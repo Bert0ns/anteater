@@ -1,9 +1,10 @@
 import os
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from cribrum_lab.model import MediaRef
+from cribrum_lab.model import MediaRef, MediaType
 from cribrum_lab.sources import FilesystemMediaSource
 
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 16
@@ -145,6 +146,12 @@ def test_takes_a_file_the_index_has_with_the_same_size_and_mtime_as_an_image(tmp
     found = {ref.path for ref in FilesystemMediaSource(tmp_path, lambda: [ref_of(fake)]).scan()}
 
     assert found == {fake}
+
+
+def test_yields_a_known_file_as_the_index_has_it_media_type_included(tmp_path):
+    clip = replace(ref_of(write(tmp_path / "clip.mp4", b"not read")), media_type=MediaType.VIDEO)
+
+    assert list(FilesystemMediaSource(tmp_path, lambda: [clip]).scan()) == [clip]
 
 
 def test_sniffs_a_known_file_again_when_its_size_or_mtime_changed(tmp_path):

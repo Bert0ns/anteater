@@ -10,7 +10,7 @@ from cribrum_lab.detectors import blur
 from cribrum_lab.detectors.burst import BurstDetector
 from cribrum_lab.imaging import load_grayscale
 from cribrum_lab.index import ImageIndex
-from cribrum_lab.model import Category, Protection, ReviewState, Signal
+from cribrum_lab.model import Category, MediaRef, MediaType, Protection, ReviewState, Signal
 
 
 def save(path, seed=0, size=(64, 48)):
@@ -830,3 +830,58 @@ def test_every_category_has_a_detector():
     detectors = [*pipeline.DETECTORS, *pipeline.GROUP_DETECTORS]
 
     assert {d.category for d in detectors} - {None} == set(Category)
+
+
+class Seen:
+    """A detector of either kind that records the paths it was given."""
+
+    version = 1
+    category = None
+
+    def __init__(self, id, seen, uses_embeddings=False):
+        self.id = id
+        self.seen = seen
+        self.uses_embeddings = uses_embeddings
+
+    def analyze(self, images, context):
+        if isinstance(images, MediaRef):
+            self.seen.append((self.id, images.path))
+            return []
+        self.seen += [(self.id, image.path) for image in images]
+        return {}
+
+
+def test_no_image_step_receives_a_video(photos, index, monkeypatch):
+    clip = photos.resolve() / "DCIM/Camera/clip.mp4"
+    clip.write_bytes(b"\x00\x00\x00\x18ftypisom" + b"\x00" * 12)
+    video = MediaRef(clip, clip.stat().st_size, clip.stat().st_mtime_ns, MediaType.VIDEO)
+    index.record(video)
+    seen = []
+
+    def spying(step, function):
+        def spy(image, *args):
+            seen.append((step, getattr(image, "path", image)))
+            return function(image, *args)
+
+        return spy
+
+    monkeypatch.setattr(pipeline, "read_metadata", spying("metadata", pipeline.read_metadata))
+    for name in ("perceptual_hash", "content_hash"):
+        monkeypatch.setattr(pipeline.hashing, name, spying(name, getattr(pipeline.hashing, name)))
+    preprocess = pipeline.mobileclip.preprocess
+    monkeypatch.setattr(pipeline.mobileclip, "preprocess", spying("embedding", preprocess))
+    detectors = [Seen("fast", seen), Seen("embedded", seen, uses_embeddings=True)]
+    exact = pipeline.ExactDuplicateDetector()  # the one group detector that hashes the files
+
+    stats = pipeline.run(
+        photos,
+        index,
+        detectors=detectors,
+        group_detectors=[exact, Seen("group", seen)],
+        embedder=MeanColorEmbedder(),
+    )
+
+    assert stats.failures == []
+    assert {step for step, _ in seen} >= {"metadata", "embedding", "fast", "embedded", "group"}
+    assert [step for step, path in seen if path == clip] == []
+    assert index.images()[1] == video  # found, and kept with its media type
