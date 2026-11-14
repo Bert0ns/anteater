@@ -43,7 +43,7 @@ import java.util.zip.CRC32
  * Four scans: a first one where one perceptual hash fails, a second after the user and time changed things, a third
  * with nothing changed, which must equal the second, and a fourth after a detector's version went up. MediaStore lists
  * the walk's images, a card's, a file the walk refuses by its head, one in a folder both leave out, and a row whose
- * file is gone. The walk also finds a video, which gets its row and nothing else.
+ * file is gone. The walk finds a video, and MediaStore lists it and one on the card: each gets its row and nothing else.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -79,6 +79,7 @@ class ScanTablesTest {
         val touched = png("DCIM/Camera/touched.png", 11)
         // The head of an MP4, as long as a.png, so a step that took it would hash it with the exact duplicates.
         file("DCIM/Camera/clip.mp4", byteArrayOf(0, 0, 0, 0x18) + "ftypisom".toByteArray() + ByteArray(a.length().toInt() - 12), 12)
+        file("Movies/v.mp4", ByteArray(a.length().toInt()), 13, card)
 
         // The copy's perceptual hash fails, so the next scan has only that hash to compute for it.
         val first = scan(pipeline(storeBatch, failingHash = copy.path))
@@ -122,6 +123,8 @@ class ScanTablesTest {
         // MediaStore lists what the walk finds too, and a file on a card the walk does not cover.
         FakeMedia.paths = (root.walkTopDown() + card.walkTopDown()).filter { it.isFile && it.extension == "png" }.map { it.path }.toList() +
             File(root, "DCIM/Camera/ghost.png").path // a row whose file is gone
+        // The walk's video, and one on the card that only MediaStore lists, by a MIME type the scan takes.
+        FakeMedia.videos = listOf(File(root, "DCIM/Camera/clip.mp4").path to "video/mp4", File(card, "Movies/v.mp4").path to "video/mp4")
         Robolectric.setupContentProvider(FakeMedia::class.java, MediaStore.AUTHORITY)
         val resolver = ApplicationProvider.getApplicationContext<Context>().contentResolver
         return MergedMediaSource(listOf(FilesystemMediaSource(root, index, index::images), MediaStoreSource(resolver, listOf(root, card))))
