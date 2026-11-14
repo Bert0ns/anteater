@@ -1,10 +1,11 @@
-// Image sources: where images come from. Mirrors lab/src/cribrum_lab/sources.py and docs/design.md §4.
+// Media sources: where images and videos come from. Mirrors lab/src/cribrum_lab/sources.py and docs/design.md §4.
 package io.github.bert0ns.cribrum.sources
 
 import android.content.ContentResolver
 import android.provider.MediaStore
 import androidx.tracing.trace
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.trash.TRASH_FOLDER
 import kotlinx.coroutines.Dispatchers
@@ -42,7 +43,7 @@ interface MediaSource {
 }
 
 /**
- * What the walk remembers of the files it sniffed and found not to be images, so it does not read
+ * What the walk remembers of the files it sniffed and found to be neither images nor videos, so it does not read
  * their head again while their size and mtime stay the same.
  */
 interface NotImages {
@@ -58,13 +59,13 @@ interface NotImages {
 private const val NOT_IMAGES_BATCH = 300
 
 /**
- * Walks a folder tree and yields every image file: the deep scan.
+ * Walks a folder tree and yields every image and video file: the deep scan.
  *
  * Hidden folders and folders with a `.nomedia` file are included: that is where messaging apps
  * keep media the gallery never shows. Files are recognized by their content, not their
- * extension, except a file that [indexed] has with the same path, size and mtime: the index
+ * extension, and yielded with the media type their head gave, except a file that [indexed] has with the same path, size and mtime: the index
  * took it, from this walk or from MediaStore, so its head is not read again and it keeps the media type the index has. The
- * same goes for a file [notImages] has: an earlier walk found it not to be an image. The walk
+ * same goes for a file [notImages] has: an earlier walk found it to be neither an image nor a video. The walk
  * adds the non-images it sniffs, and drops the ones it no longer finds when it listed the whole root.
  * Symlinks are skipped so no file is yielded twice, and so are FIFOs and other special files,
  * which would block or fail on read. Left out on purpose: the app trash, files in the system
@@ -129,8 +130,16 @@ class FilesystemMediaSource(
                 } else {
                     val again = image in rememberedSet
                     if (!again) sniffCount++
-                    val isImageFile = if (again) false else sniff(file) ?: continue
-                    if (!isImageFile) {
+                    val type = if (again) {
+                        null
+                    } else {
+                        try {
+                            mediaType(file)
+                        } catch (_: IOException) {
+                            continue // the head cannot be read
+                        }
+                    }
+                    if (type == null) {
                         metNotImages += image.path
                         if (!again && notImages != null) {
                             sniffed.add(image)
@@ -141,6 +150,7 @@ class FilesystemMediaSource(
                         }
                         continue
                     }
+                    image = image.copy(mediaType = type)
                 }
                 emit(image)
             }
@@ -246,28 +256,31 @@ class MergedMediaSource(private val sources: List<MediaSource>) : MediaSource {
     }
 }
 
+/** ISO base media brands of HEIF and AVIF images, which win wherever the ftyp box names them. */
 private val HEIF_BRANDS = setOf(
     "heic", "heix", "heim", "heis", "hevc", "hevx", "mif1", "mif2", "msf1", "miaf", "avif", "avis",
+)
+
+/**
+ * Major brands of MP4, MOV, 3GP and M4V. Audio-only files (M4A, M4B) and raw photos such as Canon's CR3 name isom among
+ * their compatible brands too, so only the major brand counts.
+ */
+private val VIDEO_BRANDS = setOf(
+    "isom", "iso2", "iso3", "iso4", "iso5", "iso6", "mp41", "mp42", "avc1", "mmp4",
+    "XAVC", "qt  ", "3gp4", "3gp5", "3gp6", "3gp7", "3g2a", "M4V ", "M4VH", "M4VP",
 )
 
 /** Enough for the magic bytes of every format and the brand list of a typical ftyp box. */
 private const val HEAD_SIZE = 64
 
-/** [isImage], or null when the head cannot be read. */
-private fun sniff(file: File): Boolean? = try {
-    isImage(file)
-} catch (_: IOException) {
-    null
-}
-
 /**
- * Videos (e.g. "isom", "mp42") share the ftyp box with HEIF and AVIF but declare no image brand.
+ * What the head of the file says it is, or null for neither an image nor a video.
  *
  * The walk remembers the files this refused, by size and mtime (docs/design.md §4). A change that lets
  * the head accept more, such as a new format or HEIF brand, must empty `not_images` in the same change:
  * a Room migration that runs `DELETE FROM not_images`. Otherwise those files are never sniffed again.
  */
-internal fun isImage(file: File): Boolean {
+internal fun mediaType(file: File): MediaType? {
     val head = file.inputStream().use { input ->
         val buffer = ByteArray(HEAD_SIZE)
         var read = 0
@@ -276,14 +289,22 @@ internal fun isImage(file: File): Boolean {
     }
     fun at(offset: Int, vararg bytes: Int) = head.size >= offset + bytes.size && bytes.indices.all { head[offset + it] == bytes[it].toByte() }
     fun text(offset: Int, value: String) = at(offset, *value.map { it.code }.toIntArray())
-    return at(0, 0xff, 0xd8, 0xff) ||
+    val ftyp = text(4, "ftyp")
+    val image = at(0, 0xff, 0xd8, 0xff) ||
         // JPEG
         at(0, 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a) ||
         // PNG
         text(0, "GIF87a") ||
         text(0, "GIF89a") ||
         (text(0, "RIFF") && text(8, "WEBP")) ||
-        (text(4, "ftyp") && ftypBrands(head).any { it in HEIF_BRANDS })
+        (ftyp && ftypBrands(head).any { it in HEIF_BRANDS })
+    // Matroska and WebM: the EBML header, with the DocType a few bytes after it.
+    val ebml = at(0, 0x1a, 0x45, 0xdf, 0xa3) && String(head, Charsets.ISO_8859_1).let { "matroska" in it || "webm" in it }
+    return when {
+        image -> MediaType.IMAGE
+        ebml || ftyp && ftypBrands(head).firstOrNull() in VIDEO_BRANDS -> MediaType.VIDEO
+        else -> null
+    }
 }
 
 /** Major brand plus compatible brands: HEIF files may declare their brand in either. */

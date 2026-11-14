@@ -43,6 +43,16 @@ private val MIAF_HEIC = bytes(0, 0, 0, 0x1c) + ascii("ftypmiaf") + ByteArray(4) 
 private val AVIF = bytes(0, 0, 0, 0x1c) + ascii("ftypavif") + ByteArray(4) + ascii("mif1miaf") + ByteArray(8)
 private val MP4 = bytes(0, 0, 0, 0x18) + ascii("ftypisom") + ByteArray(12)
 
+/** The head of an ISO base media file: its ftyp box, then the start of the next box. */
+private fun ftyp(major: String, vararg compatible: String): ByteArray {
+    val body = ascii(major) + bytes(0, 0, 2, 0) + ascii(compatible.joinToString(""))
+    return bytes(0, 0, 0, 8 + body.size) + ascii("ftyp") + body + bytes(0, 0, 0, 8) + ascii("free")
+}
+
+// The EBML header, then the DocType element of each.
+private val MKV = bytes(0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81, 0x01, 0x42, 0xf7, 0x81, 0x01, 0x42, 0x82, 0x88) + ascii("matroska")
+private val WEBM = bytes(0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81, 0x01, 0x42, 0xf7, 0x81, 0x01, 0x42, 0x82, 0x84) + ascii("webm")
+
 // Robolectric: the walk and the trash trace their calls, and a plain JVM test has no android.os.Trace.
 @RunWith(RobolectricTestRunner::class)
 class MediaSourceTest {
@@ -88,11 +98,51 @@ class MediaSourceTest {
         write("no_extension", JPEG)
         write("photo.jpg", PNG)
         write("fake.jpg", ascii("not an image"))
-        write("clip.mp4", MP4)
+        write("clip.jpg", MP4)
         write("empty.jpg", ByteArray(0))
         write("short.heic", bytes(0, 0, 0, 0x0a) + ascii("ftyp"))
 
-        assertEquals(listOf("no_extension", "photo.jpg"), scanned())
+        assertEquals(listOf("clip.jpg", "no_extension", "photo.jpg"), scanned())
+    }
+
+    private fun typeOf(content: ByteArray): MediaType? {
+        File(root, "file").writeBytes(content)
+        return runBlocking { FilesystemMediaSource(root).scan().toList() }.singleOrNull()?.mediaType
+    }
+
+    @Test
+    fun `finds a video by its head and says it is one`() {
+        val videos = mapOf(
+            "MP4" to ftyp("isom", "isom", "iso2", "avc1", "mp41"),
+            "MP4 v2" to ftyp("mp42", "isom", "mp42"),
+            "MOV" to ftyp("qt  ", "qt  "),
+            "3GP" to ftyp("3gp4", "isom", "3gp4"),
+            "M4V" to ftyp("M4V ", "M4V ", "M4A ", "mp42", "isom"),
+            "Matroska" to MKV,
+            "WebM" to WEBM,
+        )
+
+        assertEquals(videos.keys.associateWith { MediaType.VIDEO }, videos.mapValues { typeOf(it.value) })
+    }
+
+    @Test
+    fun `an image with an ftyp box stays an image`() {
+        val images = mapOf("HEIC" to HEIC, "MIAF HEIC" to MIAF_HEIC, "AVIF" to AVIF, "HEIF that also names isom" to ftyp("mif1", "mif1", "heic", "isom"))
+
+        assertEquals(images.keys.associateWith { MediaType.IMAGE }, images.mapValues { typeOf(it.value) })
+    }
+
+    @Test
+    fun `audio, AVI and other containers are not videos`() {
+        val others = mapOf(
+            "M4A" to ftyp("M4A ", "M4A ", "mp42", "isom"),
+            "M4B" to ftyp("M4B ", "M4B ", "mp42", "isom"),
+            "CR3" to ftyp("crx ", "crx ", "isom"), // a Canon raw photo, which no head check reads
+            "AVI" to ascii("RIFF") + ByteArray(4) + ascii("AVI LIST") + ByteArray(8),
+            "other EBML" to bytes(0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x82, 0x84) + ascii("none"),
+        )
+
+        assertEquals(others.keys.associateWith { null }, others.mapValues { typeOf(it.value) })
     }
 
     @Test
