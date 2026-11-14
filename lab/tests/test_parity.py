@@ -21,7 +21,8 @@ def test_parsing_each_language():
         parity.ANDROID_VERSION,
         parity.ANDROID_CONSTANT,
     )
-    assert lab == android == {"d.MAX_SIDE": "512", "d.CHUNK": "8", "d.version": "2"}
+    expected = {"d.MAX_SIDE": "512", "d.CHUNK": "8", "d.version": "2", "d.media_types": "image"}
+    assert lab == android == expected
 
 
 def test_a_different_value_names_the_mismatch():
@@ -60,8 +61,8 @@ def test_a_trailing_comment_does_not_hide_a_constant():
         parity.ANDROID_VERSION,
         parity.ANDROID_CONSTANT,
     )
-    assert lab == {"d.A": "0.5"}
-    assert android == {"d.A": "0.9"}
+    assert lab == {"d.A": "0.5", "d.media_types": "image"}
+    assert android == {"d.A": "0.9", "d.media_types": "image"}
     assert parity.mismatches(lab, android) == ["d.A: lab 0.5, android 0.9"]
 
 
@@ -94,3 +95,23 @@ def test_a_different_skip_on_stickers_is_a_mismatch():
     assert parity.skipped_mismatch(None, {"blur"}) == [
         "SKIPPED_ON_STICKERS: lab missing, android blur"
     ]
+
+
+def test_the_media_types_a_detector_accepts_are_images_only_unless_it_declares_more():
+    lab = 'class D:\n    id = "d"\n    version = 1\n'
+    android = 'class D {\n  override val id = "d"\n  override val version = 1\n}\n'
+    lab_both = lab + "    media_types = frozenset({MediaType.VIDEO, MediaType.IMAGE})\n"
+    android_both = android + "  override val mediaTypes = setOf(MediaType.IMAGE, MediaType.VIDEO)\n"
+
+    def read(source, *patterns):
+        return parity.values(source, *patterns)["d.media_types"]
+
+    lab_patterns = (parity.LAB_ID, parity.LAB_VERSION, parity.LAB_CONSTANT)
+    android_patterns = (parity.ANDROID_ID, parity.ANDROID_VERSION, parity.ANDROID_CONSTANT)
+    assert read(lab, *lab_patterns) == read(android, *android_patterns) == "image"
+    assert read(lab_both, *lab_patterns) == read(android_both, *android_patterns) == "image,video"
+
+
+def test_different_media_types_are_a_mismatch():
+    problems = parity.mismatches({"d.media_types": "image,video"}, {"d.media_types": "image"})
+    assert problems == ["d.media_types: lab image,video, android image"]

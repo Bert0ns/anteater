@@ -1,10 +1,11 @@
-"""Checks that lab/ and android/ agree on detector ids, versions and thresholds.
+"""Checks that lab/ and android/ agree on detector ids, versions, media types and thresholds.
 
 Run it from anywhere: python3 lab/scripts/check_parity.py
 
 It reads the sources with regular expressions, so it needs no dependencies. Per detector (matched
-by id) it compares the version and every numeric constant with an UPPER_CASE name; for the ranker,
-the thresholds, the protection weights and its constants. Everything must exist on both sides,
+by id) it compares the version, the media types it accepts (images only when it declares none) and
+every numeric constant with an UPPER_CASE name; for the ranker, the thresholds, the protection
+weights and its constants. Everything must exist on both sides,
 except what LAB_ONLY (detectors not ported yet) and ONE_SIDED (implementation details) list.
 It also compares the ids of the detectors a sticker skips, SKIPPED_ON_STICKERS in each pipeline.
 """
@@ -31,6 +32,8 @@ ANDROID_VERSION = re.compile(r"override val version = (\d+)")
 ANDROID_CONSTANT = re.compile(
     rf"\bval ([A-Z][A-Z0-9_]*)(?::\s*\w+)? = {NUMBER}f?\s*(?://.*)?$", re.M
 )
+LAB_MEDIA_TYPES = re.compile(r"^\s+media_types\b.*$", re.M)
+ANDROID_MEDIA_TYPES = re.compile(r"\boverride val mediaTypes\b.*$", re.M)
 SKIPPED = re.compile(r"^(?:val )?SKIPPED_ON_STICKERS\b.*$", re.M)
 WEIGHT = re.compile(rf"\b((?:Category|Protection)\.\w+)\s*(?::|to)\s*{NUMBER}")
 
@@ -47,6 +50,10 @@ def values(source: str, id_re, version_re, constant_re, owner=None) -> dict[str,
         found[f"{owner}.version"] = version.group(1)
     if owner == "ranker":
         found |= {f"ranker.{name}": number for name, number in WEIGHT.findall(source)}
+    else:
+        declared = (LAB_MEDIA_TYPES if id_re is LAB_ID else ANDROID_MEDIA_TYPES).search(source)
+        types = set(re.findall(r"MediaType\.(\w+)", declared.group())) if declared else {"IMAGE"}
+        found[f"{owner}.media_types"] = ",".join(sorted(t.lower() for t in types))
     return found
 
 
@@ -63,10 +70,18 @@ def mismatches(lab: dict[str, str], android: dict[str, str]) -> list[str]:
     for key in sorted(lab.keys() | android.keys()):
         if key.split(".")[0] in LAB_ONLY or key in ONE_SIDED:
             continue
-        if key not in lab or key not in android or float(lab[key]) != float(android[key]):
+        if key not in lab or key not in android or not _same(lab[key], android[key]):
             lab_value, android_value = lab.get(key, "missing"), android.get(key, "missing")
             problems.append(f"{key}: lab {lab_value}, android {android_value}")
     return problems
+
+
+def _same(lab: str, android: str) -> bool:
+    """Numbers by value, so 0.5 and 0.50 agree; anything else, such as the media types, by text."""
+    try:
+        return float(lab) == float(android)
+    except ValueError:
+        return lab == android
 
 
 def skipped_on_stickers(source: str) -> set[str] | None:
