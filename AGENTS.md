@@ -51,10 +51,10 @@ Each task goes to one of four models, picked by how hard it is and by which part
 
 | Tier | Models | Use them for |
 |---|---|---|
-| Workers | Sonnet 5.5 high, Gemini 3.8 Flash high | Most features and fixes, UI changes, tests, docs, and the hygiene and dependency routines |
+| Workers | Sonnet 5.5 high, Gemini 4 Hydrogen high | Most features and fixes, UI changes, tests, docs, and the hygiene and dependency routines |
 | Strong | Opus 5.5 medium or high, Gemini 4 Argon | The ranker and its scoring, concurrency and the scan worker, database migrations, design decisions, performance work whose output must not change, and tasks a worker got wrong |
 
-The workers do most of the implementing. Gemini 3.8 Flash high is a little weaker than Sonnet 5.5 high, so it gets the simpler tasks of the two. Among the strong models, Opus 5.5 medium fits moderate logic changes, and Opus 5.5 high or Gemini 4 Argon the hardest ones.
+The workers do most of the implementing. Gemini 4 Hydrogen high is a little weaker than Sonnet 5.5 high, so it gets the simpler tasks of the two. Among the strong models, Opus 5.5 medium fits moderate logic changes, and Opus 5.5 high or Gemini 4 Argon the hardest ones.
 
 A task that works on the phone a lot, such as installing builds, driving the app or measuring on it, goes to a strong model, at least Opus 5.5 medium.
 
@@ -73,7 +73,7 @@ Routines that keep the codebase healthy are issue templates in [`.github/ISSUE_T
 
 | Template | Covers | Suggested model |
 |---|---|---|
-| `routine-drift` | `docs/design.md` against the code, and lab against android | Gemini 3.8 high or Sonnet 5.5 high |
+| `routine-drift` | `docs/design.md` against the code, and lab against android | Gemini 4 Hydrogen high or Sonnet 5.5 high |
 | `routine-hygiene` | Dead code, duplication and needless abstractions in what changed | Sonnet 5.5 high |
 | `routine-dependencies` | Gradle, uv and skills updates, in one PR | Sonnet 5.5 high |
 | `routine-audit` | A deep review of one area, chosen in rotation | Opus 5.5 xhigh or Gemini 4 Argon |
