@@ -43,7 +43,7 @@ import java.util.zip.CRC32
  * Four scans: a first one where one perceptual hash fails, a second after the user and time changed things, a third
  * with nothing changed, which must equal the second, and a fourth after a detector's version went up. MediaStore lists
  * the walk's images, a card's, a file the walk refuses by its head, one in a folder both leave out, and a row whose
- * file is gone.
+ * file is gone. The walk also finds a video, which gets its row and nothing else.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -77,6 +77,8 @@ class ScanTablesTest {
         file("Pictures/broken.png", "not an image at all".toByteArray(), 9) // MediaStore lists it, the walk refuses its head
         png("Android/.Trash/t.png", 10) // MediaStore lists it, both leave it out
         val touched = png("DCIM/Camera/touched.png", 11)
+        // The head of an MP4, as long as a.png, so a step that took it would hash it with the exact duplicates.
+        file("DCIM/Camera/clip.mp4", byteArrayOf(0, 0, 0, 0x18) + "ftypisom".toByteArray() + ByteArray(a.length().toInt() - 12), 12)
 
         // The copy's perceptual hash fails, so the next scan has only that hash to compute for it.
         val first = scan(pipeline(storeBatch, failingHash = copy.path))
