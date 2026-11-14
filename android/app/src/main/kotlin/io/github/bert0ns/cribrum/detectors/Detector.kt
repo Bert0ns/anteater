@@ -7,6 +7,7 @@ import io.github.bert0ns.cribrum.metadata.ImageMetadata
 import io.github.bert0ns.cribrum.metadata.readMetadata
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.Signal
 import java.io.File
 import io.github.bert0ns.cribrum.hashing.contentHash as hashFile
@@ -65,8 +66,13 @@ interface Detector {
      */
     val decodeSide: Int? get() = null
 
+    /** The media types the pipeline gives it, images only unless it says more. Keep it equal to the lab's `media_types`. */
+    val mediaTypes: Set<MediaType> get() = IMAGES_ONLY
+
     suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal>
 }
+
+val IMAGES_ONLY: Set<MediaType> = setOf(MediaType.IMAGE)
 
 /**
  * Analyzes all images at once and emits signals for groups of them (duplicates, bursts).
@@ -82,6 +88,9 @@ interface GroupDetector {
 
     /** As in [Detector]. */
     val category: Category? get() = null
+
+    /** As in [Detector]. */
+    val mediaTypes: Set<MediaType> get() = IMAGES_ONLY
 
     suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>>
 }

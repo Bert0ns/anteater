@@ -223,7 +223,7 @@ class ImageIndex(private val db: IndexDatabase) :
 
     suspend fun embeddedPaths(model: String, modelVersion: Int): Set<String> = dao.embeddedPaths(model, modelVersion).toSet()
 
-    /** The images a per-image detector must read: not unreadable, and not in the trash, where the scan no longer looks. */
+    /** The images a per-image detector must read: not unreadable, not a video, and not in the trash, where the scan no longer looks. */
     suspend fun readableNotTrashed(): List<String> = dao.readableNotTrashed()
 
     /** Replaces whatever this detector stored for the image, from any version. */
@@ -338,7 +338,7 @@ class ImageIndex(private val db: IndexDatabase) :
 
     suspend fun removeExcludedFolder(path: String) = write { dao.deleteExcludedFolder(path) }
 
-    /** Every indexed image not in the trash, with its path, size, and mtime. */
+    /** Every indexed image not in the trash, with its path, size, and mtime. No video, until the storage map shows them (#386). */
     suspend fun notTrashed(): List<MediaRef> = dao.notTrashed().map(::ref)
 
     /** The EXIF capture time of each image that has one, to order the review by date. The ranker never sees it. A time that does not parse is left out. */
@@ -362,7 +362,7 @@ class ImageIndex(private val db: IndexDatabase) :
         }
     }
 
-    /** JPEGs, by the mime their header gave, whose headers were not read with the current rules (docs/design.md §9). */
+    /** JPEGs, by the mime their header gave, whose headers were not read with the current rules (docs/design.md §9). Never a video. */
     suspend fun jpegsToRead(): List<MediaRef> = dao.jpegsToRead(JPEG_RULES_VERSION).map(::ref)
 
     /** Stores what the scan read from a JPEG. Leaves [version] alone, as for `not_images`: it changes no ranking. */

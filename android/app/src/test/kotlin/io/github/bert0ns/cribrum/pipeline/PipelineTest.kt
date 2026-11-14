@@ -7,21 +7,25 @@ import io.github.bert0ns.cribrum.detectors.AnalysisContext
 import io.github.bert0ns.cribrum.detectors.BlurDetector
 import io.github.bert0ns.cribrum.detectors.BurstDetector
 import io.github.bert0ns.cribrum.detectors.Detector
+import io.github.bert0ns.cribrum.detectors.ExactDuplicateDetector
 import io.github.bert0ns.cribrum.detectors.GroupDetector
 import io.github.bert0ns.cribrum.detectors.MissingEmbedding
 import io.github.bert0ns.cribrum.folders.isStickerFolder
+import io.github.bert0ns.cribrum.hashing.PHASH_DECODE_SIDE
 import io.github.bert0ns.cribrum.hashing.contentHash
 import io.github.bert0ns.cribrum.hashing.perceptualHash
 import io.github.bert0ns.cribrum.imaging.Pixels
 import io.github.bert0ns.cribrum.imaging.TestImage
 import io.github.bert0ns.cribrum.index.ImageIndex
 import io.github.bert0ns.cribrum.index.memoryIndex
+import io.github.bert0ns.cribrum.metadata.ImageMetadata
 import io.github.bert0ns.cribrum.metadata.UnreadableImage
 import io.github.bert0ns.cribrum.metadata.readMetadata
 import io.github.bert0ns.cribrum.mobileclip.preprocess
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.Kind
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.Protection
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Signal
@@ -121,6 +125,63 @@ class PipelineTest {
         assertNotNull(runBlocking { index.perceptualHash(screenshot) })
         assertEquals(setOf(Category.BLURRY, Category.BAD_EXPOSURE, Category.SCREENSHOT, Protection.FACES, Category.STICKER), kinds("Pictures/Screenshots/Screenshot_1.png"))
         assertTrue(Category.EXACT_DUPLICATE in kinds("WhatsApp/Media/a-copy.png"))
+    }
+
+    /** A per-image detector that records the paths it was given. */
+    private class SeenDetector(override val id: String, private val seen: MutableCollection<Pair<String, String>>, override val usesEmbeddings: Boolean = false) : Detector {
+        override val version = 1
+
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
+            seen += id to image.path
+            return emptyList()
+        }
+    }
+
+    /** A group detector that records the paths it was given. */
+    private class SeenGroup(private val seen: MutableCollection<Pair<String, String>>) : GroupDetector {
+        override val id = "seen_group"
+        override val version = 1
+
+        override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
+            images.forEach { seen += id to it.path }
+            return emptyMap()
+        }
+    }
+
+    @Test
+    fun `no image step receives a video, whatever the index holds for it`() {
+        photos()
+        TestImage.texture(64, 48, 2).save(File(root, "DCIM/Camera/b.jpg"), Bitmap.CompressFormat.JPEG)
+        val size = File(root, "DCIM/Camera/a.png").length().toInt() // the exact duplicates hash the files that share a size
+        val clip = File(root, "DCIM/Camera/clip.mp4").apply { writeBytes(ByteArray(size)) }
+        // As if a header read had taken it for a JPEG: the steps after the metadata must not read it either.
+        val read = File(root, "WhatsApp/Media/read.mp4").apply { writeBytes(ByteArray(size)) }
+        val videos = listOf(clip, read).map { it.toMediaRef(MediaType.VIDEO) }
+        runBlocking {
+            index.recordAll(videos)
+            index.setMetadata(read.path, ImageMetadata(64, 48, "image/jpeg"))
+        }
+        val seen = ConcurrentLinkedQueue<Pair<String, String>>()
+        fun <T> spy(step: String, read: (File) -> T): (File) -> T = { file -> read(file).also { seen += step to file.path } }
+        val pipeline = Pipeline(
+            index,
+            detectors = listOf(SeenDetector("detector", seen), SeenDetector("embedded detector", seen, usesEmbeddings = true)),
+            groupDetectors = listOf(ExactDuplicateDetector(), SeenGroup(seen)),
+            embedder = MeanColorEmbedder(),
+            preprocessing = spy("embedding", ::preprocess),
+            metadataReader = spy("metadata", ::readMetadata),
+            jpegReader = spy("jpeg headers", ::readJpeg),
+            perceptualHasher = { image, pixels -> perceptualHash(pixels.gray(PHASH_DECODE_SIDE)).also { seen += "perceptual hash" to image.path } },
+            contentHasher = { image -> contentHash(image).also { seen += "content hash" to image.path } },
+        )
+
+        val stats = runBlocking { pipeline.run(FilesystemMediaSource(root) { index.images() }) }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        val steps = setOf("metadata", "jpeg headers", "perceptual hash", "embedding", "detector", "embedded detector", "content hash", "seen_group")
+        assertEquals("every step ran on the images", steps, seen.map { it.first }.toSet())
+        assertEquals(emptyList<Pair<String, String>>(), seen.filter { it.second in setOf(clip.path, read.path) })
+        assertEquals(videos, runBlocking { index.images() }.filter { it.mediaType == MediaType.VIDEO })
     }
 
     @Test

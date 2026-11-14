@@ -2,6 +2,8 @@ package io.github.bert0ns.cribrum.pipeline
 
 import io.github.bert0ns.cribrum.imaging.TestImage
 import io.github.bert0ns.cribrum.index.memoryIndex
+import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.sources.FilesystemMediaSource
 import kotlinx.coroutines.runBlocking
@@ -130,5 +132,18 @@ class CoverageTest {
         )
         assertEquals(needed, rows.mapValues { it.value.needed })
         assertEquals(rows.mapValues { it.value.needed }, rows.mapValues { it.value.analysed })
+    }
+
+    @Test
+    fun `a video is an image no step needs`() {
+        images()
+        scan()
+        runBlocking { index.record(MediaRef(File(root, "DCIM/Camera/clip.mp4").path, 900, 1, MediaType.VIDEO)) }
+
+        val rows = coverage()
+
+        assertEquals(Coverage("embedding", 1, analysed = 2, needed = 2), rows["embedding"])
+        assertEquals(Coverage("screenshot", 1, analysed = 3, needed = 3), rows["screenshot"])
+        assertEquals(Coverage("near_duplicate", 3, analysed = 3, needed = 3), rows["near_duplicate"])
     }
 }

@@ -5,6 +5,7 @@ import io.github.bert0ns.cribrum.index.memoryIndex
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Role
@@ -1225,5 +1226,19 @@ class ReviewTest {
             }
             assertEquals(fresh.counts(), counts())
         }
+    }
+
+    @Test
+    fun `a video is in no category, no figure and not on the storage map`() = runBlocking {
+        val photo = image("DCIM/a.jpg", blurry(0.9f))
+        val video = File(volume, "DCIM/clip.mp4").apply { writeText("clip") }.toMediaRef(MediaType.VIDEO)
+        index.record(video)
+        index.setSignals(video.path, "blur", 1, listOf(blurry(0.9f)))
+
+        val overview = review.overview()
+
+        assertEquals(1, overview.categories.single { it.category == Category.BLURRY }.count)
+        assertEquals(photo.size, overview.freeableBytes)
+        assertEquals(listOf(photo), review.notTrashed())
     }
 }
