@@ -2,6 +2,7 @@
 package io.github.bert0ns.cribrum.sources
 
 import android.content.ContentResolver
+import android.net.Uri
 import android.provider.MediaStore
 import androidx.tracing.trace
 import io.github.bert0ns.cribrum.model.MediaRef
@@ -181,9 +182,10 @@ internal fun isSkipped(root: File, file: File): Boolean {
 }
 
 /**
- * The images MediaStore indexes, on every volume, the SD card included. It misses `.nomedia`
- * folders, which the deep scan covers, and leaves out what the deep scan leaves out. It walks no
- * folder, so it reports no walked root. [volumes] tell which folder is the root of a path.
+ * The images and videos MediaStore indexes, on every volume, the SD card included. It misses `.nomedia`
+ * folders, which the deep scan covers, and leaves out what the deep scan leaves out. A video is one only in a
+ * container the deep scan takes, by the MIME type MediaStore gave it. It walks no folder, so it reports no
+ * walked root. [volumes] tell which folder is the root of a path.
  */
 class MediaStoreSource(private val resolver: ContentResolver, private val volumes: List<File>) : MediaSource {
     override val walkedRoots: List<File> = emptyList()
@@ -201,18 +203,21 @@ class MediaStoreSource(private val resolver: ContentResolver, private val volume
         var duplicates = 0
         // The query and the stats are one section; the emits wait for the collector, so they stay out of it. Without an emit
         // per row, each row checks for a stopped scan itself, so a stop does not wait for the stats of every row.
-        val images = trace("Walk.mediaStore") {
-            val uri = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
-            val paths = mutableListOf<String>()
+        val media = trace("Walk.mediaStore") {
+            val paths = mutableListOf<Pair<String, MediaType>>()
+
             @Suppress("DEPRECATION") // DATA is the only way to the path, and All files access allows reading it
-            resolver.query(uri, arrayOf(MediaStore.Images.Media.DATA), null, null, null)?.use { cursor ->
+            suspend fun query(uri: Uri, type: MediaType) = resolver.query(uri, arrayOf(MediaStore.MediaColumns.DATA, MediaStore.MediaColumns.MIME_TYPE), null, null, null)?.use { cursor ->
                 while (cursor.moveToNext()) {
                     currentCoroutineContext().ensureActive()
-                    cursor.getString(0)?.let(paths::add)
+                    val path = cursor.getString(0) ?: continue
+                    rows++
+                    if (type == MediaType.IMAGE || cursor.getString(1) in VIDEO_MIME_TYPES) paths += path to type
                 }
             }
-            rows = paths.size
-            paths.sorted().mapNotNull { path ->
+            query(MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL), MediaType.IMAGE)
+            query(MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL), MediaType.VIDEO)
+            paths.sortedBy { it.first }.mapNotNull { (path, type) ->
                 currentCoroutineContext().ensureActive()
                 if (path in known) {
                     duplicates++
@@ -221,14 +226,14 @@ class MediaStoreSource(private val resolver: ContentResolver, private val volume
                 val file = File(path)
                 if (isSkipped(volumes.firstOrNull(file::startsWith) ?: File("/"), file)) return@mapNotNull null
                 try {
-                    if (Files.isRegularFile(file.toPath(), LinkOption.NOFOLLOW_LINKS)) file.toMediaRef() else null
+                    if (Files.isRegularFile(file.toPath(), LinkOption.NOFOLLOW_LINKS)) file.toMediaRef(type) else null
                 } catch (_: IOException) {
                     null
                 }
             }
         }
         counts = mapOf("mediaStoreRows" to rows, "duplicates" to duplicates)
-        images.forEach { emit(it) }
+        media.forEach { emit(it) }
     }.flowOn(Dispatchers.IO)
 }
 
@@ -255,6 +260,9 @@ class MergedMediaSource(private val sources: List<MediaSource>) : MediaSource {
         }
     }
 }
+
+/** The MIME types MediaStore gives the videos the deep scan takes by their head: MP4, MOV, 3GP, M4V, Matroska and WebM. */
+private val VIDEO_MIME_TYPES = setOf("video/mp4", "video/quicktime", "video/3gpp", "video/3gpp2", "video/x-m4v", "video/x-matroska", "video/webm")
 
 /** ISO base media brands of HEIF and AVIF images, which win wherever the ftyp box names them. */
 private val HEIF_BRANDS = setOf(

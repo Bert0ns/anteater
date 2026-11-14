@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assume.assumeTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -542,14 +543,21 @@ class MediaSourceTest {
     }
 }
 
-/** A MediaStore that answers every query with the same paths. */
+/** A MediaStore that answers every query for images with the same [paths], and for videos with the same [videos]. */
 class FakeMedia : ContentProvider() {
     companion object {
         var paths: List<String?> = emptyList()
+
+        /** Paths with the MIME type MediaStore gave each. */
+        var videos: List<Pair<String?, String?>> = emptyList()
     }
 
     override fun onCreate() = true
-    override fun query(uri: Uri, projection: Array<String>?, selection: String?, args: Array<String>?, order: String?): Cursor = MatrixCursor(arrayOf(MediaStore.Images.Media.DATA)).apply { paths.forEach { addRow(arrayOf(it)) } }
+    override fun query(uri: Uri, projection: Array<String>?, selection: String?, args: Array<String>?, order: String?): Cursor = if ("video" in uri.pathSegments) {
+        MatrixCursor(arrayOf(MediaStore.Video.Media.DATA, MediaStore.Video.Media.MIME_TYPE)).apply { videos.forEach { addRow(arrayOf(it.first, it.second)) } }
+    } else {
+        MatrixCursor(arrayOf(MediaStore.Images.Media.DATA)).apply { paths.forEach { addRow(arrayOf(it)) } }
+    }
     override fun getType(uri: Uri): String? = null
     override fun insert(uri: Uri, values: ContentValues?): Uri? = null
     override fun delete(uri: Uri, selection: String?, args: Array<String>?) = 0
@@ -562,6 +570,11 @@ class MediaStoreSourceTest {
     val folder = TemporaryFolder()
 
     private val root by lazy { folder.root }
+
+    @Before
+    fun noVideos() {
+        FakeMedia.videos = emptyList()
+    }
 
     private fun write(path: String): String = File(root, path).apply {
         parentFile!!.mkdirs()
@@ -581,6 +594,31 @@ class MediaStoreSourceTest {
         val a = write("DCIM/a.jpg")
 
         assertEquals(listOf(a, b), scanned(b, a))
+    }
+
+    @Test
+    fun `yields the videos MediaStore lists in a container the scan takes, as videos, in path order with the images`() {
+        val photo = write("DCIM/b.jpg")
+        val mp4 = write("DCIM/a.mp4")
+        val mov = write("DCIM/c.mov")
+        val gp = write("DCIM/d.3gp")
+        val m4v = write("DCIM/e.m4v")
+        val mkv = write("Movies/f.mkv")
+        val webm = write("Movies/g.webm")
+        val avi = write("Movies/h.avi")
+        val wmv = write("Movies/i.wmv")
+        FakeMedia.videos = listOf(
+            mp4 to "video/mp4", mov to "video/quicktime", gp to "video/3gpp", m4v to "video/x-m4v", mkv to "video/x-matroska",
+            webm to "video/webm", avi to "video/avi", wmv to "video/x-ms-wmv", File(root, "gone.mp4").path to "video/mp4", null to "video/mp4",
+        )
+        FakeMedia.paths = listOf(photo)
+        Robolectric.setupContentProvider(FakeMedia::class.java, MediaStore.AUTHORITY)
+        val resolver = ApplicationProvider.getApplicationContext<Context>().contentResolver
+
+        val found = runBlocking { MediaStoreSource(resolver, listOf(root)).scan().toList() }
+
+        val expected = listOf(mp4, photo, mov, gp, m4v, mkv, webm).associateWith { if (it == photo) MediaType.IMAGE else MediaType.VIDEO }
+        assertEquals(expected.toList(), found.map { it.path to it.mediaType })
     }
 
     @Test
