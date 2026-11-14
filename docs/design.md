@@ -181,23 +181,29 @@ A kept video leaves the list, and comes back only under a category with a new si
 
 The core idea is a pipeline of independent, interchangeable components.
 
+The block below uses the names decided for videos (#382), and none of it handles a video yet. The code still calls `MediaRef`, `MediaSource` and `IndexedMedia` by their old names, `ImageRef`, `ImageSource` and `IndexedImage`, until #400 renames them in the lab and the app together, before #383. An agent that reads `ImageRef` assumes it can decode the file as an image, and agents write most of this code, so the names change before any video code exists. The `images` table, `ImageIndex` and `ImageMetadata` keep their names, and so does every name that is about images only, such as the decoding, the tiles and the Compress page. `MediaType` and `mediaTypes` come with #383, and the names are a sketch that #383 may change.
+
 ```kotlin
-interface ImageSource {                  // MediaStore + deep scan today; cloud libraries later
-    fun scan(): Flow<ImageRef>
+enum class MediaType { IMAGE, VIDEO }   // the index's media_type column
+
+interface MediaSource {                  // MediaStore + deep scan today; cloud libraries later
+    fun scan(): Flow<MediaRef>
 }
 
 interface Detector {                     // one per technique; a cloud classifier would be one more
     val id: String
     val version: Int
     val category: Category? get() = null
-    suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal>
+    val mediaTypes: Set<MediaType> get() = setOf(MediaType.IMAGE)   // the pipeline gives it only these
+    suspend fun analyze(media: MediaRef, context: AnalysisContext): List<Signal>
 }
 
-interface GroupDetector {                // duplicates, bursts: looks at all images at once
+interface GroupDetector {                // duplicates, bursts: looks at all images or all videos at once
     val id: String
     val version: Int
     val category: Category? get() = null
-    suspend fun analyze(images: List<ImageRef>, context: AnalysisContext): Map<ImageRef, List<Signal>>
+    val mediaTypes: Set<MediaType> get() = setOf(MediaType.IMAGE)
+    suspend fun analyze(media: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>>
 }
 
 enum class Role { BEST, INFERIOR }      // a group member's role, stored in evidence["role"]
@@ -211,15 +217,15 @@ data class Signal(
 )
 
 interface Ranker {                       // combines signals into candidates and an ordering
-    fun rank(images: List<IndexedImage>): List<Candidate>
+    fun rank(media: List<IndexedMedia>): List<Candidate>
 }
 
 interface Trash {                        // app-managed trash, retention set by the user (30 days by default)
-    suspend fun moveToTrash(images: List<ImageRef>): List<ImageRef>
-    suspend fun restore(images: List<ImageRef>): List<ImageRef>
+    suspend fun moveToTrash(media: List<MediaRef>): List<MediaRef>
+    suspend fun restore(media: List<MediaRef>): List<MediaRef>
     suspend fun trashed(): List<TrashedImage>
-    suspend fun purge(images: List<ImageRef>): List<ImageRef>   // returns what it deleted
-    suspend fun purgeExpired(): List<ImageRef>
+    suspend fun purge(media: List<MediaRef>): List<MediaRef>   // returns what it deleted
+    suspend fun purgeExpired(): List<MediaRef>
 }
 
 interface ModelRuntime                   // ONNX Runtime behind one interface
@@ -227,6 +233,7 @@ interface ModelRuntime                   // ONNX Runtime behind one interface
 
 - Signals are stored with the version of the detector that produced them. When a detector improves, only its signals are recomputed.
 - The pipeline runs in this order: scan, metadata, the per-image detectors that read no embedding (with the perceptual hash), the embeddings with the per-image detectors that read one, then the group detectors. On Android those detectors run beside the embeddings (#357): the images whose embedding is stored already go to them first, and each batch's images as soon as the batch's old results are forgotten and its embeddings stored, so a result never reads an embedding other than the stored one. The encoder runs on the GPU, and while it still has batches to embed two of the workers are held back, so its decodes find two free cores ahead of the text coverage. Once the last batch is stored, every worker classifies. The two steps keep their own times in the scan log (`embeddings` until the last batch is stored, `embeddedDetectors` after it), so their sum is the time of the phase. Their bookkeeping (the run's failures, counts and progress) runs on one thread. A stop while both run keeps what each had stored: the embeddings of the batches stored, and the results stored, each with the embedding it read. The batch the model was on when the stop came is lost, and so are the finished results still waiting to fill their batch of 32 (§4), up to 31, which the next scan classifies again. If the stop fell between forgetting the old results of the model's batch and storing its embeddings, the next scan embeds those images and classifies them again. The lab runs the two steps one after the other, with the same results. Each step stores its results as it goes, so the home screen lists candidates from the first detectors on, and an interrupted pass resumes. Images in a sticker folder come after the real images in the metadata step and the first detectors, run only the perceptual hash, `SCREENSHOT` and `STICKER` among those detectors, and skip the embedding and the detectors that read it (§5).
+- With videos (not built yet), each step takes only the media types its detectors accept (§5), and a normal scan runs no step on a video (§4). Inside a step, videos come after the images and the stickers. The frames of the videos (#393) are a phase of their own, after the image embeddings, and the group detectors stay last. Each group detector groups the images and the videos apart, so a group never mixes them.
 - A detector that reads embeddings says so (`usesEmbeddings`). That flag also puts it after the embeddings in the order above, so a detector that reads one without saying so runs before any exists. Its embedding lookup then throws something other than `MissingEmbedding`, so it lands in the run's failures on every pass instead of waiting for an embedding that its pass never gets. A result belongs to the embedding it read, so when the pipeline computes an embedding for an image it forgets that image's results from those detectors.
 - A failed embedding is a failure of that image, not of the scan. The image gets no embedding, its failure goes into the run's failures, and the next run tries it again. An image that ran out of memory while decoding gets one more try alone, after its batch, since other decodes may have taken its memory. The scan always goes on to the detectors, so one bad file cannot keep DOCUMENT and FORWARDED from running on the others. The failures of the last finished run are kept for the settings screen (§8). A detector or a perceptual hash that runs out of memory while several images are analyzed at once runs again alone, after the others, and fails only if it fails then too.
 - Detectors get per-image data they don't compute themselves (content hash, metadata, embeddings, decoded pixels) through lookups in `AnalysisContext`. The pipeline backs them with the index, so each value is computed once and shared by every detector.
@@ -251,13 +258,14 @@ interface ModelRuntime                   // ONNX Runtime behind one interface
 | Field | Purpose |
 |---|---|
 | `path`, `size`, `mtime` | Identity and change detection |
-| `width`, `height`, `mime`, `exif_*` | Metadata used by detectors and best-copy selection |
+| `media_type` | `image` or `video`, set by the scan when it records the file. Not built yet: #383 adds the column, and its migration sets `image` on every existing row. It is not called `kind`, since `Kind` is a signal's category or protection already |
+| `width`, `height`, `mime`, `exif_*` | Metadata used by detectors and best-copy selection. #384 adds a video's own fields, and a video's capture time goes in `captured_at`, where an image's goes |
 | `content_hash` | Exact duplicates |
 | `phash` | Near-duplicates |
 | `embedding` | MobileCLIP vector |
 | `review_state` | §6.3 |
 | `excluded_folders` (separate table) | Folders the user excluded, §6.3 |
-| `not_images` (separate table) | Files the walk sniffed and found not to be images, by `path`, `size` and `mtime_ns`, §4 |
+| `not_images` (separate table) | Files the walk sniffed and found not to be images, by `path`, `size` and `mtime_ns`, §4. After #383, files that are neither images nor videos |
 | `jpegs` (separate table, Android only) | What the scan read from each JPEG's headers for the compress page, §9 |
 | `signals` (separate table) | Detector output, keyed by image + detector id + version |
 
