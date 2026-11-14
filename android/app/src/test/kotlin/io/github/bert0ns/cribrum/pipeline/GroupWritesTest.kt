@@ -16,7 +16,7 @@ import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
-import io.github.bert0ns.cribrum.sources.FilesystemImageSource
+import io.github.bert0ns.cribrum.sources.FilesystemMediaSource
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -107,7 +107,7 @@ class GroupWritesTest {
             Checked(detector, version = if (detector.id == "exact_duplicate") exactVersion ?: detector.version else detector.version, forget = forget?.takeIf { it.first == detector.id }?.second)
         }
         val pipeline = Pipeline(index, detectors = listOf(SizeDetector(sizeVersion)), groupDetectors = detectors)
-        return runBlocking { pipeline.run(FilesystemImageSource(root)) }.also { compare() }
+        return runBlocking { pipeline.run(FilesystemMediaSource(root)) }.also { compare() }
     }
 
     /** Runs [detector] and, before handing its result to the store, writes it the old way on a copy of the index. */

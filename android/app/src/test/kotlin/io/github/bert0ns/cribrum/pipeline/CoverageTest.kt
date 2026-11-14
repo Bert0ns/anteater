@@ -3,7 +3,7 @@ package io.github.bert0ns.cribrum.pipeline
 import io.github.bert0ns.cribrum.imaging.TestImage
 import io.github.bert0ns.cribrum.index.memoryIndex
 import io.github.bert0ns.cribrum.model.ReviewState
-import io.github.bert0ns.cribrum.sources.FilesystemImageSource
+import io.github.bert0ns.cribrum.sources.FilesystemMediaSource
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -36,7 +36,7 @@ class CoverageTest {
         override fun embedPixels(pixels: List<FloatArray>) = pixels.map { FloatArray(512) { 1f / 22.627417f } }
     }
 
-    private fun scan() = runBlocking { Pipeline(index, embedder = embedder()).run(FilesystemImageSource(root)) }
+    private fun scan() = runBlocking { Pipeline(index, embedder = embedder()).run(FilesystemMediaSource(root)) }
 
     private fun coverage() = runBlocking { index.coverage(model = "test_model", modelVersion = 1) }.associateBy { it.id }
 
@@ -81,7 +81,7 @@ class CoverageTest {
     fun `a trashed image is not counted as missing`() {
         images()
         val trashed = File(root, "DCIM/Camera/b.png").path
-        runBlocking { Pipeline(index).run(FilesystemImageSource(root)) } // no embeddings yet
+        runBlocking { Pipeline(index).run(FilesystemMediaSource(root)) } // no embeddings yet
         runBlocking { index.setReviewState(trashed, ReviewState.TRASHED) }
         File(trashed).delete()
         scan()

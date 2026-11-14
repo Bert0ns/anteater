@@ -36,10 +36,10 @@ import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.runtime.FallbackRuntime
 import io.github.bert0ns.cribrum.runtime.ModelRuntime
 import io.github.bert0ns.cribrum.runtime.OnnxRuntime
-import io.github.bert0ns.cribrum.sources.FilesystemImageSource
-import io.github.bert0ns.cribrum.sources.ImageSource
-import io.github.bert0ns.cribrum.sources.MediaStoreImageSource
-import io.github.bert0ns.cribrum.sources.MergedImageSource
+import io.github.bert0ns.cribrum.sources.FilesystemMediaSource
+import io.github.bert0ns.cribrum.sources.MediaSource
+import io.github.bert0ns.cribrum.sources.MediaStoreSource
+import io.github.bert0ns.cribrum.sources.MergedMediaSource
 import io.github.bert0ns.cribrum.sources.NotImages
 import io.github.bert0ns.cribrum.tracing.traceSuspend
 import io.github.bert0ns.cribrum.trash.ExpiredPurge
@@ -187,9 +187,9 @@ object Indexing {
     }
 
     /** Every storage volume walked in full, then what MediaStore knows on top. [indexed] is what the index already has. */
-    fun deviceSource(context: Context, indexed: suspend () -> Collection<MediaRef>, notImages: NotImages): ImageSource {
+    fun deviceSource(context: Context, indexed: suspend () -> Collection<MediaRef>, notImages: NotImages): MediaSource {
         val volumes = context.getSystemService(StorageManager::class.java).storageVolumes.mapNotNull { it.directory }
-        return MergedImageSource(volumes.map { FilesystemImageSource(it, notImages = notImages, indexed = indexed) } + MediaStoreImageSource(context.contentResolver, volumes))
+        return MergedMediaSource(volumes.map { FilesystemMediaSource(it, notImages = notImages, indexed = indexed) } + MediaStoreSource(context.contentResolver, volumes))
     }
 }
 

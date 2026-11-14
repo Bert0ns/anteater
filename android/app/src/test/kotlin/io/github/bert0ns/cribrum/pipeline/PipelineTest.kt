@@ -27,9 +27,9 @@ import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.review.Review
-import io.github.bert0ns.cribrum.sources.FilesystemImageSource
-import io.github.bert0ns.cribrum.sources.ImageSource
-import io.github.bert0ns.cribrum.sources.MergedImageSource
+import io.github.bert0ns.cribrum.sources.FilesystemMediaSource
+import io.github.bert0ns.cribrum.sources.MediaSource
+import io.github.bert0ns.cribrum.sources.MergedMediaSource
 import io.github.bert0ns.cribrum.trash.AppTrash
 import io.github.bert0ns.cribrum.trash.Swap
 import io.github.bert0ns.cribrum.trash.Trash
@@ -78,7 +78,7 @@ class PipelineTest {
 
     private val index = memoryIndex()
     private val root by lazy { File(folder.root, "device") }
-    private val source by lazy { FilesystemImageSource(root) }
+    private val source by lazy { FilesystemMediaSource(root) }
 
     @After
     fun close() = index.close()
@@ -271,7 +271,7 @@ class PipelineTest {
         photos()
         run()
         val missed = refOf("DCIM/Camera/a.png").path
-        val blind = object : ImageSource {
+        val blind = object : MediaSource {
             override val walkedRoots get() = source.walkedRoots
 
             override fun scan() = source.scan().filter { it.path != missed } // moved away and back while the walk was in its folder
@@ -288,7 +288,7 @@ class PipelineTest {
         val card = File(folder.root, "card")
         save("DCIM/Camera/a.png")
         TestImage.texture(64, 48, 1).save(File(card, "DCIM/b.png").apply { parentFile!!.mkdirs() })
-        val both = MergedImageSource(listOf(FilesystemImageSource(root), FilesystemImageSource(card)))
+        val both = MergedMediaSource(listOf(FilesystemMediaSource(root), FilesystemMediaSource(card)))
         runBlocking { Pipeline(index).run(both) }
         val onCard = File(card, "DCIM/b.png").path
         runBlocking { index.setReviewState(onCard, ReviewState.KEPT) }
@@ -306,7 +306,7 @@ class PipelineTest {
         val card = File(folder.root, "card")
         save("DCIM/Camera/a.png")
         TestImage.texture(64, 48, 1).save(File(card, "DCIM/b.png").apply { parentFile!!.mkdirs() })
-        val both = MergedImageSource(listOf(FilesystemImageSource(root), FilesystemImageSource(card)))
+        val both = MergedMediaSource(listOf(FilesystemMediaSource(root), FilesystemMediaSource(card)))
         runBlocking { Pipeline(index).run(both) }
         File(card, "DCIM/b.png").delete()
 
@@ -365,7 +365,7 @@ class PipelineTest {
     }
 
     /** A source that runs [action] once the walk is over, like a review action that comes after the scan passed the folder. */
-    private fun afterWalk(action: suspend () -> Unit) = object : ImageSource {
+    private fun afterWalk(action: suspend () -> Unit) = object : MediaSource {
         override val walkedRoots get() = source.walkedRoots
 
         override fun scan() = flow {
@@ -407,7 +407,7 @@ class PipelineTest {
     fun `a trashed row on a volume the scan did not walk is kept even if the trash lost its item`() {
         val card = File(folder.root, "card")
         TestImage.texture(64, 48, 1).save(File(card, "DCIM/b.png").apply { parentFile!!.mkdirs() })
-        val both = MergedImageSource(listOf(FilesystemImageSource(root), FilesystemImageSource(card)))
+        val both = MergedMediaSource(listOf(FilesystemMediaSource(root), FilesystemMediaSource(card)))
         save("DCIM/Camera/a.png")
         runBlocking { Pipeline(index).run(both) }
         val onCard = File(card, "DCIM/b.png").toMediaRef()
@@ -1447,7 +1447,7 @@ class PipelineTest {
     fun `stickers analyzed before the real images leave the same stored results as stickers analyzed after them`() {
         stickersAmongPhotos()
         File(root, "$stickerFolder/s1.png").copyTo(File(root, "WhatsApp/Media/s1-copy.png")) // a group across the two
-        val onlyStickers = object : ImageSource {
+        val onlyStickers = object : MediaSource {
             override val walkedRoots get() = source.walkedRoots
 
             override fun scan() = source.scan().filter { isStickerFolder(it.path) }
