@@ -834,12 +834,12 @@ class PipelineTest {
     fun `one image at a time gives the same signals as many`() {
         photos()
         run(Pipeline(index, parallelism = 1))
-        val serial = runBlocking { index.indexedImages() }.associate { it.ref.path to it.signals.toSet() }
+        val serial = runBlocking { index.indexedMedia() }.associate { it.ref.path to it.signals.toSet() }
         val other = memoryIndex()
 
         runBlocking { Pipeline(other, parallelism = 8).run(source) }
 
-        assertEquals(serial, runBlocking { other.indexedImages() }.associate { it.ref.path to it.signals.toSet() })
+        assertEquals(serial, runBlocking { other.indexedMedia() }.associate { it.ref.path to it.signals.toSet() })
         other.close()
     }
 
@@ -1436,7 +1436,7 @@ class PipelineTest {
 
     private fun storedResults(index: ImageIndex) = runBlocking {
         listOf(
-            index.indexedImages().associate { it.ref.path to it.signals.toSet() },
+            index.indexedMedia().associate { it.ref.path to it.signals.toSet() },
             index.allMetadata(),
             index.perceptualHashes(),
             index.embeddings("mean_color", 1).mapValues { it.value.toList() },

@@ -97,7 +97,7 @@ data class Signal(
 data class SignalIdentity(val kind: Kind, val group: String, val role: String)
 
 /** An image as the ranker sees it. */
-data class IndexedImage(
+data class IndexedMedia(
     val ref: MediaRef,
     val reviewState: ReviewState = ReviewState.UNREVIEWED,
     val signals: List<Signal> = emptyList(),

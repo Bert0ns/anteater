@@ -4,7 +4,7 @@ package io.github.bert0ns.cribrum.ranker
 import io.github.bert0ns.cribrum.detectors.groupId
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
-import io.github.bert0ns.cribrum.model.IndexedImage
+import io.github.bert0ns.cribrum.model.IndexedMedia
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Protection
 import io.github.bert0ns.cribrum.model.ROLE_KEY
@@ -25,7 +25,7 @@ private fun image(
     vararg signals: Signal,
     state: ReviewState = ReviewState.UNREVIEWED,
     seenWhenKept: Set<SignalIdentity> = emptySet(),
-) = IndexedImage(MediaRef(name, 0, 0), state, signals.toList(), seenWhenKept)
+) = IndexedMedia(MediaRef(name, 0, 0), state, signals.toList(), seenWhenKept)
 
 private fun blur(score: Float, version: Int = 1) = Signal("blur", version, Category.BLURRY, score)
 
@@ -43,7 +43,7 @@ private fun favorite(score: Float = 1f) = Signal("favorite", 1, Protection.FAVOR
 
 private fun album(score: Float = 1f) = Signal("album", 1, Protection.ALBUM, score)
 
-private fun rank(vararg images: IndexedImage) = Ranker(TEST_THRESHOLDS).rank(images.toList())
+private fun rank(vararg images: IndexedMedia) = Ranker(TEST_THRESHOLDS).rank(images.toList())
 
 private fun names(candidates: List<Candidate>) = candidates.map { it.image.ref.path }
 

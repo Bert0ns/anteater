@@ -40,7 +40,7 @@ from cribrum_lab.folders import is_sticker_folder
 from cribrum_lab.index import ImageIndex
 from cribrum_lab.labels import Decision, Label, LabelStore
 from cribrum_lab.mobileclip import MobileClip
-from cribrum_lab.model import Category, IndexedImage, Protection, Signal
+from cribrum_lab.model import Category, IndexedMedia, Protection, Signal
 from cribrum_lab.ranker import THRESHOLDS, Ranker
 from cribrum_lab.runtime import OnnxRuntime
 
@@ -161,7 +161,7 @@ def _coverages(path: Path) -> tuple[str, dict[str, float] | None]:
 
 def compute_coverage(index_path: Path, out: Path, jobs: int) -> None:
     with ImageIndex(index_path) as index:
-        images = index.indexed_images()
+        images = index.indexed_media()
     paths = [i.ref.path for i in images if any(s.detector_id == "document" for s in i.signals)]
     result, failed = {}, 0
     context = multiprocessing.get_context("forkserver")
@@ -229,7 +229,7 @@ def measure_speed(coverage_file: Path, out: Path, images: int, rounds: int) -> N
 
 
 def document_signals(
-    images: Sequence[IndexedImage],
+    images: Sequence[IndexedMedia],
     embeddings: Mapping[Path, np.ndarray],
     coverage: Mapping[Path, float],
 ) -> dict[Path, list[Signal]]:
@@ -259,7 +259,7 @@ def agreement(today: Sequence[float], variant: Sequence[float]) -> dict[str, flo
     }
 
 
-def protection_levels(images: Sequence[IndexedImage]) -> dict[str, float]:
+def protection_levels(images: Sequence[IndexedMedia]) -> dict[str, float]:
     """How the STICKER list is ordered: every sticker scores 1, so only protection and then
     the path hash order it."""
     stickers = [i for i in images if is_sticker_folder(i.ref.path)]
@@ -278,7 +278,7 @@ def protection_levels(images: Sequence[IndexedImage]) -> dict[str, float]:
     }
 
 
-def face_rates(images: Sequence[IndexedImage], labels: Sequence[Label]) -> dict[str, float]:
+def face_rates(images: Sequence[IndexedMedia], labels: Sequence[Label]) -> dict[str, float]:
     """Share of the labeled stickers, kept and deleted, with a FACES score above 0."""
     faces = {
         i.ref.path: any(s.category is Protection.FACES and s.score > 0 for s in i.signals)
@@ -294,8 +294,8 @@ def face_rates(images: Sequence[IndexedImage], labels: Sequence[Label]) -> dict[
 
 
 def bootstrap_deletes_first(
-    before: Sequence[IndexedImage],
-    after: Sequence[IndexedImage],
+    before: Sequence[IndexedMedia],
+    after: Sequence[IndexedMedia],
     labels: Sequence[Label],
     category: Category,
     rounds: int = BOOTSTRAP_ROUNDS,
@@ -304,7 +304,7 @@ def bootstrap_deletes_first(
     """95% interval of the change in `deletes_first` of the category's list, after minus
     before, resampling the labeled images it lists. Both orders see the same resample."""
 
-    def positions(images: Sequence[IndexedImage]) -> dict[Path, int]:
+    def positions(images: Sequence[IndexedMedia]) -> dict[Path, int]:
         ranked = [c for c in Ranker().rank(images) if c.is_candidate]
         listed = Ranker.by_category(ranked).get(category, [])
         return {c.image.ref.path: i for i, c in enumerate(listed)}
@@ -333,7 +333,7 @@ def _auc(positions: np.ndarray, deletes: np.ndarray) -> float:
 
 def report(index_path: Path, labels_path: Path, coverage_file: Path, speed_file: Path) -> str:
     with ImageIndex(index_path) as index:
-        images = index.indexed_images()
+        images = index.indexed_media()
         embeddings = index.embeddings(MobileClip.id, MobileClip.version)
     with LabelStore(labels_path) as store:
         labels = store.all()
@@ -446,7 +446,7 @@ def _evaluation_row(result: CategoryResult) -> str:
     return f"{result.caught}, {result.only_caught}, {result.false_positives}, {result.candidates}"
 
 
-def _user_thresholds(before: Sequence[IndexedImage], after: Sequence[IndexedImage]) -> list[str]:
+def _user_thresholds(before: Sequence[IndexedMedia], after: Sequence[IndexedMedia]) -> list[str]:
     """At every DOCUMENT threshold the user can set, both sides at that threshold: the
     candidates dropped and added, and the images that leave and join each category."""
     lines, unchanged = ["  at each user DOCUMENT threshold, -left/+joined:"], []
@@ -468,7 +468,7 @@ def _user_thresholds(before: Sequence[IndexedImage], after: Sequence[IndexedImag
     return lines
 
 
-def _retuned(before: Sequence[IndexedImage], after: Sequence[IndexedImage]) -> list[str]:
+def _retuned(before: Sequence[IndexedMedia], after: Sequence[IndexedMedia]) -> list[str]:
     """Today's candidates at the default thresholds against the variant's at a lower DOCUMENT
     threshold: whether a retune wins back what the variant drops, and what it adds."""
     today = {c.image.ref.path for c in Ranker().rank(before) if c.is_candidate}

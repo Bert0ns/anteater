@@ -59,7 +59,7 @@ class ImageIndexTest {
     private fun test(block: suspend ImageIndex.() -> Unit) = runBlocking { index.block() }
 
     @Test
-    fun `indexedImages does not wait for a write in progress, and reads what was committed`() {
+    fun `indexedMedia does not wait for a write in progress, and reads what was committed`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.deleteDatabase(SNAPSHOT_TEST)
         val db = Room.databaseBuilder(context, IndexDatabase::class.java, SNAPSHOT_TEST).build()
@@ -82,13 +82,13 @@ class ImageIndexTest {
             }
             try {
                 assertTrue(writing.await(5, TimeUnit.SECONDS))
-                val read = runBlocking { withTimeout(5_000) { file.indexedImages() } }
+                val read = runBlocking { withTimeout(5_000) { file.indexedMedia() } }
                 assertEquals(listOf(PHOTO to ReviewState.UNREVIEWED), read.map { it.ref to it.reviewState })
             } finally {
                 release.countDown()
                 writer.join()
             }
-            assertEquals(ReviewState.KEPT, runBlocking { file.indexedImages() }.single().reviewState)
+            assertEquals(ReviewState.KEPT, runBlocking { file.indexedMedia() }.single().reviewState)
         }
         context.deleteDatabase(SNAPSHOT_TEST)
     }
@@ -464,7 +464,7 @@ class ImageIndexTest {
         setReviewState(PHOTO.path, ReviewState.KEPT)
         setSignals(PHOTO.path, "blur", 2, listOf(Signal("blur", 2, Category.BLURRY, 0.9f)))
 
-        val image = indexedImages().single()
+        val image = indexedMedia().single()
         assertEquals(ReviewState.KEPT, image.reviewState)
         assertEquals(listOf(Signal("blur", 2, Category.BLURRY, 0.9f)), image.signals)
         assertEquals(setOf(BLUR.identity), image.seenWhenKept)
@@ -491,11 +491,11 @@ class ImageIndexTest {
         setReviewState(PHOTO.path, ReviewState.KEPT)
 
         setSignals(PHOTO.path, "near_duplicate", 1, listOf(group("g", Role.BEST)))
-        assertEquals(setOf(BLUR.identity, group("g", Role.BEST).identity), indexedImages().single().seenWhenKept)
+        assertEquals(setOf(BLUR.identity, group("g", Role.BEST).identity), indexedMedia().single().seenWhenKept)
         assertEquals(setOf("blur", "near_duplicate"), keptDetectors(PHOTO.path))
 
         setSignals(PHOTO.path, "near_duplicate", 1, listOf(group("g", Role.INFERIOR)))
-        assertEquals(setOf(BLUR.identity, group("g", Role.BEST).identity), indexedImages().single().seenWhenKept)
+        assertEquals(setOf(BLUR.identity, group("g", Role.BEST).identity), indexedMedia().single().seenWhenKept)
     }
 
     @Test
@@ -504,7 +504,7 @@ class ImageIndexTest {
 
         setSignals(PHOTO.path, "blur", 1, listOf(BLUR))
 
-        assertEquals(emptySet<Any>(), indexedImages().single().seenWhenKept)
+        assertEquals(emptySet<Any>(), indexedMedia().single().seenWhenKept)
         assertEquals(emptySet<Any>(), keptDetectors(PHOTO.path))
     }
 
@@ -516,7 +516,7 @@ class ImageIndexTest {
 
         setReviewState(PHOTO.path, ReviewState.UNREVIEWED)
 
-        assertEquals(emptySet<Any>(), indexedImages().single().seenWhenKept)
+        assertEquals(emptySet<Any>(), indexedMedia().single().seenWhenKept)
         assertEquals(emptySet<Any>(), keptDetectors(PHOTO.path))
     }
 
@@ -528,7 +528,7 @@ class ImageIndexTest {
 
         assertEquals(
             listOf(PHOTO to emptyList(), OTHER to listOf(BLUR)),
-            indexedImages().map { it.ref to it.signals },
+            indexedMedia().map { it.ref to it.signals },
         )
     }
 
@@ -707,7 +707,7 @@ class ImageIndexTest {
         setSignals(PHOTO.path, "faces", 1, listOf(faces))
 
         assertEquals(listOf(faces), signals(PHOTO.path))
-        assertEquals(listOf(faces), indexedImages().single().signals)
+        assertEquals(listOf(faces), indexedMedia().single().signals)
     }
 
     @Test
@@ -873,7 +873,7 @@ class ImageIndexTest {
         "excludedFolders" to { excludedFolders() },
         "notTrashed" to { notTrashed() },
         "capturedAt" to { capturedAt() },
-        "indexedImages" to { indexedImages() },
+        "indexedMedia" to { indexedMedia() },
         "getVersion" to { version },
     )
 

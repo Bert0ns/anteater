@@ -5,7 +5,7 @@ package io.github.bert0ns.cribrum.ranker
 import io.github.bert0ns.cribrum.detectors.pathDigest
 import io.github.bert0ns.cribrum.folders.isExcluded
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.IndexedImage
+import io.github.bert0ns.cribrum.model.IndexedMedia
 import io.github.bert0ns.cribrum.model.Protection
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Signal
@@ -37,7 +37,7 @@ const val UNIQUE_WEIGHT = 0.2f
 val GROUP_CATEGORIES = setOf(Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE, Category.BURST)
 
 data class Candidate(
-    val image: IndexedImage,
+    val image: IndexedMedia,
     /**
      * Signals past their threshold, strongest first. Empty when the image is listed only for
      * "review everything".
@@ -61,7 +61,7 @@ class Ranker(private val thresholds: Map<Category, Float> = THRESHOLDS) {
      * duplicate group or a new role in its group. A newer detector version or a higher score is
      * not new. The index counts a detector's first result after the keep as seen, so it is not new either. Trashed images are never listed, nor are those in an excluded folder.
      */
-    fun rank(images: List<IndexedImage>, excludedFolders: Collection<String> = emptyList()): List<Candidate> {
+    fun rank(images: List<IndexedMedia>, excludedFolders: Collection<String> = emptyList()): List<Candidate> {
         val ranked = mutableListOf<Candidate>()
         for (image in images) {
             if (image.reviewState == ReviewState.TRASHED || isExcluded(image.ref.path, excludedFolders)) continue

@@ -5,7 +5,7 @@ import io.github.bert0ns.cribrum.index.memoryIndex
 import io.github.bert0ns.cribrum.index.store
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
-import io.github.bert0ns.cribrum.model.IndexedImage
+import io.github.bert0ns.cribrum.model.IndexedMedia
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Role
@@ -24,7 +24,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * The ranker and the review read the index through `indexedImages()`. Here they run on the images as the
+ * The ranker and the review read the index through `indexedMedia()`. Here they run on the images as the
  * fixture built them, with plain evidence maps, and on the images read back from the index: the results must match.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -39,9 +39,9 @@ class EvidenceEquivalenceTest {
     fun close() = index.close()
 
     /** The fixture as the detectors made it, with the states and kept signals that `setReviewState` stored. */
-    private suspend fun expectedImages(newCopy: Signal): List<IndexedImage> = fixture.mapIndexed { i, image ->
+    private suspend fun expectedImages(newCopy: Signal): List<IndexedMedia> = fixture.mapIndexed { i, image ->
         val signals = image.signals.values.flatten() + listOfNotNull(newCopy.takeIf { i % 14 == 0 })
-        IndexedImage(image.ref, index.reviewState(image.ref.path), signals, index.keptSignals(image.ref.path))
+        IndexedMedia(image.ref, index.reviewState(image.ref.path), signals, index.keptSignals(image.ref.path))
     }
 
     private fun review(trashDir: String) = Review(index, AppTrash({ listOf(folder.newFolder(trashDir)) }))
@@ -54,7 +54,7 @@ class EvidenceEquivalenceTest {
         val newCopy = Signal("copy", 1, Category.EXACT_DUPLICATE, 1f, mapOf(GROUP_KEY to "new", ROLE_KEY to Role.INFERIOR.value))
         fixture.filterIndexed { i, _ -> i % 14 == 0 }.forEach { index.setSignals(it.ref.path, "copy", 1, listOf(newCopy)) }
         fixture.filterIndexed { i, _ -> i % 11 == 0 }.forEach { index.setReviewState(it.ref.path, ReviewState.TRASHED) }
-        val read = index.indexedImages()
+        val read = index.indexedMedia()
         val expected = expectedImages(newCopy).sortedBy { it.ref.path }
         val excluded = listOf("/photos/5")
 

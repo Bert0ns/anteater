@@ -15,7 +15,7 @@ from typing import Self
 import numpy as np
 
 from cribrum_lab.metadata import ImageMetadata
-from cribrum_lab.model import IndexedImage, MediaRef, ReviewState, Signal, kind
+from cribrum_lab.model import IndexedMedia, MediaRef, ReviewState, Signal, kind
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS images (
@@ -468,7 +468,7 @@ class ImageIndex:
         rows = self._db.execute("SELECT path FROM excluded_folders ORDER BY path")
         return [Path(path) for (path,) in rows]
 
-    def indexed_images(self) -> list[IndexedImage]:
+    def indexed_media(self) -> list[IndexedMedia]:
         """Every image with its review state and signals, as the ranker takes them."""
         signals = defaultdict(list)
         for path, *fields, evidence in self._db.execute(
@@ -486,7 +486,7 @@ class ImageIndex:
             "SELECT path, size, mtime_ns, review_state FROM images ORDER BY path"
         )
         return [
-            IndexedImage(
+            IndexedMedia(
                 MediaRef(Path(path), size, mtime_ns),
                 ReviewState(state),
                 tuple(signals[path]),

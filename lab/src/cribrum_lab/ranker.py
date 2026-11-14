@@ -8,7 +8,7 @@ from pathlib import Path
 import xxhash
 
 from cribrum_lab.folders import is_excluded
-from cribrum_lab.model import Category, IndexedImage, Protection, ReviewState, Signal
+from cribrum_lab.model import Category, IndexedMedia, Protection, ReviewState, Signal
 
 THRESHOLDS = {
     Category.EXACT_DUPLICATE: 0.5,
@@ -33,7 +33,7 @@ GROUP_CATEGORIES = {Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE, Category.
 
 @dataclass(frozen=True)
 class Candidate:
-    image: IndexedImage
+    image: IndexedMedia
     reasons: tuple[Signal, ...]
     """Signals past their threshold, strongest first. Empty when the image is listed only
     for "review everything"."""
@@ -52,7 +52,7 @@ class Ranker:
         self.thresholds = thresholds
 
     def rank(
-        self, images: Sequence[IndexedImage], excluded_folders: Iterable[Path] = ()
+        self, images: Sequence[IndexedMedia], excluded_folders: Iterable[Path] = ()
     ) -> list[Candidate]:
         """The "review everything" order: every unreviewed image, most likely deletable first.
 

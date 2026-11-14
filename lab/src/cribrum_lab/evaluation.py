@@ -16,7 +16,7 @@ import numpy as np
 
 from cribrum_lab.folders import is_camera_folder, is_messaging_folder, is_sticker_folder
 from cribrum_lab.labels import Decision, Label, Stratum
-from cribrum_lab.model import Category, IndexedImage, ReviewState
+from cribrum_lab.model import Category, IndexedMedia, ReviewState
 from cribrum_lab.ranker import THRESHOLDS, Ranker
 
 SAMPLING_THRESHOLDS = {
@@ -115,7 +115,7 @@ class Report:
 
 
 def evaluate(
-    images: Sequence[IndexedImage],
+    images: Sequence[IndexedMedia],
     labels: Sequence[Label],
     thresholds: Mapping[Category, float] = THRESHOLDS,
     targets: Sequence[float] = CURVE_TARGETS,
@@ -180,7 +180,7 @@ def evaluate(
 
 
 def _library_weights(
-    images: Sequence[IndexedImage],
+    images: Sequence[IndexedMedia],
     labeled: Sequence[Label],
     row: Mapping[Path, int],
     sampled_with: Mapping[Category, float],
@@ -381,7 +381,7 @@ def _closest(scores: np.ndarray, limits: np.ndarray, categories: list[Category])
     return categories[int(fractions.argmax())].value if fractions.max() > 0 else "none"
 
 
-def _score(image: IndexedImage, category: Category) -> float:
+def _score(image: IndexedMedia, category: Category) -> float:
     return max((s.score for s in image.signals if s.category is category), default=0.0)
 
 

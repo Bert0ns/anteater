@@ -824,7 +824,7 @@ class ReviewTest {
         val best = image("DCIM/best.jpg", nearDuplicate("g", Role.BEST))
         val copy = image("DCIM/copy.jpg", nearDuplicate("g", Role.INFERIOR))
         apply(emptyList(), listOf(best)) // kept in an earlier session
-        val kept = index.indexedImages().single { it.ref.path == best.path }.seenWhenKept
+        val kept = index.indexedMedia().single { it.ref.path == best.path }.seenWhenKept
         val detectors = index.keptDetectors(best.path)
         assertTrue(kept.isNotEmpty() && detectors.isNotEmpty())
 
@@ -834,7 +834,7 @@ class ReviewTest {
         assertEquals(emptyList<MediaRef>(), undo(decision))
 
         assertEquals(ReviewState.KEPT, index.reviewState(best.path))
-        assertEquals(kept, index.indexedImages().single { it.ref.path == best.path }.seenWhenKept)
+        assertEquals(kept, index.indexedMedia().single { it.ref.path == best.path }.seenWhenKept)
         assertEquals(detectors, index.keptDetectors(best.path))
         assertEquals(ReviewState.UNREVIEWED, index.reviewState(copy.path))
         assertTrue(File(copy.path).exists())
@@ -928,7 +928,7 @@ class ReviewTest {
         undo(decision)
 
         assertEquals(ReviewState.UNREVIEWED, index.reviewState(best.path))
-        assertEquals(emptySet<Any>(), index.indexedImages().single { it.ref.path == best.path }.seenWhenKept)
+        assertEquals(emptySet<Any>(), index.indexedMedia().single { it.ref.path == best.path }.seenWhenKept)
     }
 
     @Test
@@ -1146,10 +1146,10 @@ class ReviewTest {
     @Test
     fun `a write during the read leaves the ranking for the next read to replace`() = test {
         val a = image("a.jpg", blurry(0.9f))
-        readImages = { index.indexedImages().also { index.setReviewState(a.path, ReviewState.TRASHED) } }
+        readImages = { index.indexedMedia().also { index.setReviewState(a.path, ReviewState.TRASHED) } }
         assertEquals(1, blurryCount(overview()))
 
-        readImages = index::indexedImages
+        readImages = index::indexedMedia
 
         assertEquals(0, blurryCount(overview()))
     }
@@ -1165,7 +1165,7 @@ class ReviewTest {
                 entered.complete(Unit)
                 release.await()
             }
-            index.indexedImages()
+            index.indexedMedia()
         }
         coroutineScope {
             val slow = async { overview() }

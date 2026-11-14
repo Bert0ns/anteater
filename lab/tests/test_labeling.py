@@ -12,12 +12,12 @@ from PIL import Image
 from cribrum_lab.hashing import content_hash
 from cribrum_lab.labeling import LabelingServer, clusters, sample, strata
 from cribrum_lab.labels import Decision, LabelStore, Stratum
-from cribrum_lab.model import Category, IndexedImage, MediaRef, Signal
+from cribrum_lab.model import Category, IndexedMedia, MediaRef, Signal
 from cribrum_lab.ranker import Candidate
 
 
 def candidate(name, category=None):
-    image = IndexedImage(MediaRef(Path(name), 0, 0))
+    image = IndexedMedia(MediaRef(Path(name), 0, 0))
     reasons = (Signal("x", 1, category, 1.0),) if category else ()
     return Candidate(image, reasons, 2.0 if category else 0.5)
 
