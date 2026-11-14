@@ -36,6 +36,7 @@ import io.github.bert0ns.cribrum.metadata.readMetadata
 import io.github.bert0ns.cribrum.mobileclip.preprocess
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.sources.MediaSource
@@ -245,7 +246,9 @@ class Pipeline(
         stats.forgotten = gone.size
         stats.images = found.size
 
-        val pending = stickersLast(index.withoutMetadata())
+        // The metadata read from an image header, and every step after it but the group detectors, take images only:
+        // a video is recorded and nothing more (docs/design.md §4).
+        val pending = stickersLast(index.withoutMetadata().filter { it.mediaType == MediaType.IMAGE })
         phase("metadata", stats) {
             readAndStore(pending, "metadata", progress, read = { attempt { metadataReader(it) } }) { batch -> storeMetadata(batch, stats) }
         }
@@ -259,7 +262,8 @@ class Pipeline(
         stats.unreadablePaths = found.filter { it in unreadable }
         stats.unreadable = stats.unreadablePaths.size
 
-        val images = index.images().filter { it.path in found }
+        val media = index.images().filter { it.path in found }
+        val images = media.filter { it.mediaType == MediaType.IMAGE }
         val readable = images.filter { it.path !in unreadable } // group detectors still see the unreadable files
         // The home screen lists candidates as soon as these are stored; the embeddings come after.
         phase("detectors", stats) {
@@ -300,10 +304,11 @@ class Pipeline(
         val hashed = index.hashedPaths()
         // Burst reads blur's stored measure: a new blur version is new input, though no file changed.
         val blurInput = blur?.let { "${it.id}:${it.version}" }.orEmpty()
-        val fingerprint = fingerprint(images, "$model:${images.count { it.path in hashed }}:$blurInput")
         phase("groupDetectors", stats) {
             for (detector in groupDetectors) {
-                if (upToDate(detector, fingerprint, images)) {
+                val inputs = media.filter { it.mediaType in detector.mediaTypes }
+                val fingerprint = fingerprint(inputs, "$model:${inputs.count { it.path in hashed }}:$blurInput")
+                if (upToDate(detector, fingerprint, inputs)) {
                     stats.skippedGroupDetectors += detector.id
                     continue
                 }
@@ -311,10 +316,10 @@ class Pipeline(
                 progress(detector.id, 0, 1)
                 hashFailed.clear()
                 try {
-                    val signals = traceSuspend("Group.${detector.id}.analyze") { detector.analyze(images, context) }
+                    val signals = traceSuspend("Group.${detector.id}.analyze") { detector.analyze(inputs, context) }
                     traceSuspend("Group.${detector.id}.store") {
                         // An image in two groups is rewritten by each of their detectors at every run, to keep its signals' order.
-                        stats.counts["${detector.id} rewritten"] = index.setGroupSignals(detector.id, detector.version, images.associate { it.path to signals[it].orEmpty() })
+                        stats.counts["${detector.id} rewritten"] = index.setGroupSignals(detector.id, detector.version, inputs.associate { it.path to signals[it].orEmpty() })
                         index.setGroupFingerprint(detector.id, detector.version, fingerprint, hashFailed.sorted())
                     }
                     stats.detectorRuns++
@@ -531,7 +536,7 @@ class Pipeline(
         val tasks = traceSuspend("Pipeline.tasks") {
             images.mapNotNull { image ->
                 val sticker = isStickerFolder(image.path)
-                val todo = selected.filter { image.path !in analyzed.getValue(it.id) && (!sticker || runsOnStickers(it)) }
+                val todo = selected.filter { image.mediaType in it.mediaTypes && image.path !in analyzed.getValue(it.id) && (!sticker || runsOnStickers(it)) }
                 val needsPhash = image.path !in hashed
                 // Only an image with work reads its metadata: a query each for the whole library took most of a scan with few changes.
                 // No metadata: the image was trashed before its metadata was read, and a restore brings it back to the next run.

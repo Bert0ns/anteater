@@ -213,7 +213,7 @@ interface IndexDao {
     @Query("SELECT path, size, mtime_ns, media_type FROM images ORDER BY path")
     suspend fun images(): List<StoredRef>
 
-    @Query("SELECT path, size, mtime_ns, media_type FROM images WHERE review_state != 'trashed' ORDER BY path")
+    @Query("SELECT path, size, mtime_ns, media_type FROM images WHERE review_state != 'trashed' AND media_type = 'image' ORDER BY path")
     suspend fun notTrashed(): List<StoredRef>
 
     @Query("DELETE FROM images WHERE path IN (:paths)")
@@ -305,7 +305,7 @@ interface IndexDao {
     @Query("SELECT path, detector_id, detector_version FROM analyses WHERE detector_id IN (:detectorIds)")
     suspend fun analyses(detectorIds: List<String>): List<AnalysisRow>
 
-    @Query("SELECT path FROM images WHERE NOT unreadable AND review_state != 'trashed'")
+    @Query("SELECT path FROM images WHERE NOT unreadable AND review_state != 'trashed' AND media_type = 'image'")
     suspend fun readableNotTrashed(): List<String>
 
     @Query("DELETE FROM analyses WHERE path = :path")
@@ -416,7 +416,7 @@ interface IndexDao {
 
     @Query(
         """SELECT i.path, i.size, i.mtime_ns, i.media_type FROM images i LEFT JOIN jpegs j ON j.path = i.path
-           WHERE i.mime = 'image/jpeg' AND NOT i.unreadable AND i.review_state != 'trashed'
+           WHERE i.mime = 'image/jpeg' AND i.media_type = 'image' AND NOT i.unreadable AND i.review_state != 'trashed'
            AND (j.path IS NULL OR j.version != :version OR j.page_width IS NOT NULL) ORDER BY i.path""",
     )
     suspend fun jpegsToRead(version: Int): List<StoredRef>
@@ -428,7 +428,7 @@ interface IndexDao {
     @Query(
         """SELECT i.size, COALESCE(i.width, j.page_width) AS width, COALESCE(i.height, j.page_height) AS height, j.*
            FROM images i JOIN jpegs j ON j.path = i.path
-           WHERE i.review_state != 'trashed' AND NOT i.unreadable AND COALESCE(i.width, j.page_width) IS NOT NULL
+           WHERE i.review_state != 'trashed' AND i.media_type = 'image' AND NOT i.unreadable AND COALESCE(i.width, j.page_width) IS NOT NULL
            AND j.version = :version AND j.status = 'eligible'
            ORDER BY i.size DESC, i.path""",
     )

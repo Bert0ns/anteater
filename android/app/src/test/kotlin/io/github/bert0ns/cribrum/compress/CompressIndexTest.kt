@@ -3,6 +3,7 @@ package io.github.bert0ns.cribrum.compress
 import io.github.bert0ns.cribrum.index.memoryIndex
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.ReviewState
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -72,5 +73,16 @@ class CompressIndexTest {
         index.setMetadata("/p/read.jpg", ImageMetadata(4000, 3000, "image/jpeg"))
         assertEquals(listOf("/p/new.jpg", "/p/read.jpg"), index.jpegsToRead().map { it.path })
         assertEquals(emptyList<String>(), listed())
+    }
+
+    @Test
+    fun `a video is neither read as a JPEG nor listed, whatever the index holds for it`() = test {
+        photo("/p/a.jpg", 10)
+        index.record(MediaRef("/p/clip.mp4", 900, 1, MediaType.VIDEO))
+        index.setMetadata("/p/clip.mp4", ImageMetadata(4000, 3000, "image/jpeg"))
+        assertEquals(emptyList<String>(), index.jpegsToRead().map { it.path })
+        index.setJpeg("/p/clip.mp4", ELIGIBLE)
+
+        assertEquals(listOf("/p/a.jpg"), listed())
     }
 }

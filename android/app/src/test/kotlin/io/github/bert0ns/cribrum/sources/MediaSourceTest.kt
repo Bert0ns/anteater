@@ -10,6 +10,7 @@ import android.net.Uri
 import android.provider.MediaStore
 import androidx.test.core.app.ApplicationProvider
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.trash.TRASH_FOLDER
 import kotlinx.coroutines.flow.Flow
@@ -190,6 +191,13 @@ class MediaSourceTest {
         val fake = write("fake.jpg", ascii("not an image")) // the head would say no
 
         assertEquals(listOf("fake.jpg"), scannedKnowing(fake.toMediaRef()))
+    }
+
+    @Test
+    fun `yields a known file as the index has it, media type included`() {
+        val clip = write("clip.mp4", ascii("not read")).toMediaRef(MediaType.VIDEO)
+
+        assertEquals(listOf(clip), runBlocking { FilesystemMediaSource(root) { listOf(clip) }.scan().toList() })
     }
 
     @Test

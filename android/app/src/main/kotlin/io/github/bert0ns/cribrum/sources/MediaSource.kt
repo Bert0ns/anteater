@@ -63,7 +63,7 @@ private const val NOT_IMAGES_BATCH = 300
  * Hidden folders and folders with a `.nomedia` file are included: that is where messaging apps
  * keep media the gallery never shows. Files are recognized by their content, not their
  * extension, except a file that [indexed] has with the same path, size and mtime: the index
- * took it as an image, from this walk or from MediaStore, so its head is not read again. The
+ * took it, from this walk or from MediaStore, so its head is not read again and it keeps the media type the index has. The
  * same goes for a file [notImages] has: an earlier walk found it not to be an image. The walk
  * adds the non-images it sniffs, and drops the ones it no longer finds when it listed the whole root.
  * Symlinks are skipped so no file is yielded twice, and so are FIFOs and other special files,
@@ -95,7 +95,8 @@ class FilesystemMediaSource(
         var entryCount = 0
         var sniffCount = 0
         var listedAll = true
-        val known = indexed().toHashSet()
+        // By path, so a file the index holds is yielded with the media type it was recorded with.
+        val known = indexed().associateBy { it.path }
         val remembered = notImages?.notImages().orEmpty()
         val rememberedSet = remembered.toHashSet()
         val metNotImages = HashSet<String>() // paths of non-images this walk met, remembered or newly sniffed
@@ -121,8 +122,11 @@ class FilesystemMediaSource(
             for ((file, attributes) in files) {
                 if (hasSkippedPrefix(file)) continue // the folders were decided when they were listed
                 if (!attributes.isRegularFile) continue
-                val image = file.toMediaRef(attributes)
-                if (image !in known) {
+                var image = file.toMediaRef(attributes)
+                val indexedRef = known[image.path]
+                if (indexedRef != null && indexedRef.size == image.size && indexedRef.mtimeNs == image.mtimeNs) {
+                    image = indexedRef
+                } else {
                     val again = image in rememberedSet
                     if (!again) sniffCount++
                     val isImageFile = if (again) false else sniff(file) ?: continue
