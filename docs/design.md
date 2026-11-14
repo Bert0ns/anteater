@@ -92,6 +92,12 @@ Each detector looks at an image (or at the image index) and emits **signals**. N
 | `FORWARDED` | Messaging-app folder, missing camera EXIF, meme/sticker zero-shot prompts | Forwarded memes and greeting images |
 | `STICKER` | The file is in a messaging app's sticker folder (`WhatsApp Stickers`, `WhatsApp Backup Excluded Stickers`) | Nearly deterministic. On the first phone, 62% of the images were stickers. |
 
+### Detectors for videos
+
+No detector runs on a video yet. Each detector will declare the media types it accepts, images only by default, and the pipeline will give it only those (§7, #383). `check_parity.py` compares the declarations of the lab and the app. The steps that read an image take only images: the metadata read from an image header, the JPEG headers, the perceptual hash, the embeddings and the text coverage. A test checks that none of them receives a video (#383).
+
+A video signal reuses an image category when it means the same thing: `EXACT_DUPLICATE` (#389), and later `NEAR_DUPLICATE` (#396), `BLURRY` and `BAD_EXPOSURE` (#394). A new category is only for a new meaning, such as the takes of one moment (#392) or a short clip recorded by mistake (#395). A group never mixes images and videos. A threshold can differ per media type, so a category that covers both can have one threshold for images and another for videos. The Videos tab lists the categories that have a video detector (§8).
+
 ### Order and stickers
 
 The detectors that read no embedding run first (`BLURRY`, `BAD_EXPOSURE`, `SCREENSHOT`, `FACES`, `STICKER`), with the perceptual hash, and on a sticker only `SCREENSHOT` and `STICKER` (below). Then the embeddings are computed, and `DOCUMENT` and `FORWARDED`, which read them, run on each batch as soon as its embeddings are stored (§7), and last the group detectors. On the first phone's index (11,308 images) the sticker folders held 6,056 of them, and `STICKER` and `SCREENSHOT` made 6,847 of the 8,132 candidates, so most candidates are there before the first embedding.
