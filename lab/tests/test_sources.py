@@ -18,6 +18,17 @@ AVIF = b"\x00\x00\x00\x1cftypavif\x00\x00\x00\x00mif1miaf" + b"\x00" * 8
 MP4 = b"\x00\x00\x00\x18ftypisom" + b"\x00" * 12
 
 
+def ftyp(major: bytes, *compatible: bytes) -> bytes:
+    """The head of an ISO base media file: its ftyp box, then the start of the next box."""
+    body = major + b"\x00\x00\x02\x00" + b"".join(compatible)
+    return (8 + len(body)).to_bytes(4) + b"ftyp" + body + b"\x00\x00\x00\x08free"
+
+
+# The EBML header, then the DocType element of each.
+MKV = b"\x1a\x45\xdf\xa3\x9f\x42\x86\x81\x01\x42\xf7\x81\x01\x42\x82\x88matroska"
+WEBM = b"\x1a\x45\xdf\xa3\x9f\x42\x86\x81\x01\x42\xf7\x81\x01\x42\x82\x84webm"
+
+
 def write(path: Path, content: bytes) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content)
@@ -60,10 +71,61 @@ def test_detects_images_by_content_not_extension(tmp_path):
     write(tmp_path / "no_extension", JPEG)
     write(tmp_path / "photo.jpg", PNG)
     write(tmp_path / "fake.jpg", b"not an image")
-    write(tmp_path / "clip.mp4", MP4)
+    write(tmp_path / "clip.jpg", MP4)
     write(tmp_path / "empty.jpg", b"")
 
-    assert scanned_paths(tmp_path) == {Path("no_extension"), Path("photo.jpg")}
+    assert scanned_paths(tmp_path) == {Path("no_extension"), Path("photo.jpg"), Path("clip.jpg")}
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        ftyp(b"isom", b"isom", b"iso2", b"avc1", b"mp41"),
+        ftyp(b"mp42", b"isom", b"mp42"),
+        ftyp(b"qt  ", b"qt  "),
+        ftyp(b"3gp4", b"isom", b"3gp4"),
+        ftyp(b"M4V ", b"M4V ", b"M4A ", b"mp42", b"isom"),
+        MKV,
+        WEBM,
+    ],
+    ids=["MP4", "MP4 v2", "MOV", "3GP", "M4V", "Matroska", "WebM"],
+)
+def test_finds_a_video_by_its_head_and_says_it_is_one(tmp_path, content):
+    write(tmp_path / "clip", content)
+
+    [ref] = FilesystemMediaSource(tmp_path).scan()
+
+    assert ref.media_type is MediaType.VIDEO
+
+
+@pytest.mark.parametrize(
+    "content",
+    [HEIC, MIAF_HEIC, AVIF, ftyp(b"mif1", b"mif1", b"heic", b"isom")],
+    ids=["HEIC", "MIAF HEIC", "AVIF", "HEIF that also names isom"],
+)
+def test_an_image_with_an_ftyp_box_stays_an_image(tmp_path, content):
+    write(tmp_path / "a.heic", content)
+
+    [ref] = FilesystemMediaSource(tmp_path).scan()
+
+    assert ref.media_type is MediaType.IMAGE
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        ftyp(b"M4A ", b"M4A ", b"mp42", b"isom"),
+        ftyp(b"M4B ", b"M4B ", b"mp42", b"isom"),
+        ftyp(b"crx ", b"crx ", b"isom"),  # a Canon raw photo, which no head check reads
+        b"RIFF\x00\x00\x00\x00AVI LIST" + b"\x00" * 8,
+        b"\x1a\x45\xdf\xa3\x9f\x42\x82\x84none",  # EBML, but neither Matroska nor WebM
+    ],
+    ids=["M4A", "M4B", "CR3", "AVI", "other EBML"],
+)
+def test_audio_avi_and_other_containers_are_not_videos(tmp_path, content):
+    write(tmp_path / "file", content)
+
+    assert scanned_paths(tmp_path) == set()
 
 
 def test_skips_samsung_gallery_recycle_bin_at_the_root(tmp_path):
