@@ -181,7 +181,7 @@ A kept video leaves the list, and comes back only under a category with a new si
 
 The core idea is a pipeline of independent, interchangeable components.
 
-The block below uses the names decided for videos (#382), and none of it handles a video yet. The code still calls `MediaRef`, `MediaSource` and `IndexedMedia` by their old names, `ImageRef`, `ImageSource` and `IndexedImage`, until #400 renames them in the lab and the app together, before #383. An agent that reads `ImageRef` assumes it can decode the file as an image, and agents write most of this code, so the names change before any video code exists. The `images` table, `ImageIndex` and `ImageMetadata` keep their names, and so does every name that is about images only, such as the decoding, the tiles and the Compress page. `MediaType` and `mediaTypes` come with #383, and the names are a sketch that #383 may change.
+The block below uses the names decided for videos (#382), and none of it handles a video yet. The code still calls `MediaRef`, `MediaSource` and `IndexedMedia` by their old names, `ImageRef`, `ImageSource` and `IndexedImage`, until #400 renames them in the lab and the app together, before #383. An agent that reads `ImageRef` assumes it can decode the file as an image, and agents write most of this code, so the names change before any video code exists. The `images` table, `ImageIndex` and `ImageMetadata` keep their names, and so does every name that is about images only, such as the decoding, the tiles and the Compress page. `MediaType` and `mediaTypes` are placeholder names. #383 picks the final ones and updates this section in the same change.
 
 ```kotlin
 enum class MediaType { IMAGE, VIDEO }   // the index's media_type column
