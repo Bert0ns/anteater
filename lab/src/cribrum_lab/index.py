@@ -15,7 +15,7 @@ from typing import Self
 import numpy as np
 
 from cribrum_lab.metadata import ImageMetadata
-from cribrum_lab.model import IndexedMedia, MediaRef, ReviewState, Signal, kind
+from cribrum_lab.model import IndexedMedia, MediaRef, MediaType, ReviewState, Signal, kind
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS images (
@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS images (
     captured_at TEXT,
     unreadable INTEGER NOT NULL DEFAULT 0,
     content_hash TEXT,
-    perceptual_hash TEXT
+    perceptual_hash TEXT,
+    media_type TEXT NOT NULL DEFAULT 'image'
 );
 -- Which detector version last analyzed an image, even if it emitted no signal.
 CREATE TABLE IF NOT EXISTS analyses (
@@ -82,14 +83,14 @@ CREATE TABLE IF NOT EXISTS group_runs (
 CREATE TABLE IF NOT EXISTS excluded_folders (
     path TEXT PRIMARY KEY
 );
--- Files the walk sniffed and found not to be images (docs/design.md, section 4).
+-- Files the walk sniffed and found to be neither images nor videos (docs/design.md, section 4).
 CREATE TABLE IF NOT EXISTS not_images (
     path TEXT PRIMARY KEY,
     size INTEGER NOT NULL,
     mtime_ns INTEGER NOT NULL
 );
 """
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 """Bump on every schema change: an index from another version is refused, not misread."""
 
 
@@ -151,24 +152,25 @@ class ImageIndex:
             return False
         if row is None:
             self._db.execute(
-                "INSERT INTO images (path, size, mtime_ns) VALUES (?, ?, ?)",
-                (path, image.size, image.mtime_ns),
+                "INSERT INTO images (path, size, mtime_ns, media_type) VALUES (?, ?, ?, ?)",
+                (path, image.size, image.mtime_ns, image.media_type.value),
             )
         else:
             self._db.execute(
                 """UPDATE images SET size = ?, mtime_ns = ?, width = NULL, height = NULL,
                    mime = NULL, camera_make = NULL, camera_model = NULL, captured_at = NULL,
-                   unreadable = 0, content_hash = NULL, perceptual_hash = NULL
+                   unreadable = 0, content_hash = NULL, perceptual_hash = NULL, media_type = ?
                    WHERE path = ?""",
-                (image.size, image.mtime_ns, path),
+                (image.size, image.mtime_ns, image.media_type.value, path),
             )
             self._db.execute("DELETE FROM analyses WHERE path = ?", (path,))
             self._db.execute("DELETE FROM embeddings WHERE path = ?", (path,))
         return True
 
     def images(self) -> list[MediaRef]:
-        rows = self._db.execute("SELECT path, size, mtime_ns FROM images ORDER BY path")
-        return [MediaRef(Path(path), size, mtime_ns) for path, size, mtime_ns in rows]
+        """Every indexed file, videos included."""
+        rows = self._db.execute("SELECT path, size, mtime_ns, media_type FROM images ORDER BY path")
+        return [_ref(*row) for row in rows]
 
     def forget(self, paths: Iterable[Path]) -> None:
         """Removes images from the index, with everything stored about them. Files are untouched."""
@@ -194,12 +196,12 @@ class ImageIndex:
             )
 
     def without_metadata(self) -> list[MediaRef]:
-        """Images whose metadata was never read, leaving out the unreadable ones."""
+        """Files whose metadata was never read, videos included, leaving out the unreadable ones."""
         rows = self._db.execute(
-            """SELECT path, size, mtime_ns FROM images
+            """SELECT path, size, mtime_ns, media_type FROM images
                WHERE width IS NULL AND NOT unreadable ORDER BY path"""
         )
-        return [MediaRef(Path(path), size, mtime_ns) for path, size, mtime_ns in rows]
+        return [_ref(*row) for row in rows]
 
     def set_unreadable(self, path: Path) -> None:
         """Marks an image whose header can't be decoded, so it isn't retried until it changes."""
@@ -469,7 +471,8 @@ class ImageIndex:
         return [Path(path) for (path,) in rows]
 
     def indexed_media(self) -> list[IndexedMedia]:
-        """Every image with its review state and signals, as the ranker takes them."""
+        """Every image with its review state and signals, as the ranker takes them. No video:
+        nothing reviews one yet (docs/design.md, section 6.5)."""
         signals = defaultdict(list)
         for path, *fields, evidence in self._db.execute(
             """SELECT path, detector_id, detector_version, category, score, evidence
@@ -483,7 +486,8 @@ class ImageIndex:
         for path, category, group, role in self._db.execute("SELECT * FROM kept_signals"):
             seen[path].add((kind(category), group, role))
         rows = self._db.execute(
-            "SELECT path, size, mtime_ns, review_state FROM images ORDER BY path"
+            """SELECT path, size, mtime_ns, review_state FROM images
+               WHERE media_type = 'image' ORDER BY path"""
         )
         return [
             IndexedMedia(
@@ -494,6 +498,10 @@ class ImageIndex:
             )
             for path, size, mtime_ns, state in rows
         ]
+
+
+def _ref(path: str, size: int, mtime_ns: int, media_type: str) -> MediaRef:
+    return MediaRef(Path(path), size, mtime_ns, MediaType(media_type))
 
 
 def _require(found: object, path: Path) -> None:
