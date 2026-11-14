@@ -8,7 +8,7 @@ import pytest
 from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, Role
 from cribrum_lab.index import ImageIndex, IndexVersionError
 from cribrum_lab.metadata import ImageMetadata
-from cribrum_lab.model import Category, MediaRef, Protection, ReviewState, Signal
+from cribrum_lab.model import Category, MediaRef, MediaType, Protection, ReviewState, Signal
 from cribrum_lab.ranker import Ranker
 
 PHOTO = MediaRef(Path("/photos/a.jpg"), 100, 1)
@@ -274,6 +274,23 @@ def test_indexed_media_lists_unanalyzed_images_too(index):
     index.set_signals(other.path, "blur", 1, [BLUR])
 
     assert [(i.ref, i.signals) for i in index.indexed_media()] == [(PHOTO, ()), (other, (BLUR,))]
+
+
+def test_a_video_is_recorded_with_its_media_type_and_the_ranker_never_sees_it(index):
+    video = MediaRef(Path("/videos/v.mp4"), 900, 1, MediaType.VIDEO)
+    index.record_all([PHOTO, video])
+
+    assert index.images() == [PHOTO, video]
+    assert [i.ref for i in index.indexed_media()] == [PHOTO]
+
+
+def test_a_file_whose_media_type_changed_with_its_size_is_recorded_with_the_new_one(index):
+    index.record(PHOTO)
+    video = MediaRef(PHOTO.path, 900, 1, MediaType.VIDEO)
+
+    assert index.record(video)
+
+    assert index.images() == [video]
 
 
 def test_images_without_metadata_leave_out_unreadable_ones(index):

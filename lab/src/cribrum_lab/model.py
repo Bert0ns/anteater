@@ -45,13 +45,21 @@ class ReviewState(Enum):
     TRASHED = "trashed"
 
 
+class MediaType(Enum):
+    """What a file holds, as the index's `media_type` column stores it."""
+
+    IMAGE = "image"
+    VIDEO = "video"
+
+
 @dataclass(frozen=True)
 class MediaRef:
-    """Identifies an image file. Size and mtime detect changes between scans."""
+    """Identifies an image or video file. Size and mtime detect changes between scans."""
 
     path: Path
     size: int
     mtime_ns: int
+    media_type: MediaType = MediaType.IMAGE
 
 
 @dataclass(frozen=True)
