@@ -1,28 +1,31 @@
 # Cribrum — Design Document
 
 - **Status:** Draft
-- **Last updated:** 2026-11-09
+- **Last updated:** 2026-11-14
 
 ## 1. Problem
 
-A phone accumulates thousands of images. Many have no lasting value: blurry shots, near-identical bursts, lower-resolution copies of the same photo, pictures of lecture slides or homework taken for a single moment, screenshots, and forwarded media. Messaging apps make it worse. WhatsApp alone keeps received, sent, and status media in several folders, some of them hidden from the gallery.
+A phone accumulates thousands of photos and videos. Many have no lasting value: blurry shots, near-identical bursts, lower-resolution copies of the same photo, pictures of lecture slides or homework taken for a single moment, screenshots, and forwarded media. Messaging apps make it worse. WhatsApp alone keeps received, sent, and status media in several folders, some of them hidden from the gallery. Videos hold most of the space: on the maintainer's phone, 1,419 videos take 59.8 GB and all 9,568 images take 2.5 GB (#172).
 
 Gallery apps are built for browsing, not for cleanup. They don't search the whole storage, and they can't tell a memory from clutter.
+
+The app handles images only today. How it will hold videos is decided (#382) and not built yet. Epic #172 brings them in, and each section below names the issue that builds its part.
 
 ## 2. Goals and non-goals
 
 ### Goals
 
-- Find **every** image on local storage, including folders hidden from the gallery.
-- Detect images that are likely deletable, grouped into understandable categories.
+- Find **every** photo and video on local storage, including folders hidden from the gallery.
+- Detect photos and videos that are likely deletable, grouped into understandable categories.
 - Make reviewing hundreds of candidates fast.
 - Never delete anything without explicit confirmation, and keep every deletion reversible for a while.
-- Keep the code modular, so detectors, image sources, and model runtimes can be swapped or added easily.
+- Keep the code modular, so detectors, media sources, and model runtimes can be swapped or added easily.
 
 ### Non-goals (for now)
 
 - Cloud photo libraries (Google Photos and similar).
 - Cloud-based classifiers.
+- Audio, documents and other files. Cribrum cleans photos and videos, and the storage map shows only what it can clean (§8).
 - Publication on the Play Store.
 - iOS and desktop versions.
 - Visual polish beyond a clean, functional UI.
@@ -38,7 +41,7 @@ Gallery apps are built for browsing, not for cleanup. They don't search the whol
 | D5 | **Photo age is not a deletion signal.** | An old photo may be old precisely because it survived earlier cleanups. Per-image review state replaces age (see §6.3). |
 | D6 | **Nothing is deleted without confirmation, and deletions go to a trash first, kept 30 days by default.** In the review, the main button with its counts ("Trash 45, keep 3") is the confirmation of a page: it applies the page at once, and the 30 day trash and the Undo snackbar make it reversible. Only a page that marks a favourite asks first, in a dialog (#321). Deleting for good, from the trash, always asks. | Mistakes must be recoverable. How long is a user setting. A dialog on every page repeated the button's numbers on a reversible action, cost a tap per page, and taught users to tap through dialogs, which made the one that matters, for a favourite, easier to miss. |
 | D7 | **Personal, sideloaded distribution first.** | Allows the "All files access" permission (`MANAGE_EXTERNAL_STORAGE`) without Play Store review. |
-| D8 | **Local images only.** | Cloud libraries need their own cleanup, but they are a separate, future problem (see §11). |
+| D8 | **Local photos and videos only.** | Cloud libraries need their own cleanup, but they are a separate, future problem (see §11). Videos came in because they hold most of the space on a phone (§1). Audio, documents and other files stay out (§2). |
 
 ## 4. Finding images on Android
 
