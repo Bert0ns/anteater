@@ -3,7 +3,7 @@ package io.github.bert0ns.cribrum.detectors
 
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.prompts.promptVector
 import kotlinx.coroutines.runBlocking
@@ -25,7 +25,7 @@ class ForwardedDetectorTest {
         val meta = ImageMetadata(1000, 1000, "image/jpeg", cameraModel = if (camera) "Pixel 8" else null)
         val embedding = promptVector(promptText)
         val context = AnalysisContext(metadata = { meta }, embedding = { embedding })
-        val signal = runBlocking { detector.analyze(ImageRef(path, 0, 0), context) }.single()
+        val signal = runBlocking { detector.analyze(MediaRef(path, 0, 0), context) }.single()
         assertEquals(Category.FORWARDED, signal.kind)
         return signal
     }
@@ -68,7 +68,7 @@ class ForwardedDetectorTest {
         val context = AnalysisContext(metadata = { ImageMetadata(100, 100, "image/jpeg") })
         assertThrows(MissingEmbedding::class.java) {
             runBlocking {
-                ForwardedDetector().analyze(ImageRef("/sdcard/Download/a.jpg", 0, 0), context)
+                ForwardedDetector().analyze(MediaRef("/sdcard/Download/a.jpg", 0, 0), context)
             }
         }
     }

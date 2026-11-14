@@ -6,7 +6,7 @@ import android.content.SharedPreferences
 import android.text.format.DateFormat
 import androidx.core.content.edit
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -57,7 +57,7 @@ enum class ReviewOrder {
 }
 
 /** The EXIF day when the index has one, the file's last modified day otherwise. Few images have EXIF. */
-fun imageDate(image: ImageRef, capturedAt: LocalDateTime?, zone: ZoneId): LocalDate = capturedAt?.toLocalDate() ?: Instant.ofEpochSecond(0, image.mtimeNs).atZone(zone).toLocalDate()
+fun imageDate(image: MediaRef, capturedAt: LocalDateTime?, zone: ZoneId): LocalDate = capturedAt?.toLocalDate() ?: Instant.ofEpochSecond(0, image.mtimeNs).atZone(zone).toLocalDate()
 
 /** The choice per category, stored with the other settings. Off until the user picks one. */
 class ReviewOrderSetting(private val preferences: SharedPreferences) {

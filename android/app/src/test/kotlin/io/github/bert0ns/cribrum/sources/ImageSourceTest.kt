@@ -9,8 +9,8 @@ import android.database.MatrixCursor
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.test.core.app.ApplicationProvider
-import io.github.bert0ns.cribrum.model.ImageRef
-import io.github.bert0ns.cribrum.model.toImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.trash.TRASH_FOLDER
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -98,7 +98,7 @@ class ImageSourceTest {
     fun `image ref identifies the file`() {
         val file = write("a.jpg", JPEG)
 
-        assertEquals(listOf(file.toImageRef()), runBlocking { FilesystemImageSource(root).scan().toList() })
+        assertEquals(listOf(file.toMediaRef()), runBlocking { FilesystemImageSource(root).scan().toList() })
     }
 
     @Test
@@ -183,13 +183,13 @@ class ImageSourceTest {
         assertEquals(listOf("DCIM/Android/.Trash/b.jpg"), scanned())
     }
 
-    private fun scannedKnowing(vararg known: ImageRef): List<String> = runBlocking { FilesystemImageSource(root) { known.toList() }.scan().toList() }.map { File(it.path).relativeTo(root).path }
+    private fun scannedKnowing(vararg known: MediaRef): List<String> = runBlocking { FilesystemImageSource(root) { known.toList() }.scan().toList() }.map { File(it.path).relativeTo(root).path }
 
     @Test
     fun `takes a file the index has with the same size and mtime as an image without reading it`() {
         val fake = write("fake.jpg", ascii("not an image")) // the head would say no
 
-        assertEquals(listOf("fake.jpg"), scannedKnowing(fake.toImageRef()))
+        assertEquals(listOf("fake.jpg"), scannedKnowing(fake.toMediaRef()))
     }
 
     @Test
@@ -197,7 +197,7 @@ class ImageSourceTest {
         val sized = write("sized.jpg", ascii("not an image"))
         val touched = write("touched.jpg", ascii("not an image"))
         val edited = write("edited.jpg", JPEG)
-        val before = listOf(sized, touched, edited).map { it.toImageRef() }
+        val before = listOf(sized, touched, edited).map { it.toMediaRef() }
 
         sized.appendText("!")
         touched.setLastModified(touched.lastModified() + 5_000)
@@ -220,17 +220,17 @@ class ImageSourceTest {
         assertEquals(1, reads)
     }
 
-    private class MemoryNotImages(vararg initial: ImageRef) : NotImages {
+    private class MemoryNotImages(vararg initial: MediaRef) : NotImages {
         val stored = initial.associateByTo(linkedMapOf()) { it.path }
         var reads = 0
         val batches = mutableListOf<Int>()
 
-        override suspend fun notImages(): Collection<ImageRef> {
+        override suspend fun notImages(): Collection<MediaRef> {
             reads++
             return stored.values.toList()
         }
 
-        override suspend fun addNotImages(files: List<ImageRef>) {
+        override suspend fun addNotImages(files: List<MediaRef>) {
             batches += files.size
             files.forEach { stored[it.path] = it }
         }
@@ -256,7 +256,7 @@ class ImageSourceTest {
         write("a.jpg", JPEG)
 
         assertEquals(listOf("a.jpg"), scannedRemembering(store))
-        assertEquals(listOf(text.toImageRef()), store.stored.values.toList())
+        assertEquals(listOf(text.toMediaRef()), store.stored.values.toList())
 
         // The head would now say image, so a found file here proves the head was not read.
         rewriteQuietly(text, JPEG)
@@ -276,7 +276,7 @@ class ImageSourceTest {
         touched.setLastModified(mtime + 5_000)
 
         assertEquals(listOf("sized.txt", "touched.txt"), scannedRemembering(store))
-        assertEquals(emptyMap<String, ImageRef>(), store.stored) // they are images now
+        assertEquals(emptyMap<String, MediaRef>(), store.stored) // they are images now
     }
 
     @Test
@@ -288,7 +288,7 @@ class ImageSourceTest {
         text.appendText("!")
         scannedRemembering(store)
 
-        assertEquals(listOf(text.toImageRef()), store.stored.values.toList())
+        assertEquals(listOf(text.toMediaRef()), store.stored.values.toList())
     }
 
     @Test
@@ -306,7 +306,7 @@ class ImageSourceTest {
 
     @Test
     fun `leaves the remembered files of another root alone`() {
-        val elsewhere = ImageRef("/card/notes.txt", 5, 5)
+        val elsewhere = MediaRef("/card/notes.txt", 5, 5)
         val store = MemoryNotImages(elsewhere)
         write("a/notes.txt", ascii("not an image"))
 
@@ -358,13 +358,13 @@ class ImageSourceTest {
     @Test
     fun `yields a file that is both indexed and remembered, and drops its row`() {
         val fake = write("fake.jpg", ascii("not an image"))
-        val ref = fake.toImageRef()
+        val ref = fake.toMediaRef()
         val store = MemoryNotImages(ref)
 
         val found = runBlocking { FilesystemImageSource(root, notImages = store) { listOf(ref) }.scan().toList() }
 
         assertEquals(listOf(ref), found)
-        assertEquals(emptyMap<String, ImageRef>(), store.stored)
+        assertEquals(emptyMap<String, MediaRef>(), store.stored)
     }
 
     @Test
@@ -374,12 +374,12 @@ class ImageSourceTest {
         scannedRemembering(store)
         val mediaStore = object : ImageSource {
             override val walkedRoots = emptyList<File>()
-            override fun scan(): Flow<ImageRef> = flowOf(text.toImageRef())
+            override fun scan(): Flow<MediaRef> = flowOf(text.toMediaRef())
         }
 
         val merged = MergedImageSource(listOf(FilesystemImageSource(root, notImages = store), mediaStore))
 
-        assertEquals(listOf(text.toImageRef()), runBlocking { merged.scan().toList() })
+        assertEquals(listOf(text.toMediaRef()), runBlocking { merged.scan().toList() })
     }
 
     @Test
@@ -447,7 +447,7 @@ class ImageSourceTest {
     fun `merged sources yield each path once, in source order`() {
         fun source(vararg paths: String) = object : ImageSource {
             override val walkedRoots = emptyList<File>()
-            override fun scan(): Flow<ImageRef> = flowOf(*paths.map { ImageRef(it, 1, 1) }.toTypedArray())
+            override fun scan(): Flow<MediaRef> = flowOf(*paths.map { MediaRef(it, 1, 1) }.toTypedArray())
         }
 
         val merged = MergedImageSource(listOf(source("/a.jpg", "/b.jpg"), source("/b.jpg", "/sd/c.jpg")))
@@ -460,8 +460,8 @@ class ImageSourceTest {
         val given = mutableListOf<Set<String>>()
         fun source(vararg paths: String) = object : ImageSource {
             override val walkedRoots = emptyList<File>()
-            override fun scan(): Flow<ImageRef> = scan(emptySet())
-            override fun scan(known: Set<String>): Flow<ImageRef> = flowOf(*paths.map { ImageRef(it, 1, 1) }.toTypedArray()).also { given += known }
+            override fun scan(): Flow<MediaRef> = scan(emptySet())
+            override fun scan(known: Set<String>): Flow<MediaRef> = flowOf(*paths.map { MediaRef(it, 1, 1) }.toTypedArray()).also { given += known }
         }
 
         runBlocking { MergedImageSource(listOf(source("/a.jpg", "/b.jpg"), source("/b.jpg", "/sd/c.jpg"))).scan().toList() }
@@ -474,7 +474,7 @@ class ImageSourceTest {
         fun source(count: Int, vararg paths: String) = object : ImageSource {
             override val walkedRoots = emptyList<File>()
             override val counts = mapOf("folders" to count)
-            override fun scan(): Flow<ImageRef> = flowOf(*paths.map { ImageRef(it, 1, 1) }.toTypedArray())
+            override fun scan(): Flow<MediaRef> = flowOf(*paths.map { MediaRef(it, 1, 1) }.toTypedArray())
         }
 
         val merged = MergedImageSource(listOf(source(2, "/a.jpg", "/b.jpg"), source(3, "/b.jpg", "/sd/c.jpg")))

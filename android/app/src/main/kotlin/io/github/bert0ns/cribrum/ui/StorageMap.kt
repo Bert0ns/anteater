@@ -1,6 +1,6 @@
 package io.github.bert0ns.cribrum.ui
 
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import kotlin.math.max
 import kotlin.math.min
 
@@ -60,7 +60,7 @@ private class MutableFolder(
  * Builds a [Folder] tree from a list of images. Common single-child parent
  * folders with no direct files are collapsed so the tree starts at the first branching point.
  */
-fun buildFolderTree(images: List<ImageRef>): Folder {
+fun buildFolderTree(images: List<MediaRef>): Folder {
     if (images.isEmpty()) return Folder.EMPTY
 
     val root = MutableFolder(name = "", path = "")

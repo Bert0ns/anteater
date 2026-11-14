@@ -4,13 +4,13 @@ import pytest
 
 from cribrum_lab.detectors import AnalysisContext
 from cribrum_lab.detectors.sticker import StickerDetector
-from cribrum_lab.model import Category, ImageRef
+from cribrum_lab.model import Category, MediaRef
 
 MEDIA = "/sdcard/Android/media/com.whatsapp/WhatsApp/Media"
 
 
 def analyze(path):
-    [signal] = StickerDetector().analyze(ImageRef(Path(path), 0, 0), AnalysisContext())
+    [signal] = StickerDetector().analyze(MediaRef(Path(path), 0, 0), AnalysisContext())
     assert signal.category is Category.STICKER
     return signal
 

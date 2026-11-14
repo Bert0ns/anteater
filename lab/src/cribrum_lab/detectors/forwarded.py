@@ -9,7 +9,7 @@ for recall in the lab.
 from cribrum_lab import prompts
 from cribrum_lab.detectors.base import AnalysisContext
 from cribrum_lab.folders import is_messaging_folder
-from cribrum_lab.model import Category, ImageRef, Signal
+from cribrum_lab.model import Category, MediaRef, Signal
 
 ZERO_SHOT_WEIGHT = 0.9
 MESSAGING_FOLDER_WEIGHT = 0.4
@@ -23,7 +23,7 @@ class ForwardedDetector:
     """Bump with prompts.VERSION."""
     uses_embeddings = True
 
-    def analyze(self, image: ImageRef, context: AnalysisContext) -> list[Signal]:
+    def analyze(self, image: MediaRef, context: AnalysisContext) -> list[Signal]:
         probability, prompt = prompts.classify(context.embedding(image))["forwarded"]
         messaging = is_messaging_folder(image.path)
         camera_exif = context.metadata(image).has_camera_exif

@@ -21,7 +21,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.WorkManagerTestInitHelper
 import io.github.bert0ns.cribrum.App
 import io.github.bert0ns.cribrum.CribrumApp
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ReviewState
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -43,8 +43,8 @@ class StorageMapScreenTest {
 
     private val tree = buildFolderTree(
         listOf(
-            ImageRef("/storage/emulated/0/DCIM/Camera/IMG_001.jpg", 10_000_000L, 0L),
-            ImageRef("/storage/emulated/0/Pictures/vacation.jpg", 5_000_000L, 0L),
+            MediaRef("/storage/emulated/0/DCIM/Camera/IMG_001.jpg", 10_000_000L, 0L),
+            MediaRef("/storage/emulated/0/Pictures/vacation.jpg", 5_000_000L, 0L),
         ),
     )
 
@@ -127,8 +127,8 @@ class StorageMapScreenTest {
 
     @Test
     fun `excluding a folder on the map shows a snackbar with Undo`() = runBlocking<Unit> {
-        app.index.record(ImageRef("/storage/emulated/0/DCIM/Camera/IMG_001.jpg", 10_000_000L, 1L))
-        app.index.record(ImageRef("/storage/emulated/0/Pictures/vacation.jpg", 5_000_000L, 1L))
+        app.index.record(MediaRef("/storage/emulated/0/DCIM/Camera/IMG_001.jpg", 10_000_000L, 1L))
+        app.index.record(MediaRef("/storage/emulated/0/Pictures/vacation.jpg", 5_000_000L, 1L))
         val model = ReviewViewModel(app)
         compose.setContent { App(model) }
         openStorageMapFromTheBar()
@@ -145,7 +145,7 @@ class StorageMapScreenTest {
 
     @Test
     fun `images of size zero are not shown as an empty index`() {
-        val zeros = buildFolderTree(listOf(ImageRef("/a/1.jpg", 0L, 0L), ImageRef("/a/2.jpg", 0L, 0L)))
+        val zeros = buildFolderTree(listOf(MediaRef("/a/1.jpg", 0L, 0L), MediaRef("/a/2.jpg", 0L, 0L)))
         compose.setContent { StorageMapScreen(currentFolder = zeros, onZoomIn = {}) }
 
         compose.onNodeWithText("No images found yet").assertDoesNotExist()
@@ -178,9 +178,9 @@ class StorageMapScreenTest {
 
     @Test
     fun `storage map opens from settings and displays indexed folders`() = runBlocking<Unit> {
-        app.index.record(ImageRef("/storage/emulated/0/DCIM/Camera/IMG_001.jpg", 10_000_000L, 1L))
-        app.index.record(ImageRef("/storage/emulated/0/Pictures/vacation.jpg", 5_000_000L, 1L))
-        app.index.record(ImageRef("/storage/emulated/0/Old/gone.jpg", 5_000_000L, 1L))
+        app.index.record(MediaRef("/storage/emulated/0/DCIM/Camera/IMG_001.jpg", 10_000_000L, 1L))
+        app.index.record(MediaRef("/storage/emulated/0/Pictures/vacation.jpg", 5_000_000L, 1L))
+        app.index.record(MediaRef("/storage/emulated/0/Old/gone.jpg", 5_000_000L, 1L))
         app.index.setReviewState("/storage/emulated/0/Old/gone.jpg", ReviewState.TRASHED)
 
         // viewModel() caches the first Application it sees, which is stale after another test class.
@@ -199,8 +199,8 @@ class StorageMapScreenTest {
 
     @Test
     fun `back zooms out of a folder, then returns to settings`() = runBlocking<Unit> {
-        app.index.record(ImageRef("/storage/emulated/0/DCIM/Camera/IMG_001.jpg", 10_000_000L, 1L))
-        app.index.record(ImageRef("/storage/emulated/0/Pictures/vacation.jpg", 5_000_000L, 1L))
+        app.index.record(MediaRef("/storage/emulated/0/DCIM/Camera/IMG_001.jpg", 10_000_000L, 1L))
+        app.index.record(MediaRef("/storage/emulated/0/Pictures/vacation.jpg", 5_000_000L, 1L))
 
         // viewModel() caches the first Application it sees, which is stale after another test class.
         val model = ReviewViewModel(app)

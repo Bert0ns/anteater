@@ -7,10 +7,10 @@ import io.github.bert0ns.cribrum.imaging.TestImage
 import io.github.bert0ns.cribrum.imaging.unit
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.Role
-import io.github.bert0ns.cribrum.model.toImageRef
+import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.ranker.THRESHOLDS
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -36,12 +36,12 @@ class NearDuplicateDetectorTest {
         path: String,
         format: Bitmap.CompressFormat = Bitmap.CompressFormat.JPEG,
         quality: Int = 95,
-    ): ImageRef {
+    ): MediaRef {
         val file = File(folder.root, path).apply { parentFile!!.mkdirs() }
         val pixels = IntArray(image.values.size) { image.values[it].let { v -> (0xff shl 24) or (v shl 16) or (v shl 8) or v } }
         val bitmap = Bitmap.createBitmap(pixels, image.width, image.height, Bitmap.Config.ARGB_8888)
         file.outputStream().use { bitmap.compress(format, quality, it) }
-        return file.toImageRef()
+        return file.toMediaRef()
     }
 
     private fun downsample(image: TestImage, outW: Int, outH: Int): TestImage {
@@ -67,8 +67,8 @@ class NearDuplicateDetectorTest {
     }
 
     private fun run(
-        images: List<ImageRef>,
-        embedding: suspend (ImageRef) -> FloatArray = { throw MissingEmbedding(it) },
+        images: List<MediaRef>,
+        embedding: suspend (MediaRef) -> FloatArray = { throw MissingEmbedding(it) },
     ) = runBlocking {
         NearDuplicateDetector().analyze(images, AnalysisContext(embedding = embedding))
     }
@@ -141,7 +141,7 @@ class NearDuplicateDetectorTest {
         val brokenFile = File(folder.root, "broken.jpg").apply {
             writeBytes(byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte(), 0xe0.toByte()) + "not really a jpeg".toByteArray())
         }
-        val broken = brokenFile.toImageRef()
+        val broken = brokenFile.toMediaRef()
 
         val signals = run(listOf(original, resized, recompressed, broken))
 
@@ -191,11 +191,11 @@ class NearDuplicateDetectorTest {
     // Fake images with chosen hashes and embeddings, so the linking thresholds are hit exactly.
     private val base = 0x5555555555555555uL
 
-    private fun fake(name: String, size: Long) = ImageRef("/fake/$name.jpg", size, 0)
+    private fun fake(name: String, size: Long) = MediaRef("/fake/$name.jpg", size, 0)
 
     private fun runFakes(
-        hashes: Map<ImageRef, ULong>,
-        vectors: Map<ImageRef, FloatArray> = emptyMap(),
+        hashes: Map<MediaRef, ULong>,
+        vectors: Map<MediaRef, FloatArray> = emptyMap(),
     ) = runBlocking {
         val context = AnalysisContext(
             perceptualHash = { hashes.getValue(it) },

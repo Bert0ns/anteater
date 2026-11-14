@@ -4,11 +4,11 @@ import pytest
 
 from cribrum_lab.comparison import compare, with_signals, without_signals
 from cribrum_lab.labels import Decision, Label
-from cribrum_lab.model import Category, ImageRef, IndexedImage, Protection, Signal
+from cribrum_lab.model import Category, IndexedImage, MediaRef, Protection, Signal
 
 
 def image(name, *signals):
-    return IndexedImage(ImageRef(Path(name), 0, 0), signals=signals)
+    return IndexedImage(MediaRef(Path(name), 0, 0), signals=signals)
 
 
 def blur(score):

@@ -32,7 +32,7 @@ import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.compress.CompressBatch
 import io.github.bert0ns.cribrum.mobileclip.MobileClip
 import io.github.bert0ns.cribrum.mobileclip.VISION_MODEL_ASSET
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.runtime.FallbackRuntime
 import io.github.bert0ns.cribrum.runtime.ModelRuntime
 import io.github.bert0ns.cribrum.runtime.OnnxRuntime
@@ -187,7 +187,7 @@ object Indexing {
     }
 
     /** Every storage volume walked in full, then what MediaStore knows on top. [indexed] is what the index already has. */
-    fun deviceSource(context: Context, indexed: suspend () -> Collection<ImageRef>, notImages: NotImages): ImageSource {
+    fun deviceSource(context: Context, indexed: suspend () -> Collection<MediaRef>, notImages: NotImages): ImageSource {
         val volumes = context.getSystemService(StorageManager::class.java).storageVolumes.mapNotNull { it.directory }
         return MergedImageSource(volumes.map { FilesystemImageSource(it, notImages = notImages, indexed = indexed) } + MediaStoreImageSource(context.contentResolver, volumes))
     }

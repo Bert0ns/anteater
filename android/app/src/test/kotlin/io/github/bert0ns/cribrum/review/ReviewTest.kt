@@ -4,12 +4,12 @@ import io.github.bert0ns.cribrum.index.ExcludedFolderRow
 import io.github.bert0ns.cribrum.index.memoryIndex
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
-import io.github.bert0ns.cribrum.model.toImageRef
+import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.ranker.THRESHOLDS
 import io.github.bert0ns.cribrum.trash.AppTrash
 import io.github.bert0ns.cribrum.trash.Swap
@@ -49,12 +49,12 @@ class ReviewTest {
     @After
     fun close() = index.close()
 
-    private fun image(path: String, vararg signals: Signal): ImageRef = runBlocking {
+    private fun image(path: String, vararg signals: Signal): MediaRef = runBlocking {
         val file = File(volume, path).apply {
             parentFile!!.mkdirs()
             writeText(path)
         }
-        val ref = file.toImageRef()
+        val ref = file.toMediaRef()
         index.record(ref)
         signals.groupBy { it.detectorId }.forEach { (id, s) -> index.setSignals(ref.path, id, 1, s) }
         ref
@@ -121,13 +121,13 @@ class ReviewTest {
         image("b.jpg", blurry(0.9f))
         suspend fun flagged() = page(Category.BLURRY).groups.flatMap { it.images }.filter { it.isFavorite }.map { it.image }
 
-        assertEquals(emptyList<ImageRef>(), flagged())
+        assertEquals(emptyList<MediaRef>(), flagged())
 
         favorites = setOf(a.path)
         assertEquals(listOf(a), flagged())
 
         favorites = emptySet()
-        assertEquals(emptyList<ImageRef>(), flagged())
+        assertEquals(emptyList<MediaRef>(), flagged())
     }
 
     @Test
@@ -700,9 +700,9 @@ class ReviewTest {
         val good = image("good.jpg", blurry(0.8f))
         val decision = apply(listOf(bad), listOf(good))
 
-        assertEquals(emptyList<ImageRef>(), undo(decision))
+        assertEquals(emptyList<MediaRef>(), undo(decision))
 
-        assertEquals(bad, File(bad.path).toImageRef())
+        assertEquals(bad, File(bad.path).toMediaRef())
         assertEquals(ReviewState.UNREVIEWED, index.reviewState(bad.path))
         assertEquals(ReviewState.UNREVIEWED, index.reviewState(good.path))
         assertEquals(2, page(Category.BLURRY).groups.size)
@@ -737,7 +737,7 @@ class ReviewTest {
         assertEquals(listOf(swapped), trashed().map { it.original })
         purge(listOf(swapped))
         assertEquals(listOf(image), index.images())
-        assertEquals(image, File(image.path).toImageRef())
+        assertEquals(image, File(image.path).toMediaRef())
     }
 
     @Test
@@ -761,7 +761,7 @@ class ReviewTest {
         val decision = apply(listOf(bad), listOf(good))
         index.forget(listOf(bad.path, good.path)) // a reinstall: the trash survives, the index does not
 
-        assertEquals(emptyList<ImageRef>(), undo(decision))
+        assertEquals(emptyList<MediaRef>(), undo(decision))
 
         assertTrue(File(bad.path).exists())
         assertEquals(ReviewState.UNREVIEWED, index.reviewState(bad.path))
@@ -813,7 +813,7 @@ class ReviewTest {
         apply(listOf(image), emptyList())
         File(image.path).writeText("another file")
 
-        assertEquals(emptyList<ImageRef>(), restore(listOf(image)))
+        assertEquals(emptyList<MediaRef>(), restore(listOf(image)))
 
         assertEquals(ReviewState.TRASHED, index.reviewState(image.path))
         assertEquals(listOf(image), trashed().map { it.original })
@@ -831,7 +831,7 @@ class ReviewTest {
         val p = page(Category.NEAR_DUPLICATE)
         val decision = applyPage(p, setOf(copy.path))
         assertEquals(ReviewState.KEPT, index.reviewState(best.path))
-        assertEquals(emptyList<ImageRef>(), undo(decision))
+        assertEquals(emptyList<MediaRef>(), undo(decision))
 
         assertEquals(ReviewState.KEPT, index.reviewState(best.path))
         assertEquals(kept, index.indexedImages().single { it.ref.path == best.path }.seenWhenKept)
@@ -902,15 +902,15 @@ class ReviewTest {
         val decision = apply(emptyList(), listOf(image))
         index.forget(listOf(image.path)) // the file is gone
 
-        assertEquals(emptyList<ImageRef>(), undo(decision))
+        assertEquals(emptyList<MediaRef>(), undo(decision))
 
-        assertEquals(emptyList<ImageRef>(), index.images())
+        assertEquals(emptyList<MediaRef>(), index.images())
     }
 
     @Test
     fun `an apply that cannot read a row fails before it moves any file`() = test {
         val bad = image("bad.jpg", blurry(0.9f))
-        val ghost = File(volume, "ghost.jpg").apply { writeText("x") }.toImageRef() // never recorded
+        val ghost = File(volume, "ghost.jpg").apply { writeText("x") }.toMediaRef() // never recorded
 
         runCatching { apply(listOf(bad), listOf(ghost)) }.also { assertTrue(it.isFailure) }
 
@@ -975,7 +975,7 @@ class ReviewTest {
         purge(listOf(image))
 
         assertEquals(emptyList<Any>(), trashed())
-        assertEquals(emptyList<ImageRef>(), index.images())
+        assertEquals(emptyList<MediaRef>(), index.images())
     }
 
     @Test
@@ -986,7 +986,7 @@ class ReviewTest {
         val review = Review(
             index,
             object : Trash by real {
-                override suspend fun purge(images: List<ImageRef>) = real.purge(images - stuck)
+                override suspend fun purge(images: List<MediaRef>) = real.purge(images - stuck)
             },
         )
         review.apply(listOf(stuck, deleted), emptyList())
@@ -1000,9 +1000,9 @@ class ReviewTest {
 
     /** Moves files for real, then stops at [gate] before it returns: the point where a scope that ends is felt. */
     private inner class GatedTrash(private val real: Trash, private val started: CompletableDeferred<Unit>, private val gate: CompletableDeferred<Unit>) : Trash by real {
-        override suspend fun moveToTrash(images: List<ImageRef>) = real.moveToTrash(images).also { pause() }
+        override suspend fun moveToTrash(images: List<MediaRef>) = real.moveToTrash(images).also { pause() }
 
-        override suspend fun restore(images: List<ImageRef>) = real.restore(images).also { pause() }
+        override suspend fun restore(images: List<MediaRef>) = real.restore(images).also { pause() }
 
         private suspend fun pause() {
             started.complete(Unit)
@@ -1026,7 +1026,7 @@ class ReviewTest {
     fun `purging does not forget the row of a new file now at the path`() = test {
         val old = image("a.jpg", blurry(0.9f))
         apply(listOf(old), emptyList())
-        val written = File(volume, "a.jpg").apply { writeText("a different picture") }.toImageRef()
+        val written = File(volume, "a.jpg").apply { writeText("a different picture") }.toMediaRef()
         index.record(written) // a new file at the trashed path: its row starts unreviewed
         index.setReviewState(written.path, ReviewState.KEPT)
 
@@ -1092,7 +1092,7 @@ class ReviewTest {
     /** Writes behind the index's back, so its version stays: a review that reads the index again sees it, a cached one does not. */
     private fun blurryCount(overview: Overview) = overview.categories.single { it.category == Category.BLURRY }.count
 
-    private suspend fun trashUnseen(image: ImageRef) = index.database.dao().setReviewState(image.path, ReviewState.TRASHED.value)
+    private suspend fun trashUnseen(image: MediaRef) = index.database.dao().setReviewState(image.path, ReviewState.TRASHED.value)
 
     @Test
     fun `a cached review does not see a change that bypasses the index version, until a write`() = test {
@@ -1211,7 +1211,7 @@ class ReviewTest {
             { removeExcludedFolder(File(d.path).parent!!) },
             { index.setReviewState(e.path, ReviewState.UNREVIEWED) },
             { index.forgetAnalyses(listOf(e.path), listOf("near_duplicate")) },
-            { index.record(File(a.path).apply { appendText(" edited") }.toImageRef()) },
+            { index.record(File(a.path).apply { appendText(" edited") }.toMediaRef()) },
             { index.forget(listOf(b.path)) },
             { thresholds = THRESHOLDS },
         )

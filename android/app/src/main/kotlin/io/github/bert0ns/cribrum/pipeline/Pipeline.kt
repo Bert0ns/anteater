@@ -35,7 +35,7 @@ import io.github.bert0ns.cribrum.metadata.UnreadableImage
 import io.github.bert0ns.cribrum.metadata.readMetadata
 import io.github.bert0ns.cribrum.mobileclip.preprocess
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.sources.ImageSource
@@ -170,8 +170,8 @@ class Pipeline(
     private val metadataReader: (File) -> ImageMetadata = ::readMetadata,
     private val jpegReader: (File) -> JpegInfo = ::readJpeg,
     /** Hashes an image from its task's [Pixels], so it reads the grayscale exposure already computed. */
-    private val perceptualHasher: (ImageRef, Pixels) -> ULong = { _, pixels -> perceptualHash(pixels.gray(PHASH_DECODE_SIDE)) },
-    private val contentHasher: (ImageRef) -> String = ::contentHash,
+    private val perceptualHasher: (MediaRef, Pixels) -> ULong = { _, pixels -> perceptualHash(pixels.gray(PHASH_DECODE_SIDE)) },
+    private val contentHasher: (MediaRef) -> String = ::contentHash,
     /** Monotonic milliseconds, for [Stats.phaseMs]. */
     private val clock: () -> Long = SystemClock::elapsedRealtime,
     /** The phone's thermal status, read once at the start of each phase. Null when unknown. */
@@ -196,7 +196,7 @@ class Pipeline(
         val found = LinkedHashSet<String>()
         val before = index.reviewStates()
         phase("walk", stats) {
-            val batch = ArrayList<ImageRef>(recordBatch)
+            val batch = ArrayList<MediaRef>(recordBatch)
             suspend fun flush() {
                 stats.newOrChanged += index.recordAll(batch)
                 batch.clear()
@@ -332,7 +332,7 @@ class Pipeline(
     }
 
     /** The real images first: a sticker only delays them, since the home screen lists candidates as they are stored. */
-    private fun stickersLast(images: List<ImageRef>): List<ImageRef> = images.partition { !isStickerFolder(it.path) }.let { (real, stickers) -> real + stickers }
+    private fun stickersLast(images: List<MediaRef>): List<MediaRef> = images.partition { !isStickerFolder(it.path) }.let { (real, stickers) -> real + stickers }
 
     /** Runs one phase of [run] in a trace section, and keeps how long it took. */
     private suspend fun <T> phase(name: String, stats: Stats, startedAt: Long? = null, block: suspend () -> T): T {
@@ -342,7 +342,7 @@ class Pipeline(
     }
 
     private class AnalysisTask(
-        val image: ImageRef,
+        val image: MediaRef,
         val metadata: ImageMetadata,
         val embedding: FloatArray?,
         val detectors: List<Detector>,
@@ -363,7 +363,7 @@ class Pipeline(
      * decodes. The two steps' own work runs on one thread, so they never update the stats or report progress at once.
      * Returns the embeddings of [images], for the group detectors.
      */
-    private suspend fun embedAndClassify(images: List<ImageRef>, stats: Stats, progress: Progress): Map<String, FloatArray> = withContext(Dispatchers.IO.limitedParallelism(1)) {
+    private suspend fun embedAndClassify(images: List<MediaRef>, stats: Stats, progress: Progress): Map<String, FloatArray> = withContext(Dispatchers.IO.limitedParallelism(1)) {
         // The phase's time starts here, so it holds the reads and the tasks of the images embedded already.
         val start = clock()
         val selected = detectors.filter { it.usesEmbeddings }
@@ -375,14 +375,14 @@ class Pipeline(
         var stickerTasks = 0
 
         // As in analyzeEach: only an image with work reads its metadata, and one without metadata waits for a restore.
-        suspend fun task(image: ImageRef, todo: List<Detector>): AnalysisTask? {
+        suspend fun task(image: MediaRef, todo: List<Detector>): AnalysisTask? {
             if (todo.isEmpty()) return null
             val task = index.metadata(image.path)?.let { AnalysisTask(image, it, embeddings[image.path], todo, needsPhash = false, beforeEmbeddings = false) } ?: return null
             tasks++
             if (isStickerFolder(image.path)) stickerTasks++
             return task
         }
-        fun missing(image: ImageRef) = selected.filter { image.path !in analyzed.getValue(it.id) }
+        fun missing(image: MediaRef) = selected.filter { image.path !in analyzed.getValue(it.id) }
         val waiting = todo.mapTo(HashSet()) { it.path }
         val ready = traceSuspend("Pipeline.tasks") { images.filter { it.path !in waiting }.mapNotNull { task(it, missing(it)) } }
 
@@ -441,10 +441,10 @@ class Pipeline(
      */
     private suspend fun embed(
         embedder: Embedder,
-        todo: List<ImageRef>,
+        todo: List<MediaRef>,
         stats: Stats,
         alone: suspend (() -> Unit) -> Unit,
-        stored: suspend (batch: List<ImageRef>, vectors: Map<String, FloatArray>) -> Unit,
+        stored: suspend (batch: List<MediaRef>, vectors: Map<String, FloatArray>) -> Unit,
     ) {
         stats.counts["embeddings tasks"] = todo.size
         if (todo.isEmpty()) return
@@ -455,16 +455,16 @@ class Pipeline(
             stored(todo, emptyMap())
             return
         }
-        fun fail(image: ImageRef, error: Throwable) {
+        fun fail(image: MediaRef, error: Throwable) {
             stats.failures += Failure(image.path, EMBEDDING_STEP, failureMessage(error))
         }
         val batches = todo.chunked(EMBEDDING_BATCH)
         coroutineScope {
-            fun decode(batch: List<ImageRef>) = batch.map { image -> async(Dispatchers.Default) { image to attempt { preprocessing(File(image.path)) } } }
+            fun decode(batch: List<MediaRef>) = batch.map { image -> async(Dispatchers.Default) { image to attempt { preprocessing(File(image.path)) } } }
             var next = decode(batches.first())
             for ((i, batch) in batches.withIndex()) {
-                val pixels = mutableListOf<Pair<ImageRef, FloatArray>>()
-                val outOfMemory = mutableListOf<ImageRef>()
+                val pixels = mutableListOf<Pair<MediaRef, FloatArray>>()
+                val outOfMemory = mutableListOf<MediaRef>()
                 for ((image, outcome) in next.awaitAll()) {
                     val error = outcome.exceptionOrNull()
                     when {
@@ -485,7 +485,7 @@ class Pipeline(
                 batches.getOrNull(i + 1)?.let { next = decode(it) }
                 // Not on Dispatchers.Default, where the model would wait behind the decodes queued ahead. Its failures are
                 // counted back here, beside the detectors' own.
-                val failed = mutableListOf<Pair<ImageRef, Throwable>>()
+                val failed = mutableListOf<Pair<MediaRef, Throwable>>()
                 val vectors = withContext(Dispatchers.IO) { embedBatch(embedder, pixels) { image, error -> failed += image to error } }
                 failed.forEach { (image, error) -> fail(image, error) }
                 if (vectors.isNotEmpty()) {
@@ -500,7 +500,7 @@ class Pipeline(
     }
 
     /** One call for the batch. If it throws, one call per image finds which images it throws for. */
-    private fun embedBatch(embedder: Embedder, pixels: List<Pair<ImageRef, FloatArray>>, fail: (ImageRef, Throwable) -> Unit): Map<String, FloatArray> {
+    private fun embedBatch(embedder: Embedder, pixels: List<Pair<MediaRef, FloatArray>>, fail: (MediaRef, Throwable) -> Unit): Map<String, FloatArray> {
         if (pixels.isEmpty()) return emptyMap()
         attempt { embedder.embedPixels(pixels.map { it.second }) }.onSuccess { return pixels.map { it.first.path }.zip(it).toMap() }
         return pixels.mapNotNull { (image, plane) ->
@@ -525,7 +525,7 @@ class Pipeline(
      * computes the perceptual hashes. A sticker runs only the ones that [runsOnStickers]. A detector here that asks for an
      * embedding fails: it should have said `usesEmbeddings`.
      */
-    private suspend fun analyzeEach(images: List<ImageRef>, selected: List<Detector>, step: String, stats: Stats, progress: Progress) {
+    private suspend fun analyzeEach(images: List<MediaRef>, selected: List<Detector>, step: String, stats: Stats, progress: Progress) {
         val analyzed = index.analyzedPaths(selected.associate { it.id to it.version })
         val hashed = index.hashedPaths()
         val tasks = traceSuspend("Pipeline.tasks") {
@@ -660,18 +660,18 @@ class Pipeline(
      * One broken file must not stop a run over thousands: errors come back as values. A detector
      * that needs the missing embedding comes back with null signals and no error.
      */
-    private suspend fun analyze(detector: Detector, image: ImageRef, context: AnalysisContext, kind: String): Result<List<Signal>?> {
+    private suspend fun analyze(detector: Detector, image: MediaRef, context: AnalysisContext, kind: String): Result<List<Signal>?> {
         val result = attempt<List<Signal>?> { traceSuspend("Detector.${detector.id}.$kind") { detector.analyze(image, context) } }
         return if (result.exceptionOrNull() is MissingEmbedding) Result.success(null) else result
     }
 
-    private fun computePhash(image: ImageRef, pixels: Pixels, kind: String): Result<ULong> = attempt { trace("Pipeline.phash.$kind") { perceptualHasher(image, pixels) } }
+    private fun computePhash(image: MediaRef, pixels: Pixels, kind: String): Result<ULong> = attempt { trace("Pipeline.phash.$kind") { perceptualHasher(image, pixels) } }
 
     /**
      * The detector last ran on [images] as they are, and every content hash that failed in that run fails again.
      * Hashing only those again is what groups a file that has become readable, without a run on every scan.
      */
-    private suspend fun upToDate(detector: GroupDetector, fingerprint: String, images: List<ImageRef>): Boolean {
+    private suspend fun upToDate(detector: GroupDetector, fingerprint: String, images: List<MediaRef>): Boolean {
         if (index.groupFingerprint(detector.id, detector.version) != fingerprint) return false
         val failed = index.groupHashFailed(detector.id, detector.version).toSet()
         return images.filter { it.path in failed }.none { image ->
@@ -684,12 +684,12 @@ class Pipeline(
         }
     }
 
-    private suspend fun storedSharpness(blur: Detector?, image: ImageRef): Double? = blur?.let { detector ->
+    private suspend fun storedSharpness(blur: Detector?, image: MediaRef): Double? = blur?.let { detector ->
         index.signals(image.path).firstOrNull { it.detectorId == detector.id && it.detectorVersion == detector.version }
             ?.evidence?.get(BlurDetector.PEAK_VARIANCE_KEY)?.toDoubleOrNull()
     }
 
-    private suspend fun cachedContentHash(image: ImageRef): String = index.contentHash(image.path) ?: contentHasher(image).also { index.setContentHash(image.path, it) }
+    private suspend fun cachedContentHash(image: MediaRef): String = index.contentHash(image.path) ?: contentHasher(image).also { index.setContentHash(image.path, it) }
 
     /**
      * Reads [images] on [readers] threads and stores them [storeBatch] at a time, one transaction each, in the order of
@@ -698,7 +698,7 @@ class Pipeline(
      * read, and it gets its metadata when it is back.
      */
     private suspend fun <T> readAndStore(
-        images: List<ImageRef>,
+        images: List<MediaRef>,
         step: String,
         progress: Progress,
         read: (File) -> Result<T>,
@@ -750,7 +750,7 @@ class Pipeline(
     }
 
     /** As the lab's: the same image set and inputs (embedding model, hashes) give the same text. */
-    private fun fingerprint(images: List<ImageRef>, inputs: String): String {
+    private fun fingerprint(images: List<MediaRef>, inputs: String): String {
         val digest = Algorithm.XXH3_64().createDigest()
         digest.update(inputs.toByteArray())
         for (image in images.sortedBy { it.path }) digest.update("${image.path}\u0000${image.size}\u0000${image.mtimeNs}\n".toByteArray())

@@ -16,7 +16,7 @@ import io.github.bert0ns.cribrum.compress.JpegStatus
 import io.github.bert0ns.cribrum.compress.Losses
 import io.github.bert0ns.cribrum.compress.Marker
 import io.github.bert0ns.cribrum.compress.Refusal
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -402,9 +402,9 @@ class CompressViewModelTest {
     @Test
     fun `an undo says how many originals stayed in the trash`() {
         val model = loaded()
-        batches.stayed = listOf(ImageRef("/p/a.jpg", 1, 1))
+        batches.stayed = listOf(MediaRef("/p/a.jpg", 1, 1))
 
-        model.undo(BatchResult(1, 1, emptyMap(), 100, listOf(ImageRef("/p/a.jpg", 1, 1))))
+        model.undo(BatchResult(1, 1, emptyMap(), 100, listOf(MediaRef("/p/a.jpg", 1, 1))))
         settle(model) { it.stayedInTrash == 1 }
     }
 

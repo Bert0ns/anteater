@@ -5,7 +5,7 @@ package io.github.bert0ns.cribrum.detectors
 import io.github.bert0ns.cribrum.imaging.Gray
 import io.github.bert0ns.cribrum.imaging.loadGrayscale
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Signal
 import java.io.File
 import java.util.Locale
@@ -16,7 +16,7 @@ class BlurDetector : Detector {
     override val category = Category.BLURRY
     override val decodeSide = MAX_SIDE
 
-    override suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal> {
+    override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
         val (globalVariance, peakVariance) = measure(context.pixels(image).gray(MAX_SIDE)) ?: return emptyList()
         val score = (HALF_SCORE_VARIANCE / (HALF_SCORE_VARIANCE + peakVariance)).toFloat()
         val evidence = mapOf(
@@ -39,7 +39,7 @@ class BlurDetector : Detector {
         const val PEAK_VARIANCE_KEY = "peak_variance"
 
         /** The peak variance [measure] gives for [image], 0 when it can't be decoded or is under 3 px on a side. */
-        fun peakVariance(image: ImageRef): Double = try {
+        fun peakVariance(image: MediaRef): Double = try {
             measure(loadGrayscale(File(image.path), MAX_SIDE))?.second ?: 0.0
         } catch (_: Exception) { // undecodable pixels have no detail
             0.0

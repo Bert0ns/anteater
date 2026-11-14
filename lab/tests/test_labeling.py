@@ -12,12 +12,12 @@ from PIL import Image
 from cribrum_lab.hashing import content_hash
 from cribrum_lab.labeling import LabelingServer, clusters, sample, strata
 from cribrum_lab.labels import Decision, LabelStore, Stratum
-from cribrum_lab.model import Category, ImageRef, IndexedImage, Signal
+from cribrum_lab.model import Category, IndexedImage, MediaRef, Signal
 from cribrum_lab.ranker import Candidate
 
 
 def candidate(name, category=None):
-    image = IndexedImage(ImageRef(Path(name), 0, 0))
+    image = IndexedImage(MediaRef(Path(name), 0, 0))
     reasons = (Signal("x", 1, category, 1.0),) if category else ()
     return Candidate(image, reasons, 2.0 if category else 0.5)
 
@@ -73,7 +73,7 @@ def server(tmp_path):
     (tmp_path / "broken.jpg").write_bytes(b"\xff\xd8\xff not an image")
     paths.append(tmp_path / "broken.jpg")
     store = LabelStore(":memory:")
-    refs = [ImageRef(p, p.stat().st_size, 0) for p in paths]
+    refs = [MediaRef(p, p.stat().st_size, 0) for p in paths]
     server = LabelingServer(
         [[refs[0], refs[1]], [refs[2]]],
         store,
@@ -181,7 +181,7 @@ def vector(*values):
 
 
 def test_clusters_group_similar_images_largest_first():
-    refs = [ImageRef(Path(f"{i}"), 0, 0) for i in range(7)]
+    refs = [MediaRef(Path(f"{i}"), 0, 0) for i in range(7)]
     vectors = {
         refs[0].path: vector(1, 0),
         refs[1].path: vector(0, 1),
@@ -197,7 +197,7 @@ def test_clusters_group_similar_images_largest_first():
 
 
 def test_large_clusters_are_split_to_fit_a_screen():
-    refs = [ImageRef(Path(f"{i}"), 0, 0) for i in range(100)]
+    refs = [MediaRef(Path(f"{i}"), 0, 0) for i in range(100)]
 
     groups = clusters(refs, {ref.path: vector(1) for ref in refs})
 

@@ -3,7 +3,7 @@
 package io.github.bert0ns.cribrum.detectors
 
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.prompts.VERSION
 import io.github.bert0ns.cribrum.prompts.classify
@@ -25,7 +25,7 @@ class DocumentDetector(private val coverage: (File) -> Float = ::textCoverage) :
     override val category = Category.DOCUMENT
     override val usesEmbeddings = true
 
-    override suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal> {
+    override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
         val (probability, prompt) = classify(context.embedding(image)).getValue("document")
         val coverage = coverage(File(image.path))
         val textChance = TEXT_WEIGHT * min(1f, coverage / FULL_COVERAGE)

@@ -15,7 +15,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.pipeline.Coverage
 import io.github.bert0ns.cribrum.pipeline.FailedFile
 import io.github.bert0ns.cribrum.pipeline.ScanReport
@@ -94,7 +94,7 @@ class LanguageTest {
     @Test
     @Config(qualifiers = "it")
     fun `the favourite dialog gives the chosen retention in Italian`() {
-        val image = ImageRef("/sdcard/DCIM/a.jpg", 1, 0)
+        val image = MediaRef("/sdcard/DCIM/a.jpg", 1, 0)
         val page = listOf(ReviewGroup("a", listOf(ReviewItem(image, suggestTrash = true, isFavorite = true))))
         var days by mutableIntStateOf(1)
         compose.setContent { CategoryScreen(page, 1, setOf(image.path), false, {}, { _, _ -> }, {}, retentionDays = days) }

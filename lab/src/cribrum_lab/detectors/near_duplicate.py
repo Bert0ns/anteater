@@ -14,7 +14,7 @@ import xxhash
 from cribrum_lab.detectors.base import AnalysisContext, Role
 from cribrum_lab.folders import is_camera_folder, is_messaging_folder
 from cribrum_lab.hashing import is_flat_hash
-from cribrum_lab.model import GROUP_KEY, ROLE_KEY, Category, ImageRef, Signal
+from cribrum_lab.model import GROUP_KEY, ROLE_KEY, Category, MediaRef, Signal
 
 MAX_DISTANCE = 10
 """Hamming distance between 64-bit pHashes that still links two images."""
@@ -31,8 +31,8 @@ class NearDuplicateDetector:
     category = Category.NEAR_DUPLICATE
 
     def analyze(
-        self, images: Sequence[ImageRef], context: AnalysisContext
-    ) -> dict[ImageRef, list[Signal]]:
+        self, images: Sequence[MediaRef], context: AnalysisContext
+    ) -> dict[MediaRef, list[Signal]]:
         members, hashes, vectors = [], [], []
         for image in images:
             try:
@@ -120,7 +120,7 @@ def _components(count: int, links: Iterable[tuple[int, int]]) -> list[list[int]]
     return [members for members in components.values() if len(members) > 1]
 
 
-def _preference(image: ImageRef, context: AnalysisContext) -> tuple:
+def _preference(image: MediaRef, context: AnalysisContext) -> tuple:
     """The copy to keep: highest resolution, least compression, camera EXIF, then folder."""
     meta = context.metadata(image)
     pixels = meta.width * meta.height

@@ -5,7 +5,7 @@ import com.appmattus.crypto.Algorithm
 import io.github.bert0ns.cribrum.imaging.Gray
 import io.github.bert0ns.cribrum.imaging.loadGrayscale
 import io.github.bert0ns.cribrum.imaging.resize
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import java.io.File
 import kotlin.math.cos
 import kotlin.math.round
@@ -16,7 +16,7 @@ const val PHASH_SIZE = 32
 const val PHASH_DECODE_SIDE = 256
 
 /** xxHash3 64-bit digest of the whole file, as hex. Throws an IOException if it can't be read. */
-fun contentHash(image: ImageRef): String {
+fun contentHash(image: MediaRef): String {
     val digest = Algorithm.XXH3_64().createDigest()
     val buffer = ByteArray(CHUNK)
     File(image.path).inputStream().use { input ->
@@ -36,7 +36,7 @@ fun contentHash(image: ImageRef): String {
  * [PHASH_DECODE_SIDE] and the resampling are part of the hash: changing them means
  * bumping the version of every detector that uses it.
  */
-fun perceptualHash(image: ImageRef): ULong = perceptualHash(loadGrayscale(File(image.path), PHASH_DECODE_SIDE))
+fun perceptualHash(image: MediaRef): ULong = perceptualHash(loadGrayscale(File(image.path), PHASH_DECODE_SIDE))
 
 /** The pHash of [gray], an image's grayscale at [PHASH_DECODE_SIDE]: the pipeline passes the one exposure computed. */
 fun perceptualHash(gray: Gray): ULong {

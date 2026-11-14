@@ -7,7 +7,7 @@ from PIL import Image
 from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, AnalysisContext, Role
 from cribrum_lab.detectors.near_duplicate import NearDuplicateDetector
 from cribrum_lab.metadata import ImageMetadata, read_metadata
-from cribrum_lab.model import Category, ImageRef
+from cribrum_lab.model import Category, MediaRef
 
 
 def scene(seed, size=(1600, 1200)):
@@ -18,7 +18,7 @@ def scene(seed, size=(1600, 1200)):
 def save(image, path, **params):
     path.parent.mkdir(parents=True, exist_ok=True)
     image.save(path, **params)
-    return ImageRef(path, path.stat().st_size, 0)
+    return MediaRef(path, path.stat().st_size, 0)
 
 
 def no_embedding(image):
@@ -89,9 +89,9 @@ def test_undecodable_image_is_skipped(copies, tmp_path):
     broken = tmp_path / "broken.jpg"
     broken.write_bytes(b"\xff\xd8\xff\xe0 not really a jpeg")
 
-    signals = run([*copies, ImageRef(broken, 30, 0)])
+    signals = run([*copies, MediaRef(broken, 30, 0)])
 
-    assert ImageRef(broken, 30, 0) not in signals
+    assert MediaRef(broken, 30, 0) not in signals
     assert len(signals) == 3
 
 
@@ -138,7 +138,7 @@ def run_fakes(hashes, vectors=None):
 
 
 def fake(name, size):
-    return ImageRef(Path(f"/fake/{name}.jpg"), size, 0)
+    return MediaRef(Path(f"/fake/{name}.jpg"), size, 0)
 
 
 def test_a_copy_linked_only_through_another_copy_scores_under_the_threshold():

@@ -19,7 +19,7 @@ import androidx.work.WorkerParameters
 import io.github.bert0ns.cribrum.CribrumApp
 import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.index.ImageIndex
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.pipeline.IndexWorker
 import io.github.bert0ns.cribrum.review.Review
 import io.github.bert0ns.cribrum.sources.FavoriteRequests
@@ -48,7 +48,7 @@ data class BatchResult(
     /** The bytes the compressed photos take less than their originals did. */
     val savedBytes: Long,
     /** Every original the batch moved to the trash, those a swap that failed halfway left there included: what Undo restores. */
-    val originals: List<ImageRef>,
+    val originals: List<MediaRef>,
     /** The paths of the compressed photos that were favourites: their copies are new MediaStore rows without the mark. */
     val favorites: List<String> = emptyList(),
 ) {
@@ -120,12 +120,12 @@ object CompressBatch {
      * [Review.restore]. It waits while a scan or a batch runs, since a restore rewrites rows a scan may be recording.
      * Returns the originals that stayed in the trash, because their path holds a file that is not their copy any more.
      */
-    suspend fun undo(context: Context, result: BatchResult): List<ImageRef> {
+    suspend fun undo(context: Context, result: BatchResult): List<MediaRef> {
         val app = context.applicationContext as CribrumApp
         return undo(Review(app.index, app.trash), result)
     }
 
-    internal suspend fun undo(review: Review, result: BatchResult): List<ImageRef> = IndexWorker.running.withLock {
+    internal suspend fun undo(review: Review, result: BatchResult): List<MediaRef> = IndexWorker.running.withLock {
         val restored = review.restore(result.originals).toSet()
         mutableState.update { if (it is BatchState.Finished && it.result == result) BatchState.Idle else it }
         result.originals.filterNot { it in restored }
@@ -179,7 +179,7 @@ open class CompressWorker(context: Context, parameters: WorkerParameters) : Coro
         var compressed = 0
         val refused = mutableMapOf<Refusal, Int>()
         var saved = 0L
-        val originals = mutableListOf<ImageRef>()
+        val originals = mutableListOf<MediaRef>()
         val favorites = mutableListOf<String>()
         try {
             try {
@@ -248,7 +248,7 @@ open class CompressWorker(context: Context, parameters: WorkerParameters) : Coro
     }
 
     /** Not cancellable, so a cancel lets the photo it is on finish. */
-    protected open suspend fun compress(image: ImageRef, level: CompressionLevel): Compression = compressor.compress(image, level)
+    protected open suspend fun compress(image: MediaRef, level: CompressionLevel): Compression = compressor.compress(image, level)
 
     /** The worse of the thermal status and the headroom, as the scan's heat line reads them (docs/design.md §4). */
     protected open fun heat(): HeatLevel? {

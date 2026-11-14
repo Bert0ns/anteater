@@ -6,7 +6,7 @@ import io.github.bert0ns.cribrum.imaging.Pixels
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
 import io.github.bert0ns.cribrum.metadata.readMetadata
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Signal
 import java.io.File
 import io.github.bert0ns.cribrum.hashing.contentHash as hashFile
@@ -19,19 +19,19 @@ import io.github.bert0ns.cribrum.hashing.perceptualHash as hashPerceptual
  * with lookups backed by the index, so each value is computed once. Grows as detectors need it.
  */
 data class AnalysisContext(
-    val contentHash: suspend (ImageRef) -> String = { hashFile(it) },
-    val perceptualHash: suspend (ImageRef) -> ULong = { hashPerceptual(it) },
+    val contentHash: suspend (MediaRef) -> String = { hashFile(it) },
+    val perceptualHash: suspend (MediaRef) -> ULong = { hashPerceptual(it) },
     /** L2-normalized MobileCLIP2-S0 embedding, 512 floats. Throws [MissingEmbedding] when the image has none. */
-    val embedding: suspend (ImageRef) -> FloatArray = { throw MissingEmbedding(it) },
+    val embedding: suspend (MediaRef) -> FloatArray = { throw MissingEmbedding(it) },
     /** Throws [io.github.bert0ns.cribrum.metadata.UnreadableImage] when the header can't be decoded. */
-    val metadata: suspend (ImageRef) -> ImageMetadata = { readMetadata(File(it.path)) },
+    val metadata: suspend (MediaRef) -> ImageMetadata = { readMetadata(File(it.path)) },
     /** The BLURRY measure of the image, the Laplacian variance of its sharpest region: 0 when it can't be decoded. */
-    val sharpness: suspend (ImageRef) -> Double = { BlurDetector.peakVariance(it) },
+    val sharpness: suspend (MediaRef) -> Double = { BlurDetector.peakVariance(it) },
     /**
      * The image's decoded pixels. The pipeline gives the detectors of one image the same [Pixels], so they
      * share its decodes, and drops it with the image. By default each call decodes anew.
      */
-    val pixels: (ImageRef) -> Pixels = { Pixels(File(it.path)) },
+    val pixels: (MediaRef) -> Pixels = { Pixels(File(it.path)) },
     /** Known screen resolutions as (short side, long side). */
     val screenSizes: Set<Pair<Int, Int>> = SCREEN_SIZES,
 )
@@ -40,7 +40,7 @@ data class AnalysisContext(
  * The run has no embedding for this image: no model, or it could not decode the image. A
  * detector that needs one lets it propagate, and the pipeline runs it again on a later run.
  */
-class MissingEmbedding(image: ImageRef) : NoSuchElementException(image.path)
+class MissingEmbedding(image: MediaRef) : NoSuchElementException(image.path)
 
 /**
  * Analyzes one image and emits zero or more signals.
@@ -65,7 +65,7 @@ interface Detector {
      */
     val decodeSide: Int? get() = null
 
-    suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal>
+    suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal>
 }
 
 /**
@@ -83,5 +83,5 @@ interface GroupDetector {
     /** As in [Detector]. */
     val category: Category? get() = null
 
-    suspend fun analyze(images: List<ImageRef>, context: AnalysisContext): Map<ImageRef, List<Signal>>
+    suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>>
 }

@@ -10,7 +10,7 @@ from cribrum_lab.detectors import AnalysisContext
 from cribrum_lab.detectors.document import DocumentDetector
 from cribrum_lab.detectors.forwarded import ForwardedDetector
 from cribrum_lab.metadata import ImageMetadata
-from cribrum_lab.model import Category, ImageRef
+from cribrum_lab.model import Category, MediaRef
 
 STORED = json.loads(prompts.EMBEDDINGS.read_text())
 HAS_MODEL = all((mobileclip.MODELS / name).exists() for name in mobileclip._FILES)
@@ -24,7 +24,7 @@ def prompt_vector(text):
 def analyze(detector, text, path="/sdcard/Download/a.jpg", camera=False):
     meta = ImageMetadata(1000, 1000, "image/jpeg", camera_model="Pixel 8" if camera else None)
     context = AnalysisContext(metadata=lambda _: meta, embedding=lambda _: prompt_vector(text))
-    [signal] = detector.analyze(ImageRef(Path(path), 0, 0), context)
+    [signal] = detector.analyze(MediaRef(Path(path), 0, 0), context)
     return signal
 
 

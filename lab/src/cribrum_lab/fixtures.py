@@ -20,7 +20,7 @@ from PIL import Image, ImageDraw, ImageFilter
 from cribrum_lab import hashing, mobileclip
 from cribrum_lab.detectors import AnalysisContext
 from cribrum_lab.metadata import read_metadata
-from cribrum_lab.model import ImageRef
+from cribrum_lab.model import MediaRef
 from cribrum_lab.pipeline import DETECTORS, GROUP_DETECTORS
 
 ROOT = Path(__file__).resolve().parents[3] / "fixtures" / "golden"
@@ -126,14 +126,14 @@ def write_images(root: Path) -> None:
 def expected(root: Path, embed: bool) -> dict:
     """What the lab says about the fixture images. Embeddings need the MobileCLIP model."""
     paths = sorted(p for p in root.rglob("*") if p.is_file() and p.suffix != ".json")
-    images = [ImageRef(p, p.stat().st_size, 0) for p in paths]
+    images = [MediaRef(p, p.stat().st_size, 0) for p in paths]
     metadata = {image: read_metadata(image.path) for image in images}
     model = mobileclip.MobileClip() if embed else None
     vectors = {}
     if model:
         vectors = {i: model.embed_images([i.path])[0] for i in images}
 
-    def embedding(image: ImageRef) -> np.ndarray:
+    def embedding(image: MediaRef) -> np.ndarray:
         if image not in vectors:
             raise LookupError(image.path)
         return vectors[image]

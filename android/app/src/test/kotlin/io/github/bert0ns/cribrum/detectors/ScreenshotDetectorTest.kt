@@ -3,7 +3,7 @@ package io.github.bert0ns.cribrum.detectors
 
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Signal
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -23,7 +23,7 @@ private fun analyze(
 ): Signal {
     val meta = ImageMetadata(size.first, size.second, "image/jpeg", cameraModel = if (camera) "Pixel 8" else null)
     val context = AnalysisContext(metadata = { meta }, screenSizes = screenSizes)
-    val signal = runBlocking { ScreenshotDetector().analyze(ImageRef(path, 0, 0), context) }.single()
+    val signal = runBlocking { ScreenshotDetector().analyze(MediaRef(path, 0, 0), context) }.single()
     assertEquals(Category.SCREENSHOT, signal.kind)
     return signal
 }

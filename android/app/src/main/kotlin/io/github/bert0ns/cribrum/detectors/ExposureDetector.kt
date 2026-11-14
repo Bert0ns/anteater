@@ -3,7 +3,7 @@
 package io.github.bert0ns.cribrum.detectors
 
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Signal
 import java.util.Locale
 
@@ -18,7 +18,7 @@ class ExposureDetector : Detector {
     override val category = Category.BAD_EXPOSURE
     override val decodeSide = MAX_SIDE
 
-    override suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal> {
+    override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
         val (p1, p5, p95, p99) = percentiles(context.pixels(image).gray(MAX_SIDE).pixels, listOf(1.0, 5.0, 95.0, 99.0))
         val cases = linkedMapOf(
             "dark" to fade(p95 - DARK_LEVEL),

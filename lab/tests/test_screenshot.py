@@ -5,7 +5,7 @@ import pytest
 from cribrum_lab.detectors import AnalysisContext
 from cribrum_lab.detectors.screenshot import ScreenshotDetector
 from cribrum_lab.metadata import ImageMetadata
-from cribrum_lab.model import Category, ImageRef
+from cribrum_lab.model import Category, MediaRef
 
 SCREEN = (1080, 2400)
 PHOTO = (4000, 3000)
@@ -16,7 +16,7 @@ def analyze(path, size, camera=False, screen_sizes=None):
     context = AnalysisContext(metadata=lambda image: meta)
     if screen_sizes is not None:
         context = AnalysisContext(metadata=lambda image: meta, screen_sizes=screen_sizes)
-    [signal] = ScreenshotDetector().analyze(ImageRef(Path(path), 0, 0), context)
+    [signal] = ScreenshotDetector().analyze(MediaRef(Path(path), 0, 0), context)
     assert signal.category is Category.SCREENSHOT
     return signal
 

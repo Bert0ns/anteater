@@ -5,7 +5,7 @@ from collections.abc import Sequence
 
 from cribrum_lab.detectors.base import AnalysisContext, Role
 from cribrum_lab.folders import is_camera_folder, is_messaging_folder
-from cribrum_lab.model import GROUP_KEY, ROLE_KEY, Category, ImageRef, Signal
+from cribrum_lab.model import GROUP_KEY, ROLE_KEY, Category, MediaRef, Signal
 
 
 class ExactDuplicateDetector:
@@ -16,8 +16,8 @@ class ExactDuplicateDetector:
     category = Category.EXACT_DUPLICATE
 
     def analyze(
-        self, images: Sequence[ImageRef], context: AnalysisContext
-    ) -> dict[ImageRef, list[Signal]]:
+        self, images: Sequence[MediaRef], context: AnalysisContext
+    ) -> dict[MediaRef, list[Signal]]:
         by_size = defaultdict(list)
         for image in images:
             by_size[image.size].append(image)
@@ -44,7 +44,7 @@ class ExactDuplicateDetector:
         return result
 
 
-def _preference(image: ImageRef) -> tuple:
+def _preference(image: MediaRef) -> tuple:
     """The copy to keep: camera folder first, messaging folders last, then the shortest path."""
     if is_messaging_folder(image.path):
         place = 2

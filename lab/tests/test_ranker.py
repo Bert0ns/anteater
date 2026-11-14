@@ -3,14 +3,14 @@ from pathlib import Path
 import pytest
 
 from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, Role
-from cribrum_lab.model import Category, ImageRef, IndexedImage, Protection, ReviewState, Signal
+from cribrum_lab.model import Category, IndexedImage, MediaRef, Protection, ReviewState, Signal
 from cribrum_lab.ranker import Ranker
 
 THRESHOLDS = {Category.BLURRY: 0.5, Category.SCREENSHOT: 0.8, Category.EXACT_DUPLICATE: 0.5}
 
 
 def image(name, *signals, state=ReviewState.UNREVIEWED, seen_when_kept=frozenset()):
-    return IndexedImage(ImageRef(Path(name), 0, 0), state, signals, frozenset(seen_when_kept))
+    return IndexedImage(MediaRef(Path(name), 0, 0), state, signals, frozenset(seen_when_kept))
 
 
 def blur(score, version=1):

@@ -15,7 +15,7 @@ from typing import Self
 import numpy as np
 
 from cribrum_lab.metadata import ImageMetadata
-from cribrum_lab.model import ImageRef, IndexedImage, ReviewState, Signal, kind
+from cribrum_lab.model import IndexedImage, MediaRef, ReviewState, Signal, kind
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS images (
@@ -124,7 +124,7 @@ class ImageIndex:
     def close(self) -> None:
         self._db.close()
 
-    def record(self, image: ImageRef) -> bool:
+    def record(self, image: MediaRef) -> bool:
         """Adds or updates an image. Returns True if it is new or changed.
 
         A changed image (different size or mtime) loses its metadata, hashes, embeddings,
@@ -134,7 +134,7 @@ class ImageIndex:
         """
         return self.record_all([image]) > 0
 
-    def record_all(self, images: Iterable[ImageRef]) -> int:
+    def record_all(self, images: Iterable[MediaRef]) -> int:
         """`record` for many images in one transaction. Returns how many are new or changed.
 
         If it raises, none of them is recorded.
@@ -142,7 +142,7 @@ class ImageIndex:
         with self._db:
             return sum(self._record(image) for image in images)
 
-    def _record(self, image: ImageRef) -> bool:
+    def _record(self, image: MediaRef) -> bool:
         path = str(image.path)
         row = self._db.execute(
             "SELECT size, mtime_ns FROM images WHERE path = ?", (path,)
@@ -166,20 +166,20 @@ class ImageIndex:
             self._db.execute("DELETE FROM embeddings WHERE path = ?", (path,))
         return True
 
-    def images(self) -> list[ImageRef]:
+    def images(self) -> list[MediaRef]:
         rows = self._db.execute("SELECT path, size, mtime_ns FROM images ORDER BY path")
-        return [ImageRef(Path(path), size, mtime_ns) for path, size, mtime_ns in rows]
+        return [MediaRef(Path(path), size, mtime_ns) for path, size, mtime_ns in rows]
 
     def forget(self, paths: Iterable[Path]) -> None:
         """Removes images from the index, with everything stored about them. Files are untouched."""
         with self._db:
             self._db.executemany("DELETE FROM images WHERE path = ?", [(str(p),) for p in paths])
 
-    def not_images(self) -> list[ImageRef]:
+    def not_images(self) -> list[MediaRef]:
         rows = self._db.execute("SELECT path, size, mtime_ns FROM not_images")
-        return [ImageRef(Path(path), size, mtime_ns) for path, size, mtime_ns in rows]
+        return [MediaRef(Path(path), size, mtime_ns) for path, size, mtime_ns in rows]
 
-    def add_not_images(self, files: Iterable[ImageRef]) -> None:
+    def add_not_images(self, files: Iterable[MediaRef]) -> None:
         """Stores the files; one already stored with the same path is replaced."""
         with self._db:
             self._db.executemany(
@@ -193,13 +193,13 @@ class ImageIndex:
                 "DELETE FROM not_images WHERE path = ?", [(str(p),) for p in paths]
             )
 
-    def without_metadata(self) -> list[ImageRef]:
+    def without_metadata(self) -> list[MediaRef]:
         """Images whose metadata was never read, leaving out the unreadable ones."""
         rows = self._db.execute(
             """SELECT path, size, mtime_ns FROM images
                WHERE width IS NULL AND NOT unreadable ORDER BY path"""
         )
-        return [ImageRef(Path(path), size, mtime_ns) for path, size, mtime_ns in rows]
+        return [MediaRef(Path(path), size, mtime_ns) for path, size, mtime_ns in rows]
 
     def set_unreadable(self, path: Path) -> None:
         """Marks an image whose header can't be decoded, so it isn't retried until it changes."""
@@ -487,7 +487,7 @@ class ImageIndex:
         )
         return [
             IndexedImage(
-                ImageRef(Path(path), size, mtime_ns),
+                MediaRef(Path(path), size, mtime_ns),
                 ReviewState(state),
                 tuple(signals[path]),
                 frozenset(seen[path]),

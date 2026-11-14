@@ -5,7 +5,7 @@ import io.github.bert0ns.cribrum.golden.Golden
 import io.github.bert0ns.cribrum.imaging.TestImage
 import io.github.bert0ns.cribrum.imaging.loadGrayscale
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Signal
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -41,7 +41,7 @@ class ExposureDetectorTest {
 
     private fun analyze(image: TestImage): Signal {
         val file = image.save(File(folder.newFolder(), "a.png"))
-        val signal = runBlocking { ExposureDetector().analyze(ImageRef(file.path, 0, 0), AnalysisContext()) }.single()
+        val signal = runBlocking { ExposureDetector().analyze(MediaRef(file.path, 0, 0), AnalysisContext()) }.single()
         assertEquals(Category.BAD_EXPOSURE, signal.kind)
         return signal
     }

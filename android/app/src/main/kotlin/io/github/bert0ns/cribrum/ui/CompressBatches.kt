@@ -6,7 +6,7 @@ import io.github.bert0ns.cribrum.compress.BatchResult
 import io.github.bert0ns.cribrum.compress.BatchState
 import io.github.bert0ns.cribrum.compress.CompressBatch
 import io.github.bert0ns.cribrum.compress.CompressionLevel
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import kotlinx.coroutines.flow.StateFlow
 
 interface CompressBatches {
@@ -19,7 +19,7 @@ interface CompressBatches {
     fun cancel()
 
     /** Puts the originals of [result] back from the trash, and returns those that stayed there. */
-    suspend fun undo(result: BatchResult): List<ImageRef>
+    suspend fun undo(result: BatchResult): List<MediaRef>
 }
 
 /** The app's one batch job. */

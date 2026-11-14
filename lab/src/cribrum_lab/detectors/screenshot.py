@@ -8,7 +8,7 @@ raises the score. The weights are starting points, to be tuned for recall in the
 import re
 
 from cribrum_lab.detectors.base import AnalysisContext
-from cribrum_lab.model import Category, ImageRef, Signal
+from cribrum_lab.model import Category, MediaRef, Signal
 
 PATH_WEIGHT = 0.9
 SCREEN_SIZE_WEIGHT = 0.6
@@ -29,7 +29,7 @@ class ScreenshotDetector:
     version = 1
     category = Category.SCREENSHOT
 
-    def analyze(self, image: ImageRef, context: AnalysisContext) -> list[Signal]:
+    def analyze(self, image: MediaRef, context: AnalysisContext) -> list[Signal]:
         meta = context.metadata(image)
         path_match = next(
             (m.group() for part in image.path.parts[-_PATH_PARTS:] if (m := _PATTERN.search(part))),

@@ -10,7 +10,7 @@ import io.github.bert0ns.cribrum.detectors.ForwardedDetector
 import io.github.bert0ns.cribrum.hashing.toHex
 import io.github.bert0ns.cribrum.index.memoryIndex
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.sources.FakeMedia
@@ -215,7 +215,7 @@ class ScanTablesTest {
         override val id = "size"
         override val category = Category.BLURRY
 
-        override suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal> {
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
             val metadata = context.metadata(image)
             return listOf(Signal(id, version, Category.BLURRY, (image.size % 100) / 100f, mapOf("width" to "${metadata.width}", "mime" to "${metadata.mime}")))
         }
@@ -228,7 +228,7 @@ class ScanTablesTest {
         override val category = Category.DOCUMENT
         override val usesEmbeddings = true
 
-        override suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal> = listOf(Signal(id, version, Category.DOCUMENT, context.embedding(image)[0].coerceIn(0f, 1f)))
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> = listOf(Signal(id, version, Category.DOCUMENT, context.embedding(image)[0].coerceIn(0f, 1f)))
     }
 
     private class ArithmeticEmbedder : Embedder {

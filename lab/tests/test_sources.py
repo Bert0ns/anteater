@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from cribrum_lab.model import ImageRef
+from cribrum_lab.model import MediaRef
 from cribrum_lab.sources import FilesystemImageSource
 
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 16
@@ -76,7 +76,7 @@ def test_skips_samsung_gallery_recycle_bin_at_the_root(tmp_path):
     }
 
 
-def test_image_ref_identifies_the_file(tmp_path):
+def test_media_ref_identifies_the_file(tmp_path):
     path = write(tmp_path / "a.jpg", JPEG)
 
     [ref] = FilesystemImageSource(tmp_path).scan()
@@ -134,9 +134,9 @@ def test_skips_everything_below_the_recycle_bin(tmp_path):
     assert scanned_paths(tmp_path) == {Path("Android/c.jpg")}
 
 
-def ref_of(path: Path) -> ImageRef:
+def ref_of(path: Path) -> MediaRef:
     info = path.stat()
-    return ImageRef(path, info.st_size, info.st_mtime_ns)
+    return MediaRef(path, info.st_size, info.st_mtime_ns)
 
 
 def test_takes_a_file_the_index_has_with_the_same_size_and_mtime_as_an_image(tmp_path):
@@ -174,16 +174,16 @@ def test_reads_the_known_files_once_per_scan_not_once_per_file(tmp_path):
 
 
 class MemoryNotImages:
-    def __init__(self, *initial: ImageRef) -> None:
+    def __init__(self, *initial: MediaRef) -> None:
         self.stored = {ref.path: ref for ref in initial}
         self.reads = 0
         self.batches: list[int] = []
 
-    def not_images(self) -> list[ImageRef]:
+    def not_images(self) -> list[MediaRef]:
         self.reads += 1
         return list(self.stored.values())
 
-    def add_not_images(self, files: list[ImageRef]) -> None:
+    def add_not_images(self, files: list[MediaRef]) -> None:
         self.batches.append(len(files))
         self.stored |= {ref.path: ref for ref in files}
 
@@ -255,7 +255,7 @@ def test_forgets_a_remembered_file_the_walk_no_longer_finds(tmp_path):
 
 
 def test_leaves_the_remembered_files_of_another_root_alone(tmp_path):
-    elsewhere = ImageRef(Path("/card/notes.txt"), 5, 5)
+    elsewhere = MediaRef(Path("/card/notes.txt"), 5, 5)
     store = MemoryNotImages(elsewhere)
     write(tmp_path / "a/notes.txt", b"not an image")
 

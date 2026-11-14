@@ -3,7 +3,7 @@ package io.github.bert0ns.cribrum.review
 import io.github.bert0ns.cribrum.index.memoryIndex
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.trash.AppTrash
 import kotlinx.coroutines.runBlocking
@@ -37,7 +37,7 @@ class ReviewOrderTest {
 
     /** A blurry image taken at [capturedAt] when it has EXIF, and last modified at [mtime] otherwise. */
     private fun image(name: String, score: Float, capturedAt: LocalDateTime? = null, mtime: LocalDateTime = LocalDateTime.of(2000, 1, 1, 0, 0)): String = runBlocking {
-        val ref = ImageRef(name, 1_000, TimeUnit.SECONDS.toNanos(mtime.atZone(zone).toEpochSecond()))
+        val ref = MediaRef(name, 1_000, TimeUnit.SECONDS.toNanos(mtime.atZone(zone).toEpochSecond()))
         index.record(ref)
         index.setSignals(name, "blur", 1, listOf(Signal("blur", 1, Category.BLURRY, score)))
         if (capturedAt != null) index.setMetadata(name, ImageMetadata(10, 10, "image/jpeg", capturedAt = capturedAt))

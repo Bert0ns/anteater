@@ -3,7 +3,7 @@ package io.github.bert0ns.cribrum.detectors
 
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
@@ -20,17 +20,17 @@ class ExactDuplicateDetectorTest {
     @get:Rule
     val folder = TemporaryFolder()
 
-    private fun write(name: String, content: String): ImageRef {
+    private fun write(name: String, content: String): MediaRef {
         val file = File(folder.root, name).apply {
             parentFile!!.mkdirs()
             writeText(content)
         }
-        return ImageRef(file.path, content.length.toLong(), 0)
+        return MediaRef(file.path, content.length.toLong(), 0)
     }
 
-    private fun run(images: List<ImageRef>, context: AnalysisContext = AnalysisContext()) = runBlocking { ExactDuplicateDetector().analyze(images, context) }
+    private fun run(images: List<MediaRef>, context: AnalysisContext = AnalysisContext()) = runBlocking { ExactDuplicateDetector().analyze(images, context) }
 
-    private fun Map<ImageRef, List<Signal>>.evidence(image: ImageRef, key: String) = getValue(image).single().evidence[key]
+    private fun Map<MediaRef, List<Signal>>.evidence(image: MediaRef, key: String) = getValue(image).single().evidence[key]
 
     @Test
     fun `identical files form a group with one best copy`() {
@@ -61,19 +61,19 @@ class ExactDuplicateDetectorTest {
 
     @Test
     fun `same size with different content is not a duplicate`() {
-        assertEquals(emptyMap<ImageRef, List<Signal>>(), run(listOf(write("a.jpg", "aaaa"), write("b.jpg", "bbbb"))))
+        assertEquals(emptyMap<MediaRef, List<Signal>>(), run(listOf(write("a.jpg", "aaaa"), write("b.jpg", "bbbb"))))
     }
 
     @Test
     fun `unique sizes are never hashed`() {
-        val hashed = mutableListOf<ImageRef>()
+        val hashed = mutableListOf<MediaRef>()
         val context = AnalysisContext(contentHash = {
             hashed += it
             "same"
         })
 
-        assertEquals(emptyMap<ImageRef, List<Signal>>(), run(listOf(write("a.jpg", "a"), write("b.jpg", "bb")), context))
-        assertEquals(emptyList<ImageRef>(), hashed)
+        assertEquals(emptyMap<MediaRef, List<Signal>>(), run(listOf(write("a.jpg", "a"), write("b.jpg", "bb")), context))
+        assertEquals(emptyList<MediaRef>(), hashed)
     }
 
     @Test

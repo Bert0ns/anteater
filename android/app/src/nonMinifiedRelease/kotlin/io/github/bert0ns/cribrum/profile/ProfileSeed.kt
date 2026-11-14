@@ -15,7 +15,7 @@ import io.github.bert0ns.cribrum.model.GROUP_KEY
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
-import io.github.bert0ns.cribrum.model.toImageRef
+import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.pipeline.DETECTORS
 import io.github.bert0ns.cribrum.pipeline.GROUP_DETECTORS
 import kotlinx.coroutines.runBlocking
@@ -41,7 +41,7 @@ class ProfileSeed : Initializer<Unit> {
     override fun dependencies() = emptyList<Class<out Initializer<*>>>()
 
     private suspend fun seed(app: CribrumApp, folder: File) {
-        val images = List(IMAGES) { File(folder, "$it.jpg").also { file -> writeImage(file, it) }.toImageRef() }
+        val images = List(IMAGES) { File(folder, "$it.jpg").also { file -> writeImage(file, it) }.toMediaRef() }
         app.index.recordAll(images)
         for (detector in DETECTORS) {
             // A sticker is listed under STICKER only, which would empty the other categories.

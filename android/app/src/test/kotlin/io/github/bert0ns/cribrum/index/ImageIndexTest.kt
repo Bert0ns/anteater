@@ -9,7 +9,7 @@ import io.github.bert0ns.cribrum.compress.JpegStatus
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Protection
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.ReviewState
@@ -34,8 +34,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 private const val SNAPSHOT_TEST = "snapshot-test.sqlite"
-private val PHOTO = ImageRef("/photos/a.jpg", 100, 1)
-private val OTHER = ImageRef("/photos/b.jpg", 5, 5)
+private val PHOTO = MediaRef("/photos/a.jpg", 100, 1)
+private val OTHER = MediaRef("/photos/b.jpg", 5, 5)
 
 /** The walk's memory of non-images: it never reaches the review, so it is neither in `reads` nor in `writes`. */
 private val NOT_IMAGES_METHODS = setOf("notImages", "addNotImages", "forgetNotImages")
@@ -107,9 +107,9 @@ class ImageIndexTest {
     fun `record reports new and changed images`() = test {
         assertTrue(record(PHOTO))
         assertFalse(record(PHOTO))
-        assertTrue(record(ImageRef(PHOTO.path, 101, 1)))
-        assertTrue(record(ImageRef(PHOTO.path, 101, 2)))
-        assertEquals(listOf(ImageRef(PHOTO.path, 101, 2)), images())
+        assertTrue(record(MediaRef(PHOTO.path, 101, 1)))
+        assertTrue(record(MediaRef(PHOTO.path, 101, 2)))
+        assertEquals(listOf(MediaRef(PHOTO.path, 101, 2)), images())
     }
 
     @Test
@@ -117,18 +117,18 @@ class ImageIndexTest {
         record(PHOTO)
         record(OTHER)
         setMetadata(OTHER.path, META)
-        val fresh = ImageRef("/photos/c.jpg", 7, 7)
+        val fresh = MediaRef("/photos/c.jpg", 7, 7)
 
-        assertEquals(2, recordAll(listOf(PHOTO, ImageRef(OTHER.path, 6, 5), fresh)))
+        assertEquals(2, recordAll(listOf(PHOTO, MediaRef(OTHER.path, 6, 5), fresh)))
 
-        assertEquals(listOf(PHOTO, ImageRef(OTHER.path, 6, 5), fresh), images())
+        assertEquals(listOf(PHOTO, MediaRef(OTHER.path, 6, 5), fresh), images())
         assertNull(metadata(OTHER.path)) // the changed one was reset, like record does
     }
 
     @Test
     fun `recordAll looks up more paths than one statement takes, and a path listed twice sees its first record`() = test {
-        val many = (0 until 1_200).map { ImageRef("/photos/$it.jpg", 1, 1) }
-        val touched = ImageRef(PHOTO.path, 101, 2)
+        val many = (0 until 1_200).map { MediaRef("/photos/$it.jpg", 1, 1) }
+        val touched = MediaRef(PHOTO.path, 101, 2)
 
         assertEquals(1_203, recordAll(many + PHOTO + touched + PHOTO)) // new, then changed twice
 
@@ -150,9 +150,9 @@ class ImageIndexTest {
     fun `a batch that fails part way leaves the index as it was`() = test {
         record(PHOTO)
         val before = version
-        val batch = object : AbstractList<ImageRef>() {
+        val batch = object : AbstractList<MediaRef>() {
             override val size = 3
-            override fun get(index: Int) = if (index == 2) error("disk full") else ImageRef("/photos/new-$index.jpg", 1, 1)
+            override fun get(index: Int) = if (index == 2) error("disk full") else MediaRef("/photos/new-$index.jpg", 1, 1)
         }
 
         assertThrows(IllegalStateException::class.java) { runBlocking { recordAll(batch) } }
@@ -167,7 +167,7 @@ class ImageIndexTest {
         record(PHOTO)
         setReviewState(PHOTO.path, ReviewState.TRASHED)
 
-        assertTrue(record(ImageRef(PHOTO.path, 101, 1)))
+        assertTrue(record(MediaRef(PHOTO.path, 101, 1)))
 
         assertEquals(ReviewState.UNREVIEWED, reviewState(PHOTO.path))
     }
@@ -206,7 +206,7 @@ class ImageIndexTest {
         setSignals(PHOTO.path, "blur", 1, listOf(BLUR))
         setReviewState(PHOTO.path, ReviewState.KEPT)
 
-        record(ImageRef(PHOTO.path, 200, 5)) // edited, or just touched by a sync tool
+        record(MediaRef(PHOTO.path, 200, 5)) // edited, or just touched by a sync tool
 
         assertNull(metadata(PHOTO.path))
         assertEquals(emptyList<String>(), unreadable())
@@ -319,7 +319,7 @@ class ImageIndexTest {
         val onDisk = ImageIndex.open(ApplicationProvider.getApplicationContext(), "size-test.sqlite")
         try {
             val empty = onDisk.fileBytes()
-            repeat(300) { onDisk.record(ImageRef("/photos/$it.jpg", 1, 1)) }
+            repeat(300) { onDisk.record(MediaRef("/photos/$it.jpg", 1, 1)) }
             assertTrue(onDisk.fileBytes() > empty)
         } finally {
             onDisk.close()
@@ -344,7 +344,7 @@ class ImageIndexTest {
         }
         try {
             onDisk {
-                vectors.keys.forEach { record(ImageRef(it, 1, 1)) }
+                vectors.keys.forEach { record(MediaRef(it, 1, 1)) }
                 setEmbeddings("clip", 1, vectors)
             }
             val shown = onDisk { fileBytes() - embeddingBytes() }
@@ -360,7 +360,7 @@ class ImageIndexTest {
     @Test
     fun `deleting the embeddings gives their pages back to the file`() = test {
         repeat(100) {
-            record(ImageRef("/photos/$it.jpg", 1, 1))
+            record(MediaRef("/photos/$it.jpg", 1, 1))
             setEmbeddings("clip", 1, mapOf("/photos/$it.jpg" to FloatArray(512) { value -> value.toFloat() }))
         }
         assertEquals(100, embeddingCount())
@@ -534,7 +534,7 @@ class ImageIndexTest {
 
     @Test
     fun `images without metadata leave out unreadable ones`() = test {
-        val broken = ImageRef("/photos/c.jpg", 5, 5)
+        val broken = MediaRef("/photos/c.jpg", 5, 5)
         for (image in listOf(PHOTO, OTHER, broken)) record(image)
         setMetadata(PHOTO.path, META)
         setUnreadable(broken.path)
@@ -550,18 +550,18 @@ class ImageIndexTest {
 
         forget(listOf(PHOTO.path))
 
-        assertEquals(emptyList<ImageRef>(), images())
+        assertEquals(emptyList<MediaRef>(), images())
         assertEquals(emptyList<Signal>(), signals(PHOTO.path))
     }
 
     @Test
     fun `forget takes more paths than one statement can bind`() = test {
-        val many = (0 until 1200).map { ImageRef("/photos/$it.jpg", 1, 1) }
+        val many = (0 until 1200).map { MediaRef("/photos/$it.jpg", 1, 1) }
         many.forEach { record(it) }
 
         forget(many.map { it.path })
 
-        assertEquals(emptyList<ImageRef>(), images())
+        assertEquals(emptyList<MediaRef>(), images())
     }
 
     @Test
@@ -653,7 +653,7 @@ class ImageIndexTest {
                 .build(),
         )
         counted.use { index ->
-            val images = (0 until 1000).map { ImageRef("/photos/$it.jpg", 1, 1) }
+            val images = (0 until 1000).map { MediaRef("/photos/$it.jpg", 1, 1) }
             // One image in ten is in a group of two.
             val signals = images.associate { image ->
                 val n = image.path.filter(Char::isDigit).toInt()
@@ -759,7 +759,7 @@ class ImageIndexTest {
     fun `not images are no images`() = test {
         addNotImages(listOf(PHOTO))
 
-        assertEquals(emptyList<ImageRef>(), images())
+        assertEquals(emptyList<MediaRef>(), images())
         assertEquals(0, imageCount())
     }
 

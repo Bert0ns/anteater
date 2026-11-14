@@ -2,7 +2,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, AnalysisContext, GroupDetector, Role
-from cribrum_lab.model import Category, ImageRef, Signal
+from cribrum_lab.model import Category, MediaRef, Signal
 
 
 class SameSizeDetector:
@@ -34,9 +34,9 @@ def run(detector: GroupDetector, images):
 
 
 def test_group_members_share_a_group_id_and_get_a_role():
-    a = ImageRef(Path("a.jpg"), 10, 0)
-    b = ImageRef(Path("b.jpg"), 10, 0)
-    unique = ImageRef(Path("c.jpg"), 20, 0)
+    a = MediaRef(Path("a.jpg"), 10, 0)
+    b = MediaRef(Path("b.jpg"), 10, 0)
+    unique = MediaRef(Path("c.jpg"), 20, 0)
 
     signals = run(SameSizeDetector(), [b, unique, a])
 

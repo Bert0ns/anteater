@@ -29,7 +29,7 @@ import io.github.bert0ns.cribrum.compress.JpegInfo
 import io.github.bert0ns.cribrum.compress.JpegStatus
 import io.github.bert0ns.cribrum.compress.Marker
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.ranker.THRESHOLDS
 import io.github.bert0ns.cribrum.review.CategorySummary
 import io.github.bert0ns.cribrum.review.ReviewGroup
@@ -55,7 +55,7 @@ class AccessibilityTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private val images = (1..3).map { ImageRef("/sdcard/DCIM/img$it.jpg", 1_000_000, 0) }
+    private val images = (1..3).map { MediaRef("/sdcard/DCIM/img$it.jpg", 1_000_000, 0) }
     private val page = images.map { ReviewGroup(it.path, listOf(ReviewItem(it, suggestTrash = true))) }
     private val marked = images.map { it.path }.toSet()
 

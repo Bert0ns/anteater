@@ -6,7 +6,7 @@ from PIL import Image, ImageFilter
 
 from cribrum_lab.detectors import AnalysisContext
 from cribrum_lab.detectors.blur import BlurDetector
-from cribrum_lab.model import Category, ImageRef
+from cribrum_lab.model import Category, MediaRef
 
 
 def texture(size=(800, 600), seed=0):
@@ -17,7 +17,7 @@ def texture(size=(800, 600), seed=0):
 def blur_score(tmp_path, image, name="a.jpg"):
     path = tmp_path / name
     image.save(path, quality=95)
-    [signal] = BlurDetector().analyze(ImageRef(path, 0, 0), AnalysisContext())
+    [signal] = BlurDetector().analyze(MediaRef(path, 0, 0), AnalysisContext())
     assert signal.category is Category.BLURRY
     return signal.score
 
@@ -52,7 +52,7 @@ def test_evidence_records_the_measures(tmp_path):
     path = tmp_path / "a.png"
     texture().save(path)
 
-    [signal] = BlurDetector().analyze(ImageRef(path, 0, 0), AnalysisContext())
+    [signal] = BlurDetector().analyze(MediaRef(path, 0, 0), AnalysisContext())
 
     assert set(signal.evidence) == {"global_variance", "peak_variance"}
 
@@ -64,7 +64,7 @@ def test_tiny_and_thin_images_do_not_crash(tmp_path, size):
 
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        signals = BlurDetector().analyze(ImageRef(path, 0, 0), AnalysisContext())
+        signals = BlurDetector().analyze(MediaRef(path, 0, 0), AnalysisContext())
 
     assert signals
     assert all(0.0 <= s.score <= 1.0 for s in signals)
@@ -75,4 +75,4 @@ def test_an_image_that_ends_under_3_px_on_a_side_yields_no_signal(tmp_path, size
     path = tmp_path / "a.png"
     texture((max(size[0], 8), max(size[1], 8))).resize(size).save(path)
 
-    assert BlurDetector().analyze(ImageRef(path, 0, 0), AnalysisContext()) == []
+    assert BlurDetector().analyze(MediaRef(path, 0, 0), AnalysisContext()) == []

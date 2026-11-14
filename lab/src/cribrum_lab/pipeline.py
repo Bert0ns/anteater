@@ -33,7 +33,7 @@ from cribrum_lab.folders import is_sticker_folder
 from cribrum_lab.imaging import Pixels
 from cribrum_lab.index import ImageIndex
 from cribrum_lab.metadata import ImageMetadata, UnreadableImage, read_metadata
-from cribrum_lab.model import Category, ImageRef, Signal
+from cribrum_lab.model import Category, MediaRef, Signal
 from cribrum_lab.sources import FilesystemImageSource
 
 DETECTORS: list[Detector] = [
@@ -126,7 +126,7 @@ def run(
 
     found = set()
     source = FilesystemImageSource(root, index.images, not_images=index)
-    batch: list[ImageRef] = []
+    batch: list[MediaRef] = []
     for image in source.scan():
         found.add(image.path)
         batch.append(image)
@@ -206,14 +206,14 @@ def run(
     hash_failed: set[str] = set()
     cached_content_hash = _cached_content_hash(index)
 
-    def content_hash(image: ImageRef) -> str:
+    def content_hash(image: MediaRef) -> str:
         try:
             return cached_content_hash(image)
         except OSError:
             hash_failed.add(str(image.path))
             raise
 
-    def hashes(image: ImageRef) -> bool:
+    def hashes(image: MediaRef) -> bool:
         try:
             cached_content_hash(image)
         except OSError:
@@ -259,14 +259,14 @@ def run(
     return stats
 
 
-def _stickers_last(images: list[ImageRef]) -> list[ImageRef]:
+def _stickers_last(images: list[MediaRef]) -> list[MediaRef]:
     """The real images first: a sticker only delays them, since the home screen lists
     candidates as they are stored."""
     return sorted(images, key=lambda i: is_sticker_folder(i.path))
 
 
 def _analyze_each(
-    images: list[ImageRef],
+    images: list[MediaRef],
     detectors: Sequence[Detector],
     embeddings: dict[Path, np.ndarray],
     step: str,
@@ -322,8 +322,8 @@ def _analyze_each(
 
 
 def _analyze(
-    task: tuple[ImageRef, ImageMetadata, np.ndarray | None, list[Detector], bool, bool],
-) -> tuple[ImageRef, list[tuple[str, int, list[Signal] | str | None]], int | str | None]:
+    task: tuple[MediaRef, ImageMetadata, np.ndarray | None, list[Detector], bool, bool],
+) -> tuple[MediaRef, list[tuple[str, int, list[Signal] | str | None]], int | str | None]:
     """Runs in a worker process: metadata and embedding come along, the index stays in the
     parent.
 
@@ -365,7 +365,7 @@ def _analyze(
     return image, results, phash
 
 
-def _no_embedding_yet(image: ImageRef) -> np.ndarray:
+def _no_embedding_yet(image: MediaRef) -> np.ndarray:
     raise RuntimeError(f"{image.path}: reads an embedding without uses_embeddings")
 
 
@@ -373,7 +373,7 @@ def _embed(
     embedder: Embedder,
     index: ImageIndex,
     detectors: Sequence[Detector],
-    images: list[ImageRef],
+    images: list[MediaRef],
     jobs: int,
     stats: Stats,
     progress: Progress,
@@ -406,7 +406,7 @@ def _embed(
             progress("embeddings", start + batch_start + len(batch), len(todo))
 
 
-def _preprocess(image: ImageRef) -> np.ndarray | str:
+def _preprocess(image: MediaRef) -> np.ndarray | str:
     try:
         return mobileclip.preprocess(image.path)
     except Exception as error:
@@ -426,8 +426,8 @@ def _map(function, tasks, jobs):
         yield from pool.map(function, tasks, chunksize=4)
 
 
-def _cached_content_hash(index: ImageIndex) -> Callable[[ImageRef], str]:
-    def content_hash(image: ImageRef) -> str:
+def _cached_content_hash(index: ImageIndex) -> Callable[[MediaRef], str]:
+    def content_hash(image: MediaRef) -> str:
         digest = index.content_hash(image.path)
         if digest is None:
             digest = hashing.content_hash(image)
@@ -437,10 +437,10 @@ def _cached_content_hash(index: ImageIndex) -> Callable[[ImageRef], str]:
     return content_hash
 
 
-def _stored_perceptual_hash(index: ImageIndex) -> Callable[[ImageRef], int]:
+def _stored_perceptual_hash(index: ImageIndex) -> Callable[[MediaRef], int]:
     """Hashes come from the worker step; an image without one could not be decoded."""
 
-    def perceptual_hash(image: ImageRef) -> int:
+    def perceptual_hash(image: MediaRef) -> int:
         phash = index.perceptual_hash(image.path)
         if phash is None:
             raise UnreadableImage(image.path)
@@ -449,8 +449,8 @@ def _stored_perceptual_hash(index: ImageIndex) -> Callable[[ImageRef], int]:
     return perceptual_hash
 
 
-def _stored_embedding(embeddings: dict[Path, np.ndarray]) -> Callable[[ImageRef], np.ndarray]:
-    def embedding(image: ImageRef) -> np.ndarray:
+def _stored_embedding(embeddings: dict[Path, np.ndarray]) -> Callable[[MediaRef], np.ndarray]:
+    def embedding(image: MediaRef) -> np.ndarray:
         found = embeddings.get(image.path)
         if found is None:
             raise MissingEmbedding(image.path)
@@ -461,11 +461,11 @@ def _stored_embedding(embeddings: dict[Path, np.ndarray]) -> Callable[[ImageRef]
 
 def _stored_sharpness(
     index: ImageIndex, blur_detector: Detector | None
-) -> Callable[[ImageRef], float]:
+) -> Callable[[MediaRef], float]:
     """Burst ranks its shots by the measure blur stored, and decodes a shot again only when
     blur left none."""
 
-    def sharpness(image: ImageRef) -> float:
+    def sharpness(image: MediaRef) -> float:
         if blur_detector is not None:
             for signal in index.signals(image.path):
                 if (signal.detector_id, signal.detector_version) == (
@@ -479,8 +479,8 @@ def _stored_sharpness(
     return sharpness
 
 
-def _metadata(index: ImageIndex) -> Callable[[ImageRef], ImageMetadata]:
-    def metadata(image: ImageRef) -> ImageMetadata:
+def _metadata(index: ImageIndex) -> Callable[[MediaRef], ImageMetadata]:
+    def metadata(image: MediaRef) -> ImageMetadata:
         found = index.metadata(image.path)
         if found is None:
             raise UnreadableImage(image.path)
@@ -489,7 +489,7 @@ def _metadata(index: ImageIndex) -> Callable[[ImageRef], ImageMetadata]:
     return metadata
 
 
-def _fingerprint(images: Sequence[ImageRef], inputs: str) -> str:
+def _fingerprint(images: Sequence[MediaRef], inputs: str) -> str:
     digest = xxhash.xxh3_64(inputs.encode())
     for image in sorted(images, key=lambda i: str(i.path)):
         digest.update(f"{image.path}\0{image.size}\0{image.mtime_ns}\n".encode())

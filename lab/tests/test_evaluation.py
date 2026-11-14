@@ -4,7 +4,7 @@ import pytest
 
 from cribrum_lab.evaluation import evaluate, format_report
 from cribrum_lab.labels import Decision, Label, Stratum
-from cribrum_lab.model import Category, ImageRef, IndexedImage, ReviewState, Signal
+from cribrum_lab.model import Category, IndexedImage, MediaRef, ReviewState, Signal
 
 THRESHOLDS = {Category.BLURRY: 0.5, Category.SCREENSHOT: 0.5}
 
@@ -14,7 +14,7 @@ def image(name, blur=0.0, screenshot=0.0, state=ReviewState.UNREVIEWED):
         Signal("blur", 1, Category.BLURRY, blur),
         Signal("screenshot", 1, Category.SCREENSHOT, screenshot),
     )
-    return IndexedImage(ImageRef(Path(name), 0, 0), state, signals)
+    return IndexedImage(MediaRef(Path(name), 0, 0), state, signals)
 
 
 def label(name, decision):
@@ -81,7 +81,7 @@ def test_sweep_leaves_out_images_a_sticker_owns():
     stickers = {Category.STICKER: 0.5}
     images = [
         IndexedImage(
-            ImageRef(Path("sticker"), 0, 0),
+            MediaRef(Path("sticker"), 0, 0),
             ReviewState.UNREVIEWED,
             (Signal("blur", 1, Category.BLURRY, 0.9), Signal("sticker", 1, Category.STICKER, 1.0)),
         ),

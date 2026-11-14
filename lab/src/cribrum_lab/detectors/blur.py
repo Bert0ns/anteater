@@ -4,7 +4,7 @@ import numpy as np
 
 from cribrum_lab.detectors.base import AnalysisContext
 from cribrum_lab.imaging import load_grayscale
-from cribrum_lab.model import Category, ImageRef, Signal
+from cribrum_lab.model import Category, MediaRef, Signal
 
 MAX_SIDE = 512
 TILES = 4
@@ -21,7 +21,7 @@ class BlurDetector:
     category = Category.BLURRY
     decode_side = MAX_SIDE
 
-    def analyze(self, image: ImageRef, context: AnalysisContext) -> list[Signal]:
+    def analyze(self, image: MediaRef, context: AnalysisContext) -> list[Signal]:
         measured = measure(context.pixels(image).gray(MAX_SIDE))
         if measured is None:
             return []
@@ -50,7 +50,7 @@ def measure(gray: np.ndarray) -> tuple[float, float] | None:
     return float(laplacian.var()), peak_variance
 
 
-def peak_variance(image: ImageRef) -> float:
+def peak_variance(image: MediaRef) -> float:
     """The peak variance `measure` gives for the image, 0 when it can't be decoded or is under
     3 px on a side."""
     try:

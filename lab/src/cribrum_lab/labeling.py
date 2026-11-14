@@ -18,7 +18,7 @@ from PIL import Image, ImageOps
 
 from cribrum_lab import hashing
 from cribrum_lab.labels import Decision, Label, LabelStore, Stratum
-from cribrum_lab.model import Category, ImageRef
+from cribrum_lab.model import Category, MediaRef
 from cribrum_lab.ranker import Candidate
 
 PREVIEW_SIDE = 1600
@@ -34,7 +34,7 @@ _PAGE = Path(__file__).with_name("labeling.html")
 
 def sample(
     ranked: Sequence[Candidate], size: int, exclude: set[Path], seed: int = 0
-) -> list[ImageRef]:
+) -> list[MediaRef]:
     """Half candidates, spread over their categories, half images no detector flagged.
 
     Recall can only be measured on images no detector flagged if some get labeled too.
@@ -44,7 +44,7 @@ def sample(
     pool = [c for c in ranked if c.image.ref.path not in exclude]
     flagged = [c for c in pool if c.is_candidate]
     unflagged = [c.image.ref for c in pool if not c.is_candidate]
-    by_category: dict[Category, list[ImageRef]] = {}
+    by_category: dict[Category, list[MediaRef]] = {}
     for candidate in flagged:
         top = candidate.reasons[0].category  # strongest reason
         by_category.setdefault(top, []).append(candidate.image.ref)
@@ -73,8 +73,8 @@ def strata(ranked: Sequence[Candidate]) -> dict[Path, Stratum]:
 
 
 def clusters(
-    images: Sequence[ImageRef], vectors: Mapping[Path, np.ndarray]
-) -> list[list[ImageRef]]:
+    images: Sequence[MediaRef], vectors: Mapping[Path, np.ndarray]
+) -> list[list[MediaRef]]:
     """Groups of similar images, largest first, so a whole group can be labeled at once.
 
     Leader clustering: each image joins the first cluster whose first image is at least
@@ -82,7 +82,7 @@ def clusters(
     alike to no other are left out: they are labeled one by one.
     """
     leaders: list[np.ndarray] = []
-    members: list[list[ImageRef]] = []
+    members: list[list[MediaRef]] = []
     for image in images:
         vector = vectors.get(image.path)
         if vector is None:
@@ -122,7 +122,7 @@ class LabelingServer(ThreadingHTTPServer):
 
     def __init__(
         self,
-        groups: Sequence[Sequence[ImageRef]],
+        groups: Sequence[Sequence[MediaRef]],
         store: LabelStore,
         port: int = 0,
         strata: Mapping[Path, Stratum] | None = None,

@@ -2,7 +2,7 @@ package io.github.bert0ns.cribrum
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.review.Decision
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -14,7 +14,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [36])
 class AppliedMessageTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
-    private val images = (1..3).map { ImageRef("/sdcard/$it.jpg", 1_000_000, 0) }
+    private val images = (1..3).map { MediaRef("/sdcard/$it.jpg", 1_000_000, 0) }
 
     @Test
     fun `a trashed page says how many and their size, which does not break`() {

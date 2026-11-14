@@ -5,12 +5,12 @@ import xxhash
 from PIL import Image
 
 from cribrum_lab.imaging import Pixels
-from cribrum_lab.model import ImageRef
+from cribrum_lab.model import MediaRef
 
 _CHUNK = 1 << 20
 
 
-def content_hash(image: ImageRef) -> str:
+def content_hash(image: MediaRef) -> str:
     """xxHash3 64-bit digest of the whole file, as hex. Raises OSError if it can't be read."""
     digest = xxhash.xxh3_64()
     with image.path.open("rb") as file:
@@ -19,7 +19,7 @@ def content_hash(image: ImageRef) -> str:
     return digest.hexdigest()
 
 
-def perceptual_hash(image: ImageRef, pixels: Pixels | None = None) -> int:
+def perceptual_hash(image: MediaRef, pixels: Pixels | None = None) -> int:
     """64-bit pHash: the signs of the 8x8 lowest frequencies of a 32x32 DCT against their median.
 
     Resizing and recompression barely change it: near-duplicates differ in a few bits.

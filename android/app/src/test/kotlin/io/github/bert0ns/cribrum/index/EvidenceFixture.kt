@@ -2,8 +2,8 @@ package io.github.bert0ns.cribrum.index
 
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
-import io.github.bert0ns.cribrum.model.ImageRef
 import io.github.bert0ns.cribrum.model.Kind
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Protection
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.Role
@@ -12,7 +12,7 @@ import java.util.Locale
 import kotlin.random.Random
 
 /** One image of the fixture and the signals each detector stored for it, keyed by detector id. */
-class FixtureImage(val ref: ImageRef, val signals: Map<String, List<Signal>>)
+class FixtureImage(val ref: MediaRef, val signals: Map<String, List<Signal>>)
 
 /**
  * [count] images with evidence shaped like every detector's, with scores spread over the whole range.
@@ -57,7 +57,7 @@ fun evidenceFixture(count: Int): List<FixtureImage> = List(count) { i ->
         put("near_duplicate", Category.NEAR_DUPLICATE, roleScore, common + mapOf("distance" to "4", "cosine" to number(3)))
         put("burst", Category.BURST, roleScore, common + mapOf("sharpness" to number(1), "shots" to "3"))
     }
-    FixtureImage(ImageRef("/photos/${i % 100}/img_$i.jpg", 1000L + i, i.toLong()), signals)
+    FixtureImage(MediaRef("/photos/${i % 100}/img_$i.jpg", 1000L + i, i.toLong()), signals)
 }
 
 /** Stores the fixture in the index. */
