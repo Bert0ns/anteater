@@ -1,17 +1,26 @@
-"""Image sources: where images come from. Mirrors docs/design.md, sections 4 and 7."""
+"""Media sources: where images and videos come from. Mirrors docs/design.md, sections 4 and 7."""
 
 import stat
 from collections.abc import Callable, Iterable, Iterator
+from dataclasses import replace
 from pathlib import Path
 from typing import Protocol
 
-from cribrum_lab.model import MediaRef
+from cribrum_lab.model import MediaRef, MediaType
 
-# ISO base media brands of HEIF and AVIF images. Videos (e.g. "isom", "mp42") are left out.
+# ISO base media brands of HEIF and AVIF images, which win wherever the ftyp box names them.
 _HEIF_BRANDS = {
     b"heic", b"heix", b"heim", b"heis", b"hevc", b"hevx",
     b"mif1", b"mif2", b"msf1", b"miaf", b"avif", b"avis",
 }  # fmt: skip
+# Major brands of MP4, MOV, 3GP and M4V. Audio-only files (M4A, M4B) and raw photos such as Canon's
+# CR3 name isom among their compatible brands too, so only the major brand counts.
+_VIDEO_BRANDS = {
+    b"isom", b"iso2", b"iso3", b"iso4", b"iso5", b"iso6", b"mp41", b"mp42", b"avc1", b"mmp4",
+    b"XAVC", b"qt  ", b"3gp4", b"3gp5", b"3gp6", b"3gp7", b"3g2a", b"M4V ", b"M4VH", b"M4VP",
+}  # fmt: skip
+_EBML = b"\x1a\x45\xdf\xa3"
+"""The start of a Matroska or WebM file, whose DocType element follows within a few bytes."""
 _HEAD_SIZE = 64
 """Enough for the magic bytes of every format and the brand list of a typical ftyp box."""
 
@@ -30,8 +39,8 @@ class MediaSource(Protocol):
 
 
 class NotImages(Protocol):
-    """What the walk remembers of the files it sniffed and found not to be images, so it does
-    not read their head again while their size and mtime stay the same."""
+    """What the walk remembers of the files it sniffed and found to be neither images nor videos,
+    so it does not read their head again while their size and mtime stay the same."""
 
     def not_images(self) -> Iterable[MediaRef]: ...
 
@@ -47,14 +56,15 @@ NOT_IMAGES_BATCH = 300
 
 
 class FilesystemMediaSource:
-    """Walks a folder tree and yields every image file, like the Android deep scan.
+    """Walks a folder tree and yields every image and video file, like the Android deep scan.
 
     Hidden folders and folders with a `.nomedia` file are included: that is where
     messaging apps keep media the gallery never shows. Files are recognized by their
-    content, not their extension, except a file that `indexed` returns with the same path,
-    size and mtime: the index took it, so its head is not read again and it keeps the media
-    type the index has. `indexed` is called once per `scan`, before the walk. The same goes for a file `not_images` has: an
-    earlier walk found it not to be an image. The walk adds the non-images it sniffs, and drops
+    content, not their extension, and yielded with the media type their head gave, except a
+    file that `indexed` returns with the same path, size and mtime: the index took it, so its
+    head is not read again and it keeps the media type the index has. `indexed` is called once
+    per `scan`, before the walk. The same goes for a file `not_images` has: an earlier walk found
+    it to be neither an image nor a video. The walk adds the non-images it sniffs, and drops
     the ones it no longer finds when it listed the whole root. Symlinks are skipped so no file
     is yielded twice, and so are FIFOs and other special files, which would block or fail on
     read. Left out on purpose: files in the system trash or still being written (`.trashed-*`,
@@ -110,7 +120,8 @@ class FilesystemMediaSource:
                         image = indexed
                     else:
                         again = image in remembered_set
-                        if again or not _is_image(path):
+                        media_type = None if again else _media_type(path)
+                        if media_type is None:
                             met.add(path)
                             if self._not_images is not None and not again:
                                 sniffed.append(image)
@@ -118,6 +129,7 @@ class FilesystemMediaSource:
                                     self._not_images.add_not_images(sniffed)
                                     sniffed = []  # the store may still hold the list it was given
                             continue
+                        image = replace(image, media_type=media_type)
                 except OSError:
                     continue  # unreadable or vanished during the scan
                 yield image
@@ -136,20 +148,28 @@ class FilesystemMediaSource:
             self.walked_roots = [self.root]
 
 
-def _is_image(path: Path) -> bool:
+def _media_type(path: Path) -> MediaType | None:
+    """What the head of the file says it is, or None for neither an image nor a video."""
     # The walk remembers the files this refused, by size and mtime (docs/design.md, section 4).
     # A change that lets the head accept more, such as a new format or HEIF brand, must empty
     # `not_images` in the same change: bump SCHEMA_VERSION in index.py, which refuses older
     # files. Otherwise those files are never sniffed again.
     with path.open("rb") as file:
         head = file.read(_HEAD_SIZE)
-    return (
+    ftyp = head[4:8] == b"ftyp"
+    if (
         head.startswith(b"\xff\xd8\xff")  # JPEG
         or head.startswith(b"\x89PNG\r\n\x1a\n")
         or head.startswith((b"GIF87a", b"GIF89a"))
         or (head.startswith(b"RIFF") and head[8:12] == b"WEBP")
-        or (head[4:8] == b"ftyp" and not _HEIF_BRANDS.isdisjoint(_ftyp_brands(head)))
-    )
+        or (ftyp and not _HEIF_BRANDS.isdisjoint(_ftyp_brands(head)))
+    ):
+        return MediaType.IMAGE
+    if (ftyp and head[8:12] in _VIDEO_BRANDS) or (
+        head.startswith(_EBML) and (b"matroska" in head or b"webm" in head)
+    ):
+        return MediaType.VIDEO
+    return None
 
 
 def _ftyp_brands(head: bytes) -> list[bytes]:
