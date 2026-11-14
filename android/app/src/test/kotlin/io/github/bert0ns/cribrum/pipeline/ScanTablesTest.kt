@@ -14,9 +14,9 @@ import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.sources.FakeMedia
-import io.github.bert0ns.cribrum.sources.FilesystemImageSource
-import io.github.bert0ns.cribrum.sources.MediaStoreImageSource
-import io.github.bert0ns.cribrum.sources.MergedImageSource
+import io.github.bert0ns.cribrum.sources.FilesystemMediaSource
+import io.github.bert0ns.cribrum.sources.MediaStoreSource
+import io.github.bert0ns.cribrum.sources.MergedMediaSource
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -116,13 +116,13 @@ class ScanTablesTest {
         return (listOf(dump(), "[scan failures]") + failures).joinToString("\n")
     }
 
-    private fun source(): MergedImageSource {
+    private fun source(): MergedMediaSource {
         // MediaStore lists what the walk finds too, and a file on a card the walk does not cover.
         FakeMedia.paths = (root.walkTopDown() + card.walkTopDown()).filter { it.isFile && it.extension == "png" }.map { it.path }.toList() +
             File(root, "DCIM/Camera/ghost.png").path // a row whose file is gone
         Robolectric.setupContentProvider(FakeMedia::class.java, MediaStore.AUTHORITY)
         val resolver = ApplicationProvider.getApplicationContext<Context>().contentResolver
-        return MergedImageSource(listOf(FilesystemImageSource(root, index, index::images), MediaStoreImageSource(resolver, listOf(root, card))))
+        return MergedMediaSource(listOf(FilesystemMediaSource(root, index, index::images), MediaStoreSource(resolver, listOf(root, card))))
     }
 
     /**

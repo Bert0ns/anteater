@@ -38,7 +38,7 @@ import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Signal
-import io.github.bert0ns.cribrum.sources.ImageSource
+import io.github.bert0ns.cribrum.sources.MediaSource
 import io.github.bert0ns.cribrum.tracing.traceSuspend
 import io.github.bert0ns.cribrum.trash.Trash
 import kotlinx.coroutines.CancellationException
@@ -191,7 +191,7 @@ class Pipeline(
      * Only images under a root the source walked can be gone: an absent SD card or an unreadable
      * folder is not a deletion.
      */
-    suspend fun run(source: ImageSource, progress: Progress = { _, _, _ -> }): Stats = withContext(Dispatchers.IO) {
+    suspend fun run(source: MediaSource, progress: Progress = { _, _, _ -> }): Stats = withContext(Dispatchers.IO) {
         val stats = Stats()
         val found = LinkedHashSet<String>()
         val before = index.reviewStates()

@@ -16,7 +16,7 @@ _HEAD_SIZE = 64
 """Enough for the magic bytes of every format and the brand list of a typical ftyp box."""
 
 
-class ImageSource(Protocol):
+class MediaSource(Protocol):
     def scan(self) -> Iterator[MediaRef]: ...
 
     @property
@@ -46,7 +46,7 @@ NOT_IMAGES_BATCH = 300
 """Files the walk hands to `add_not_images` at once."""
 
 
-class FilesystemImageSource:
+class FilesystemMediaSource:
     """Walks a folder tree and yields every image file, like the Android deep scan.
 
     Hidden folders and folders with a `.nomedia` file are included: that is where

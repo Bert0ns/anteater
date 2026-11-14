@@ -91,7 +91,7 @@ Prints the recall on the labeled images with the current thresholds, and the num
 | Module | Contents |
 |---|---|
 | `cribrum_lab.model` | Core types: `MediaRef`, `Category`, `Signal` |
-| `cribrum_lab.sources` | `ImageSource` interface and `FilesystemImageSource`, which finds every image under a folder (videos are ignored) |
+| `cribrum_lab.sources` | `MediaSource` interface and `FilesystemMediaSource`, which finds every image under a folder (videos are ignored) |
 | `cribrum_lab.metadata` | `read_metadata`: displayed size, MIME type, camera EXIF and capture time |
 | `cribrum_lab.index` | `ImageIndex`: SQLite store for images, metadata, signals per detector version, and review state |
 | `cribrum_lab.imaging` | `load_grayscale`: downscaled luminance for content-based detectors |

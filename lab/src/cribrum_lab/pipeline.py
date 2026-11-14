@@ -34,7 +34,7 @@ from cribrum_lab.imaging import Pixels
 from cribrum_lab.index import ImageIndex
 from cribrum_lab.metadata import ImageMetadata, UnreadableImage, read_metadata
 from cribrum_lab.model import Category, MediaRef, Signal
-from cribrum_lab.sources import FilesystemImageSource
+from cribrum_lab.sources import FilesystemMediaSource
 
 DETECTORS: list[Detector] = [
     BlurDetector(),
@@ -125,7 +125,7 @@ def run(
     stats = Stats()
 
     found = set()
-    source = FilesystemImageSource(root, index.images, not_images=index)
+    source = FilesystemMediaSource(root, index.images, not_images=index)
     batch: list[MediaRef] = []
     for image in source.scan():
         found.add(image.path)

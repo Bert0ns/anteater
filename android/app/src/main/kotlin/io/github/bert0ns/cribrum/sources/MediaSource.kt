@@ -19,11 +19,11 @@ import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.attribute.BasicFileAttributes
 
-interface ImageSource {
+interface MediaSource {
     fun scan(): Flow<MediaRef>
 
     /**
-     * [scan], free to leave out a path in [known] before any work on it. [MergedImageSource] passes the paths the
+     * [scan], free to leave out a path in [known] before any work on it. [MergedMediaSource] passes the paths the
      * earlier sources yielded, whose refs it keeps over any later one.
      */
     fun scan(known: Set<String>): Flow<MediaRef> = scan()
@@ -72,13 +72,13 @@ private const val NOT_IMAGES_BATCH = 300
  * Samsung Gallery's recycle bin, and `Android/data` and `Android/obb`, which Android 11 and
  * newer keep from every app.
  */
-class FilesystemImageSource(
+class FilesystemMediaSource(
     private val root: File,
     /** Read once per scan, before the walk. */
     private val notImages: NotImages? = null,
     /** Read once per scan, before the walk. Last, so a test can pass it as a trailing lambda. */
     private val indexed: suspend () -> Collection<MediaRef> = { emptyList() },
-) : ImageSource {
+) : MediaSource {
     /** The root once the walk listed every folder; a folder that cannot be listed, or a missing root, leaves it out. */
     @Volatile // written on the IO thread of the flow, read by the collector
     override var walkedRoots: List<File> = emptyList()
@@ -171,7 +171,7 @@ internal fun isSkipped(root: File, file: File): Boolean {
  * folders, which the deep scan covers, and leaves out what the deep scan leaves out. It walks no
  * folder, so it reports no walked root. [volumes] tell which folder is the root of a path.
  */
-class MediaStoreImageSource(private val resolver: ContentResolver, private val volumes: List<File>) : ImageSource {
+class MediaStoreSource(private val resolver: ContentResolver, private val volumes: List<File>) : MediaSource {
     override val walkedRoots: List<File> = emptyList()
 
     @Volatile
@@ -222,7 +222,7 @@ class MediaStoreImageSource(private val resolver: ContentResolver, private val v
  * Every image any source finds, once. Each source builds its refs with [toMediaRef], so the same
  * file has the same path, size and mtime whichever source finds it.
  */
-class MergedImageSource(private val sources: List<ImageSource>) : ImageSource {
+class MergedMediaSource(private val sources: List<MediaSource>) : MediaSource {
     override val walkedRoots: List<File> get() = sources.flatMap { it.walkedRoots }
 
     @Volatile

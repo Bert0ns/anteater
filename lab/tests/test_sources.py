@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from cribrum_lab.model import MediaRef
-from cribrum_lab.sources import FilesystemImageSource
+from cribrum_lab.sources import FilesystemMediaSource
 
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 16
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -24,7 +24,7 @@ def write(path: Path, content: bytes) -> Path:
 
 
 def scanned_paths(root: Path) -> set[Path]:
-    return {ref.path.relative_to(root) for ref in FilesystemImageSource(root).scan()}
+    return {ref.path.relative_to(root) for ref in FilesystemMediaSource(root).scan()}
 
 
 def test_finds_every_supported_format(tmp_path):
@@ -79,7 +79,7 @@ def test_skips_samsung_gallery_recycle_bin_at_the_root(tmp_path):
 def test_media_ref_identifies_the_file(tmp_path):
     path = write(tmp_path / "a.jpg", JPEG)
 
-    [ref] = FilesystemImageSource(tmp_path).scan()
+    [ref] = FilesystemMediaSource(tmp_path).scan()
 
     stat = path.stat()
     assert (ref.path, ref.size, ref.mtime_ns) == (path, stat.st_size, stat.st_mtime_ns)
@@ -104,7 +104,7 @@ def test_scan_order_is_deterministic(tmp_path):
     for name in ["b/2.jpg", "b/1.jpg", "a/9.jpg", "c.jpg"]:
         write(tmp_path / name, JPEG)
 
-    paths = [ref.path.relative_to(tmp_path) for ref in FilesystemImageSource(tmp_path).scan()]
+    paths = [ref.path.relative_to(tmp_path) for ref in FilesystemMediaSource(tmp_path).scan()]
 
     assert paths == [Path(n) for n in ["c.jpg", "a/9.jpg", "b/1.jpg", "b/2.jpg"]]
 
@@ -142,7 +142,7 @@ def ref_of(path: Path) -> MediaRef:
 def test_takes_a_file_the_index_has_with_the_same_size_and_mtime_as_an_image(tmp_path):
     fake = write(tmp_path / "fake.jpg", b"not an image")  # the head would say no
 
-    found = {ref.path for ref in FilesystemImageSource(tmp_path, lambda: [ref_of(fake)]).scan()}
+    found = {ref.path for ref in FilesystemMediaSource(tmp_path, lambda: [ref_of(fake)]).scan()}
 
     assert found == {fake}
 
@@ -157,7 +157,7 @@ def test_sniffs_a_known_file_again_when_its_size_or_mtime_changed(tmp_path):
     os.utime(touched, ns=(1, touched.stat().st_mtime_ns + 5_000_000_000))
     edited.write_bytes(JPEG + b"\x00")
 
-    found = {ref.path for ref in FilesystemImageSource(tmp_path, lambda: before).scan()}
+    found = {ref.path for ref in FilesystemMediaSource(tmp_path, lambda: before).scan()}
 
     assert found == {edited}
 
@@ -166,7 +166,7 @@ def test_reads_the_known_files_once_per_scan_not_once_per_file(tmp_path):
     for name in ["a.jpg", "b.jpg", "c.jpg"]:
         write(tmp_path / name, JPEG)
     reads = []
-    source = FilesystemImageSource(tmp_path, lambda: reads.append(1) or [])
+    source = FilesystemMediaSource(tmp_path, lambda: reads.append(1) or [])
 
     list(source.scan())
 
@@ -193,7 +193,7 @@ class MemoryNotImages:
 
 
 def scanned_remembering(store: MemoryNotImages, root: Path) -> set[Path]:
-    return {ref.path for ref in FilesystemImageSource(root, not_images=store).scan()}
+    return {ref.path for ref in FilesystemMediaSource(root, not_images=store).scan()}
 
 
 def rewrite_quietly(path: Path, content: bytes) -> None:
@@ -309,7 +309,7 @@ def test_yields_a_file_that_is_both_indexed_and_remembered_and_drops_its_row(tmp
     ref = ref_of(fake)
     store = MemoryNotImages(ref)
 
-    found = list(FilesystemImageSource(tmp_path, lambda: [ref], not_images=store).scan())
+    found = list(FilesystemMediaSource(tmp_path, lambda: [ref], not_images=store).scan())
 
     assert found == [ref]
     assert store.stored == {}
@@ -317,7 +317,7 @@ def test_yields_a_file_that_is_both_indexed_and_remembered_and_drops_its_row(tmp
 
 def test_reports_its_root_as_walked_once_the_whole_tree_is_listed(tmp_path):
     write(tmp_path / "a/b.jpg", JPEG)
-    source = FilesystemImageSource(tmp_path)
+    source = FilesystemMediaSource(tmp_path)
 
     list(source.scan())
 
@@ -332,7 +332,7 @@ def test_reports_no_walked_root_when_a_folder_cannot_be_listed(tmp_path):
     try:
         if os.access(locked, os.R_OK):
             pytest.skip("the folder is still listable (running as root?)")
-        source = FilesystemImageSource(tmp_path)
+        source = FilesystemMediaSource(tmp_path)
 
         found = [ref.path for ref in source.scan()]
     finally:
@@ -343,7 +343,7 @@ def test_reports_no_walked_root_when_a_folder_cannot_be_listed(tmp_path):
 
 
 def test_reports_no_walked_root_when_the_root_is_missing(tmp_path):
-    source = FilesystemImageSource(tmp_path / "gone")
+    source = FilesystemMediaSource(tmp_path / "gone")
 
     list(source.scan())
 

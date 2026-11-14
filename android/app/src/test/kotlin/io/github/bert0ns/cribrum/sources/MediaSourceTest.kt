@@ -44,7 +44,7 @@ private val MP4 = bytes(0, 0, 0, 0x18) + ascii("ftypisom") + ByteArray(12)
 
 // Robolectric: the walk and the trash trace their calls, and a plain JVM test has no android.os.Trace.
 @RunWith(RobolectricTestRunner::class)
-class ImageSourceTest {
+class MediaSourceTest {
     @get:Rule
     val folder = TemporaryFolder()
 
@@ -55,7 +55,7 @@ class ImageSourceTest {
         writeBytes(content)
     }
 
-    private fun scanned(): List<String> = runBlocking { FilesystemImageSource(root).scan().toList() }.map { File(it.path).relativeTo(root).path }
+    private fun scanned(): List<String> = runBlocking { FilesystemMediaSource(root).scan().toList() }.map { File(it.path).relativeTo(root).path }
 
     @Test
     fun `finds every supported format`() {
@@ -98,7 +98,7 @@ class ImageSourceTest {
     fun `image ref identifies the file`() {
         val file = write("a.jpg", JPEG)
 
-        assertEquals(listOf(file.toMediaRef()), runBlocking { FilesystemImageSource(root).scan().toList() })
+        assertEquals(listOf(file.toMediaRef()), runBlocking { FilesystemMediaSource(root).scan().toList() })
     }
 
     @Test
@@ -183,7 +183,7 @@ class ImageSourceTest {
         assertEquals(listOf("DCIM/Android/.Trash/b.jpg"), scanned())
     }
 
-    private fun scannedKnowing(vararg known: MediaRef): List<String> = runBlocking { FilesystemImageSource(root) { known.toList() }.scan().toList() }.map { File(it.path).relativeTo(root).path }
+    private fun scannedKnowing(vararg known: MediaRef): List<String> = runBlocking { FilesystemMediaSource(root) { known.toList() }.scan().toList() }.map { File(it.path).relativeTo(root).path }
 
     @Test
     fun `takes a file the index has with the same size and mtime as an image without reading it`() {
@@ -210,7 +210,7 @@ class ImageSourceTest {
     fun `reads the known files once per scan, not once per file`() {
         listOf("a.jpg", "b.jpg", "c.jpg").forEach { write(it, JPEG) }
         var reads = 0
-        val source = FilesystemImageSource(root) {
+        val source = FilesystemMediaSource(root) {
             reads++
             emptyList()
         }
@@ -240,7 +240,7 @@ class ImageSourceTest {
         }
     }
 
-    private fun scannedRemembering(store: NotImages, folder: File = root): List<String> = runBlocking { FilesystemImageSource(folder, notImages = store).scan().toList() }.map { File(it.path).relativeTo(root).path }
+    private fun scannedRemembering(store: NotImages, folder: File = root): List<String> = runBlocking { FilesystemMediaSource(folder, notImages = store).scan().toList() }.map { File(it.path).relativeTo(root).path }
 
     /** Overwrites [file] with [content] of the same length, and puts its mtime back. */
     private fun rewriteQuietly(file: File, content: ByteArray) {
@@ -361,7 +361,7 @@ class ImageSourceTest {
         val ref = fake.toMediaRef()
         val store = MemoryNotImages(ref)
 
-        val found = runBlocking { FilesystemImageSource(root, notImages = store) { listOf(ref) }.scan().toList() }
+        val found = runBlocking { FilesystemMediaSource(root, notImages = store) { listOf(ref) }.scan().toList() }
 
         assertEquals(listOf(ref), found)
         assertEquals(emptyMap<String, MediaRef>(), store.stored)
@@ -372,12 +372,12 @@ class ImageSourceTest {
         val text = write("notes.jpg", ascii("not an image")) // MediaStore trusts the extension
         val store = MemoryNotImages()
         scannedRemembering(store)
-        val mediaStore = object : ImageSource {
+        val mediaStore = object : MediaSource {
             override val walkedRoots = emptyList<File>()
             override fun scan(): Flow<MediaRef> = flowOf(text.toMediaRef())
         }
 
-        val merged = MergedImageSource(listOf(FilesystemImageSource(root, notImages = store), mediaStore))
+        val merged = MergedMediaSource(listOf(FilesystemMediaSource(root, notImages = store), mediaStore))
 
         assertEquals(listOf(text.toMediaRef()), runBlocking { merged.scan().toList() })
     }
@@ -387,7 +387,7 @@ class ImageSourceTest {
         write("a/b.jpg", JPEG)
         write("a/notes.txt", ascii("not an image"))
         write("c.png", PNG)
-        val source = FilesystemImageSource(root)
+        val source = FilesystemMediaSource(root)
 
         runBlocking { source.scan().toList() }
 
@@ -397,7 +397,7 @@ class ImageSourceTest {
     @Test
     fun `reports its root as walked once the whole tree is listed`() {
         write("a/b.jpg", JPEG)
-        val source = FilesystemImageSource(root)
+        val source = FilesystemMediaSource(root)
 
         runBlocking { source.scan().toList() }
 
@@ -410,7 +410,7 @@ class ImageSourceTest {
         write("c.jpg", JPEG)
         val locked = File(root, "a").apply { setReadable(false) }
         assumeTrue("the folder is still listable (running as root?)", locked.listFiles() == null)
-        val source = FilesystemImageSource(root)
+        val source = FilesystemMediaSource(root)
 
         val found = try {
             runBlocking { source.scan().toList() }
@@ -424,7 +424,7 @@ class ImageSourceTest {
 
     @Test
     fun `reports no walked root when the root is missing`() {
-        val source = FilesystemImageSource(File(root, "gone"))
+        val source = FilesystemMediaSource(File(root, "gone"))
 
         runBlocking { source.scan().toList() }
 
@@ -434,9 +434,9 @@ class ImageSourceTest {
     @Test
     fun `merged sources report the roots of the sources that walked`() {
         write("a/x.jpg", JPEG)
-        val present = FilesystemImageSource(File(root, "a"))
-        val missing = FilesystemImageSource(File(root, "card"))
-        val merged = MergedImageSource(listOf(present, missing))
+        val present = FilesystemMediaSource(File(root, "a"))
+        val missing = FilesystemMediaSource(File(root, "card"))
+        val merged = MergedMediaSource(listOf(present, missing))
 
         runBlocking { merged.scan().toList() }
 
@@ -445,12 +445,12 @@ class ImageSourceTest {
 
     @Test
     fun `merged sources yield each path once, in source order`() {
-        fun source(vararg paths: String) = object : ImageSource {
+        fun source(vararg paths: String) = object : MediaSource {
             override val walkedRoots = emptyList<File>()
             override fun scan(): Flow<MediaRef> = flowOf(*paths.map { MediaRef(it, 1, 1) }.toTypedArray())
         }
 
-        val merged = MergedImageSource(listOf(source("/a.jpg", "/b.jpg"), source("/b.jpg", "/sd/c.jpg")))
+        val merged = MergedMediaSource(listOf(source("/a.jpg", "/b.jpg"), source("/b.jpg", "/sd/c.jpg")))
 
         assertEquals(listOf("/a.jpg", "/b.jpg", "/sd/c.jpg"), runBlocking { merged.scan().toList() }.map { it.path })
     }
@@ -458,26 +458,26 @@ class ImageSourceTest {
     @Test
     fun `merged sources give a later source the paths the earlier ones yielded`() {
         val given = mutableListOf<Set<String>>()
-        fun source(vararg paths: String) = object : ImageSource {
+        fun source(vararg paths: String) = object : MediaSource {
             override val walkedRoots = emptyList<File>()
             override fun scan(): Flow<MediaRef> = scan(emptySet())
             override fun scan(known: Set<String>): Flow<MediaRef> = flowOf(*paths.map { MediaRef(it, 1, 1) }.toTypedArray()).also { given += known }
         }
 
-        runBlocking { MergedImageSource(listOf(source("/a.jpg", "/b.jpg"), source("/b.jpg", "/sd/c.jpg"))).scan().toList() }
+        runBlocking { MergedMediaSource(listOf(source("/a.jpg", "/b.jpg"), source("/b.jpg", "/sd/c.jpg"))).scan().toList() }
 
         assertEquals(listOf(emptySet(), setOf("/a.jpg", "/b.jpg")), given)
     }
 
     @Test
     fun `merged sources add up their counts and count the files a later source found again`() {
-        fun source(count: Int, vararg paths: String) = object : ImageSource {
+        fun source(count: Int, vararg paths: String) = object : MediaSource {
             override val walkedRoots = emptyList<File>()
             override val counts = mapOf("folders" to count)
             override fun scan(): Flow<MediaRef> = flowOf(*paths.map { MediaRef(it, 1, 1) }.toTypedArray())
         }
 
-        val merged = MergedImageSource(listOf(source(2, "/a.jpg", "/b.jpg"), source(3, "/b.jpg", "/sd/c.jpg")))
+        val merged = MergedMediaSource(listOf(source(2, "/a.jpg", "/b.jpg"), source(3, "/b.jpg", "/sd/c.jpg")))
         runBlocking { merged.scan().toList() }
 
         assertEquals(mapOf("folders" to 5, "duplicates" to 1), merged.counts)
@@ -499,7 +499,7 @@ class FakeMedia : ContentProvider() {
 }
 
 @RunWith(RobolectricTestRunner::class)
-class MediaStoreImageSourceTest {
+class MediaStoreSourceTest {
     @get:Rule
     val folder = TemporaryFolder()
 
@@ -514,7 +514,7 @@ class MediaStoreImageSourceTest {
         FakeMedia.paths = paths.toList()
         Robolectric.setupContentProvider(FakeMedia::class.java, MediaStore.AUTHORITY)
         val resolver = ApplicationProvider.getApplicationContext<Context>().contentResolver
-        return runBlocking { MediaStoreImageSource(resolver, listOf(root)).scan().toList() }.map { it.path }
+        return runBlocking { MediaStoreSource(resolver, listOf(root)).scan().toList() }.map { it.path }
     }
 
     @Test
@@ -531,7 +531,7 @@ class MediaStoreImageSourceTest {
         val trashed = write("$TRASH_FOLDER/0b1c/IMG_1.jpg")
         FakeMedia.paths = listOf(kept, trashed)
         Robolectric.setupContentProvider(FakeMedia::class.java, MediaStore.AUTHORITY)
-        val source = MediaStoreImageSource(ApplicationProvider.getApplicationContext<Context>().contentResolver, listOf(root))
+        val source = MediaStoreSource(ApplicationProvider.getApplicationContext<Context>().contentResolver, listOf(root))
 
         runBlocking { source.scan().toList() }
 
@@ -545,7 +545,7 @@ class MediaStoreImageSourceTest {
         val gone = File(root, "DCIM/Camera/IMG_3.jpg").path // a stat would drop it without counting it
         FakeMedia.paths = listOf(found, other, gone)
         Robolectric.setupContentProvider(FakeMedia::class.java, MediaStore.AUTHORITY)
-        val source = MediaStoreImageSource(ApplicationProvider.getApplicationContext<Context>().contentResolver, listOf(root))
+        val source = MediaStoreSource(ApplicationProvider.getApplicationContext<Context>().contentResolver, listOf(root))
 
         val images = runBlocking { source.scan(setOf(found, gone)).toList() }
 

@@ -31,7 +31,7 @@ import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.runtime.ModelRuntime
 import io.github.bert0ns.cribrum.runtime.OnnxRuntime
 import io.github.bert0ns.cribrum.runtime.Tensor
-import io.github.bert0ns.cribrum.sources.FilesystemImageSource
+import io.github.bert0ns.cribrum.sources.FilesystemMediaSource
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -313,7 +313,7 @@ class SharedDecodeTest {
         }
         val detectors = listOf(BlurDetector(), ExposureDetector(), ScreenshotDetector(), FaceDetector(recording), StickerDetector())
 
-        val stats = Pipeline(index, detectors, emptyList()).run(FilesystemImageSource(root))
+        val stats = Pipeline(index, detectors, emptyList()).run(FilesystemMediaSource(root))
 
         assertEquals(emptyList<Failure>(), stats.failures)
         val files = root.walk().filter { it.isFile }.toList()

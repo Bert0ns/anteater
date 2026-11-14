@@ -17,7 +17,7 @@ import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.pipeline.Embedder
 import io.github.bert0ns.cribrum.pipeline.Pipeline
 import io.github.bert0ns.cribrum.review.Review
-import io.github.bert0ns.cribrum.sources.FilesystemImageSource
+import io.github.bert0ns.cribrum.sources.FilesystemMediaSource
 import io.github.bert0ns.cribrum.trash.AppTrash
 import io.github.bert0ns.cribrum.trash.copyFileFor
 import kotlinx.coroutines.CoroutineStart
@@ -153,7 +153,7 @@ class CompressorTest {
     }
 
     /** A scan of the volume with no detectors: the walk, the metadata and the JPEG headers. */
-    private fun scan() = runBlocking { Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), trash = trash).run(FilesystemImageSource(volume)) }
+    private fun scan() = runBlocking { Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), trash = trash).run(FilesystemMediaSource(volume)) }
 
     private fun listed() = runBlocking { index.compressible(36) }
 
@@ -184,7 +184,7 @@ class CompressorTest {
                 readJpeg(it)
             },
         )
-        runBlocking { pipeline.run(FilesystemImageSource(volume)) }
+        runBlocking { pipeline.run(FilesystemMediaSource(volume)) }
         assertEquals(original, listed())
         // The page row did not stop the scan from reading the restored original's headers.
         assertEquals(listOf(image.size), headersRead)
@@ -241,12 +241,12 @@ class CompressorTest {
                 contentHash(it)
             },
         )
-        pipeline.run(FilesystemImageSource(volume))
+        pipeline.run(FilesystemMediaSource(volume))
         val originalHash = index.contentHash(image.path)
 
         val copy = (compressor.compress(image, CompressionLevel.HIGH) as Compression.Done).copy
         read.clear()
-        pipeline.run(FilesystemImageSource(volume))
+        pipeline.run(FilesystemMediaSource(volume))
 
         val steps = listOf("metadata", "jpeg", "perceptual hash", "detector", "embedding", "group", "content hash")
         assertEquals(steps.map { "$it ${copy.size}" }.toSet(), read.toSet())
