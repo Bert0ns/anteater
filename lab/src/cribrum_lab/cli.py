@@ -84,7 +84,7 @@ def _progress(step: str, done: int, total: int) -> None:
 
 
 def _report(index: ImageIndex, top: int) -> None:
-    images = index.indexed_images()
+    images = index.indexed_media()
     ranked = Ranker().rank(images)
     candidates = [c for c in ranked if c.is_candidate]
     print(f"{len(images)} images, {len(ranked)} to review, {len(candidates)} candidates")
@@ -100,7 +100,7 @@ def _label(index: ImageIndex, labels: Path, size: int, seed: int, port: int, gro
     with LabelStore(labels) as store:
         done = {label.path for label in store.all()}
         exclude = done | set(index.unreadable())
-        ranked = Ranker().rank(index.indexed_images())
+        ranked = Ranker().rank(index.indexed_media())
         queue = sample(ranked, size, exclude, seed)
         groups = []
         if grouped:
@@ -120,7 +120,7 @@ def _label(index: ImageIndex, labels: Path, size: int, seed: int, port: int, gro
 
 def _evaluate(index: ImageIndex, labels: Path, out: Path | None) -> None:
     with LabelStore(labels) as store:
-        text = format_report(evaluate(index.indexed_images(), store.all()))
+        text = format_report(evaluate(index.indexed_media(), store.all()))
     print(text)
     if out:
         out.write_text(text + "\n")

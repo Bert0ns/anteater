@@ -337,7 +337,7 @@ interface IndexDao {
     @Query("SELECT * FROM signals WHERE path = :path ORDER BY id")
     suspend fun signals(path: String): List<SignalRow>
 
-    /** Blocking, as [ImageIndex.indexedImages] needs: its read-only transaction belongs to the thread. */
+    /** Blocking, as [ImageIndex.indexedMedia] needs: its read-only transaction belongs to the thread. */
     @Query("SELECT * FROM signals ORDER BY id")
     fun allSignals(): List<SignalRow>
 

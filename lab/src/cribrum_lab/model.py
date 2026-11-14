@@ -81,7 +81,7 @@ class Signal:
 
 
 @dataclass(frozen=True)
-class IndexedImage:
+class IndexedMedia:
     """An image as the ranker sees it."""
 
     ref: MediaRef

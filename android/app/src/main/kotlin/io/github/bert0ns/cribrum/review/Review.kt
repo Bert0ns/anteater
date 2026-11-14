@@ -8,7 +8,7 @@ import io.github.bert0ns.cribrum.folders.isExcluded
 import io.github.bert0ns.cribrum.index.ImageIndex
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
-import io.github.bert0ns.cribrum.model.IndexedImage
+import io.github.bert0ns.cribrum.model.IndexedMedia
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Protection
 import io.github.bert0ns.cribrum.model.ROLE_KEY
@@ -108,7 +108,7 @@ data class Decision(
 /** One ranking and the index it came from, valid while the index is at [version]. */
 private class Ranking(
     val version: Long,
-    val images: List<IndexedImage>,
+    val images: List<IndexedMedia>,
     val excluded: List<String>,
     val thresholds: Map<Category, Float>,
     /** The candidates the review offers: without those of a group it hides (see [GroupMembers.isHidden]). */
@@ -122,7 +122,7 @@ private class Ranking(
 
 /** What the index holds about the groups of one category, minus what the review never lists (see [Review.groups]). */
 private data class GroupMembers(
-    val members: Map<String, List<Pair<IndexedImage, Role>>>,
+    val members: Map<String, List<Pair<IndexedMedia, Role>>>,
     val withExcludedCopy: Set<String>,
     val withTrashedBestCopy: Set<String>,
     val hasNonTrashedBest: Set<String>,
@@ -157,7 +157,7 @@ class Review(
     private var last = SoftReference<Ranking>(null)
 
     /** For tests that write while the index is read. */
-    internal var readImages: suspend () -> List<IndexedImage> = index::indexedImages
+    internal var readImages: suspend () -> List<IndexedMedia> = index::indexedMedia
 
     /** For tests: what the system does to [last] when memory runs short. */
     internal fun dropRanking() = last.clear()
@@ -188,7 +188,7 @@ class Review(
     }
 
     // Traced here and not in Ranker, whose tests run on the plain JVM, where android.os.Trace is not there.
-    private fun rank(thresholds: Map<Category, Float>, images: List<IndexedImage>, excluded: Collection<String>) = trace("Ranker.rank") { Ranker(thresholds).rank(images, excluded) }
+    private fun rank(thresholds: Map<Category, Float>, images: List<IndexedMedia>, excluded: Collection<String>) = trace("Ranker.rank") { Ranker(thresholds).rank(images, excluded) }
 
     /**
      * The version is read before the index, so a read that a write overtakes is kept under the version before the
@@ -370,8 +370,8 @@ class Review(
     }
 
     /** Members in an [excluded] folder or stickers are left out: the review never lists, trashes or keeps them here. */
-    private fun groupMembers(category: Category, images: List<IndexedImage>, excluded: List<String>): GroupMembers {
-        val members = mutableMapOf<String, MutableList<Pair<IndexedImage, Role>>>()
+    private fun groupMembers(category: Category, images: List<IndexedMedia>, excluded: List<String>): GroupMembers {
+        val members = mutableMapOf<String, MutableList<Pair<IndexedMedia, Role>>>()
         val withExcludedCopy = mutableSetOf<String>()
         val withTrashedBestCopy = mutableSetOf<String>()
         val hasNonTrashedBest = mutableSetOf<String>()

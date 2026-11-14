@@ -82,7 +82,7 @@ The code names its heavy steps with `androidx.tracing`, so a Perfetto trace of t
 
 | Section | Where |
 |---|---|
-| `Index.indexedImages` | `ImageIndex.indexedImages`: reading every image and signal |
+| `Index.indexedMedia` | `ImageIndex.indexedMedia`: reading every image and signal |
 | `Ranker.rank` | `Review`'s calls of `Ranker.rank` |
 | `Review.overview`, `Review.counts`, `Review.page` | the three `Review` loads, each with the two above inside |
 | `Pipeline.walk`, `Pipeline.metadata`, `Pipeline.jpegHeaders`, `Pipeline.detectors`, `Pipeline.embeddings`, `Pipeline.embeddedDetectors`, `Pipeline.groupDetectors` | the phases of `Pipeline.run`, with the same times as the `scan-time` log. The detectors that read the embeddings run beside the embeddings (`embedAndClassify`), so `Pipeline.embeddings` holds their first part, from the start of the two to the last batch stored, and `Pipeline.embeddedDetectors` the rest. The sum of the two is the classification phase. The log's `embeddings` time also holds what comes just before the trace's `Pipeline.embeddings`: the reads of the stored embeddings and of the analyzed paths, and the first `Pipeline.tasks` section |
@@ -225,7 +225,7 @@ A debug build is signed with another key, so it can't be installed over a releas
 
 | Package | Contents | Lab counterpart |
 |---|---|---|
-| `io.github.bert0ns.cribrum.model` | Core types: `MediaRef`, `Category`, `Protection`, `Signal`, `IndexedImage` | `cribrum_lab.model` |
+| `io.github.bert0ns.cribrum.model` | Core types: `MediaRef`, `Category`, `Protection`, `Signal`, `IndexedMedia` | `cribrum_lab.model` |
 | `io.github.bert0ns.cribrum.ranker` | `Ranker`, `Candidate`, thresholds and protection weights | `cribrum_lab.ranker` |
 | `io.github.bert0ns.cribrum.index` | Room tables and `ImageIndex`, with the lab's schema | `cribrum_lab.index` |
 | `io.github.bert0ns.cribrum.metadata` | `ImageMetadata` and `readMetadata` | `cribrum_lab.metadata` |

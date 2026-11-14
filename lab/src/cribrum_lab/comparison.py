@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 
 from cribrum_lab.labels import Decision, Label
-from cribrum_lab.model import Category, IndexedImage, ReviewState, Signal
+from cribrum_lab.model import Category, IndexedMedia, ReviewState, Signal
 from cribrum_lab.ranker import Candidate, Ranker
 
 PAGE_SIZE = 48
@@ -64,8 +64,8 @@ class Comparison:
 
 
 def without_signals(
-    images: Sequence[IndexedImage], detector_ids: Collection[str], where: Callable[[Path], bool]
-) -> list[IndexedImage]:
+    images: Sequence[IndexedMedia], detector_ids: Collection[str], where: Callable[[Path], bool]
+) -> list[IndexedMedia]:
     """The images as if the detectors had not run on those `where` accepts."""
     return [
         dataclasses.replace(
@@ -78,8 +78,8 @@ def without_signals(
 
 
 def with_signals(
-    images: Sequence[IndexedImage], detector_id: str, signals: Mapping[Path, Sequence[Signal]]
-) -> list[IndexedImage]:
+    images: Sequence[IndexedMedia], detector_id: str, signals: Mapping[Path, Sequence[Signal]]
+) -> list[IndexedMedia]:
     """The images with the detector's signals replaced by `signals`, for the images it holds."""
     return [
         dataclasses.replace(
@@ -94,8 +94,8 @@ def with_signals(
 
 
 def compare(
-    before: Sequence[IndexedImage],
-    after: Sequence[IndexedImage],
+    before: Sequence[IndexedMedia],
+    after: Sequence[IndexedMedia],
     labels: Sequence[Label] = (),
     ranker: Ranker | None = None,
 ) -> Comparison:
@@ -132,7 +132,7 @@ def compare(
     )
 
 
-def _candidates(images: Sequence[IndexedImage], ranker: Ranker) -> dict[Path, Candidate]:
+def _candidates(images: Sequence[IndexedMedia], ranker: Ranker) -> dict[Path, Candidate]:
     images = [dataclasses.replace(i, review_state=ReviewState.UNREVIEWED) for i in images]
     return {c.image.ref.path: c for c in ranker.rank(images) if c.is_candidate}
 

@@ -308,7 +308,7 @@ def test_worker_processes_give_the_same_signals(photos, tmp_path, index):
     with ImageIndex(tmp_path / "parallel.sqlite") as parallel:
         pipeline.run(photos, parallel, jobs=2)
 
-        assert parallel.indexed_images() == index.indexed_images()
+        assert parallel.indexed_media() == index.indexed_media()
 
 
 class StoredBlur:

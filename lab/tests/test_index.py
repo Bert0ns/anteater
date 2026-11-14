@@ -219,7 +219,7 @@ def test_keeping_records_the_current_signals(index):
     index.set_review_state(PHOTO.path, ReviewState.KEPT)
     index.set_signals(PHOTO.path, "blur", 2, [Signal("blur", 2, Category.BLURRY, 0.9)])
 
-    [image] = index.indexed_images()
+    [image] = index.indexed_media()
     assert image.review_state is ReviewState.KEPT
     assert image.signals == (Signal("blur", 2, Category.BLURRY, 0.9),)
     assert image.seen_when_kept == {BLUR.identity}
@@ -237,12 +237,12 @@ def test_a_first_result_after_the_keep_counts_as_seen_and_a_later_group_does_not
     index.set_review_state(PHOTO.path, ReviewState.KEPT)
 
     index.set_signals(PHOTO.path, "near_duplicate", 1, [group("g", Role.BEST)])
-    [image] = index.indexed_images()
+    [image] = index.indexed_media()
     assert image.seen_when_kept == {BLUR.identity, group("g", Role.BEST).identity}
     assert Ranker().rank([image]) == []
 
     index.set_signals(PHOTO.path, "near_duplicate", 1, [group("g", Role.INFERIOR)])
-    [image] = index.indexed_images()
+    [image] = index.indexed_media()
     assert image.seen_when_kept == {BLUR.identity, group("g", Role.BEST).identity}
     assert [c.image.ref.path for c in Ranker().rank([image])] == [PHOTO.path]
 
@@ -252,7 +252,7 @@ def test_a_first_result_for_an_image_that_is_not_kept_is_not_recorded(index):
 
     index.set_signals(PHOTO.path, "blur", 1, [BLUR])
 
-    [image] = index.indexed_images()
+    [image] = index.indexed_media()
     assert image.seen_when_kept == frozenset()
 
 
@@ -263,17 +263,17 @@ def test_leaving_kept_forgets_the_recorded_signals(index):
 
     index.set_review_state(PHOTO.path, ReviewState.UNREVIEWED)
 
-    [image] = index.indexed_images()
+    [image] = index.indexed_media()
     assert image.seen_when_kept == frozenset()
 
 
-def test_indexed_images_lists_unanalyzed_images_too(index):
+def test_indexed_media_lists_unanalyzed_images_too(index):
     index.record(PHOTO)
     other = MediaRef(Path("/photos/b.jpg"), 5, 5)
     index.record(other)
     index.set_signals(other.path, "blur", 1, [BLUR])
 
-    assert [(i.ref, i.signals) for i in index.indexed_images()] == [(PHOTO, ()), (other, (BLUR,))]
+    assert [(i.ref, i.signals) for i in index.indexed_media()] == [(PHOTO, ()), (other, (BLUR,))]
 
 
 def test_images_without_metadata_leave_out_unreadable_ones(index):
@@ -398,7 +398,7 @@ def test_protection_signals_round_trip(index):
     index.set_signals(PHOTO.path, "faces", 1, [faces])
 
     assert index.signals(PHOTO.path) == [faces]
-    assert index.indexed_images()[0].signals == (faces,)
+    assert index.indexed_media()[0].signals == (faces,)
 
 
 def test_excluded_folders_are_listed_added_once_and_removed(index):

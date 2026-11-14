@@ -13,7 +13,7 @@ import io.github.bert0ns.cribrum.compress.Losses
 import io.github.bert0ns.cribrum.compress.Marker
 import io.github.bert0ns.cribrum.folders.isExcluded
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
-import io.github.bert0ns.cribrum.model.IndexedImage
+import io.github.bert0ns.cribrum.model.IndexedMedia
 import io.github.bert0ns.cribrum.model.Kind
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ReviewState
@@ -345,12 +345,12 @@ class ImageIndex(private val db: IndexDatabase) :
     }.toMap()
 
     /** Every image with its review state and signals, as the ranker takes them. */
-    suspend fun indexedImages(): List<IndexedImage> = traceSuspend("Index.indexedImages") {
+    suspend fun indexedMedia(): List<IndexedMedia> = traceSuspend("Index.indexedMedia") {
         readTransaction {
             val signals = dao.allSignals().groupBy({ it.path }, ::signal)
             val seen = dao.allKeptSignals().groupBy({ it.path }) { SignalIdentity(Kind.of(it.category), it.groupId, it.role) }
             dao.statesNow().map { row ->
-                IndexedImage(
+                IndexedMedia(
                     MediaRef(row.path, row.size, row.mtimeNs),
                     ReviewState.of(row.reviewState),
                     signals[row.path].orEmpty(),
