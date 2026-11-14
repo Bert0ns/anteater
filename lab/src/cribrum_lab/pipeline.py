@@ -19,6 +19,7 @@ import xxhash
 
 from cribrum_lab import hashing, mobileclip
 from cribrum_lab.detectors import AnalysisContext, Detector, GroupDetector, blur
+from cribrum_lab.detectors.base import accepted_media_types
 from cribrum_lab.detectors.blur import BlurDetector
 from cribrum_lab.detectors.burst import BurstDetector
 from cribrum_lab.detectors.document import DocumentDetector
@@ -33,7 +34,7 @@ from cribrum_lab.folders import is_sticker_folder
 from cribrum_lab.imaging import Pixels
 from cribrum_lab.index import ImageIndex
 from cribrum_lab.metadata import ImageMetadata, UnreadableImage, read_metadata
-from cribrum_lab.model import Category, MediaRef, Signal
+from cribrum_lab.model import Category, MediaRef, MediaType, Signal
 from cribrum_lab.sources import FilesystemMediaSource
 
 DETECTORS: list[Detector] = [
@@ -145,7 +146,11 @@ def run(
     stats.forgotten = len(gone)
     stats.images = len(found)
 
-    pending = _stickers_last(index.without_metadata())
+    # The metadata read from an image header, and every step after it but the group detectors,
+    # take images only: a video is recorded and nothing more (docs/design.md, section 4).
+    pending = _stickers_last(
+        [i for i in index.without_metadata() if i.media_type is MediaType.IMAGE]
+    )
     for done, image in enumerate(pending, 1):
         try:
             index.set_metadata(image.path, read_metadata(image.path))
@@ -155,7 +160,8 @@ def run(
     unreadable = set(index.unreadable())
     stats.unreadable = len(unreadable & found)
 
-    images = [i for i in index.images() if i.path in found]
+    media = [i for i in index.images() if i.path in found]
+    images = [i for i in media if i.media_type is MediaType.IMAGE]
     readable = [i for i in images if i.path not in unreadable]
     # The home screen lists candidates as soon as these are stored; the embeddings come after.
     fast = [d for d in detectors if not getattr(d, "uses_embeddings", False)]
@@ -236,22 +242,23 @@ def run(
     hashed = index.hashed_paths()
     # Burst reads blur's stored measure: a new blur version is new input, though no file changed.
     blur_input = f"{blur_detector.id}:{blur_detector.version}" if blur_detector else ""
-    fingerprint = _fingerprint(
-        images, f"{model}:{sum(i.path in hashed for i in images)}:{blur_input}"
-    )
     for detector in group_detectors:
+        inputs = [i for i in media if i.media_type in accepted_media_types(detector)]
+        fingerprint = _fingerprint(
+            inputs, f"{model}:{sum(i.path in hashed for i in inputs)}:{blur_input}"
+        )
         # Hashing again only what failed in the last run groups a file that has become
         # readable, without a run on every scan.
         failed = set(index.group_hash_failed(detector.id, detector.version))
         if index.group_fingerprint(detector.id, detector.version) == fingerprint and not any(
-            hashes(i) for i in images if str(i.path) in failed
+            hashes(i) for i in inputs if str(i.path) in failed
         ):
             continue
         progress(detector.id, 0, 1)
         hash_failed.clear()
-        signals = detector.analyze(images, context)
+        signals = detector.analyze(inputs, context)
         index.set_signals_of_many(
-            detector.id, detector.version, {i.path: signals.get(i, []) for i in images}
+            detector.id, detector.version, {i.path: signals.get(i, []) for i in inputs}
         )
         index.set_group_fingerprint(detector.id, detector.version, fingerprint, sorted(hash_failed))
         stats.detector_runs += 1
@@ -289,7 +296,8 @@ def _analyze_each(
         todo = [
             d
             for d in detectors
-            if (not sticker or runs_on_stickers(d))
+            if image.media_type in accepted_media_types(d)
+            and (not sticker or runs_on_stickers(d))
             and not index.is_analyzed(image.path, d.id, d.version)
         ]
         needs_phash = before_embeddings and index.perceptual_hash(image.path) is None

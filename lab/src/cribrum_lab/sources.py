@@ -52,8 +52,8 @@ class FilesystemMediaSource:
     Hidden folders and folders with a `.nomedia` file are included: that is where
     messaging apps keep media the gallery never shows. Files are recognized by their
     content, not their extension, except a file that `indexed` returns with the same path,
-    size and mtime: the index took it as an image, so its head is not read again. `indexed`
-    is called once per `scan`, before the walk. The same goes for a file `not_images` has: an
+    size and mtime: the index took it, so its head is not read again and it keeps the media
+    type the index has. `indexed` is called once per `scan`, before the walk. The same goes for a file `not_images` has: an
     earlier walk found it not to be an image. The walk adds the non-images it sniffs, and drops
     the ones it no longer finds when it listed the whole root. Symlinks are skipped so no file
     is yielded twice, and so are FIFOs and other special files, which would block or fail on
@@ -81,7 +81,8 @@ class FilesystemMediaSource:
     def scan(self) -> Iterator[MediaRef]:
         self.walked_roots = []
         listed_all = True
-        known = set(self._indexed())
+        # By path, so a file the index holds is yielded with the media type it was recorded with.
+        known = {ref.path: ref for ref in self._indexed()}
         remembered = list(self._not_images.not_images()) if self._not_images is not None else []
         remembered_set = set(remembered)
         met: set[Path] = set()  # non-images this walk met, remembered or newly sniffed
@@ -104,7 +105,10 @@ class FilesystemMediaSource:
                     if not stat.S_ISREG(info.st_mode):
                         continue
                     image = MediaRef(path, info.st_size, info.st_mtime_ns)
-                    if image not in known:
+                    indexed = known.get(path)
+                    if indexed and (indexed.size, indexed.mtime_ns) == (image.size, image.mtime_ns):
+                        image = indexed
+                    else:
                         again = image in remembered_set
                         if again or not _is_image(path):
                             met.add(path)

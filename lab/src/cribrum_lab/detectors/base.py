@@ -10,8 +10,15 @@ import numpy as np
 from cribrum_lab import hashing
 from cribrum_lab.imaging import Pixels
 from cribrum_lab.metadata import ImageMetadata, read_metadata
-from cribrum_lab.model import Category, MediaRef, Signal
+from cribrum_lab.model import Category, MediaRef, MediaType, Signal
 from cribrum_lab.screens import SCREEN_SIZES
+
+IMAGES_ONLY = frozenset({MediaType.IMAGE})
+
+
+def accepted_media_types(detector: "Detector | GroupDetector") -> frozenset[MediaType]:
+    """The media types the pipeline gives `detector`: its `media_types`, images only without."""
+    return getattr(detector, "media_types", IMAGES_ONLY)
 
 
 class Role(StrEnum):
@@ -69,6 +76,9 @@ class Detector(Protocol):
     A detector that decodes the image sets `decode_side` to the draft side it decodes at, read
     the same way. The pipeline runs an image's detectors from the largest side down, as the
     app does, where the sides that give one sample size share a decode.
+
+    A detector gets only the media types in `media_types`, read with `accepted_media_types`:
+    images only when it does not set it.
     """
 
     id: str
@@ -88,8 +98,9 @@ class GroupDetector(Protocol):
     ever suggests it; the others are `Role.INFERIOR`. Images in no group are left
     out of the result.
 
-    `version` follows the same rule as `Detector.version`. Per-image data they need
-    (content hashes, metadata, embeddings) comes from the lookups in `AnalysisContext`.
+    `version` follows the same rule as `Detector.version`, and `media_types` the one of
+    `Detector.media_types`. Per-image data they need (content hashes, metadata, embeddings) comes
+    from the lookups in `AnalysisContext`.
     """
 
     id: str
