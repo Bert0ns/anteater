@@ -32,6 +32,8 @@ data class ImageRow(
     @ColumnInfo(defaultValue = "0") val unreadable: Boolean = false,
     @ColumnInfo(name = "content_hash") val contentHash: String? = null,
     @ColumnInfo(name = "perceptual_hash") val perceptualHash: String? = null,
+    /** `image` or `video`, from the source that found the file. */
+    @ColumnInfo(name = "media_type", defaultValue = "'image'") val mediaType: String = "image",
 )
 
 /** Which detector version last analyzed an image, even if it emitted no signal. */
@@ -119,7 +121,7 @@ data class GroupRunRow(
 @Entity(tableName = "excluded_folders")
 data class ExcludedFolderRow(@PrimaryKey val path: String)
 
-/** A file the walk sniffed and found not to be an image, with the size and mtime it had (docs/design.md §4). */
+/** A file the walk sniffed and found to be neither an image nor a video, with the size and mtime it had (docs/design.md §4). */
 @Entity(tableName = "not_images")
 data class NotImageRow(
     @PrimaryKey val path: String,
@@ -168,7 +170,7 @@ data class StoredJpegCount(val status: String, @ColumnInfo(name = "gain_map") va
 
 data class StoredSignalId(val path: String, val id: Long)
 
-data class StoredRef(val path: String, val size: Long, @ColumnInfo(name = "mtime_ns") val mtimeNs: Long)
+data class StoredRef(val path: String, val size: Long, @ColumnInfo(name = "mtime_ns") val mtimeNs: Long, @ColumnInfo(name = "media_type") val mediaType: String)
 
 data class StoredMetadata(
     val width: Int,
@@ -194,7 +196,7 @@ data class StoredState(
 
 @Dao
 interface IndexDao {
-    @Query("SELECT path, size, mtime_ns FROM images WHERE path IN (:paths)")
+    @Query("SELECT path, size, mtime_ns, media_type FROM images WHERE path IN (:paths)")
     suspend fun refs(paths: List<String>): List<StoredRef>
 
     @Insert
@@ -203,15 +205,15 @@ interface IndexDao {
     @Query(
         """UPDATE images SET size = :size, mtime_ns = :mtimeNs, width = NULL, height = NULL,
            mime = NULL, camera_make = NULL, camera_model = NULL, captured_at = NULL,
-           unreadable = 0, content_hash = NULL, perceptual_hash = NULL,
+           unreadable = 0, content_hash = NULL, perceptual_hash = NULL, media_type = :mediaType,
            review_state = CASE WHEN review_state = 'trashed' THEN 'unreviewed' ELSE review_state END WHERE path = :path""",
     )
-    suspend fun resetImage(path: String, size: Long, mtimeNs: Long)
+    suspend fun resetImage(path: String, size: Long, mtimeNs: Long, mediaType: String)
 
-    @Query("SELECT path, size, mtime_ns FROM images ORDER BY path")
+    @Query("SELECT path, size, mtime_ns, media_type FROM images ORDER BY path")
     suspend fun images(): List<StoredRef>
 
-    @Query("SELECT path, size, mtime_ns FROM images WHERE review_state != 'trashed' ORDER BY path")
+    @Query("SELECT path, size, mtime_ns, media_type FROM images WHERE review_state != 'trashed' ORDER BY path")
     suspend fun notTrashed(): List<StoredRef>
 
     @Query("DELETE FROM images WHERE path IN (:paths)")
@@ -220,7 +222,7 @@ interface IndexDao {
     @Query("DELETE FROM images WHERE path IN (:paths) AND review_state = 'trashed'")
     suspend fun forgetTrashed(paths: List<String>): Int
 
-    @Query("SELECT path, size, mtime_ns FROM images WHERE width IS NULL AND NOT unreadable ORDER BY path")
+    @Query("SELECT path, size, mtime_ns, media_type FROM images WHERE width IS NULL AND NOT unreadable ORDER BY path")
     suspend fun withoutMetadata(): List<StoredRef>
 
     @Query("UPDATE images SET unreadable = 1 WHERE path = :path")
@@ -393,8 +395,8 @@ interface IndexDao {
     @Query("SELECT path, size, mtime_ns, review_state FROM images ORDER BY path")
     suspend fun states(): List<StoredState>
 
-    /** [states], blocking, as [allSignals]. */
-    @Query("SELECT path, size, mtime_ns, review_state FROM images ORDER BY path")
+    /** [states] of the images only, blocking, as [allSignals]. */
+    @Query("SELECT path, size, mtime_ns, review_state FROM images WHERE media_type = 'image' ORDER BY path")
     fun statesNow(): List<StoredState>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
@@ -413,7 +415,7 @@ interface IndexDao {
     suspend fun deleteJpeg(path: String)
 
     @Query(
-        """SELECT i.path, i.size, i.mtime_ns FROM images i LEFT JOIN jpegs j ON j.path = i.path
+        """SELECT i.path, i.size, i.mtime_ns, i.media_type FROM images i LEFT JOIN jpegs j ON j.path = i.path
            WHERE i.mime = 'image/jpeg' AND NOT i.unreadable AND i.review_state != 'trashed'
            AND (j.path IS NULL OR j.version != :version OR j.page_width IS NOT NULL) ORDER BY i.path""",
     )
@@ -435,8 +437,8 @@ interface IndexDao {
     @Query("SELECT status, gain_map, count(*) AS count FROM jpegs GROUP BY status, gain_map ORDER BY status, gain_map")
     suspend fun jpegCounts(): List<StoredJpegCount>
 
-    @Query("SELECT path, size, mtime_ns FROM not_images")
-    suspend fun notImages(): List<StoredRef>
+    @Query("SELECT * FROM not_images")
+    suspend fun notImages(): List<NotImageRow>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun putNotImages(rows: List<NotImageRow>)
@@ -454,7 +456,7 @@ interface IndexDao {
         ImageRow::class, AnalysisRow::class, SignalRow::class, KeptSignalRow::class, KeptDetectorRow::class, EmbeddingRow::class,
         GroupRunRow::class, ExcludedFolderRow::class, NotImageRow::class, JpegRow::class,
     ],
-    version = 6,
+    version = 7,
 )
 abstract class IndexDatabase : RoomDatabase() {
     abstract fun dao(): IndexDao
@@ -511,5 +513,16 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE `jpegs` ADD COLUMN `page_width` INTEGER")
         db.execSQL("ALTER TABLE `jpegs` ADD COLUMN `page_height` INTEGER")
+    }
+}
+
+/**
+ * Version 6 held images only. Every row is one, and the walk now takes videos too: it sniffs again the files it
+ * remembered as neither, which is how the videos an earlier scan turned away are found (docs/design.md §4).
+ */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `images` ADD COLUMN `media_type` TEXT NOT NULL DEFAULT 'image'")
+        db.execSQL("DELETE FROM `not_images`")
     }
 }

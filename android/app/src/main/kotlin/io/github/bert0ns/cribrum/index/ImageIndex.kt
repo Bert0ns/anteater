@@ -16,6 +16,7 @@ import io.github.bert0ns.cribrum.metadata.ImageMetadata
 import io.github.bert0ns.cribrum.model.IndexedMedia
 import io.github.bert0ns.cribrum.model.Kind
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.model.SignalIdentity
@@ -79,20 +80,21 @@ class ImageIndex(private val db: IndexDatabase) :
     private suspend fun recordOne(image: MediaRef, stored: MutableMap<String, StoredRef>): Boolean {
         val row = stored[image.path]
         when {
-            row == null -> dao.insertImage(ImageRow(image.path, image.size, image.mtimeNs))
+            row == null -> dao.insertImage(ImageRow(image.path, image.size, image.mtimeNs, mediaType = image.mediaType.value))
             row.size == image.size && row.mtimeNs == image.mtimeNs -> return false
             else -> {
-                dao.resetImage(image.path, image.size, image.mtimeNs)
+                dao.resetImage(image.path, image.size, image.mtimeNs, image.mediaType.value)
                 dao.deleteAnalyses(image.path)
                 dao.deleteEmbeddings(image.path)
                 dao.deleteJpeg(image.path)
             }
         }
-        stored[image.path] = StoredRef(image.path, image.size, image.mtimeNs)
+        stored[image.path] = StoredRef(image.path, image.size, image.mtimeNs, image.mediaType.value)
         return true
     }
 
-    suspend fun images(): List<MediaRef> = dao.images().map { MediaRef(it.path, it.size, it.mtimeNs) }
+    /** Every indexed file, videos included. */
+    suspend fun images(): List<MediaRef> = dao.images().map(::ref)
 
     /** Removes images from the index, with everything stored about them. Files are untouched. */
     suspend fun forget(paths: Collection<String>) = delete {
@@ -107,8 +109,8 @@ class ImageIndex(private val db: IndexDatabase) :
         paths.chunked(SQL_VARIABLES).sumOf { dao.forgetTrashed(it) }
     }
 
-    /** Images whose metadata was never read, leaving out the unreadable ones. */
-    suspend fun withoutMetadata(): List<MediaRef> = dao.withoutMetadata().map { MediaRef(it.path, it.size, it.mtimeNs) }
+    /** Files whose metadata was never read, videos included, leaving out the unreadable ones. */
+    suspend fun withoutMetadata(): List<MediaRef> = dao.withoutMetadata().map(::ref)
 
     /** Marks an image whose header can't be decoded, so it isn't retried until it changes. */
     suspend fun setUnreadable(path: String) = write { require(dao.setUnreadable(path), path) }
@@ -337,14 +339,14 @@ class ImageIndex(private val db: IndexDatabase) :
     suspend fun removeExcludedFolder(path: String) = write { dao.deleteExcludedFolder(path) }
 
     /** Every indexed image not in the trash, with its path, size, and mtime. */
-    suspend fun notTrashed(): List<MediaRef> = dao.notTrashed().map { MediaRef(it.path, it.size, it.mtimeNs) }
+    suspend fun notTrashed(): List<MediaRef> = dao.notTrashed().map(::ref)
 
     /** The EXIF capture time of each image that has one, to order the review by date. The ranker never sees it. A time that does not parse is left out. */
     suspend fun capturedAt(): Map<String, LocalDateTime> = dao.capturedAt().mapNotNull { row ->
         runCatching { LocalDateTime.parse(row.capturedAt) }.getOrNull()?.let { row.path to it }
     }.toMap()
 
-    /** Every image with its review state and signals, as the ranker takes them. */
+    /** Every image with its review state and signals, as the ranker takes them. No video: nothing reviews one yet (docs/design.md §6.5). */
     suspend fun indexedMedia(): List<IndexedMedia> = traceSuspend("Index.indexedMedia") {
         readTransaction {
             val signals = dao.allSignals().groupBy({ it.path }, ::signal)
@@ -361,7 +363,7 @@ class ImageIndex(private val db: IndexDatabase) :
     }
 
     /** JPEGs, by the mime their header gave, whose headers were not read with the current rules (docs/design.md §9). */
-    suspend fun jpegsToRead(): List<MediaRef> = dao.jpegsToRead(JPEG_RULES_VERSION).map { MediaRef(it.path, it.size, it.mtimeNs) }
+    suspend fun jpegsToRead(): List<MediaRef> = dao.jpegsToRead(JPEG_RULES_VERSION).map(::ref)
 
     /** Stores what the scan read from a JPEG. Leaves [version] alone, as for `not_images`: it changes no ranking. */
     suspend fun setJpeg(path: String, info: JpegInfo) = putJpeg(path, info, null, null)
@@ -477,7 +479,7 @@ class ImageIndex(private val db: IndexDatabase) :
     }
 
     companion object {
-        fun open(context: Context, name: String = "index.sqlite"): ImageIndex = ImageIndex(Room.databaseBuilder(context, IndexDatabase::class.java, name).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build())
+        fun open(context: Context, name: String = "index.sqlite"): ImageIndex = ImageIndex(Room.databaseBuilder(context, IndexDatabase::class.java, name).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build())
     }
 }
 
@@ -486,6 +488,8 @@ private val ISO_SECONDS = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
 
 /** Under SQLite's limit on bound parameters per statement. */
 private const val SQL_VARIABLES = 500
+
+private fun ref(row: StoredRef) = MediaRef(row.path, row.size, row.mtimeNs, MediaType.of(row.mediaType))
 
 private fun metadata(row: StoredMetadata) = ImageMetadata(
     row.width,

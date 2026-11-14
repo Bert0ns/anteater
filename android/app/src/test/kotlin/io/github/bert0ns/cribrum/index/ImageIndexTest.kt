@@ -10,6 +10,7 @@ import io.github.bert0ns.cribrum.metadata.ImageMetadata
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.Protection
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.ReviewState
@@ -101,6 +102,25 @@ class ImageIndexTest {
         assertEquals(listOf(PHOTO), notTrashed())
         setReviewState(OTHER.path, ReviewState.UNREVIEWED)
         assertEquals(listOf(PHOTO, OTHER), notTrashed())
+    }
+
+    @Test
+    fun `a video is recorded with its media type and the ranker never sees it`() = test {
+        val video = MediaRef("/videos/v.mp4", 900, 1, MediaType.VIDEO)
+        recordAll(listOf(PHOTO, video))
+
+        assertEquals(listOf(PHOTO, video), images())
+        assertEquals(listOf(PHOTO), indexedMedia().map { it.ref })
+    }
+
+    @Test
+    fun `a file whose media type changed with its size is recorded with the new one`() = test {
+        record(PHOTO)
+        val video = MediaRef(PHOTO.path, 900, 1, MediaType.VIDEO)
+
+        assertTrue(record(video))
+
+        assertEquals(listOf(video), images())
     }
 
     @Test

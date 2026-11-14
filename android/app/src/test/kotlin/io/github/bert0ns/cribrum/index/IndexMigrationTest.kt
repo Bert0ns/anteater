@@ -8,6 +8,7 @@ import io.github.bert0ns.cribrum.compress.JPEG_RULES_VERSION
 import io.github.bert0ns.cribrum.compress.JpegInfo
 import io.github.bert0ns.cribrum.compress.JpegStatus
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.ReviewState
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -120,6 +121,36 @@ class IndexMigrationTest {
         ImageIndex.open(context, NAME).use {
             assertEquals(emptyList<MediaRef>(), runBlocking { it.jpegsToRead() })
             assertEquals(listOf(CompressibleImage("/photos/a.jpg", 100, 4000, 3000, JpegInfo(JpegStatus.ELIGIBLE, quality = 95))), runBlocking { it.compressible(34) })
+        }
+    }
+
+    @Test
+    fun `version 6 opens with every row an image and no memory of non-images, so the walk sniffs those files again`() {
+        createDatabase(context, 6).use {
+            it.execSQL(
+                "INSERT INTO images (path, size, mtime_ns, review_state, width, height, mime, perceptual_hash) " +
+                    "VALUES ('/photos/a.jpg', 100, 1, 'kept', 4000, 3000, 'image/jpeg', '00000000000000ff')",
+            )
+            it.execSQL("INSERT INTO images (path, size, mtime_ns, review_state) VALUES ('/photos/b.png', 50, 2, 'trashed')")
+            it.execSQL("INSERT INTO analyses (path, detector_id, detector_version) VALUES ('/photos/a.jpg', 'blur', 1)")
+            it.execSQL("INSERT INTO signals (path, detector_id, detector_version, category, score, evidence) VALUES ('/photos/a.jpg', 'blur', 1, 'blurry', 0.5, '{}')")
+            it.execSQL(
+                "INSERT INTO jpegs (path, version, status, gain_map, quality, compressed, re_edit, depth_map, xmp, c2pa) " +
+                    "VALUES ('/photos/a.jpg', $JPEG_RULES_VERSION, 'eligible', 0, 95, 0, 0, 0, 0, 0)",
+            )
+            it.execSQL("INSERT INTO not_images (path, size, mtime_ns) VALUES ('/videos/clip.mp4', 900, 3)")
+            it.execSQL("INSERT INTO not_images (path, size, mtime_ns) VALUES ('/docs/notes.txt', 5, 4)")
+        }
+
+        ImageIndex.open(context, NAME).use {
+            assertEquals(listOf(MediaRef("/photos/a.jpg", 100, 1), MediaRef("/photos/b.png", 50, 2)), runBlocking { it.images() })
+            assertEquals(listOf("/photos/a.jpg", "/photos/b.png"), runBlocking { it.indexedMedia() }.map { image -> image.ref.path })
+            assertEquals(ReviewState.KEPT, runBlocking { it.reviewState("/photos/a.jpg") })
+            assertEquals(ReviewState.TRASHED, runBlocking { it.reviewState("/photos/b.png") })
+            assertEquals(listOf("blur"), runBlocking { it.signals("/photos/a.jpg") }.map { signal -> signal.detectorId })
+            assertEquals(0xffuL, runBlocking { it.perceptualHash("/photos/a.jpg") })
+            assertEquals(listOf("/photos/a.jpg"), runBlocking { it.compressible(34) }.map { image -> image.path })
+            assertEquals(emptyList<MediaRef>(), runBlocking { it.notImages() })
         }
     }
 }

@@ -61,14 +61,25 @@ enum class Role(val value: String) {
     INFERIOR("inferior"),
 }
 
-/** Identifies an image file. Size and mtime detect changes between scans. */
-data class MediaRef(val path: String, val size: Long, val mtimeNs: Long)
+/** What a file holds, as the index's `media_type` column stores it. */
+enum class MediaType(val value: String) {
+    IMAGE("image"),
+    VIDEO("video"),
+    ;
+
+    companion object {
+        fun of(value: String): MediaType = entries.first { it.value == value }
+    }
+}
+
+/** Identifies an image or video file. Size and mtime detect changes between scans. */
+data class MediaRef(val path: String, val size: Long, val mtimeNs: Long, val mediaType: MediaType = MediaType.IMAGE)
 
 /** The file as it is now, not a symlink's target. Every component builds its [MediaRef]s with it. */
-fun File.toMediaRef(): MediaRef = toMediaRef(Files.readAttributes(toPath(), BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS))
+fun File.toMediaRef(mediaType: MediaType = MediaType.IMAGE): MediaRef = toMediaRef(Files.readAttributes(toPath(), BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS), mediaType)
 
 /** [toMediaRef] for a caller that has read the attributes already, with `NOFOLLOW_LINKS`. */
-fun File.toMediaRef(attributes: BasicFileAttributes): MediaRef = MediaRef(path, attributes.size(), attributes.lastModifiedTime().to(TimeUnit.NANOSECONDS))
+fun File.toMediaRef(attributes: BasicFileAttributes, mediaType: MediaType = MediaType.IMAGE): MediaRef = MediaRef(path, attributes.size(), attributes.lastModifiedTime().to(TimeUnit.NANOSECONDS), mediaType)
 
 /**
  * A detector's evidence that an image may belong to a deletable category, or, with a
