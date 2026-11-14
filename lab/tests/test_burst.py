@@ -8,7 +8,7 @@ from PIL import Image, ImageFilter
 from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, AnalysisContext, Role
 from cribrum_lab.detectors.burst import BurstDetector
 from cribrum_lab.metadata import ImageMetadata
-from cribrum_lab.model import Category, ImageRef
+from cribrum_lab.model import Category, MediaRef
 
 START = datetime(2024, 5, 1, 10, 0, 0)
 
@@ -29,7 +29,7 @@ class Shots:
     def add(self, name, seconds, blur=0, camera="Pixel 8", vector=None):
         path = self.folder / f"{name}.jpg"
         texture().filter(ImageFilter.GaussianBlur(blur)).save(path)
-        image = ImageRef(path, path.stat().st_size, 0)
+        image = MediaRef(path, path.stat().st_size, 0)
         captured = START + timedelta(seconds=seconds) if seconds is not None else None
         self.meta[image] = ImageMetadata(640, 480, "image/jpeg", "Google", camera, captured)
         if vector is not None:
@@ -71,7 +71,7 @@ def test_shots_seconds_apart_form_a_burst_with_the_sharpest_as_best(shots):
 
 
 def test_the_sharpness_lookup_picks_the_best_shot_to_one_decimal_as_blur_stores_it():
-    photos = [ImageRef(Path(f"/fake/{i}.jpg"), 1000, 0) for i in range(3)]
+    photos = [MediaRef(Path(f"/fake/{i}.jpg"), 1000, 0) for i in range(3)]
     sharpness = dict(zip(photos, [50.04, 50.01, 25.0], strict=True))
     meta = {
         image: ImageMetadata(
@@ -133,7 +133,7 @@ def test_undecodable_image_has_sharpness_zero_and_is_never_best_shot(shots):
     sharp = shots.add("sharp", 0)
     broken_path = shots.folder / "broken.jpg"
     broken_path.write_bytes(b"\xff\xd8\xff\xe0" + b"corrupt")
-    broken_ref = ImageRef(broken_path, broken_path.stat().st_size, 0)
+    broken_ref = MediaRef(broken_path, broken_path.stat().st_size, 0)
     captured = START + timedelta(seconds=1)
     shots.meta[broken_ref] = ImageMetadata(640, 480, "image/jpeg", "Google", "Pixel 8", captured)
 

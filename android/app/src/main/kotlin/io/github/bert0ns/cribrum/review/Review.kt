@@ -8,8 +8,8 @@ import io.github.bert0ns.cribrum.folders.isExcluded
 import io.github.bert0ns.cribrum.index.ImageIndex
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
-import io.github.bert0ns.cribrum.model.ImageRef
 import io.github.bert0ns.cribrum.model.IndexedImage
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Protection
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.ReviewState
@@ -64,7 +64,7 @@ data class ReviewGroup(
 )
 
 data class ReviewItem(
-    val image: ImageRef,
+    val image: MediaRef,
     /** What the screen preselects: trash the candidates, keep the best copy of a group. */
     val suggestTrash: Boolean,
     val isBest: Boolean = false,
@@ -99,9 +99,9 @@ data class PreviousReview(val state: ReviewState, val kept: Set<SignalIdentity>,
 
 /** What applying a page did, so it can be undone. [previous] holds what each image in [kept] had before. */
 data class Decision(
-    val trashed: List<ImageRef>,
-    val kept: List<ImageRef>,
-    val failed: List<ImageRef>,
+    val trashed: List<MediaRef>,
+    val kept: List<MediaRef>,
+    val failed: List<MediaRef>,
     val previous: Map<String, PreviousReview> = emptyMap(),
 )
 
@@ -262,7 +262,7 @@ class Review(
      * its scan stays where it is and in the review: it is listed in [Decision.failed]. The files and the
      * rows change together even if the caller's scope ends meanwhile, and so do [undo] and [restore].
      */
-    suspend fun apply(toTrash: List<ImageRef>, toKeep: List<ImageRef>): Decision = withContext(NonCancellable) {
+    suspend fun apply(toTrash: List<MediaRef>, toKeep: List<MediaRef>): Decision = withContext(NonCancellable) {
         // Read first: a row that is missing fails before any file moves.
         val previous = toKeep.associate { it.path to PreviousReview(index.reviewState(it.path), index.keptSignals(it.path), index.keptDetectors(it.path)) }
         val moved = trash.moveToTrash(toTrash)
@@ -292,7 +292,7 @@ class Review(
      * it, and writing the old size back would reset it. Returns the images that stayed in the trash because
      * their path is taken.
      */
-    suspend fun undo(decision: Decision): List<ImageRef> = withContext(NonCancellable) {
+    suspend fun undo(decision: Decision): List<MediaRef> = withContext(NonCancellable) {
         val restored = trash.restore(decision.trashed)
         restored.forEach {
             index.record(it)
@@ -306,7 +306,7 @@ class Review(
     }
 
     /** Which of [images] the gallery marks as favourites right now, not when the page was read. */
-    suspend fun favoritesAmong(images: Collection<ImageRef>): Set<String> = favorites().let { favorites -> images.map { it.path }.filterTo(HashSet()) { it in favorites } }
+    suspend fun favoritesAmong(images: Collection<MediaRef>): Set<String> = favorites().let { favorites -> images.map { it.path }.filterTo(HashSet()) { it in favorites } }
 
     suspend fun trashed(): List<TrashedImage> = trash.trashed()
 
@@ -321,7 +321,7 @@ class Review(
      * trashed belonged to the compressed copy that took the original's path: it keeps its state, and the kept
      * signals of the original it still holds (docs/design.md §9).
      */
-    suspend fun restore(images: List<ImageRef>): List<ImageRef> = withContext(NonCancellable) {
+    suspend fun restore(images: List<MediaRef>): List<MediaRef> = withContext(NonCancellable) {
         val before = images.associate { it.path to runCatching { index.reviewState(it.path) }.getOrNull() }
         val restored = trash.restore(images)
         restored.forEach {
@@ -336,7 +336,7 @@ class Review(
     }
 
     /** Deletes images from the trash for good, and from the index with them. An image the trash could not delete keeps its row, and so does a new file now at its path. */
-    suspend fun purge(images: List<ImageRef>) {
+    suspend fun purge(images: List<MediaRef>) {
         index.forgetTrashed(trash.unheldPaths(trash.purge(images)))
     }
 
@@ -344,14 +344,14 @@ class Review(
      * Never suggests the folder of [image] again, subfolders included, and returns the folder. Its
      * images stay in the index with their signals, so removing the exclusion needs no new scan.
      */
-    suspend fun excludeFolderOf(image: ImageRef): String = File(image.path).parent!!.also { excludeFolder(it) }
+    suspend fun excludeFolderOf(image: MediaRef): String = File(image.path).parent!!.also { excludeFolder(it) }
 
     suspend fun excludeFolder(folder: String) = index.excludeFolder(folder)
 
     suspend fun removeExcludedFolder(folder: String) = index.removeExcludedFolder(folder)
 
     /** Images neither in the trash nor in an excluded folder, for storage space exploration. */
-    suspend fun notTrashed(): List<ImageRef> {
+    suspend fun notTrashed(): List<MediaRef> {
         val excluded = index.excludedFolders()
         return index.notTrashed().filterNot { isExcluded(it.path, excluded) }
     }

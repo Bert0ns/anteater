@@ -225,7 +225,7 @@ A debug build is signed with another key, so it can't be installed over a releas
 
 | Package | Contents | Lab counterpart |
 |---|---|---|
-| `io.github.bert0ns.cribrum.model` | Core types: `ImageRef`, `Category`, `Protection`, `Signal`, `IndexedImage` | `cribrum_lab.model` |
+| `io.github.bert0ns.cribrum.model` | Core types: `MediaRef`, `Category`, `Protection`, `Signal`, `IndexedImage` | `cribrum_lab.model` |
 | `io.github.bert0ns.cribrum.ranker` | `Ranker`, `Candidate`, thresholds and protection weights | `cribrum_lab.ranker` |
 | `io.github.bert0ns.cribrum.index` | Room tables and `ImageIndex`, with the lab's schema | `cribrum_lab.index` |
 | `io.github.bert0ns.cribrum.metadata` | `ImageMetadata` and `readMetadata` | `cribrum_lab.metadata` |

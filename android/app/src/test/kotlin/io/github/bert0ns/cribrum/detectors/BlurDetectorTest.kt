@@ -4,7 +4,7 @@ package io.github.bert0ns.cribrum.detectors
 import io.github.bert0ns.cribrum.imaging.Gray
 import io.github.bert0ns.cribrum.imaging.TestImage
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Signal
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -57,7 +57,7 @@ class BlurDetectorTest {
 
     private fun analyze(image: TestImage, name: String = "a.png"): List<Signal> {
         val file = image.save(File(folder.root, name))
-        return runBlocking { BlurDetector().analyze(ImageRef(file.path, 0, 0), AnalysisContext()) }
+        return runBlocking { BlurDetector().analyze(MediaRef(file.path, 0, 0), AnalysisContext()) }
     }
 
     private fun score(image: TestImage, name: String = "a.png"): Float {

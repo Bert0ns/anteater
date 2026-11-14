@@ -4,13 +4,13 @@ from PIL import Image
 
 from cribrum_lab.detectors import AnalysisContext
 from cribrum_lab.detectors.exposure import ExposureDetector
-from cribrum_lab.model import Category, ImageRef
+from cribrum_lab.model import Category, MediaRef
 
 
 def analyze(tmp_path, image):
     path = tmp_path / "a.png"
     image.save(path)
-    [signal] = ExposureDetector().analyze(ImageRef(path, 0, 0), AnalysisContext())
+    [signal] = ExposureDetector().analyze(MediaRef(path, 0, 0), AnalysisContext())
     assert signal.category is Category.BAD_EXPOSURE
     return signal
 

@@ -34,7 +34,7 @@ import androidx.compose.ui.test.pinch
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
@@ -62,7 +62,7 @@ class CategoryScreenTest {
     val compose = createComposeRule()
 
     // One folder each, so the full size view, which names the folder, says which image it shows.
-    private val images = (1..3).map { ImageRef("/sdcard/Album$it/img$it.jpg", 1_000_000, 0) }
+    private val images = (1..3).map { MediaRef("/sdcard/Album$it/img$it.jpg", 1_000_000, 0) }
     private val page = images.map { ReviewGroup(it.path, listOf(ReviewItem(it, suggestTrash = true))) }
 
     @Test
@@ -242,7 +242,7 @@ class CategoryScreenTest {
 
     @Test
     fun `holding an image offers to never suggest its folder again`() {
-        var excluded: ImageRef? = null
+        var excluded: MediaRef? = null
         compose.setContent {
             CategoryScreen(page, 3, emptySet(), false, {}, { _, _ -> }, {}, onExcludeFolder = { excluded = it })
         }
@@ -274,7 +274,7 @@ class CategoryScreenTest {
 
     @Test
     fun `changing the grouping scrolls the grid back to its top`() {
-        val many = (1..80).map { ImageRef("/sdcard/DCIM/many$it.jpg", 1_000, 0) }
+        val many = (1..80).map { MediaRef("/sdcard/DCIM/many$it.jpg", 1_000, 0) }
         val long = many.map { ReviewGroup(it.path, listOf(ReviewItem(it, suggestTrash = true))) }
         var grouping by mutableStateOf(ReviewOrder.OFF)
         compose.setContent { CategoryScreen(long, 80, emptySet(), false, {}, { _, _ -> }, {}, reviewOrder = grouping) }
@@ -408,7 +408,7 @@ class CategoryScreenTest {
 
     @Test
     fun `excluding a folder from the full size view excludes the image on show and closes the view`() {
-        var excluded: ImageRef? = null
+        var excluded: MediaRef? = null
         compose.setContent { CategoryScreen(page, 3, emptySet(), false, {}, { _, _ -> }, {}, onExcludeFolder = { excluded = it }) }
         val exclude = "Never suggest this folder or its subfolders"
 

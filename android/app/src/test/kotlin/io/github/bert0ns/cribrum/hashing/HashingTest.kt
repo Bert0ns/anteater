@@ -2,7 +2,7 @@ package io.github.bert0ns.cribrum.hashing
 
 import android.graphics.Bitmap
 import io.github.bert0ns.cribrum.imaging.TestImage
-import io.github.bert0ns.cribrum.model.toImageRef
+import io.github.bert0ns.cribrum.model.toMediaRef
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -25,7 +25,7 @@ class HashingTest {
     private fun phash(image: TestImage, name: String, format: Bitmap.CompressFormat = Bitmap.CompressFormat.JPEG): ULong {
         val file = File(folder.root, name)
         image.save(file, format)
-        return perceptualHash(file.toImageRef())
+        return perceptualHash(file.toMediaRef())
     }
 
     @Test
@@ -38,9 +38,9 @@ class HashingTest {
             writeBytes(bytes)
         }
 
-        val ha = contentHash(a.toImageRef())
-        val hb = contentHash(b.toImageRef())
-        val hc = contentHash(c.toImageRef())
+        val ha = contentHash(a.toMediaRef())
+        val hb = contentHash(b.toMediaRef())
+        val hc = contentHash(c.toMediaRef())
 
         assertEquals(ha, hb)
         assertNotEquals(ha, hc)

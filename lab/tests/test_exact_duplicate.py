@@ -2,14 +2,14 @@ from pathlib import Path
 
 from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, AnalysisContext, Role
 from cribrum_lab.detectors.exact_duplicate import ExactDuplicateDetector
-from cribrum_lab.model import Category, ImageRef
+from cribrum_lab.model import Category, MediaRef
 
 
-def write(root: Path, name: str, content: bytes) -> ImageRef:
+def write(root: Path, name: str, content: bytes) -> MediaRef:
     path = root / name
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content)
-    return ImageRef(path, len(content), 0)
+    return MediaRef(path, len(content), 0)
 
 
 def run(images, context=None):

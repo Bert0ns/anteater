@@ -4,8 +4,8 @@ package io.github.bert0ns.cribrum.trash
 import android.content.Context
 import android.media.MediaScannerConnection
 import android.os.storage.StorageManager
-import io.github.bert0ns.cribrum.model.ImageRef
-import io.github.bert0ns.cribrum.model.toImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.sources.FavoriteRequests
 import io.github.bert0ns.cribrum.sources.queryFavoritesAmong
 import io.github.bert0ns.cribrum.tracing.traceSuspend
@@ -35,7 +35,7 @@ private val COPY_NAME = Regex("""^\.pending-cribrum-[0-9a-f-]{36}\.jpg$""")
 /** What [AppTrash.replaceWithCopy] did. The copy is discarded unless it is [Swapped]. */
 sealed interface Swap {
     /** The copy, as it now is at the original's path. The original is in the trash. [favorite]: the gallery had it marked, and the copy is a new MediaStore row without the mark. */
-    data class Swapped(val copy: ImageRef, val favorite: Boolean = false) : Swap
+    data class Swapped(val copy: MediaRef, val favorite: Boolean = false) : Swap
 
     /** Nothing changed: the original is where it was. */
     data object Untouched : Swap
@@ -46,7 +46,7 @@ sealed interface Swap {
 
 data class TrashedImage(
     /** Where the image was, with the size and mtime it had: moving keeps both. */
-    val original: ImageRef,
+    val original: MediaRef,
     val trashedAt: Instant,
     /** The file inside the trash. */
     val file: File,
@@ -54,17 +54,17 @@ data class TrashedImage(
     val purgeAt: Instant,
     val seenAt: Instant = trashedAt,
     /** The compressed copy that took the original's path, as it was when it did. Null for an ordinary item. */
-    val compressedCopy: ImageRef? = null,
+    val compressedCopy: MediaRef? = null,
     /** The gallery had it marked as a favourite when it went to the trash, so a restore asks for the mark again (docs/design.md §9). */
     val favorite: Boolean = false,
 )
 
 interface Trash {
     /** Moves images to the trash. Returns the ones moved: a file gone or changed since its scan stays put. */
-    suspend fun moveToTrash(images: List<ImageRef>): List<ImageRef>
+    suspend fun moveToTrash(images: List<MediaRef>): List<MediaRef>
 
     /** Moves images back to their original path. Returns the ones restored: an occupied path is never overwritten. */
-    suspend fun restore(images: List<ImageRef>): List<ImageRef>
+    suspend fun restore(images: List<MediaRef>): List<MediaRef>
 
     suspend fun trashed(): List<TrashedImage>
 
@@ -72,14 +72,14 @@ interface Trash {
      * Deletes images from the trash for good, one item for each entry of [images], so two items that are the same image
      * go only when it is listed twice. Returns the ones deleted: a file the system would not delete is still in the trash.
      */
-    suspend fun purge(images: List<ImageRef>): List<ImageRef>
+    suspend fun purge(images: List<MediaRef>): List<MediaRef>
 
     /** Deletes what has been in the trash for longer than the retention the user chose. Returns what it deleted. */
     suspend fun purgeExpired(): ExpiredPurge
 }
 
 /** What [Trash.purgeExpired] deleted, and the original paths of the items it read and left in the trash. */
-data class ExpiredPurge(val purged: List<ImageRef>, val held: Set<String>) {
+data class ExpiredPurge(val purged: List<MediaRef>, val held: Set<String>) {
     /** [unheldPaths] without listing the trash again: what the purge read, minus what it deleted, is what is left. */
     val unheldPaths: List<String> get() = unheld(purged, held)
 
@@ -92,15 +92,15 @@ data class ExpiredPurge(val purged: List<ImageRef>, val held: Set<String>) {
  * The paths of [purged] that no item left in the trash holds, for the index to forget. A compressed original and
  * its copy share a path, so purging one must not drop the row the other still needs (docs/design.md §9).
  */
-suspend fun Trash.unheldPaths(purged: List<ImageRef>): List<String> = unheld(purged, trashed().mapTo(HashSet()) { it.original.path })
+suspend fun Trash.unheldPaths(purged: List<MediaRef>): List<String> = unheld(purged, trashed().mapTo(HashSet()) { it.original.path })
 
-private fun unheld(purged: List<ImageRef>, held: Set<String>): List<String> = purged.map { it.path }.filterNot { it in held }
+private fun unheld(purged: List<MediaRef>, held: Set<String>): List<String> = purged.map { it.path }.filterNot { it in held }
 
 /**
  * Each trashed file gets its own folder in the trash of its volume, holding the file under its
  * own name and an `origin.properties` with where it came from. The trash survives an uninstall
  * and needs no database to be restored. Moving is a rename, so it is instant and keeps the
- * file's mtime: a restored file is the same [ImageRef] as before.
+ * file's mtime: a restored file is the same [MediaRef] as before.
  */
 class AppTrash(
     /** The storage volume roots: each file goes to the trash on its own volume. */
@@ -116,12 +116,12 @@ class AppTrash(
     private val changed: (List<String>) -> Unit = {},
 ) : Trash {
 
-    internal var recordWriter: (File, ImageRef, Instant, Instant, ImageRef?, Boolean) -> Unit = ::writeOrigin
+    internal var recordWriter: (File, MediaRef, Instant, Instant, MediaRef?, Boolean) -> Unit = ::writeOrigin
 
     /** Moves a file without replacing one already there. Tests swap it to fail a step. */
     internal var mover: (File, File) -> Unit = { from, to -> Files.move(from.toPath(), to.toPath()) }
 
-    override suspend fun moveToTrash(images: List<ImageRef>): List<ImageRef> = io {
+    override suspend fun moveToTrash(images: List<MediaRef>): List<MediaRef> = io {
         val flagged = flagged(images.map { it.path })
         val moved = images.filter { move(it, favorite = it.path in flagged) != null }
         changed(moved.map { it.path })
@@ -132,14 +132,14 @@ class AppTrash(
      * Restoring an original whose path holds its compressed copy moves the copy to the trash first, so nothing is
      * deleted. A file at the path that is not that copy is never moved or overwritten, and the original stays.
      */
-    override suspend fun restore(images: List<ImageRef>): List<ImageRef> {
+    override suspend fun restore(images: List<MediaRef>): List<MediaRef> {
         val (restored, favorites) = io { restoreFiles(images) }
         if (favorites.isNotEmpty()) restoredFavorites(favorites)
         return restored
     }
 
     /** The images put back, and the paths among them that were favourites. */
-    private suspend fun restoreFiles(images: List<ImageRef>): Pair<List<ImageRef>, List<String>> {
+    private suspend fun restoreFiles(images: List<MediaRef>): Pair<List<MediaRef>, List<String>> {
         val byOriginal = items().associateBy { it.original }
         val restored = images.filter { image ->
             val item = byOriginal[image] ?: return@filter false
@@ -163,9 +163,9 @@ class AppTrash(
      * Moves [original] to the trash and renames [copy], its compressed copy written by [copyFileFor], to its path.
      * The item records the copy, so restoring the original puts the copy in the trash in its place.
      */
-    suspend fun replaceWithCopy(original: ImageRef, copy: File): Swap = io {
+    suspend fun replaceWithCopy(original: MediaRef, copy: File): Swap = io {
         val target = File(original.path)
-        val copyRef = runCatching { copy.toImageRef() }.getOrNull()?.let { ImageRef(original.path, it.size, it.mtimeNs) }
+        val copyRef = runCatching { copy.toMediaRef() }.getOrNull()?.let { MediaRef(original.path, it.size, it.mtimeNs) }
         val favorite = flagged(listOf(original.path)).isNotEmpty()
         val folder = copyRef?.let { runCatching { move(original, it, favorite) }.getOrNull() }
         if (folder == null || runCatching { mover(copy, target) }.isFailure) {
@@ -176,7 +176,7 @@ class AppTrash(
             return@io Swap.Untouched
         }
         changed(listOf(original.path))
-        Swap.Swapped(runCatching { target.toImageRef() }.getOrDefault(copyRef), favorite)
+        Swap.Swapped(runCatching { target.toMediaRef() }.getOrDefault(copyRef), favorite)
     }
 
     /**
@@ -200,7 +200,7 @@ class AppTrash(
 
     override suspend fun trashed(): List<TrashedImage> = io { items() }
 
-    override suspend fun purge(images: List<ImageRef>): List<ImageRef> = io {
+    override suspend fun purge(images: List<MediaRef>): List<MediaRef> = io {
         val wanted = images.groupingBy { it }.eachCount().toMutableMap()
         items().filter { item ->
             val left = wanted[item.original] ?: 0
@@ -210,7 +210,7 @@ class AppTrash(
 
     override suspend fun purgeExpired(): ExpiredPurge = io {
         val now = clock.instant()
-        val expired = mutableListOf<ImageRef>()
+        val expired = mutableListOf<MediaRef>()
         val held = HashSet<String>()
         for (volume in volumes()) {
             val trashFolder = File(volume, TRASH_FOLDER)
@@ -223,10 +223,10 @@ class AppTrash(
     }
 
     /** Returns the item folder the file went to, or null if it stayed where it was. */
-    private fun move(image: ImageRef, compressedCopy: ImageRef? = null, favorite: Boolean = false): File? {
+    private fun move(image: MediaRef, compressedCopy: MediaRef? = null, favorite: Boolean = false): File? {
         val file = File(image.path)
         if (file.name == ORIGIN) return null
-        if (!file.isFile || runCatching { file.toImageRef() }.getOrNull() != image) return null
+        if (!file.isFile || runCatching { file.toMediaRef() }.getOrNull() != image) return null
         val root = rootOf(file) ?: return null
         val folder = File(root, UUID.randomUUID().toString())
         try {
@@ -260,7 +260,7 @@ class AppTrash(
 
     private fun flagged(paths: Collection<String>): Set<String> = runCatching { favorites(paths) }.getOrDefault(emptySet())
 
-    private fun writeOrigin(folder: File, image: ImageRef, trashedAt: Instant, seenAt: Instant, compressedCopy: ImageRef?, favorite: Boolean) {
+    private fun writeOrigin(folder: File, image: MediaRef, trashedAt: Instant, seenAt: Instant, compressedCopy: MediaRef?, favorite: Boolean) {
         val origin = Properties()
         origin["path"] = image.path
         origin["size"] = image.size.toString()
@@ -303,12 +303,12 @@ class AppTrash(
         val compressedSize = origin.getProperty("compressed_size")?.toLongOrNull()
         val compressedMtimeNs = origin.getProperty("compressed_mtime_ns")?.toLongOrNull()
         TrashedImage(
-            ImageRef(path, size, mtimeNs),
+            MediaRef(path, size, mtimeNs),
             trashedAt,
             file,
             purgeAt,
             seenAt,
-            if (compressedSize != null && compressedMtimeNs != null) ImageRef(path, compressedSize, compressedMtimeNs) else null,
+            if (compressedSize != null && compressedMtimeNs != null) MediaRef(path, compressedSize, compressedMtimeNs) else null,
             origin.getProperty("favorite") == "true",
         )
     }.getOrNull()

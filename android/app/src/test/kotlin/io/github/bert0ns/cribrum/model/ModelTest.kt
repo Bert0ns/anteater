@@ -17,7 +17,7 @@ class ModelTest {
         val file = folder.newFile("a.jpg").apply { writeText("12345") }
         file.setLastModified(1_700_000_000_123)
 
-        assertEquals(ImageRef(file.path, 5, 1_700_000_000_123_000_000), file.toImageRef())
+        assertEquals(MediaRef(file.path, 5, 1_700_000_000_123_000_000), file.toMediaRef())
     }
 
     @Test
@@ -25,8 +25,8 @@ class ModelTest {
         val target = folder.newFile("target.jpg").apply { writeText("12345") }
         val link = Files.createSymbolicLink(folder.root.toPath().resolve("link.jpg"), target.toPath()).toFile()
 
-        assertEquals(link.path, link.toImageRef().path)
-        assertNotEquals(5L, link.toImageRef().size)
+        assertEquals(link.path, link.toMediaRef().path)
+        assertNotEquals(5L, link.toMediaRef().size)
     }
 
     @Test

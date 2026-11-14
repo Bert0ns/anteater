@@ -3,7 +3,7 @@
 package io.github.bert0ns.cribrum.detectors
 
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Signal
 import java.io.File
 
@@ -17,7 +17,7 @@ class ScreenshotDetector : Detector {
     override val version = 1
     override val category = Category.SCREENSHOT
 
-    override suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal> {
+    override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
         val meta = context.metadata(image)
         val pathMatch = pathParts(image.path).firstNotNullOfOrNull { PATTERN.find(it)?.value }.orEmpty()
         val isScreenSize = (minOf(meta.width, meta.height) to maxOf(meta.width, meta.height)) in context.screenSizes

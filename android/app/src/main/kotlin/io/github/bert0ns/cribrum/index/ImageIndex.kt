@@ -13,9 +13,9 @@ import io.github.bert0ns.cribrum.compress.Losses
 import io.github.bert0ns.cribrum.compress.Marker
 import io.github.bert0ns.cribrum.folders.isExcluded
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
-import io.github.bert0ns.cribrum.model.ImageRef
 import io.github.bert0ns.cribrum.model.IndexedImage
 import io.github.bert0ns.cribrum.model.Kind
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.model.SignalIdentity
@@ -60,13 +60,13 @@ class ImageIndex(private val db: IndexDatabase) :
      * a file on disk at its path is not the one in the trash, so the row starts unreviewed.
      * An unchanged image keeps the version: a scan records every file, and would otherwise drop the review's ranking.
      */
-    suspend fun record(image: ImageRef): Boolean = recordAll(listOf(image)) > 0
+    suspend fun record(image: MediaRef): Boolean = recordAll(listOf(image)) > 0
 
     /**
      * [record] for many images in one transaction, which is much cheaper than one each. Returns how many are new or
      * changed. If it throws, none of them is recorded and the version stays.
      */
-    suspend fun recordAll(images: List<ImageRef>): Int = traceSuspend("Index.recordAll") {
+    suspend fun recordAll(images: List<MediaRef>): Int = traceSuspend("Index.recordAll") {
         db.withTransaction {
             // One lookup for many paths, in the same transaction: one for each path took most of the time.
             val stored = HashMap<String, StoredRef>()
@@ -76,7 +76,7 @@ class ImageIndex(private val db: IndexDatabase) :
     }.also { changed -> if (changed > 0) writes.incrementAndGet() }
 
     /** Records [image] against its row in [stored], and keeps [stored] as the row now is, for a path the list holds twice. */
-    private suspend fun recordOne(image: ImageRef, stored: MutableMap<String, StoredRef>): Boolean {
+    private suspend fun recordOne(image: MediaRef, stored: MutableMap<String, StoredRef>): Boolean {
         val row = stored[image.path]
         when {
             row == null -> dao.insertImage(ImageRow(image.path, image.size, image.mtimeNs))
@@ -92,7 +92,7 @@ class ImageIndex(private val db: IndexDatabase) :
         return true
     }
 
-    suspend fun images(): List<ImageRef> = dao.images().map { ImageRef(it.path, it.size, it.mtimeNs) }
+    suspend fun images(): List<MediaRef> = dao.images().map { MediaRef(it.path, it.size, it.mtimeNs) }
 
     /** Removes images from the index, with everything stored about them. Files are untouched. */
     suspend fun forget(paths: Collection<String>) = delete {
@@ -108,7 +108,7 @@ class ImageIndex(private val db: IndexDatabase) :
     }
 
     /** Images whose metadata was never read, leaving out the unreadable ones. */
-    suspend fun withoutMetadata(): List<ImageRef> = dao.withoutMetadata().map { ImageRef(it.path, it.size, it.mtimeNs) }
+    suspend fun withoutMetadata(): List<MediaRef> = dao.withoutMetadata().map { MediaRef(it.path, it.size, it.mtimeNs) }
 
     /** Marks an image whose header can't be decoded, so it isn't retried until it changes. */
     suspend fun setUnreadable(path: String) = write { require(dao.setUnreadable(path), path) }
@@ -337,7 +337,7 @@ class ImageIndex(private val db: IndexDatabase) :
     suspend fun removeExcludedFolder(path: String) = write { dao.deleteExcludedFolder(path) }
 
     /** Every indexed image not in the trash, with its path, size, and mtime. */
-    suspend fun notTrashed(): List<ImageRef> = dao.notTrashed().map { ImageRef(it.path, it.size, it.mtimeNs) }
+    suspend fun notTrashed(): List<MediaRef> = dao.notTrashed().map { MediaRef(it.path, it.size, it.mtimeNs) }
 
     /** The EXIF capture time of each image that has one, to order the review by date. The ranker never sees it. A time that does not parse is left out. */
     suspend fun capturedAt(): Map<String, LocalDateTime> = dao.capturedAt().mapNotNull { row ->
@@ -351,7 +351,7 @@ class ImageIndex(private val db: IndexDatabase) :
             val seen = dao.allKeptSignals().groupBy({ it.path }) { SignalIdentity(Kind.of(it.category), it.groupId, it.role) }
             dao.statesNow().map { row ->
                 IndexedImage(
-                    ImageRef(row.path, row.size, row.mtimeNs),
+                    MediaRef(row.path, row.size, row.mtimeNs),
                     ReviewState.of(row.reviewState),
                     signals[row.path].orEmpty(),
                     seen[row.path].orEmpty().toSet(),
@@ -361,7 +361,7 @@ class ImageIndex(private val db: IndexDatabase) :
     }
 
     /** JPEGs, by the mime their header gave, whose headers were not read with the current rules (docs/design.md §9). */
-    suspend fun jpegsToRead(): List<ImageRef> = dao.jpegsToRead(JPEG_RULES_VERSION).map { ImageRef(it.path, it.size, it.mtimeNs) }
+    suspend fun jpegsToRead(): List<MediaRef> = dao.jpegsToRead(JPEG_RULES_VERSION).map { MediaRef(it.path, it.size, it.mtimeNs) }
 
     /** Stores what the scan read from a JPEG. Leaves [version] alone, as for `not_images`: it changes no ranking. */
     suspend fun setJpeg(path: String, info: JpegInfo) = putJpeg(path, info, null, null)
@@ -404,9 +404,9 @@ class ImageIndex(private val db: IndexDatabase) :
 
     // The walk's memory of non-images: no image changes with it, so it leaves [version] alone, and a scan
     // that sniffed new files does not drop the review's ranking.
-    override suspend fun notImages(): List<ImageRef> = dao.notImages().map { ImageRef(it.path, it.size, it.mtimeNs) }
+    override suspend fun notImages(): List<MediaRef> = dao.notImages().map { MediaRef(it.path, it.size, it.mtimeNs) }
 
-    override suspend fun addNotImages(files: List<ImageRef>) = db.withTransaction { dao.putNotImages(files.map { NotImageRow(it.path, it.size, it.mtimeNs) }) }
+    override suspend fun addNotImages(files: List<MediaRef>) = db.withTransaction { dao.putNotImages(files.map { NotImageRow(it.path, it.size, it.mtimeNs) }) }
 
     override suspend fun forgetNotImages(paths: Collection<String>) = db.withTransaction { paths.chunked(SQL_VARIABLES).forEach { dao.forgetNotImages(it) } }
 

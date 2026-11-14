@@ -13,8 +13,8 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
 import androidx.test.core.app.ApplicationProvider
-import io.github.bert0ns.cribrum.model.ImageRef
-import io.github.bert0ns.cribrum.model.toImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.trash.AppTrash
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -235,9 +235,9 @@ class FavoriteRequestsTest {
     }
 
     /** A trash that trashed [name] while the gallery had it marked, and asks the way the app does when it is restored. */
-    private fun trashedFavorite(name: String, scan: suspend (Context, Collection<String>) -> Unit = noScan): Pair<AppTrash, ImageRef> {
+    private fun trashedFavorite(name: String, scan: suspend (Context, Collection<String>) -> Unit = noScan): Pair<AppTrash, MediaRef> {
         val volume = folder.newFolder("storage")
-        val image = File(volume, name).apply { writeText("photo") }.toImageRef()
+        val image = File(volume, name).apply { writeText("photo") }.toMediaRef()
         val trash = AppTrash({ listOf(volume) }, favorites = { setOf(image.path) }, restoredFavorites = { FavoriteRequests.askAsync(context, it, { lost -> asked += lost }, scan) })
         runBlocking { trash.moveToTrash(listOf(image)) }
         return trash to image

@@ -10,7 +10,7 @@ import numpy as np
 from cribrum_lab import hashing
 from cribrum_lab.imaging import Pixels
 from cribrum_lab.metadata import ImageMetadata, read_metadata
-from cribrum_lab.model import Category, ImageRef, Signal
+from cribrum_lab.model import Category, MediaRef, Signal
 from cribrum_lab.screens import SCREEN_SIZES
 
 
@@ -28,29 +28,29 @@ class AnalysisContext:
     Grows as detectors need it (e.g. cached embeddings).
     """
 
-    content_hash: Callable[[ImageRef], str] = hashing.content_hash
-    perceptual_hash: Callable[[ImageRef], int] = hashing.perceptual_hash
-    embedding: Callable[[ImageRef], np.ndarray] = lambda image: _embed(image)
+    content_hash: Callable[[MediaRef], str] = hashing.content_hash
+    perceptual_hash: Callable[[MediaRef], int] = hashing.perceptual_hash
+    embedding: Callable[[MediaRef], np.ndarray] = lambda image: _embed(image)
     """L2-normalized MobileCLIP embedding."""
-    metadata: Callable[[ImageRef], ImageMetadata] = lambda image: read_metadata(image.path)
+    metadata: Callable[[MediaRef], ImageMetadata] = lambda image: read_metadata(image.path)
     """Raises `UnreadableImage` when the header can't be decoded."""
-    sharpness: Callable[[ImageRef], float] = lambda image: _peak_variance(image)
+    sharpness: Callable[[MediaRef], float] = lambda image: _peak_variance(image)
     """The BLURRY measure of the image, the Laplacian variance of its sharpest region: 0 when it
     can't be decoded."""
     screen_sizes: Collection[tuple[int, int]] = SCREEN_SIZES
     """Known screen resolutions as (short side, long side)."""
-    pixels: Callable[[ImageRef], Pixels] = lambda image: Pixels(image.path)
+    pixels: Callable[[MediaRef], Pixels] = lambda image: Pixels(image.path)
     """The image's pixels. The pipeline gives the detectors of one image the same `Pixels`, so
     they share what it loads, and drops it with the image. By default each call loads anew."""
 
 
-def _peak_variance(image: ImageRef) -> float:
+def _peak_variance(image: MediaRef) -> float:
     from cribrum_lab.detectors import blur  # blur imports this module
 
     return blur.peak_variance(image)
 
 
-def _embed(image: ImageRef) -> np.ndarray:
+def _embed(image: MediaRef) -> np.ndarray:
     from cribrum_lab import mobileclip  # loads ONNX Runtime only when a detector needs it
 
     return mobileclip.default_model().embed_images([image.path])[0]
@@ -76,7 +76,7 @@ class Detector(Protocol):
     category: Category | None
     """The category its signals are about, so the app can tell which categories it looks for."""
 
-    def analyze(self, image: ImageRef, context: AnalysisContext) -> list[Signal]: ...
+    def analyze(self, image: MediaRef, context: AnalysisContext) -> list[Signal]: ...
 
 
 class GroupDetector(Protocol):
@@ -98,5 +98,5 @@ class GroupDetector(Protocol):
     """As in `Detector`."""
 
     def analyze(
-        self, images: Sequence[ImageRef], context: AnalysisContext
-    ) -> dict[ImageRef, list[Signal]]: ...
+        self, images: Sequence[MediaRef], context: AnalysisContext
+    ) -> dict[MediaRef, list[Signal]]: ...

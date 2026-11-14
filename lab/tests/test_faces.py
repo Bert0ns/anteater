@@ -4,7 +4,7 @@ from PIL import Image
 
 from cribrum_lab.detectors import AnalysisContext
 from cribrum_lab.detectors.faces import INPUT_SIDE, STRIDES, FaceDetector, detect, letterbox
-from cribrum_lab.model import ImageRef, Protection
+from cribrum_lab.model import MediaRef, Protection
 
 
 class FakeYuNet:
@@ -63,7 +63,7 @@ def test_face_detector_emits_a_faces_protection(tmp_path):
     Image.new("RGB", (640, 640)).save(path)
     detector = FaceDetector(FakeYuNet((32, 5, 5, 0.95, 2.0), (16, 30, 30, 0.7, 1.0)))
 
-    [signal] = detector.analyze(ImageRef(path, 0, 0), AnalysisContext())
+    [signal] = detector.analyze(MediaRef(path, 0, 0), AnalysisContext())
 
     assert signal.category is Protection.FACES
     assert signal.score == pytest.approx(0.95)
@@ -77,7 +77,7 @@ def test_no_face_scores_zero(tmp_path):
     path = tmp_path / "a.jpg"
     Image.new("RGB", (300, 200)).save(path)
 
-    [signal] = FaceDetector(FakeYuNet()).analyze(ImageRef(path, 0, 0), AnalysisContext())
+    [signal] = FaceDetector(FakeYuNet()).analyze(MediaRef(path, 0, 0), AnalysisContext())
 
     assert signal.score == 0.0
     assert signal.evidence == {"faces": "0"}

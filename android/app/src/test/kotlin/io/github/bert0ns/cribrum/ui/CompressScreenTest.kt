@@ -58,7 +58,7 @@ import io.github.bert0ns.cribrum.compress.Losses
 import io.github.bert0ns.cribrum.compress.Marker
 import io.github.bert0ns.cribrum.compress.Refusal
 import io.github.bert0ns.cribrum.compress.estimatedSaving
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.pipeline.ScanProgress
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -81,7 +81,7 @@ class RecordingBatches(initial: BatchState = BatchState.Idle) : CompressBatches 
     val started = mutableListOf<Pair<List<String>, CompressionLevel>>()
     var cancels = 0
     val undone = mutableListOf<BatchResult>()
-    var stayed: List<ImageRef> = emptyList()
+    var stayed: List<MediaRef> = emptyList()
 
     /** Holds an undo until the test lets it go, as a running scan does. */
     var undoGate: CompletableDeferred<Unit>? = null
@@ -95,7 +95,7 @@ class RecordingBatches(initial: BatchState = BatchState.Idle) : CompressBatches 
         cancels++
     }
 
-    override suspend fun undo(result: BatchResult): List<ImageRef> {
+    override suspend fun undo(result: BatchResult): List<MediaRef> {
         undone += result
         undoGate?.await()
         mutableState.value = BatchState.Idle
@@ -906,8 +906,8 @@ class CompressScreenTest {
 
     @Test
     fun `originals an undo could not put back are said`() {
-        batches.stayed = listOf(ImageRef("/p/x.jpg", 1, 1))
-        batches.mutableState.value = BatchState.Finished(BatchResult(1, 1, emptyMap(), 100, listOf(ImageRef("/p/x.jpg", 1, 1))))
+        batches.stayed = listOf(MediaRef("/p/x.jpg", 1, 1))
+        batches.mutableState.value = BatchState.Finished(BatchResult(1, 1, emptyMap(), 100, listOf(MediaRef("/p/x.jpg", 1, 1))))
         show(model(big))
         awaitText("1 photo compressed")
 

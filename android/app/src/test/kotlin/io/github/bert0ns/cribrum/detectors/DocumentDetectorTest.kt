@@ -2,7 +2,7 @@
 package io.github.bert0ns.cribrum.detectors
 
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.prompts.PROMPTS
 import io.github.bert0ns.cribrum.prompts.promptVector
@@ -19,7 +19,7 @@ class DocumentDetectorTest {
     private fun analyze(detector: DocumentDetector, promptText: String): Signal {
         val embedding = promptVector(promptText)
         val context = AnalysisContext(embedding = { embedding })
-        return runBlocking { detector.analyze(ImageRef("/sdcard/Download/a.jpg", 0, 0), context) }.single()
+        return runBlocking { detector.analyze(MediaRef("/sdcard/Download/a.jpg", 0, 0), context) }.single()
     }
 
     @Test
@@ -49,7 +49,7 @@ class DocumentDetectorTest {
     @Test
     fun `missing embedding propagates`() {
         assertThrows(MissingEmbedding::class.java) {
-            runBlocking { DocumentDetector { 0f }.analyze(ImageRef("/sdcard/Download/a.jpg", 0, 0), AnalysisContext()) }
+            runBlocking { DocumentDetector { 0f }.analyze(MediaRef("/sdcard/Download/a.jpg", 0, 0), AnalysisContext()) }
         }
     }
 }

@@ -2,7 +2,7 @@
 package io.github.bert0ns.cribrum.detectors
 
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Signal
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -11,7 +11,7 @@ import org.junit.Test
 private const val MEDIA = "/sdcard/Android/media/com.whatsapp/WhatsApp/Media"
 
 private fun analyze(path: String): Signal {
-    val signal = runBlocking { StickerDetector().analyze(ImageRef(path, 0, 0), AnalysisContext()) }.single()
+    val signal = runBlocking { StickerDetector().analyze(MediaRef(path, 0, 0), AnalysisContext()) }.single()
     assertEquals(Category.STICKER, signal.kind)
     return signal
 }

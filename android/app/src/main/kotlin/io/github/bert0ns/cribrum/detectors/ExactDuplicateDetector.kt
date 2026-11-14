@@ -6,7 +6,7 @@ import io.github.bert0ns.cribrum.folders.isCameraFolder
 import io.github.bert0ns.cribrum.folders.isMessagingFolder
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
@@ -19,8 +19,8 @@ class ExactDuplicateDetector : GroupDetector {
     override val version = 1
     override val category = Category.EXACT_DUPLICATE
 
-    override suspend fun analyze(images: List<ImageRef>, context: AnalysisContext): Map<ImageRef, List<Signal>> {
-        val byHash = LinkedHashMap<String, MutableList<ImageRef>>()
+    override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
+        val byHash = LinkedHashMap<String, MutableList<MediaRef>>()
         for (sameSize in images.groupBy { it.size }.values) {
             if (sameSize.size < 2) continue
             for (image in sameSize) {
@@ -32,7 +32,7 @@ class ExactDuplicateDetector : GroupDetector {
                 byHash.getOrPut(digest) { mutableListOf() } += image
             }
         }
-        val result = LinkedHashMap<ImageRef, List<Signal>>()
+        val result = LinkedHashMap<MediaRef, List<Signal>>()
         for ((digest, copies) in byHash) {
             if (copies.size < 2) continue
             val best = copies.minWith(PREFERENCE)
@@ -47,7 +47,7 @@ class ExactDuplicateDetector : GroupDetector {
 
     private companion object {
         /** The copy to keep: camera folder first, messaging folders last, then the shortest path. */
-        val PREFERENCE = compareBy<ImageRef>(
+        val PREFERENCE = compareBy<MediaRef>(
             {
                 when {
                     isMessagingFolder(it.path) -> 2

@@ -23,7 +23,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.trash.TrashedImage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -44,7 +44,7 @@ class TrashScreenTest {
 
     private val trashed = listOf("a.jpg", "b.jpg").map {
         val trashedAt = Instant.now() - Duration.ofDays(3)
-        TrashedImage(ImageRef("/sdcard/DCIM/$it", 1, 0), trashedAt, File("/sdcard/.cribrum-trash/x/$it"), trashedAt + Duration.ofDays(30) - Duration.ofHours(12))
+        TrashedImage(MediaRef("/sdcard/DCIM/$it", 1, 0), trashedAt, File("/sdcard/.cribrum-trash/x/$it"), trashedAt + Duration.ofDays(30) - Duration.ofHours(12))
     }
 
     @Test
@@ -145,7 +145,7 @@ class TrashScreenTest {
     @Test
     fun `one day left is spoken in the singular`() {
         val at = Instant.now()
-        val last = TrashedImage(ImageRef("/sdcard/DCIM/c.jpg", 1, 0), at, File("/sdcard/.cribrum-trash/x/c.jpg"), at + Duration.ofHours(20))
+        val last = TrashedImage(MediaRef("/sdcard/DCIM/c.jpg", 1, 0), at, File("/sdcard/.cribrum-trash/x/c.jpg"), at + Duration.ofHours(20))
         compose.setContent { TrashScreen(listOf(last), emptySet(), {}, { _, _ -> }, {}, {}) }
 
         compose.onNodeWithContentDescription("c.jpg. 1 day left").assertExists()
@@ -181,8 +181,8 @@ class TrashScreenTest {
     @Test
     fun `two items with the same path are selected and deleted one by one`() {
         val at = Instant.now() - Duration.ofDays(3)
-        val original = TrashedImage(ImageRef("/sdcard/DCIM/a.jpg", 9, 0), at, File("/sdcard/.cribrum-trash/1/a.jpg"), at + Duration.ofDays(30))
-        val copy = TrashedImage(ImageRef("/sdcard/DCIM/a.jpg", 4, 1), at, File("/sdcard/.cribrum-trash/2/a.jpg"), at + Duration.ofDays(30))
+        val original = TrashedImage(MediaRef("/sdcard/DCIM/a.jpg", 9, 0), at, File("/sdcard/.cribrum-trash/1/a.jpg"), at + Duration.ofDays(30))
+        val copy = TrashedImage(MediaRef("/sdcard/DCIM/a.jpg", 4, 1), at, File("/sdcard/.cribrum-trash/2/a.jpg"), at + Duration.ofDays(30))
         var deleted: Set<String>? = null
         compose.setContent {
             var selected by remember { mutableStateOf(emptySet<String>()) }
@@ -200,7 +200,7 @@ class TrashScreenTest {
     @Test
     fun `emptying the trash counts every item, also two with the same path`() {
         val at = Instant.now() - Duration.ofDays(3)
-        val items = listOf(9L to 0L, 4L to 1L).mapIndexed { i, (size, mtime) -> TrashedImage(ImageRef("/sdcard/DCIM/a.jpg", size, mtime), at, File("/sdcard/.cribrum-trash/$i/a.jpg"), at + Duration.ofDays(30)) }
+        val items = listOf(9L to 0L, 4L to 1L).mapIndexed { i, (size, mtime) -> TrashedImage(MediaRef("/sdcard/DCIM/a.jpg", size, mtime), at, File("/sdcard/.cribrum-trash/$i/a.jpg"), at + Duration.ofDays(30)) }
         compose.setContent { TrashScreen(items, emptySet(), {}, { _, _ -> }, {}, {}) }
 
         compose.onNodeWithText("Empty trash").performClick()
@@ -211,7 +211,7 @@ class TrashScreenTest {
     @Test
     fun `a favourite shows its heart at full size`() {
         val at = Instant.now() - Duration.ofDays(3)
-        val favourite = TrashedImage(ImageRef("/sdcard/DCIM/a.jpg", 1, 0), at, File("/sdcard/.cribrum-trash/x/a.jpg"), at + Duration.ofDays(30), favorite = true)
+        val favourite = TrashedImage(MediaRef("/sdcard/DCIM/a.jpg", 1, 0), at, File("/sdcard/.cribrum-trash/x/a.jpg"), at + Duration.ofDays(30), favorite = true)
         compose.setContent { TrashScreen(listOf(favourite), emptySet(), {}, { _, _ -> }, {}, {}) }
 
         compose.onNodeWithContentDescription("a.jpg", substring = true).performTouchInput { longClick() }
@@ -234,7 +234,7 @@ class TrashScreenTest {
     @Test
     fun `stickers have their own section, selected all at once`() {
         val sticker = TrashedImage(
-            ImageRef("/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Stickers/s.webp", 1, 0),
+            MediaRef("/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Stickers/s.webp", 1, 0),
             Instant.now(),
             File("/sdcard/.cribrum-trash/y/s.webp"),
             Instant.now() + Duration.ofDays(30),

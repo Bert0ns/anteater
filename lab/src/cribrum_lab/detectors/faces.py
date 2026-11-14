@@ -13,7 +13,7 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from cribrum_lab.detectors.base import AnalysisContext
-from cribrum_lab.model import ImageRef, Protection, Signal
+from cribrum_lab.model import MediaRef, Protection, Signal
 from cribrum_lab.runtime import ModelRuntime, OnnxRuntime
 
 INPUT_SIDE = 640
@@ -37,7 +37,7 @@ class FaceDetector:
     def __init__(self, runtime: ModelRuntime | None = None) -> None:
         self._runtime = runtime
 
-    def analyze(self, image: ImageRef, context: AnalysisContext) -> list[Signal]:
+    def analyze(self, image: MediaRef, context: AnalysisContext) -> list[Signal]:
         pixels, (width, height) = letterbox(image.path)
         faces = detect(self._runtime or _default_runtime(), pixels)
         evidence = {"faces": str(len(faces))}

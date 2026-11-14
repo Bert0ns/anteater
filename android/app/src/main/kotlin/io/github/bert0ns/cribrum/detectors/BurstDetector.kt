@@ -4,7 +4,7 @@ package io.github.bert0ns.cribrum.detectors
 
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
@@ -33,8 +33,8 @@ class BurstDetector : GroupDetector {
     override val version = 3
     override val category = Category.BURST
 
-    override suspend fun analyze(images: List<ImageRef>, context: AnalysisContext): Map<ImageRef, List<Signal>> {
-        val byCamera = LinkedHashMap<Pair<String?, String?>, MutableList<Pair<LocalDateTime, ImageRef>>>()
+    override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
+        val byCamera = LinkedHashMap<Pair<String?, String?>, MutableList<Pair<LocalDateTime, MediaRef>>>()
         for (image in images) {
             val meta = try {
                 context.metadata(image)
@@ -47,7 +47,7 @@ class BurstDetector : GroupDetector {
                 .add(capturedAt to image)
         }
 
-        val result = LinkedHashMap<ImageRef, List<Signal>>()
+        val result = LinkedHashMap<MediaRef, List<Signal>>()
         for (shots in byCamera.values) {
             shots.sortWith(compareBy({ it.first }, { it.second.path }))
             for (burst in bursts(shots, context)) {
@@ -66,14 +66,14 @@ class BurstDetector : GroupDetector {
      * was one different frame and is dropped, so a single other subject does not split a burst.
      */
     private suspend fun bursts(
-        shots: List<Pair<LocalDateTime, ImageRef>>,
+        shots: List<Pair<LocalDateTime, MediaRef>>,
         context: AnalysisContext,
-    ): List<List<ImageRef>> {
-        suspend fun follows(previous: Pair<LocalDateTime, ImageRef>, shot: Pair<LocalDateTime, ImageRef>) = Duration.between(previous.first, shot.first) <= MAX_GAP && alike(previous.second, shot.second, context)
+    ): List<List<MediaRef>> {
+        suspend fun follows(previous: Pair<LocalDateTime, MediaRef>, shot: Pair<LocalDateTime, MediaRef>) = Duration.between(previous.first, shot.first) <= MAX_GAP && alike(previous.second, shot.second, context)
 
-        val bursts = mutableListOf<List<Pair<LocalDateTime, ImageRef>>>()
+        val bursts = mutableListOf<List<Pair<LocalDateTime, MediaRef>>>()
         var current = mutableListOf(shots[0])
-        var pending: Pair<LocalDateTime, ImageRef>? = null
+        var pending: Pair<LocalDateTime, MediaRef>? = null
         for (shot in shots.drop(1)) {
             val skipped = pending
             if (skipped != null && follows(skipped, shot)) {
@@ -96,7 +96,7 @@ class BurstDetector : GroupDetector {
     }
 
     /** Recall first: without both embeddings, time alone decides. */
-    private suspend fun alike(a: ImageRef, b: ImageRef, context: AnalysisContext): Boolean {
+    private suspend fun alike(a: MediaRef, b: MediaRef, context: AnalysisContext): Boolean {
         val va = try {
             context.embedding(a)
         } catch (_: MissingEmbedding) {
@@ -110,12 +110,12 @@ class BurstDetector : GroupDetector {
         return dot(va, vb) >= BURST_MIN_COSINE
     }
 
-    private fun signals(burst: List<ImageRef>, sharpness: Map<ImageRef, Double>): Map<ImageRef, List<Signal>> {
+    private fun signals(burst: List<MediaRef>, sharpness: Map<MediaRef, Double>): Map<MediaRef, List<Signal>> {
         val best = burst.maxBy { sharpness.getValue(it) }
         val groupId = groupId(burst[0].path)
         val bestSharpness = sharpness.getValue(best)
 
-        val result = LinkedHashMap<ImageRef, List<Signal>>()
+        val result = LinkedHashMap<MediaRef, List<Signal>>()
         for (image in burst) {
             val isBest = image == best
             val role = if (isBest) Role.BEST else Role.INFERIOR

@@ -11,7 +11,7 @@ import io.github.bert0ns.cribrum.imaging.Pixels
 import io.github.bert0ns.cribrum.imaging.resampleChannels
 import io.github.bert0ns.cribrum.imaging.turnedSize
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Protection
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.runtime.ModelRuntime
@@ -39,7 +39,7 @@ class FaceDetector(private val injected: ModelRuntime? = null) : Detector {
 
     private val runtime by lazy { injected ?: defaultRuntime }
 
-    override suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal> {
+    override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
         val boxed = YuNet.letterbox(context.pixels(image))
         val faces = YuNet.detect(runtime, boxed.pixels)
         val evidence = mutableMapOf("faces" to faces.size.toString())

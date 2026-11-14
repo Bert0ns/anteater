@@ -8,7 +8,7 @@ import io.github.bert0ns.cribrum.hashing.isFlatHash
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
@@ -39,8 +39,8 @@ class NearDuplicateDetector : GroupDetector {
     override val version = 3
     override val category = Category.NEAR_DUPLICATE
 
-    override suspend fun analyze(images: List<ImageRef>, context: AnalysisContext): Map<ImageRef, List<Signal>> {
-        val members = mutableListOf<ImageRef>()
+    override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
+        val members = mutableListOf<MediaRef>()
         val hashes = mutableListOf<ULong>()
         val vectors = mutableListOf<FloatArray?>()
         for (image in images) {
@@ -61,7 +61,7 @@ class NearDuplicateDetector : GroupDetector {
         }
 
         val links = hashLinks(hashes) + embeddingLinks(vectors)
-        val result = LinkedHashMap<ImageRef, List<Signal>>()
+        val result = LinkedHashMap<MediaRef, List<Signal>>()
         for (component in components(members.size, links)) {
             val prefs = component.map { preference(it, members[it], context) }
             val bestIdx = prefs.minWith(PREFERENCE_COMPARATOR).index
@@ -163,7 +163,7 @@ class NearDuplicateDetector : GroupDetector {
         val path: String,
     )
 
-    private suspend fun preference(index: Int, image: ImageRef, context: AnalysisContext): CandidatePreference {
+    private suspend fun preference(index: Int, image: MediaRef, context: AnalysisContext): CandidatePreference {
         val meta = try {
             context.metadata(image)
         } catch (error: Exception) {

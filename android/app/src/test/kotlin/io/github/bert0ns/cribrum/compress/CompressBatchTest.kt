@@ -16,8 +16,8 @@ import androidx.work.testing.WorkManagerTestInitHelper
 import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.index.memoryIndex
 import io.github.bert0ns.cribrum.metadata.readMetadata
-import io.github.bert0ns.cribrum.model.ImageRef
-import io.github.bert0ns.cribrum.model.toImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.pipeline.FakeScan
 import io.github.bert0ns.cribrum.pipeline.IndexWorker
 import io.github.bert0ns.cribrum.pipeline.Indexing
@@ -86,7 +86,7 @@ class CompressBatchTest {
     private val started: MutableList<String> = Collections.synchronizedList(mutableListOf())
 
     /** Runs as a photo starts, before the compressor. Like the compressor, a cancel does not stop it. */
-    private var onPhoto: suspend (ImageRef) -> Unit = {}
+    private var onPhoto: suspend (MediaRef) -> Unit = {}
 
     @Volatile
     private var heat: HeatLevel? = null
@@ -119,7 +119,7 @@ class CompressBatchTest {
             foregrounds += info
         }
 
-        override suspend fun compress(image: ImageRef, level: CompressionLevel): Compression = withContext(NonCancellable) {
+        override suspend fun compress(image: MediaRef, level: CompressionLevel): Compression = withContext(NonCancellable) {
             started += image.path
             onPhoto(image)
             // Robolectric's ActivityManager reports no free memory.
@@ -157,13 +157,13 @@ class CompressBatchTest {
 
     private fun scanEnded() = runBlocking { withTimeout(10_000) { while (WorkManager.getInstance(app).getWorkInfosByTag(Indexing.TAG).get().any { !it.state.isFinished }) yield() } }
 
-    private fun photo(name: String, quality: Int = 100): ImageRef {
-        val image = File(camera, name).apply { writeBytes(encodedJpeg(800, 600, quality)) }.toImageRef()
+    private fun photo(name: String, quality: Int = 100): MediaRef {
+        val image = File(camera, name).apply { writeBytes(encodedJpeg(800, 600, quality)) }.toMediaRef()
         runBlocking { index.record(image) }
         return image
     }
 
-    private fun start(vararg images: ImageRef) = assertTrue(CompressBatch.start(app, images.map { it.path }, CompressionLevel.HIGH))
+    private fun start(vararg images: MediaRef) = assertTrue(CompressBatch.start(app, images.map { it.path }, CompressionLevel.HIGH))
 
     private fun state(predicate: (BatchState) -> Boolean): BatchState = runBlocking { withTimeout(10_000) { CompressBatch.state.first(predicate) } }
 
@@ -182,7 +182,7 @@ class CompressBatchTest {
     fun `the result counts the photos compressed, those refused and why, and the real saving`() {
         val small = photo("a.jpg")
         val notSmaller = photo("b.jpg", quality = 40)
-        val notIndexed = File(camera, "c.jpg").apply { writeBytes(encodedJpeg(800, 600, 100)) }.toImageRef()
+        val notIndexed = File(camera, "c.jpg").apply { writeBytes(encodedJpeg(800, 600, 100)) }.toMediaRef()
 
         start(small, notSmaller, notIndexed)
         val result = finished()
@@ -293,7 +293,7 @@ class CompressBatchTest {
         notification(waiting)
         assertEquals(waiting, foregrounds.single().notification.extras.getString("android.title"))
         assertEquals(emptyList<String>(), started)
-        assertEquals(image, File(image.path).toImageRef())
+        assertEquals(image, File(image.path).toMediaRef())
         scanGate.complete(Unit)
         assertEquals(1, finished().compressed)
     }
@@ -354,7 +354,7 @@ class CompressBatchTest {
         assertEquals(2, result.notReached)
         assertEquals(listOf(first), result.originals)
         assertEquals(listOf(first.path), started)
-        others.forEach { assertEquals(it, File(it.path).toImageRef()) }
+        others.forEach { assertEquals(it, File(it.path).toMediaRef()) }
         waitFor { !running() }
         assertFalse(IndexWorker.running.isLocked)
     }
@@ -373,7 +373,7 @@ class CompressBatchTest {
 
         assertEquals(1, result.notReached)
         assertEquals(emptyList<String>(), started)
-        assertEquals(image, File(image.path).toImageRef())
+        assertEquals(image, File(image.path).toMediaRef())
     }
 
     @Test
@@ -386,7 +386,7 @@ class CompressBatchTest {
 
         val stayed = runBlocking { CompressBatch.undo(Review(index, trash), result) }
 
-        assertEquals(emptyList<ImageRef>(), stayed)
+        assertEquals(emptyList<MediaRef>(), stayed)
         images.zip(bytes).forEach { (image, original) -> assertArrayEquals(original, File(image.path).readBytes()) }
         val items = runBlocking { trash.trashed() }
         assertEquals(images.map { it.path }.toSet(), items.map { it.original.path }.toSet())
@@ -494,7 +494,7 @@ class CompressBatchTest {
         assertFalse(undo.isCompleted)
         assertFalse(bytes.contentEquals(File(image.path).readBytes()))
         scanGate.complete(Unit)
-        assertEquals(emptyList<ImageRef>(), runBlocking { withTimeout(10_000) { undo.await() } })
+        assertEquals(emptyList<MediaRef>(), runBlocking { withTimeout(10_000) { undo.await() } })
         assertArrayEquals(bytes, File(image.path).readBytes())
     }
 
@@ -522,10 +522,10 @@ class CompressBatchTest {
         assertFalse(File(image.path).exists())
         trash.mover = { from, to -> Files.move(from.toPath(), to.toPath()) }
 
-        assertEquals(emptyList<ImageRef>(), runBlocking { CompressBatch.undo(Review(index, trash), result) })
+        assertEquals(emptyList<MediaRef>(), runBlocking { CompressBatch.undo(Review(index, trash), result) })
 
         assertArrayEquals(bytes, File(image.path).readBytes())
-        assertEquals(emptyList<ImageRef>(), runBlocking { trash.trashed() }.map { it.original })
+        assertEquals(emptyList<MediaRef>(), runBlocking { trash.trashed() }.map { it.original })
     }
 
     @Test
@@ -542,7 +542,7 @@ class CompressBatchTest {
         assertEquals(1, result.compressed)
         assertEquals(1, result.notReached)
         assertEquals(listOf(first.path), started)
-        assertEquals(second, File(second.path).toImageRef())
+        assertEquals(second, File(second.path).toMediaRef())
         waitFor { !running() }
         assertFalse(IndexWorker.running.isLocked)
     }

@@ -7,7 +7,7 @@ import io.github.bert0ns.cribrum.compress.CompressibleImage
 import io.github.bert0ns.cribrum.compress.JPEG_RULES_VERSION
 import io.github.bert0ns.cribrum.compress.JpegInfo
 import io.github.bert0ns.cribrum.compress.JpegStatus
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -57,7 +57,7 @@ class IndexMigrationTest {
         }
 
         ImageIndex.open(context, NAME).use {
-            assertEquals(listOf(ImageRef("/photos/a.jpg", 100, 1)), runBlocking { it.images() })
+            assertEquals(listOf(MediaRef("/photos/a.jpg", 100, 1)), runBlocking { it.images() })
             assertEquals(emptyList<String>(), runBlocking { it.excludedFolders() })
         }
     }
@@ -84,10 +84,10 @@ class IndexMigrationTest {
         }
 
         ImageIndex.open(context, NAME).use {
-            assertEquals(listOf(ImageRef("/photos/a.jpg", 100, 1)), runBlocking { it.images() })
-            assertEquals(emptyList<ImageRef>(), runBlocking { it.notImages() })
-            runBlocking { it.addNotImages(listOf(ImageRef("/photos/notes.txt", 5, 2))) }
-            assertEquals(listOf(ImageRef("/photos/notes.txt", 5, 2)), runBlocking { it.notImages() })
+            assertEquals(listOf(MediaRef("/photos/a.jpg", 100, 1)), runBlocking { it.images() })
+            assertEquals(emptyList<MediaRef>(), runBlocking { it.notImages() })
+            runBlocking { it.addNotImages(listOf(MediaRef("/photos/notes.txt", 5, 2))) }
+            assertEquals(listOf(MediaRef("/photos/notes.txt", 5, 2)), runBlocking { it.notImages() })
         }
     }
 
@@ -99,7 +99,7 @@ class IndexMigrationTest {
         }
 
         ImageIndex.open(context, NAME).use {
-            assertEquals(listOf(ImageRef("/photos/a.jpg", 100, 1)), runBlocking { it.jpegsToRead() })
+            assertEquals(listOf(MediaRef("/photos/a.jpg", 100, 1)), runBlocking { it.jpegsToRead() })
             runBlocking { it.setJpeg("/photos/a.jpg", JpegInfo(JpegStatus.ELIGIBLE, quality = 95)) }
             assertEquals(listOf("/photos/a.jpg"), runBlocking { it.compressible(34) }.map { image -> image.path })
             runBlocking { it.forget(listOf("/photos/a.jpg")) }
@@ -118,7 +118,7 @@ class IndexMigrationTest {
         }
 
         ImageIndex.open(context, NAME).use {
-            assertEquals(emptyList<ImageRef>(), runBlocking { it.jpegsToRead() })
+            assertEquals(emptyList<MediaRef>(), runBlocking { it.jpegsToRead() })
             assertEquals(listOf(CompressibleImage("/photos/a.jpg", 100, 4000, 3000, JpegInfo(JpegStatus.ELIGIBLE, quality = 95))), runBlocking { it.compressible(34) })
         }
     }

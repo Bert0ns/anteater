@@ -20,12 +20,12 @@ import io.github.bert0ns.cribrum.metadata.UnreadableImage
 import io.github.bert0ns.cribrum.metadata.readMetadata
 import io.github.bert0ns.cribrum.mobileclip.preprocess
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
 import io.github.bert0ns.cribrum.model.Kind
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Protection
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Signal
-import io.github.bert0ns.cribrum.model.toImageRef
+import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.review.Review
 import io.github.bert0ns.cribrum.sources.FilesystemImageSource
 import io.github.bert0ns.cribrum.sources.ImageSource
@@ -352,10 +352,10 @@ class PipelineTest {
 
     private val trash by lazy { AppTrash({ listOf(root) }) }
 
-    private fun refOf(path: String) = File(root, path).toImageRef()
+    private fun refOf(path: String) = File(root, path).toMediaRef()
 
     /** The trash holds [path]'s file and the index says so, as after an apply. */
-    private fun trashed(path: String): ImageRef {
+    private fun trashed(path: String): MediaRef {
         val ref = refOf(path)
         runBlocking {
             assertEquals(listOf(ref), trash.moveToTrash(listOf(ref)))
@@ -410,7 +410,7 @@ class PipelineTest {
         val both = MergedImageSource(listOf(FilesystemImageSource(root), FilesystemImageSource(card)))
         save("DCIM/Camera/a.png")
         runBlocking { Pipeline(index).run(both) }
-        val onCard = File(card, "DCIM/b.png").toImageRef()
+        val onCard = File(card, "DCIM/b.png").toMediaRef()
         runBlocking { index.setReviewState(onCard.path, ReviewState.TRASHED) }
         card.deleteRecursively() // the card is out, and so is its trash
 
@@ -510,7 +510,7 @@ class PipelineTest {
         override val id = "interrupting"
         override val version = 1
 
-        override suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal> {
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
             if (image.path == target) {
                 val review = Review(index, trash)
                 review.apply(listOf(image), emptyList())
@@ -654,7 +654,7 @@ class PipelineTest {
         override val id = "failing"
         override val version = 1
 
-        override suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal> {
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
             if (!fixed) throw IOException("truncated")
             return listOf(Signal(id, version, Category.BLURRY, 0.5f))
         }
@@ -664,7 +664,7 @@ class PipelineTest {
     private class Decoding(override val id: String, override val decodeSide: Int?, val log: Map<String, MutableList<Pair<String, Pixels>>>) : Detector {
         override val version = 1
 
-        override suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal> {
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
             log.getValue(image.path) += id to context.pixels(image)
             return emptyList()
         }
@@ -677,7 +677,7 @@ class PipelineTest {
         // Each image's list is written by the one worker that runs its task.
         val log = paths.associateWith { mutableListOf<Pair<String, Pixels>>() }
         val detectors = listOf(Decoding("small", 256, log), Decoding("none", null, log), Decoding("large", 640, log), Decoding("middle", 512, log))
-        val hasher = { image: ImageRef, pixels: Pixels ->
+        val hasher = { image: MediaRef, pixels: Pixels ->
             log.getValue(image.path) += "hash" to pixels
             0uL
         }
@@ -761,7 +761,7 @@ class PipelineTest {
         override val id = "blur"
         override val category = Category.BLURRY
 
-        override suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal> = peaks[File(image.path).name]?.let { listOf(Signal(id, version, Category.BLURRY, 0.5f, mapOf("peak_variance" to it))) }.orEmpty()
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> = peaks[File(image.path).name]?.let { listOf(Signal(id, version, Category.BLURRY, 0.5f, mapOf("peak_variance" to it))) }.orEmpty()
     }
 
     @Test
@@ -774,7 +774,7 @@ class PipelineTest {
         run(Pipeline(index, listOf(blur), listOf(BurstDetector()), metadataReader = reader))
 
         val sharpness = shots.map { shot -> runBlocking { index.signals(shot.path) }.single { it.kind == Category.BURST }.evidence["sharpness"] }
-        val measured = runBlocking { BlurDetector().analyze(shots[2].toImageRef(), AnalysisContext()) }.single().evidence["peak_variance"]
+        val measured = runBlocking { BlurDetector().analyze(shots[2].toMediaRef(), AnalysisContext()) }.single().evidence["peak_variance"]
         assertEquals(listOf("12.3", "45.6", measured), sharpness)
     }
 
@@ -793,7 +793,7 @@ class PipelineTest {
         override val version = 1
         val seen = ConcurrentLinkedQueue<String>()
 
-        override suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal> {
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
             seen += image.path
             return listOf(Signal(id, version, Category.BLURRY, 0.5f))
         }
@@ -874,7 +874,7 @@ class PipelineTest {
         override val version = 1
         var seen = mapOf<String, FloatArray>()
 
-        override suspend fun analyze(images: List<ImageRef>, context: AnalysisContext): Map<ImageRef, List<Signal>> {
+        override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
             seen = images.associate { File(it.path).name to context.embedding(it) }
             return emptyMap()
         }
@@ -906,7 +906,7 @@ class PipelineTest {
         override val version = 1
         override val usesEmbeddings = true
 
-        override suspend fun analyze(image: ImageRef, context: AnalysisContext) = listOf(Signal(id, version, Category.DOCUMENT, context.embedding(image)[0]))
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext) = listOf(Signal(id, version, Category.DOCUMENT, context.embedding(image)[0]))
     }
 
     @Test
@@ -1015,7 +1015,7 @@ class PipelineTest {
         override val id = "unflagged"
         override val version = 1
 
-        override suspend fun analyze(image: ImageRef, context: AnalysisContext) = listOf(Signal(id, version, Category.DOCUMENT, context.embedding(image)[0]))
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext) = listOf(Signal(id, version, Category.DOCUMENT, context.embedding(image)[0]))
     }
 
     @Test
@@ -1067,7 +1067,7 @@ class PipelineTest {
         override val version = inner.version
         override val usesEmbeddings = true
 
-        override suspend fun analyze(image: ImageRef, context: AnalysisContext) = inner.analyze(image, context).also { analyzed() }
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext) = inner.analyze(image, context).also { analyzed() }
     }
 
     /** Every image's results, by detector: the analyses, then the signals, with no row id. */
@@ -1208,7 +1208,7 @@ class PipelineTest {
         override val version = 1
         val seen = ConcurrentLinkedQueue<String>()
 
-        override suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal> {
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
             seen += File(image.path).name
             return emptyList()
         }
@@ -1269,7 +1269,7 @@ class PipelineTest {
             override val id = "probe"
             override val version = 1
 
-            override suspend fun analyze(images: List<ImageRef>, context: AnalysisContext): Map<ImageRef, List<Signal>> {
+            override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
                 seen = runCatching { context.embedding(images.single()) }.isSuccess
                 return emptyMap()
             }
@@ -1364,7 +1364,7 @@ class PipelineTest {
         assertEquals(3, runBlocking { index.withoutMetadata() }.size)
         val stats = run(Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), storeBatch = 2))
         assertEquals(emptyList<Failure>(), stats.failures)
-        assertEquals(emptyList<ImageRef>(), runBlocking { index.withoutMetadata() })
+        assertEquals(emptyList<MediaRef>(), runBlocking { index.withoutMetadata() })
     }
 
     @Test
@@ -1376,7 +1376,7 @@ class PipelineTest {
             override val id = "probe"
             override val version = 1
 
-            override suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal> {
+            override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
                 if (analyzed.incrementAndGet() == 6) {
                     // One worker and batches of two: four images are stored, and the fifth waits in the collector's batch.
                     withTimeout(10_000) { while (index.analyzedPaths("probe", 1).size < 4) delay(10) }
@@ -1423,7 +1423,7 @@ class PipelineTest {
             override val id = "probe"
             override val version = 1
 
-            override suspend fun analyze(images: List<ImageRef>, context: AnalysisContext): Map<ImageRef, List<Signal>> {
+            override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
                 seen = images.map { File(it.path).name }
                 return emptyMap()
             }
@@ -1584,7 +1584,7 @@ class PipelineTest {
         private val attempts = java.util.concurrent.ConcurrentHashMap<String, Int>()
         val alone = ConcurrentLinkedQueue<String>()
 
-        override suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal> {
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
             val name = File(image.path).name
             val concurrent = inFlight.incrementAndGet()
             try {
@@ -1630,13 +1630,13 @@ class PipelineTest {
         val throwingDetector = object : GroupDetector {
             override val id = "throwing_group"
             override val version = 1
-            override suspend fun analyze(images: List<ImageRef>, context: AnalysisContext): Map<ImageRef, List<Signal>> = throw IllegalStateException("detector exploded")
+            override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> = throw IllegalStateException("detector exploded")
         }
         var nextRan = false
         val followingDetector = object : GroupDetector {
             override val id = "following_group"
             override val version = 1
-            override suspend fun analyze(images: List<ImageRef>, context: AnalysisContext): Map<ImageRef, List<Signal>> {
+            override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
                 nextRan = true
                 return emptyMap()
             }
@@ -1655,7 +1655,7 @@ class PipelineTest {
         val cancellingDetector = object : GroupDetector {
             override val id = "cancelling_group"
             override val version = 1
-            override suspend fun analyze(images: List<ImageRef>, context: AnalysisContext): Map<ImageRef, List<Signal>> = throw kotlinx.coroutines.CancellationException("job cancelled")
+            override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> = throw kotlinx.coroutines.CancellationException("job cancelled")
         }
 
         assertThrows(kotlinx.coroutines.CancellationException::class.java) {
@@ -1668,7 +1668,7 @@ class PipelineTest {
         override val id = "gated_group"
         override val version = 1
 
-        override suspend fun analyze(images: List<ImageRef>, context: AnalysisContext): Map<ImageRef, List<Signal>> {
+        override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
             started.complete(Unit)
             gate.await()
             return emptyMap()

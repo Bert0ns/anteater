@@ -2,7 +2,7 @@
 package io.github.bert0ns.cribrum.detectors
 
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.job
@@ -13,7 +13,7 @@ import org.junit.Test
 import java.time.LocalDateTime
 
 class GroupCancellationTest {
-    private fun images(count: Int) = List(count) { ImageRef("/photos/$it.jpg", 1000, it.toLong()) }
+    private fun images(count: Int) = List(count) { MediaRef("/photos/$it.jpg", 1000, it.toLong()) }
 
     private fun stopped(): Nothing = throw CancellationException("stopped")
 

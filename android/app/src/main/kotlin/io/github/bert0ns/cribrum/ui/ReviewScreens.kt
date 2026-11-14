@@ -101,7 +101,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.review.CategorySummary
 import io.github.bert0ns.cribrum.review.ReviewGroup
 import io.github.bert0ns.cribrum.review.ReviewItem
@@ -291,7 +291,7 @@ fun CategoryScreen(
     remaining: Int,
     marked: Set<String>,
     grouped: Boolean,
-    onToggle: (ImageRef) -> Unit,
+    onToggle: (MediaRef) -> Unit,
     /** Gets the paths to trash and to keep that the user confirmed, so an apply is of what they saw. */
     onApply: (toTrash: Set<String>, toKeep: Set<String>) -> Unit,
     /** Gets the ids of the groups on screen, so a skip is of what the user saw. */
@@ -299,9 +299,9 @@ fun CategoryScreen(
     modifier: Modifier = Modifier,
     /** Shown right above the button, which a snackbar at the bottom of the screen would cover. */
     snackbar: SnackbarHostState = remember { SnackbarHostState() },
-    onExcludeFolder: (ImageRef) -> Unit = {},
+    onExcludeFolder: (MediaRef) -> Unit = {},
     /** Makes the image a gallery favourite, or takes the mark off, from the full size view. */
-    onFavorite: (ImageRef, Boolean) -> Unit = { _, _ -> },
+    onFavorite: (MediaRef, Boolean) -> Unit = { _, _ -> },
     reviewOrder: ReviewOrder = ReviewOrder.OFF,
     retentionDays: Int = TrashRetention.DEFAULT_DAYS,
     /** A change is running: the page on screen is about to be replaced, so confirming it is off. */
@@ -310,7 +310,7 @@ fun CategoryScreen(
     val locale = LocalConfiguration.current.locales[0]
     val haptics = LocalHapticFeedback.current
     var askFavorites by remember { mutableStateOf(false) }
-    var fullSize by remember { mutableStateOf<ImageRef?>(null) }
+    var fullSize by remember { mutableStateOf<MediaRef?>(null) }
     val images = page.flatMap { it.images }
     val toTrash = images.filter { it.image.path in marked }
     val favorites = toTrash.count { it.isFavorite }
@@ -435,11 +435,11 @@ fun CategoryScreen(
 @Composable
 private fun FullSize(
     items: List<ReviewItem>,
-    start: ImageRef,
+    start: MediaRef,
     marked: Set<String>,
-    onToggle: (ImageRef) -> Unit,
-    onExcludeFolder: (ImageRef) -> Unit,
-    onFavorite: (ImageRef, Boolean) -> Unit,
+    onToggle: (MediaRef) -> Unit,
+    onExcludeFolder: (MediaRef) -> Unit,
+    onFavorite: (MediaRef, Boolean) -> Unit,
     onClose: () -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current

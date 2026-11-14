@@ -11,7 +11,7 @@ import io.github.bert0ns.cribrum.index.ImageIndex
 import io.github.bert0ns.cribrum.index.IndexDatabase
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Role
@@ -95,7 +95,7 @@ class GroupWritesTest {
         assertEquals(4 * 4, checks)
     }
 
-    private var scripted: Map<ImageRef, List<Signal>> = emptyMap()
+    private var scripted: Map<MediaRef, List<Signal>> = emptyMap()
 
     private fun scan(
         sizeVersion: Int = 2,
@@ -115,7 +115,7 @@ class GroupWritesTest {
         override val id = detector.id
         override val category = detector.category
 
-        override suspend fun analyze(images: List<ImageRef>, context: AnalysisContext): Map<ImageRef, List<Signal>> {
+        override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
             compare()
             val signals = detector.analyze(images, context)
             forget?.let { index.forget(listOf(it)) } // the user's purge, between the analysis and the store
@@ -156,13 +156,13 @@ class GroupWritesTest {
         ).joinToString("\n")
     }
 
-    private fun keep(image: ImageRef) = runBlocking { index.setReviewState(image.path, ReviewState.KEPT) }
+    private fun keep(image: MediaRef) = runBlocking { index.setReviewState(image.path, ReviewState.KEPT) }
 
-    private fun save(path: String, seed: Int): ImageRef = TestImage.texture(64, 48, seed).save(File(root, path).apply { parentFile!!.mkdirs() }).let(::ref)
+    private fun save(path: String, seed: Int): MediaRef = TestImage.texture(64, 48, seed).save(File(root, path).apply { parentFile!!.mkdirs() }).let(::ref)
 
-    private fun copy(image: ImageRef, path: String): ImageRef = File(image.path).copyTo(File(root, path).apply { parentFile!!.mkdirs() }).let(::ref)
+    private fun copy(image: MediaRef, path: String): MediaRef = File(image.path).copyTo(File(root, path).apply { parentFile!!.mkdirs() }).let(::ref)
 
-    private fun ref(file: File) = ImageRef(file.path, file.length(), file.lastModified() * 1_000_000)
+    private fun ref(file: File) = MediaRef(file.path, file.length(), file.lastModified() * 1_000_000)
 
     private fun member(group: String, role: Role) = Signal("scripted", 1, Category.BURST, if (role == Role.BEST) 0f else 0.8f, mapOf(GROUP_KEY to group, ROLE_KEY to role.value))
 
@@ -172,7 +172,7 @@ class GroupWritesTest {
         override val version = 1
         override val category = Category.BURST
 
-        override suspend fun analyze(images: List<ImageRef>, context: AnalysisContext): Map<ImageRef, List<Signal>> {
+        override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
             val byPath = scripted.mapKeys { it.key.path }
             return images.mapNotNull { image -> byPath[image.path]?.let { image to it } }.toMap()
         }
@@ -183,6 +183,6 @@ class GroupWritesTest {
         override val id = "size"
         override val category = Category.BLURRY
 
-        override suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal> = listOf(Signal(id, version, Category.BLURRY, (image.size % 100) / 100f))
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> = listOf(Signal(id, version, Category.BLURRY, (image.size % 100) / 100f))
     }
 }

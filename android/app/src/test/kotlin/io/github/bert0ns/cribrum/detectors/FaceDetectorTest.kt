@@ -5,7 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import io.github.bert0ns.cribrum.imaging.Pixels
 import io.github.bert0ns.cribrum.imaging.TestImage
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Protection
 import io.github.bert0ns.cribrum.runtime.ModelRuntime
 import io.github.bert0ns.cribrum.runtime.Tensor
@@ -56,7 +56,7 @@ class FaceDetectorTest {
 
     private fun analyze(runtime: ModelRuntime, image: TestImage = TestImage(640, 640)) = runBlocking {
         val file = image.save(File(folder.root, "a.png"))
-        FaceDetector(runtime).analyze(ImageRef(file.path, 0, 0), AnalysisContext()).single()
+        FaceDetector(runtime).analyze(MediaRef(file.path, 0, 0), AnalysisContext()).single()
     }
 
     @Test

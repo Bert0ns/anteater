@@ -10,7 +10,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.WorkManagerTestInitHelper
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert
@@ -85,7 +85,7 @@ class MainActivityTest {
 
             // Record an image into index while out of app
             runBlocking {
-                app.index.record(ImageRef("/sdcard/test.jpg", 1000, 1L))
+                app.index.record(MediaRef("/sdcard/test.jpg", 1000, 1L))
             }
 
             // User grants permission and returns to app

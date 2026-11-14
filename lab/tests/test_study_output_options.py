@@ -5,7 +5,7 @@ import pytest
 
 from cribrum_lab import prompts
 from cribrum_lab.labels import Decision, Label
-from cribrum_lab.model import Category, ImageRef, IndexedImage, Protection, Signal
+from cribrum_lab.model import Category, IndexedImage, MediaRef, Protection, Signal
 
 _SCRIPT = Path(__file__).parents[1] / "scripts" / "study_output_options.py"
 _spec = importlib.util.spec_from_file_location("study_output_options", _SCRIPT)
@@ -21,7 +21,7 @@ def document_embedding():
 
 
 def image(path, *signals):
-    return IndexedImage(ImageRef(Path(path), 0, 0), signals=signals)
+    return IndexedImage(MediaRef(Path(path), 0, 0), signals=signals)
 
 
 def test_document_signals_combine_the_zero_shot_with_the_coverage_given():

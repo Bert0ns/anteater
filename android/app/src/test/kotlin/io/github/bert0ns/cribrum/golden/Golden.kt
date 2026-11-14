@@ -2,8 +2,8 @@
 // detectors say about them.
 package io.github.bert0ns.cribrum.golden
 
-import io.github.bert0ns.cribrum.model.ImageRef
-import io.github.bert0ns.cribrum.model.toImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.toMediaRef
 import org.json.JSONObject
 import java.io.File
 import java.nio.ByteBuffer
@@ -16,7 +16,7 @@ data class ExpectedSignal(val detector: String, val version: Int, val category: 
 
 data class ExpectedImage(
     val relative: String,
-    val image: ImageRef,
+    val image: MediaRef,
     val width: Int,
     val height: Int,
     val hasCameraExif: Boolean,
@@ -41,7 +41,7 @@ object Golden {
             val signals = entry.getJSONArray("signals")
             ExpectedImage(
                 relative = relative,
-                image = File(GOLDEN_ROOT, relative).toImageRef(),
+                image = File(GOLDEN_ROOT, relative).toMediaRef(),
                 width = entry.getInt("width"),
                 height = entry.getInt("height"),
                 hasCameraExif = entry.getBoolean("has_camera_exif"),

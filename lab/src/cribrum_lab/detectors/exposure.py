@@ -8,7 +8,7 @@ starting points, to be tuned for recall in the lab.
 import numpy as np
 
 from cribrum_lab.detectors.base import AnalysisContext
-from cribrum_lab.model import Category, ImageRef, Signal
+from cribrum_lab.model import Category, MediaRef, Signal
 
 MAX_SIDE = 256
 DARK_LEVEL = 30
@@ -25,7 +25,7 @@ class ExposureDetector:
     category = Category.BAD_EXPOSURE
     decode_side = MAX_SIDE
 
-    def analyze(self, image: ImageRef, context: AnalysisContext) -> list[Signal]:
+    def analyze(self, image: MediaRef, context: AnalysisContext) -> list[Signal]:
         gray = context.pixels(image).gray(MAX_SIDE)
         p1, p5, p95, p99 = (float(v) for v in np.percentile(gray, [1, 5, 95, 99]))
         cases = {

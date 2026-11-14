@@ -62,13 +62,13 @@ enum class Role(val value: String) {
 }
 
 /** Identifies an image file. Size and mtime detect changes between scans. */
-data class ImageRef(val path: String, val size: Long, val mtimeNs: Long)
+data class MediaRef(val path: String, val size: Long, val mtimeNs: Long)
 
-/** The file as it is now, not a symlink's target. Every component builds its [ImageRef]s with it. */
-fun File.toImageRef(): ImageRef = toImageRef(Files.readAttributes(toPath(), BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS))
+/** The file as it is now, not a symlink's target. Every component builds its [MediaRef]s with it. */
+fun File.toMediaRef(): MediaRef = toMediaRef(Files.readAttributes(toPath(), BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS))
 
-/** [toImageRef] for a caller that has read the attributes already, with `NOFOLLOW_LINKS`. */
-fun File.toImageRef(attributes: BasicFileAttributes): ImageRef = ImageRef(path, attributes.size(), attributes.lastModifiedTime().to(TimeUnit.NANOSECONDS))
+/** [toMediaRef] for a caller that has read the attributes already, with `NOFOLLOW_LINKS`. */
+fun File.toMediaRef(attributes: BasicFileAttributes): MediaRef = MediaRef(path, attributes.size(), attributes.lastModifiedTime().to(TimeUnit.NANOSECONDS))
 
 /**
  * A detector's evidence that an image may belong to a deletable category, or, with a
@@ -98,7 +98,7 @@ data class SignalIdentity(val kind: Kind, val group: String, val role: String)
 
 /** An image as the ranker sees it. */
 data class IndexedImage(
-    val ref: ImageRef,
+    val ref: MediaRef,
     val reviewState: ReviewState = ReviewState.UNREVIEWED,
     val signals: List<Signal> = emptyList(),
     /** Identities of the signals the image had when the user kept it. */

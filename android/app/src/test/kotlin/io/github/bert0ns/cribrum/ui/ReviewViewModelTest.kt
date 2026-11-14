@@ -7,12 +7,12 @@ import io.github.bert0ns.cribrum.CribrumApp
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
-import io.github.bert0ns.cribrum.model.toImageRef
+import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.pipeline.Coverage
 import io.github.bert0ns.cribrum.pipeline.Stats
 import io.github.bert0ns.cribrum.ranker.THRESHOLDS
@@ -61,7 +61,7 @@ class ReviewViewModelTest {
     }
 
     private fun blurry(path: String, score: Float) = runBlocking {
-        app.index.record(ImageRef(path, 1_000, 1L))
+        app.index.record(MediaRef(path, 1_000, 1L))
         app.index.setSignals(path, "blur", 1, listOf(Signal("blur", 1, Category.BLURRY, score)))
     }
 
@@ -145,7 +145,7 @@ class ReviewViewModelTest {
         val plain = "/sdcard/plain.jpg"
 
         runBlocking {
-            app.index.record(ImageRef(best, 1_000, 1L))
+            app.index.record(MediaRef(best, 1_000, 1L))
             app.index.setSignals(
                 best,
                 "near_duplicate",
@@ -153,7 +153,7 @@ class ReviewViewModelTest {
                 listOf(Signal("near_duplicate", 2, Category.NEAR_DUPLICATE, 0f, mapOf(GROUP_KEY to "g", ROLE_KEY to Role.BEST.value))),
             )
 
-            app.index.record(ImageRef(plain, 1_000, 1L))
+            app.index.record(MediaRef(plain, 1_000, 1L))
             app.index.setSignals(
                 plain,
                 "near_duplicate",
@@ -161,7 +161,7 @@ class ReviewViewModelTest {
                 listOf(Signal("near_duplicate", 2, Category.NEAR_DUPLICATE, 0.8f, mapOf(GROUP_KEY to "g", ROLE_KEY to Role.INFERIOR.value))),
             )
 
-            app.index.record(ImageRef(blurry, 1_000, 1L))
+            app.index.record(MediaRef(blurry, 1_000, 1L))
             app.index.setSignals(
                 blurry,
                 "near_duplicate",
@@ -170,7 +170,7 @@ class ReviewViewModelTest {
             )
             app.index.setSignals(blurry, "blur", 1, listOf(Signal("blur", 1, Category.BLURRY, 0.9f)))
 
-            app.index.record(ImageRef(sticker, 1_000, 1L))
+            app.index.record(MediaRef(sticker, 1_000, 1L))
             app.index.setSignals(
                 sticker,
                 "near_duplicate",
@@ -186,8 +186,8 @@ class ReviewViewModelTest {
 
         assertEquals(listOf(best, plain, blurry).sorted(), paths(model).sorted())
 
-        if (plain in model.state.value.marked) model.toggle(ImageRef(plain, 1_000, 1L))
-        if (blurry in model.state.value.marked) model.toggle(ImageRef(blurry, 1_000, 1L))
+        if (plain in model.state.value.marked) model.toggle(MediaRef(plain, 1_000, 1L))
+        if (blurry in model.state.value.marked) model.toggle(MediaRef(blurry, 1_000, 1L))
         settle(model) { model.state.value.marked.isEmpty() }
 
         applyShown(model)
@@ -274,7 +274,7 @@ class ReviewViewModelTest {
     @Test
     fun `sorting a category by size is remembered, and the home total counts each image once`() {
         blurry("/sdcard/small.jpg", 0.9f) // the index says 1,000 bytes
-        runBlocking { app.index.record(ImageRef("/sdcard/large.jpg", 5_000, 1L)) }
+        runBlocking { app.index.record(MediaRef("/sdcard/large.jpg", 5_000, 1L)) }
         runBlocking {
             app.index.setSignals("/sdcard/large.jpg", "blur", 1, listOf(Signal("blur", 1, Category.BLURRY, 0.5f)))
             app.index.setSignals("/sdcard/large.jpg", "shot", 1, listOf(Signal("shot", 1, Category.SCREENSHOT, 0.9f)))
@@ -302,7 +302,7 @@ class ReviewViewModelTest {
 
     /** A file in a trash of its own, trashed [daysAgo] days ago (the trash reads its time from origin.properties). */
     private fun trashed(trash: AppTrash, volume: File, name: String, daysAgo: Long) = runBlocking {
-        val image = File(volume, name).apply { writeText(name) }.toImageRef()
+        val image = File(volume, name).apply { writeText(name) }.toMediaRef()
         trash.moveToTrash(listOf(image))
         val origin = trash.trashed().single { it.original == image }.file.parentFile!!.resolve("origin.properties")
         val trashedAt = Instant.now() - Duration.ofDays(daysAgo)
@@ -372,7 +372,7 @@ class ReviewViewModelTest {
         model.open(Category.BLURRY)
         settle(model) { paths(it).size == 3 }
 
-        model.excludeFolder(ImageRef("/sdcard/Family/a.jpg", 1_000, 1L))
+        model.excludeFolder(MediaRef("/sdcard/Family/a.jpg", 1_000, 1L))
         settle(model) { paths(it) == listOf("/sdcard/Other/c.jpg") }
         assertEquals(1, model.state.value.remaining)
 
@@ -398,9 +398,9 @@ class ReviewViewModelTest {
         val model = ReviewViewModel(app)
         model.open(Category.BLURRY)
         settle(model) { paths(it).size == 4 }
-        model.toggle(ImageRef("/sdcard/A/a.jpg", 1_000, 1L))
+        model.toggle(MediaRef("/sdcard/A/a.jpg", 1_000, 1L))
 
-        model.excludeFolder(ImageRef("/sdcard/C/d.jpg", 1_000, 1L))
+        model.excludeFolder(MediaRef("/sdcard/C/d.jpg", 1_000, 1L))
         settle(model) { paths(it).size == 3 }
 
         assertEquals(setOf("/sdcard/A/b.jpg", "/sdcard/B/c.jpg"), model.state.value.marked)
@@ -413,9 +413,9 @@ class ReviewViewModelTest {
         val model = ReviewViewModel(app)
         model.open(Category.BLURRY)
         settle(model) { paths(it).size == 2 }
-        model.toggle(ImageRef("/sdcard/A/a.jpg", 1_000, 1L))
+        model.toggle(MediaRef("/sdcard/A/a.jpg", 1_000, 1L))
 
-        model.excludeFolder(ImageRef("/sdcard/B/b.jpg", 1_000, 1L))
+        model.excludeFolder(MediaRef("/sdcard/B/b.jpg", 1_000, 1L))
         settle(model) { it.state.value.lastExclusion == "/sdcard/B" }
         assertEquals(listOf("/sdcard/A/a.jpg"), paths(model))
 
@@ -505,7 +505,7 @@ class ReviewViewModelTest {
         model.openStorageMap()
         settle(model) { it.state.value.screen == Screen.StorageMap }
         runBlocking {
-            app.index.record(ImageRef("/sdcard/a.jpg", 1, 1L))
+            app.index.record(MediaRef("/sdcard/a.jpg", 1, 1L))
             app.index.setEmbeddings("clip", 1, mapOf("/sdcard/a.jpg" to floatArrayOf(1f)))
         }
 
@@ -795,7 +795,7 @@ class ReviewViewModelTest {
     fun `settings measures the trash and the embeddings, and measures again after a delete`() {
         val volume = folder.newFolder()
         val trash = AppTrash({ listOf(volume) })
-        val image = File(volume, "a.jpg").apply { writeText("0123456789") }.toImageRef()
+        val image = File(volume, "a.jpg").apply { writeText("0123456789") }.toMediaRef()
         runBlocking {
             app.index.record(image)
             trash.moveToTrash(listOf(image))
@@ -817,16 +817,16 @@ class ReviewViewModelTest {
 
     /** A trash whose listing waits for [release], like a big one on a slow phone. */
     private class SlowTrash(private val release: CompletableDeferred<Unit>, private val items: List<TrashedImage> = emptyList()) : Trash {
-        override suspend fun moveToTrash(images: List<ImageRef>) = images
+        override suspend fun moveToTrash(images: List<MediaRef>) = images
 
-        override suspend fun restore(images: List<ImageRef>) = images
+        override suspend fun restore(images: List<MediaRef>) = images
 
         override suspend fun trashed(): List<TrashedImage> {
             release.await()
             return items
         }
 
-        override suspend fun purge(images: List<ImageRef>) = images
+        override suspend fun purge(images: List<MediaRef>) = images
 
         override suspend fun purgeExpired() = ExpiredPurge.NONE
     }
@@ -851,7 +851,7 @@ class ReviewViewModelTest {
     @Test
     fun `the trash screen opens at once, empty and loading, and fills when the list is read`() {
         val release = CompletableDeferred<Unit>()
-        val items = listOf(TrashedImage(ImageRef("/sdcard/DCIM/a.jpg", 1, 0), Instant.EPOCH, File("/trash/0/a.jpg"), Instant.EPOCH))
+        val items = listOf(TrashedImage(MediaRef("/sdcard/DCIM/a.jpg", 1, 0), Instant.EPOCH, File("/trash/0/a.jpg"), Instant.EPOCH))
         val model = ReviewViewModel(app, Review(app.index, SlowTrash(release, items)))
         settle(model) { true }
 
@@ -870,23 +870,23 @@ class ReviewViewModelTest {
 
     /** A trash that records what it was asked and can hold the moves, like a slow volume. */
     private class RecordingTrash(private val gate: CompletableDeferred<Unit>? = null) : Trash {
-        val moves = mutableListOf<List<ImageRef>>()
-        val restores = mutableListOf<List<ImageRef>>()
+        val moves = mutableListOf<List<MediaRef>>()
+        val restores = mutableListOf<List<MediaRef>>()
 
-        override suspend fun moveToTrash(images: List<ImageRef>): List<ImageRef> {
+        override suspend fun moveToTrash(images: List<MediaRef>): List<MediaRef> {
             gate?.await()
             moves += images
             return images
         }
 
-        override suspend fun restore(images: List<ImageRef>): List<ImageRef> {
+        override suspend fun restore(images: List<MediaRef>): List<MediaRef> {
             restores += images
             return images
         }
 
         override suspend fun trashed() = emptyList<TrashedImage>()
 
-        override suspend fun purge(images: List<ImageRef>) = images
+        override suspend fun purge(images: List<MediaRef>) = images
 
         override suspend fun purgeExpired() = ExpiredPurge.NONE
     }
@@ -946,7 +946,7 @@ class ReviewViewModelTest {
         model.applyPage(toTrash, toKeep) // the dialog on screen did not mention a favourite
         settle(model) { true }
 
-        assertEquals(emptyList<List<ImageRef>>(), trash.moves)
+        assertEquals(emptyList<List<MediaRef>>(), trash.moves)
         assertNull(model.state.value.lastDecision)
         assertEquals(setOf("/sdcard/a.jpg"), model.state.value.page.flatMap { it.images }.filter { it.isFavorite }.map { it.image.path }.toSet())
         assertEquals(toTrash, model.state.value.marked) // the page is back as it was, with its marks
@@ -1024,7 +1024,7 @@ class ReviewViewModelTest {
         val marked = model.state.value.marked
         assertEquals(listOf(image), hearts(model))
 
-        model.setFavorite(ImageRef(image, 1_000, 1L), false)
+        model.setFavorite(MediaRef(image, 1_000, 1L), false)
         settle(model) { hearts(it).isEmpty() }
 
         assertEquals(listOf(image to false), asked)
@@ -1072,7 +1072,7 @@ class ReviewViewModelTest {
         model.applyPage(toTrash, toKeep)
         settle(model) { it.state.value.favoriteAppeared }
 
-        assertEquals(emptyList<List<ImageRef>>(), trash.moves)
+        assertEquals(emptyList<List<MediaRef>>(), trash.moves)
     }
 
     @Test
@@ -1102,7 +1102,7 @@ class ReviewViewModelTest {
         model.applyPage(setOf("/sdcard/a0.jpg"), emptySet()) // not what the page holds
         settle(model) { true }
 
-        assertEquals(emptyList<List<ImageRef>>(), trash.moves)
+        assertEquals(emptyList<List<MediaRef>>(), trash.moves)
         assertNull(model.state.value.lastDecision)
         assertEquals(PAGE_SIZE, paths(model).size)
     }
@@ -1124,7 +1124,7 @@ class ReviewViewModelTest {
         model.undo(first) // the snackbar of the first page, still on screen
         settle(model) { true }
 
-        assertEquals(emptyList<List<ImageRef>>(), trash.restores)
+        assertEquals(emptyList<List<MediaRef>>(), trash.restores)
         assertEquals(second, model.state.value.lastDecision)
         model.undo(second)
         settle(model) { it.state.value.lastDecision == null }
@@ -1147,7 +1147,7 @@ class ReviewViewModelTest {
 
         model.setReviewOrder(ReviewOrder.MONTH)
         shadowOf(Looper.getMainLooper()).idle()
-        model.toggle(ImageRef("/sdcard/a0.jpg", 1_000, 1L)) // the page is still the old one on screen
+        model.toggle(MediaRef("/sdcard/a0.jpg", 1_000, 1L)) // the page is still the old one on screen
         held.countDown()
         settle(model) { it.state.value.reviewOrder == ReviewOrder.MONTH && "/sdcard/a0.jpg" !in it.state.value.marked }
 
@@ -1175,32 +1175,32 @@ class ReviewViewModelTest {
     }
 
     /** A trash holding [held], whose restore and purge handle only the first image asked. */
-    private class StubbornTrash(held: List<ImageRef>) : Trash {
+    private class StubbornTrash(held: List<MediaRef>) : Trash {
         private val inside = held.toMutableList()
 
-        override suspend fun moveToTrash(images: List<ImageRef>) = images
+        override suspend fun moveToTrash(images: List<MediaRef>) = images
 
-        override suspend fun restore(images: List<ImageRef>) = images.take(1).also { inside.removeAll(it) }
+        override suspend fun restore(images: List<MediaRef>) = images.take(1).also { inside.removeAll(it) }
 
         override suspend fun trashed() = inside.map { TrashedImage(it, Instant.EPOCH, File(it.path), Instant.EPOCH) }
 
-        override suspend fun purge(images: List<ImageRef>) = images.take(1).also { inside.removeAll(it) }
+        override suspend fun purge(images: List<MediaRef>) = images.take(1).also { inside.removeAll(it) }
 
         override suspend fun purgeExpired() = ExpiredPurge.NONE
     }
 
     /** A trash that remembers what it was asked to purge, and purges it. */
-    private class PurgingTrash(held: List<ImageRef>) : Trash {
+    private class PurgingTrash(held: List<MediaRef>) : Trash {
         private val inside = held.toMutableList()
-        val purged = mutableListOf<List<ImageRef>>()
+        val purged = mutableListOf<List<MediaRef>>()
 
-        override suspend fun moveToTrash(images: List<ImageRef>) = images
+        override suspend fun moveToTrash(images: List<MediaRef>) = images
 
-        override suspend fun restore(images: List<ImageRef>) = images
+        override suspend fun restore(images: List<MediaRef>) = images
 
         override suspend fun trashed() = inside.map { TrashedImage(it, Instant.EPOCH, File(it.path), Instant.EPOCH) }
 
-        override suspend fun purge(images: List<ImageRef>) = images.also {
+        override suspend fun purge(images: List<MediaRef>) = images.also {
             purged += it
             inside.removeAll(it)
         }
@@ -1210,8 +1210,8 @@ class ReviewViewModelTest {
 
     @Test
     fun `restoring from the trash keeps only what came back and shows what is left`() {
-        val one = ImageRef("/sdcard/one.jpg", 1_000, 1L)
-        val two = ImageRef("/sdcard/two.jpg", 1_000, 1L)
+        val one = MediaRef("/sdcard/one.jpg", 1_000, 1L)
+        val two = MediaRef("/sdcard/two.jpg", 1_000, 1L)
         runBlocking {
             listOf(one, two).forEach {
                 app.index.record(it)
@@ -1237,24 +1237,24 @@ class ReviewViewModelTest {
     }
 
     /** A trash holding [held], whose restore refuses the paths in [occupied], like a file that took the name. */
-    private class OccupiedTrash(held: List<ImageRef>, var occupied: Set<String> = emptySet()) : Trash {
+    private class OccupiedTrash(held: List<MediaRef>, var occupied: Set<String> = emptySet()) : Trash {
         private val inside = held.toMutableList()
 
-        override suspend fun moveToTrash(images: List<ImageRef>) = images.also { inside += it }
+        override suspend fun moveToTrash(images: List<MediaRef>) = images.also { inside += it }
 
-        override suspend fun restore(images: List<ImageRef>) = images.filter { it.path !in occupied }.also { inside.removeAll(it) }
+        override suspend fun restore(images: List<MediaRef>) = images.filter { it.path !in occupied }.also { inside.removeAll(it) }
 
         override suspend fun trashed() = inside.map { TrashedImage(it, Instant.EPOCH, File(it.path), Instant.EPOCH) }
 
-        override suspend fun purge(images: List<ImageRef>) = images.also { inside.removeAll(it) }
+        override suspend fun purge(images: List<MediaRef>) = images.also { inside.removeAll(it) }
 
         override suspend fun purgeExpired() = ExpiredPurge.NONE
     }
 
     @Test
     fun `restoring an image whose path is taken keeps it selected and says it stayed`() {
-        val one = ImageRef("/sdcard/one.jpg", 1_000, 1L)
-        val two = ImageRef("/sdcard/two.jpg", 1_000, 1L)
+        val one = MediaRef("/sdcard/one.jpg", 1_000, 1L)
+        val two = MediaRef("/sdcard/two.jpg", 1_000, 1L)
         runBlocking {
             listOf(one, two).forEach {
                 app.index.record(it)
@@ -1304,7 +1304,7 @@ class ReviewViewModelTest {
     fun `restoring from the trash with an empty index brings the file back and does not crash`() {
         val volume = folder.newFolder()
         val trash = AppTrash({ listOf(volume) })
-        val image = File(volume, "a.jpg").apply { writeText("0123456789") }.toImageRef()
+        val image = File(volume, "a.jpg").apply { writeText("0123456789") }.toMediaRef()
         runBlocking { trash.moveToTrash(listOf(image)) } // the trash survived a reinstall, the index did not
         val model = ReviewViewModel(app, Review(app.index, trash))
         model.openTrash()
@@ -1322,13 +1322,13 @@ class ReviewViewModelTest {
 
     /** A trash that cannot be read, like a volume that went away. */
     private class BrokenTrash : Trash {
-        override suspend fun moveToTrash(images: List<ImageRef>) = images
+        override suspend fun moveToTrash(images: List<MediaRef>) = images
 
-        override suspend fun restore(images: List<ImageRef>) = images
+        override suspend fun restore(images: List<MediaRef>) = images
 
         override suspend fun trashed(): List<TrashedImage> = throw IOException("volume gone")
 
-        override suspend fun purge(images: List<ImageRef>) = images
+        override suspend fun purge(images: List<MediaRef>) = images
 
         override suspend fun purgeExpired() = ExpiredPurge.NONE
     }
@@ -1351,8 +1351,8 @@ class ReviewViewModelTest {
 
     @Test
     fun `emptying the trash shows what the trash still holds`() {
-        val one = ImageRef("/sdcard/one.jpg", 1_000, 1L)
-        val two = ImageRef("/sdcard/two.jpg", 1_000, 1L)
+        val one = MediaRef("/sdcard/one.jpg", 1_000, 1L)
+        val two = MediaRef("/sdcard/two.jpg", 1_000, 1L)
         val model = ReviewViewModel(app, Review(app.index, StubbornTrash(listOf(one, two))))
         model.openTrash()
         settle(model) { it.state.value.trashed.size == 2 }
@@ -1367,7 +1367,7 @@ class ReviewViewModelTest {
 
     @Test
     fun `deleting the selection purges only the selected images, through the trash`() {
-        val images = listOf("one", "two", "three").map { ImageRef("/sdcard/$it.jpg", 1_000, 1L) }
+        val images = listOf("one", "two", "three").map { MediaRef("/sdcard/$it.jpg", 1_000, 1L) }
         val trash = PurgingTrash(images)
         val model = ReviewViewModel(app, Review(app.index, trash))
         model.openTrash()
@@ -1384,8 +1384,8 @@ class ReviewViewModelTest {
 
     @Test
     fun `deleting one of two items with the same path purges only that one`() {
-        val original = ImageRef("/sdcard/a.jpg", 9_000, 1L)
-        val copy = ImageRef("/sdcard/a.jpg", 4_000, 2L)
+        val original = MediaRef("/sdcard/a.jpg", 9_000, 1L)
+        val copy = MediaRef("/sdcard/a.jpg", 4_000, 2L)
         val trash = ItemTrash(listOf(original, copy))
         val model = ReviewViewModel(app, Review(app.index, trash))
         model.openTrash()
@@ -1402,17 +1402,17 @@ class ReviewViewModelTest {
     }
 
     /** A trash whose items each have a file of their own, as the real one does, so two may share an original path. */
-    private class ItemTrash(held: List<ImageRef>) : Trash {
+    private class ItemTrash(held: List<MediaRef>) : Trash {
         private val inside = held.mapIndexed { i, image -> TrashedImage(image, Instant.EPOCH, File("/trash/$i/${File(image.path).name}"), Instant.EPOCH) }.toMutableList()
-        val purged = mutableListOf<List<ImageRef>>()
+        val purged = mutableListOf<List<MediaRef>>()
 
-        override suspend fun moveToTrash(images: List<ImageRef>) = images
+        override suspend fun moveToTrash(images: List<MediaRef>) = images
 
-        override suspend fun restore(images: List<ImageRef>) = images
+        override suspend fun restore(images: List<MediaRef>) = images
 
         override suspend fun trashed() = inside.toList()
 
-        override suspend fun purge(images: List<ImageRef>) = images.also {
+        override suspend fun purge(images: List<MediaRef>) = images.also {
             purged += it
             for (image in it) inside.remove(inside.first { item -> item.original == image })
         }
@@ -1463,7 +1463,7 @@ class ReviewViewModelTest {
         twoPages(more = PAGE_SIZE + 1)
         var gate: CompletableDeferred<Unit>? = null
         val trash = object : Trash by RecordingTrash() {
-            override suspend fun moveToTrash(images: List<ImageRef>): List<ImageRef> {
+            override suspend fun moveToTrash(images: List<MediaRef>): List<MediaRef> {
                 gate?.await()
                 return images
             }
@@ -1500,11 +1500,11 @@ class ReviewViewModelTest {
         val model = ReviewViewModel(app, review)
         model.open(Category.BLURRY)
         settle(model) { paths(it).size == 3 }
-        model.excludeFolder(ImageRef("/sdcard/A/a.jpg", 1_000, 1L))
+        model.excludeFolder(MediaRef("/sdcard/A/a.jpg", 1_000, 1L))
         settle(model) { it.state.value.lastExclusion == "/sdcard/A" }
         slow.set(true)
 
-        model.excludeFolder(ImageRef("/sdcard/B/b.jpg", 1_000, 1L)) // waits in the page read
+        model.excludeFolder(MediaRef("/sdcard/B/b.jpg", 1_000, 1L)) // waits in the page read
         shadowOf(Looper.getMainLooper()).idle()
         model.dismissExclusion("/sdcard/A") // the first snackbar times out meanwhile
         held.countDown()

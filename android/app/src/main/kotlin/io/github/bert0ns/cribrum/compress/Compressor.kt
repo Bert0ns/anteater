@@ -10,7 +10,7 @@ import androidx.core.graphics.scale
 import androidx.exifinterface.media.ExifInterface
 import io.github.bert0ns.cribrum.index.ImageIndex
 import io.github.bert0ns.cribrum.metadata.readMetadata
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.tracing.traceSuspend
 import io.github.bert0ns.cribrum.trash.AppTrash
@@ -50,7 +50,7 @@ enum class Refusal {
 
 sealed interface Compression {
     /** The compressed copy, now at the original's path. The original is in the trash. [favorite]: the original was marked in the gallery, the copy is not. */
-    data class Done(val copy: ImageRef, val favorite: Boolean = false) : Compression
+    data class Done(val copy: MediaRef, val favorite: Boolean = false) : Compression
 
     data class Refused(val reason: Refusal) : Compression
 }
@@ -67,10 +67,10 @@ class Compressor(
 
     /**
      * Writes a compressed copy of [image] next to it, then moves the original to the trash and the copy to its path.
-     * The copy is a new [ImageRef] at the same path: the index keeps the row's review state and drops its signals, so
+     * The copy is a new [MediaRef] at the same path: the index keeps the row's review state and drops its signals, so
      * the next scan analyzes the copy again. Not cancellable, so the files and the index always change together.
      */
-    suspend fun compress(image: ImageRef, level: CompressionLevel): Compression = withContext(Dispatchers.IO + NonCancellable) {
+    suspend fun compress(image: MediaRef, level: CompressionLevel): Compression = withContext(Dispatchers.IO + NonCancellable) {
         val original = File(image.path)
         val copy = copyFileFor(original)
         val refusal = try {
@@ -142,7 +142,7 @@ class Compressor(
 
     private val previews = Mutex()
 
-    private fun write(original: File, image: ImageRef, copy: File, level: CompressionLevel): Refusal? {
+    private fun write(original: File, image: MediaRef, copy: File, level: CompressionLevel): Refusal? {
         val encoded = encode(original, copy, level)
         if (encoded.refusal != null) return encoded.refusal
         copyExif(original, copy, encoded.width, encoded.height)

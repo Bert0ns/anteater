@@ -6,7 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.bert0ns.cribrum.CribrumApp
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.pipeline.Coverage
 import io.github.bert0ns.cribrum.pipeline.ScanReport
 import io.github.bert0ns.cribrum.pipeline.coverage
@@ -112,7 +112,7 @@ data class ReviewState(
     /** The folder the user just excluded, until they undo it or move on. */
     val lastExclusion: String? = null,
     /** Images a restore or an undo left in the trash because a file has their path, until the snackbar goes. */
-    val stayedInTrash: List<ImageRef> = emptyList(),
+    val stayedInTrash: List<MediaRef> = emptyList(),
     /** The last change failed and the screen is as it was, until the snackbar goes. */
     val changeFailed: Boolean = false,
     /** An apply showed the page again because an image on it became a favourite meanwhile, until the snackbar goes. */
@@ -252,7 +252,7 @@ class ReviewViewModel @JvmOverloads constructor(
     }
 
     /** Hides the image's folder, subfolders included, and shows the page again without it. */
-    fun excludeFolder(image: ImageRef) = load { state ->
+    fun excludeFolder(image: MediaRef) = load { state ->
         val category = (state.screen as? Screen.Category)?.category ?: return@load state
         val folder = review.excludeFolderOf(image)
         state.showing(pageFor(category, state), keepMarksOf = state).copy(lastExclusion = folder)
@@ -386,7 +386,7 @@ class ReviewViewModel @JvmOverloads constructor(
     }
 
     /** An image that left the page while the tap waited for a change has no mark to flip. */
-    fun toggle(image: ImageRef) = queue {
+    fun toggle(image: MediaRef) = queue {
         if (it.page.none { group -> group.images.any { item -> item.image.path == image.path } }) return@queue it
         it.copy(marked = if (image.path in it.marked) it.marked - image.path else it.marked + image.path)
     }
@@ -396,7 +396,7 @@ class ReviewViewModel @JvmOverloads constructor(
      * for the trash is left alone, as the screen offers no heart for it. The page on screen is not read again: it keeps its
      * images and marks, and only the heart changes. A ranking built later reads the favourites again by itself.
      */
-    fun setFavorite(image: ImageRef, favorite: Boolean) {
+    fun setFavorite(image: MediaRef, favorite: Boolean) {
         viewModelScope.launch {
             if (image.path in state.value.marked) return@launch
             val granted = try {
@@ -453,7 +453,7 @@ class ReviewViewModel @JvmOverloads constructor(
     fun dismissUndo(decision: Decision) = queue { if (it.lastDecision == decision) it.copy(lastDecision = null) else it }
 
     /** Dismisses [images], the ones the snackbar shows, and only while they are still the last. */
-    fun dismissStayedInTrash(images: List<ImageRef>) = queue { if (it.stayedInTrash == images) it.copy(stayedInTrash = emptyList()) else it }
+    fun dismissStayedInTrash(images: List<MediaRef>) = queue { if (it.stayedInTrash == images) it.copy(stayedInTrash = emptyList()) else it }
 
     fun dismissChangeFailed() = queue { it.copy(changeFailed = false) }
 

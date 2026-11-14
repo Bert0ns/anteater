@@ -6,7 +6,7 @@ nothing else goes there.
 
 from cribrum_lab.detectors.base import AnalysisContext
 from cribrum_lab.folders import is_sticker_folder
-from cribrum_lab.model import Category, ImageRef, Signal
+from cribrum_lab.model import Category, MediaRef, Signal
 
 
 class StickerDetector:
@@ -14,7 +14,7 @@ class StickerDetector:
     version = 1
     category = Category.STICKER
 
-    def analyze(self, image: ImageRef, context: AnalysisContext) -> list[Signal]:
+    def analyze(self, image: MediaRef, context: AnalysisContext) -> list[Signal]:
         in_folder = is_sticker_folder(image.path)
         score = 1.0 if in_folder else 0.0
         evidence = {"sticker_folder": "yes" if in_folder else "no"}

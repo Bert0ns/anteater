@@ -20,10 +20,10 @@ import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.detectors.AnalysisContext
 import io.github.bert0ns.cribrum.detectors.GroupDetector
 import io.github.bert0ns.cribrum.mobileclip.MobileClip
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Signal
-import io.github.bert0ns.cribrum.model.toImageRef
+import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.runtime.ModelRuntime
 import io.github.bert0ns.cribrum.runtime.Tensor
 import io.github.bert0ns.cribrum.trash.AppTrash
@@ -522,8 +522,8 @@ class IndexingWorkTest {
         val appInstance = app as CribrumApp
         val volume = folder.newFolder("storage")
         val trash = AppTrash({ listOf(volume) }, retention = { Duration.ZERO })
-        val purged = File(volume, "purged.jpg").apply { writeText("purged") }.toImageRef()
-        val stuck = File(volume, "stuck.jpg").apply { writeText("stuck") }.toImageRef()
+        val purged = File(volume, "purged.jpg").apply { writeText("purged") }.toMediaRef()
+        val stuck = File(volume, "stuck.jpg").apply { writeText("stuck") }.toMediaRef()
         runBlocking {
             listOf(purged, stuck).forEach {
                 appInstance.index.record(it)
@@ -656,7 +656,7 @@ class IndexingWorkTest {
             override val id = "stop"
             override val version = 1
 
-            override suspend fun analyze(images: List<ImageRef>, context: AnalysisContext): Map<ImageRef, List<Signal>> = throw CancellationException("stopped")
+            override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> = throw CancellationException("stopped")
         }
 
         val (_, runtime) = runCountingScan(loadModel = true, stopWith = stop)

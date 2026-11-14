@@ -4,8 +4,8 @@ import android.content.Context
 import android.os.Environment
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
-import io.github.bert0ns.cribrum.model.ImageRef
-import io.github.bert0ns.cribrum.model.toImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.toMediaRef
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -52,7 +52,7 @@ class AppTrashDeviceTest {
         folder.deleteRecursively()
     }
 
-    private fun photo(name: String): ImageRef = File(folder, name).apply { writeBytes(ByteArray(1024) { it.toByte() }) }.toImageRef()
+    private fun photo(name: String): MediaRef = File(folder, name).apply { writeBytes(ByteArray(1024) { it.toByte() }) }.toMediaRef()
 
     private fun plantRealTrashSentinel(): File {
         if (!realTrashFolder.exists()) {
@@ -89,7 +89,7 @@ class AppTrashDeviceTest {
         assertTrue(item.file.path.startsWith(File(folder, TRASH_FOLDER).path))
 
         assertEquals(listOf(image), trash.restore(listOf(image)))
-        assertEquals(image, File(image.path).toImageRef())
+        assertEquals(image, File(image.path).toMediaRef())
     }
 
     @Test

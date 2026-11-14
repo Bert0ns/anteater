@@ -4,8 +4,8 @@ package io.github.bert0ns.cribrum.sources
 import android.content.ContentResolver
 import android.provider.MediaStore
 import androidx.tracing.trace
-import io.github.bert0ns.cribrum.model.ImageRef
-import io.github.bert0ns.cribrum.model.toImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.trash.TRASH_FOLDER
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -20,13 +20,13 @@ import java.nio.file.LinkOption
 import java.nio.file.attribute.BasicFileAttributes
 
 interface ImageSource {
-    fun scan(): Flow<ImageRef>
+    fun scan(): Flow<MediaRef>
 
     /**
      * [scan], free to leave out a path in [known] before any work on it. [MergedImageSource] passes the paths the
      * earlier sources yielded, whose refs it keeps over any later one.
      */
-    fun scan(known: Set<String>): Flow<ImageRef> = scan()
+    fun scan(known: Set<String>): Flow<MediaRef> = scan()
 
     /**
      * The roots the last [scan] listed in full. An image under one of them that [scan] did not
@@ -46,10 +46,10 @@ interface ImageSource {
  * their head again while their size and mtime stay the same.
  */
 interface NotImages {
-    suspend fun notImages(): Collection<ImageRef>
+    suspend fun notImages(): Collection<MediaRef>
 
     /** Stores the files; one already stored with the same path is replaced. */
-    suspend fun addNotImages(files: List<ImageRef>)
+    suspend fun addNotImages(files: List<MediaRef>)
 
     suspend fun forgetNotImages(paths: Collection<String>)
 }
@@ -77,7 +77,7 @@ class FilesystemImageSource(
     /** Read once per scan, before the walk. */
     private val notImages: NotImages? = null,
     /** Read once per scan, before the walk. Last, so a test can pass it as a trailing lambda. */
-    private val indexed: suspend () -> Collection<ImageRef> = { emptyList() },
+    private val indexed: suspend () -> Collection<MediaRef> = { emptyList() },
 ) : ImageSource {
     /** The root once the walk listed every folder; a folder that cannot be listed, or a missing root, leaves it out. */
     @Volatile // written on the IO thread of the flow, read by the collector
@@ -88,7 +88,7 @@ class FilesystemImageSource(
     override var counts: Map<String, Int> = emptyMap()
         private set
 
-    override fun scan(): Flow<ImageRef> = flow {
+    override fun scan(): Flow<MediaRef> = flow {
         walkedRoots = emptyList()
         counts = emptyMap()
         var folderCount = 0
@@ -99,7 +99,7 @@ class FilesystemImageSource(
         val remembered = notImages?.notImages().orEmpty()
         val rememberedSet = remembered.toHashSet()
         val metNotImages = HashSet<String>() // paths of non-images this walk met, remembered or newly sniffed
-        var sniffed = ArrayList<ImageRef>(NOT_IMAGES_BATCH)
+        var sniffed = ArrayList<MediaRef>(NOT_IMAGES_BATCH)
         val folders = ArrayDeque(listOf(root))
         while (folders.isNotEmpty()) {
             val folder = folders.removeFirst()
@@ -121,7 +121,7 @@ class FilesystemImageSource(
             for ((file, attributes) in files) {
                 if (hasSkippedPrefix(file)) continue // the folders were decided when they were listed
                 if (!attributes.isRegularFile) continue
-                val image = file.toImageRef(attributes)
+                val image = file.toMediaRef(attributes)
                 if (image !in known) {
                     val again = image in rememberedSet
                     if (!again) sniffCount++
@@ -178,10 +178,10 @@ class MediaStoreImageSource(private val resolver: ContentResolver, private val v
     override var counts: Map<String, Int> = emptyMap()
         private set
 
-    override fun scan(): Flow<ImageRef> = scan(emptySet())
+    override fun scan(): Flow<MediaRef> = scan(emptySet())
 
     /** A path in [known] costs no stat: the walk already found it, and that is most of what MediaStore lists. */
-    override fun scan(known: Set<String>): Flow<ImageRef> = flow {
+    override fun scan(known: Set<String>): Flow<MediaRef> = flow {
         counts = emptyMap()
         var rows = 0
         var duplicates = 0
@@ -207,7 +207,7 @@ class MediaStoreImageSource(private val resolver: ContentResolver, private val v
                 val file = File(path)
                 if (isSkipped(volumes.firstOrNull(file::startsWith) ?: File("/"), file)) return@mapNotNull null
                 try {
-                    if (Files.isRegularFile(file.toPath(), LinkOption.NOFOLLOW_LINKS)) file.toImageRef() else null
+                    if (Files.isRegularFile(file.toPath(), LinkOption.NOFOLLOW_LINKS)) file.toMediaRef() else null
                 } catch (_: IOException) {
                     null
                 }
@@ -219,7 +219,7 @@ class MediaStoreImageSource(private val resolver: ContentResolver, private val v
 }
 
 /**
- * Every image any source finds, once. Each source builds its refs with [toImageRef], so the same
+ * Every image any source finds, once. Each source builds its refs with [toMediaRef], so the same
  * file has the same path, size and mtime whichever source finds it.
  */
 class MergedImageSource(private val sources: List<ImageSource>) : ImageSource {
@@ -232,7 +232,7 @@ class MergedImageSource(private val sources: List<ImageSource>) : ImageSource {
     override val counts: Map<String, Int>
         get() = (sources.flatMap { it.counts.toList() } + ("duplicates" to duplicates)).groupingBy { it.first }.fold(0) { sum, entry -> sum + entry.second }
 
-    override fun scan(): Flow<ImageRef> = flow {
+    override fun scan(): Flow<MediaRef> = flow {
         duplicates = 0
         val seen = HashSet<String>()
         for (source in sources) {

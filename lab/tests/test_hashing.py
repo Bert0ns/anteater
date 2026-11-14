@@ -3,7 +3,7 @@ from PIL import Image, ImageFilter
 
 from cribrum_lab.hashing import content_hash, perceptual_hash
 from cribrum_lab.imaging import Pixels
-from cribrum_lab.model import ImageRef
+from cribrum_lab.model import MediaRef
 
 
 def scene(seed):
@@ -14,7 +14,7 @@ def scene(seed):
 def phash(tmp_path, image, name, **params):
     path = tmp_path / name
     image.save(path, **params)
-    return perceptual_hash(ImageRef(path, 0, 0))
+    return perceptual_hash(MediaRef(path, 0, 0))
 
 
 def distance(a, b):
@@ -27,7 +27,7 @@ def test_content_hash_depends_on_every_byte(tmp_path):
     b.write_bytes(b"x" * 3_000_000)
     c.write_bytes(b"x" * 2_999_999 + b"y")
 
-    hashes = [content_hash(ImageRef(p, 0, 0)) for p in (a, b, c)]
+    hashes = [content_hash(MediaRef(p, 0, 0)) for p in (a, b, c)]
 
     assert hashes[0] == hashes[1] != hashes[2]
 
@@ -58,6 +58,6 @@ def test_flat_images_hash_the_same_on_every_platform(tmp_path):
 def test_the_hash_from_shared_pixels_is_the_hash_from_the_file(tmp_path):
     path = tmp_path / "a.jpg"
     scene(0).save(path)
-    image = ImageRef(path, 0, 0)
+    image = MediaRef(path, 0, 0)
 
     assert perceptual_hash(image, Pixels(path)) == perceptual_hash(image)

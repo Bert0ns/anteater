@@ -1,7 +1,7 @@
 package io.github.bert0ns.cribrum.trash
 
-import io.github.bert0ns.cribrum.model.ImageRef
-import io.github.bert0ns.cribrum.model.toImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.toMediaRef
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -53,12 +53,12 @@ class AppTrashTest {
         }, { favoritesRestored += it }) { changed += it }
     }
 
-    private fun photo(path: String, bytes: String = "jpeg bytes"): ImageRef {
+    private fun photo(path: String, bytes: String = "jpeg bytes"): MediaRef {
         val file = File(volume, path)
         file.parentFile!!.mkdirs()
         file.writeText(bytes)
         file.setLastModified(1_700_000_000_000)
-        return file.toImageRef()
+        return file.toMediaRef()
     }
 
     private fun test(block: suspend AppTrash.() -> Unit) = runBlocking { trash.block() }
@@ -86,7 +86,7 @@ class AppTrashTest {
 
         assertEquals(listOf(image), restore(listOf(image)))
 
-        assertEquals(image, File(image.path).toImageRef())
+        assertEquals(image, File(image.path).toMediaRef())
         assertEquals(emptyList<TrashedImage>(), trashed())
         assertEquals(listOf(volume.resolve(TRASH_FOLDER).resolve(".nomedia")), volume.resolve(TRASH_FOLDER).listFiles()!!.toList())
     }
@@ -108,7 +108,7 @@ class AppTrashTest {
         moveToTrash(listOf(image))
         photo("DCIM/d.jpg", "a new photo")
 
-        assertEquals(emptyList<ImageRef>(), restore(listOf(image)))
+        assertEquals(emptyList<MediaRef>(), restore(listOf(image)))
 
         assertEquals("a new photo", File(image.path).readText())
         assertEquals(listOf(image), trashed().map { it.original })
@@ -121,7 +121,7 @@ class AppTrashTest {
         val gone = photo("DCIM/f.jpg")
         File(gone.path).delete()
 
-        assertEquals(emptyList<ImageRef>(), moveToTrash(listOf(changedFile, gone)))
+        assertEquals(emptyList<MediaRef>(), moveToTrash(listOf(changedFile, gone)))
 
         assertTrue(File(changedFile.path).exists())
         assertEquals(emptyList<TrashedImage>(), trashed())
@@ -129,9 +129,9 @@ class AppTrashTest {
 
     @Test
     fun `a file outside every volume is not moved`() = test {
-        val outside = File(folder.root, "elsewhere.jpg").apply { writeText("x") }.toImageRef()
+        val outside = File(folder.root, "elsewhere.jpg").apply { writeText("x") }.toMediaRef()
 
-        assertEquals(emptyList<ImageRef>(), moveToTrash(listOf(outside)))
+        assertEquals(emptyList<MediaRef>(), moveToTrash(listOf(outside)))
 
         assertTrue(File(outside.path).exists())
     }
@@ -172,7 +172,7 @@ class AppTrashTest {
         moveToTrash(listOf(image))
         clock.now += Duration.ofDays(10)
 
-        assertEquals(emptyList<ImageRef>(), purgeExpired().purged)
+        assertEquals(emptyList<MediaRef>(), purgeExpired().purged)
         assertEquals(Instant.parse("2026-11-18T12:00:00Z"), trashed().single().purgeAt)
 
         retention = Duration.ofDays(7)
@@ -189,7 +189,7 @@ class AppTrashTest {
         clock.now += Duration.ofDays(40)
         retention = Duration.ofDays(60)
 
-        assertEquals(emptyList<ImageRef>(), purgeExpired().purged)
+        assertEquals(emptyList<MediaRef>(), purgeExpired().purged)
         assertEquals(listOf(image), trashed().map { it.original })
     }
 
@@ -270,7 +270,7 @@ class AppTrashTest {
     fun `refuses to move a file named origin properties`() = test {
         val originFile = photo("DCIM/origin.properties")
 
-        assertEquals(emptyList<ImageRef>(), moveToTrash(listOf(originFile)))
+        assertEquals(emptyList<MediaRef>(), moveToTrash(listOf(originFile)))
 
         assertTrue(File(originFile.path).isFile)
         assertTrue(trashed().isEmpty())
@@ -296,7 +296,7 @@ class AppTrashTest {
         File(invalidFolder, "origin.properties").writeBytes(byteArrayOf(0x00, 0x1F, 0x7F))
 
         assertEquals(emptyList<TrashedImage>(), trashed())
-        assertEquals(emptyList<ImageRef>(), purgeExpired().purged)
+        assertEquals(emptyList<MediaRef>(), purgeExpired().purged)
     }
 
     @Test
@@ -321,7 +321,7 @@ class AppTrashTest {
         assertEquals(clock.now, items.single().trashedAt)
         assertEquals(clock.now + retention, items.single().purgeAt)
 
-        assertEquals(emptyList<ImageRef>(), purgeExpired().purged)
+        assertEquals(emptyList<MediaRef>(), purgeExpired().purged)
         assertTrue(imgFile.exists())
     }
 
@@ -339,7 +339,7 @@ class AppTrashTest {
         val rewoundNow = clock.now
 
         // purgeExpired detects now < seen_at and rewrites seen_at to now
-        assertEquals(emptyList<ImageRef>(), purgeExpired().purged)
+        assertEquals(emptyList<MediaRef>(), purgeExpired().purged)
 
         val updatedProps = Properties().apply { originFile.inputStream().use(::load) }
         assertEquals(rewoundNow.toString(), updatedProps.getProperty("seen_at"))
@@ -348,7 +348,7 @@ class AppTrashTest {
         // Advance clock by 31 days (retention is 30 days from rewoundNow, but 26 days from trashedAt)
         // At this point: seen_at + 30 days <= clock.now, but trashed_at + 30 days > clock.now!
         clock.now = rewoundNow + Duration.ofDays(28)
-        assertEquals(emptyList<ImageRef>(), purgeExpired().purged)
+        assertEquals(emptyList<MediaRef>(), purgeExpired().purged)
         assertTrue(trashed().isNotEmpty())
 
         // Advance clock so both trashed_at + 30 days and seen_at + 30 days have passed
@@ -375,7 +375,7 @@ class AppTrashTest {
         originFile.outputStream().use { props.store(it, null) }
 
         // purgeExpired writes seen_at = clock.now and does not purge yet
-        assertEquals(emptyList<ImageRef>(), purgeExpired().purged)
+        assertEquals(emptyList<MediaRef>(), purgeExpired().purged)
 
         val loaded = Properties().apply { originFile.inputStream().use(::load) }
         assertEquals(clock.now.toString(), loaded.getProperty("seen_at"))
@@ -393,7 +393,7 @@ class AppTrashTest {
         val image = photo("DCIM/write_fail.jpg")
         recordWriter = { _, _, _, _, _, _ -> throw IOException("simulated disk full") }
 
-        assertEquals(emptyList<ImageRef>(), moveToTrash(listOf(image)))
+        assertEquals(emptyList<MediaRef>(), moveToTrash(listOf(image)))
 
         assertTrue(File(image.path).exists())
         val trashRoot = File(volume, TRASH_FOLDER)
@@ -406,7 +406,7 @@ class AppTrashTest {
         val sourceDir = File(image.path).parentFile!!
         sourceDir.setWritable(false)
         try {
-            assertEquals(emptyList<ImageRef>(), moveToTrash(listOf(image)))
+            assertEquals(emptyList<MediaRef>(), moveToTrash(listOf(image)))
             assertTrue(File(image.path).exists())
             val trashRoot = File(volume, TRASH_FOLDER)
             assertEquals(emptyList<File>(), trashRoot.listFiles()?.filter { it.isDirectory }.orEmpty())
@@ -424,7 +424,7 @@ class AppTrashTest {
         val parentDir = File(image.path).parentFile!!
         parentDir.setReadOnly()
         try {
-            assertEquals(emptyList<ImageRef>(), restore(listOf(image)))
+            assertEquals(emptyList<MediaRef>(), restore(listOf(image)))
             assertEquals(listOf(item), trashed())
             assertTrue(item.file.exists())
         } finally {
@@ -452,19 +452,19 @@ class AppTrashTest {
 
         File(image.path).writeText("collision file")
 
-        assertEquals(emptyList<ImageRef>(), restore(listOf(image)))
+        assertEquals(emptyList<MediaRef>(), restore(listOf(image)))
 
         assertEquals("collision file", File(image.path).readText())
         assertEquals(listOf(image), trashed().map { it.original })
     }
 
     /** A compressed copy of [image] written next to it, smaller and with its mtime. */
-    private fun copyOf(image: ImageRef): File = copyFileFor(File(image.path)).apply {
+    private fun copyOf(image: MediaRef): File = copyFileFor(File(image.path)).apply {
         writeText("small")
         setLastModified(1_700_000_000_000)
     }
 
-    private fun filesIn(image: ImageRef) = File(image.path).parentFile!!.list()!!.toList()
+    private fun filesIn(image: MediaRef) = File(image.path).parentFile!!.list()!!.toList()
 
     @Test
     fun `a copy takes its original's path and the original waits in the trash with a record of it`() = test {
@@ -473,7 +473,7 @@ class AppTrashTest {
 
         val swapped = (replaceWithCopy(image, copy) as Swap.Swapped).copy
 
-        assertEquals(ImageRef(image.path, 5, image.mtimeNs), swapped)
+        assertEquals(MediaRef(image.path, 5, image.mtimeNs), swapped)
         assertEquals("small", File(image.path).readText())
         assertEquals(listOf("a.jpg"), filesIn(image))
         val item = trashed().single()
@@ -592,7 +592,7 @@ class AppTrashTest {
 
         assertEquals(listOf(image), restore(listOf(image)))
 
-        assertEquals(image, File(image.path).toImageRef())
+        assertEquals(image, File(image.path).toMediaRef())
         assertEquals("the original photo", File(image.path).readText())
         val item = trashed().single()
         assertEquals(swapped, item.original)
@@ -607,7 +607,7 @@ class AppTrashTest {
         replaceWithCopy(image, copyOf(image))
         File(image.path).writeText("edited in the gallery")
 
-        assertEquals(emptyList<ImageRef>(), restore(listOf(image)))
+        assertEquals(emptyList<MediaRef>(), restore(listOf(image)))
 
         assertEquals("edited in the gallery", File(image.path).readText())
         assertEquals(listOf(image), trashed().map { it.original })
@@ -621,7 +621,7 @@ class AppTrashTest {
 
         assertEquals(listOf(image), restore(listOf(image)))
 
-        assertEquals(image, File(image.path).toImageRef())
+        assertEquals(image, File(image.path).toMediaRef())
         assertEquals(listOf(swapped), trashed().map { it.original })
     }
 
@@ -635,9 +635,9 @@ class AppTrashTest {
             Files.move(from.toPath(), to.toPath())
         }
 
-        assertEquals(emptyList<ImageRef>(), restore(listOf(image)))
+        assertEquals(emptyList<MediaRef>(), restore(listOf(image)))
 
-        assertEquals(swapped, File(image.path).toImageRef())
+        assertEquals(swapped, File(image.path).toMediaRef())
         assertEquals(listOf(item), trashed())
     }
 
@@ -648,7 +648,7 @@ class AppTrashTest {
 
         assertEquals(Swap.Untouched, replaceWithCopy(image, copyOf(image)))
 
-        assertEquals(image, File(image.path).toImageRef())
+        assertEquals(image, File(image.path).toMediaRef())
         assertEquals(listOf("a.jpg"), filesIn(image))
         assertEquals(emptyList<File>(), File(volume, TRASH_FOLDER).listFiles()!!.filter { it.isDirectory })
     }
@@ -664,7 +664,7 @@ class AppTrashTest {
 
         assertEquals(Swap.Untouched, replaceWithCopy(image, copy))
 
-        assertEquals(image, File(image.path).toImageRef())
+        assertEquals(image, File(image.path).toMediaRef())
         assertEquals(listOf("a.jpg"), filesIn(image))
         assertEquals(emptyList<TrashedImage>(), trashed())
         assertEquals(emptyList<File>(), File(volume, TRASH_FOLDER).listFiles()!!.filter { it.isDirectory })
@@ -682,7 +682,7 @@ class AppTrashTest {
         assertEquals(listOf(image), trashed().map { it.original })
         mover = { from, to -> Files.move(from.toPath(), to.toPath()) }
         assertEquals(listOf(image), restore(listOf(image)))
-        assertEquals(image, File(image.path).toImageRef())
+        assertEquals(image, File(image.path).toMediaRef())
     }
 
     @Test
@@ -693,7 +693,7 @@ class AppTrashTest {
 
         assertEquals(Swap.Untouched, broken.replaceWithCopy(image, copy))
 
-        assertEquals(image, File(image.path).toImageRef())
+        assertEquals(image, File(image.path).toMediaRef())
         assertEquals(listOf("a.jpg"), filesIn(image))
     }
 
@@ -716,7 +716,7 @@ class AppTrashTest {
 
         assertEquals(listOf(image), purge(listOf(image)))
 
-        assertEquals(swapped, File(image.path).toImageRef())
+        assertEquals(swapped, File(image.path).toMediaRef())
         assertEquals(emptyList<TrashedImage>(), trashed())
     }
 
@@ -834,6 +834,6 @@ class AppTrashTest {
         assertFalse(orphan.exists())
         assertTrue(pending.exists())
         assertTrue(inTrash.exists())
-        assertEquals(image, File(image.path).toImageRef())
+        assertEquals(image, File(image.path).toMediaRef())
     }
 }

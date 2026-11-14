@@ -10,7 +10,7 @@ from pathlib import Path
 
 from cribrum_lab import prompts, text
 from cribrum_lab.detectors.base import AnalysisContext
-from cribrum_lab.model import Category, ImageRef, Signal
+from cribrum_lab.model import Category, MediaRef, Signal
 
 FULL_COVERAGE = 0.10
 TEXT_WEIGHT = 0.8
@@ -26,7 +26,7 @@ class DocumentDetector:
     def __init__(self, coverage: Callable[[Path], float] = text.text_coverage) -> None:
         self._coverage = coverage
 
-    def analyze(self, image: ImageRef, context: AnalysisContext) -> list[Signal]:
+    def analyze(self, image: MediaRef, context: AnalysisContext) -> list[Signal]:
         probability, prompt = prompts.classify(context.embedding(image))["document"]
         coverage = self._coverage(image.path)
         text_chance = TEXT_WEIGHT * min(1.0, coverage / FULL_COVERAGE)

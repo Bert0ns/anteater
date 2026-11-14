@@ -15,11 +15,11 @@ import io.github.bert0ns.cribrum.mobileclip.MODEL_ID
 import io.github.bert0ns.cribrum.mobileclip.MODEL_VERSION
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
-import io.github.bert0ns.cribrum.model.toImageRef
+import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.pipeline.DETECTORS
 import io.github.bert0ns.cribrum.pipeline.GROUP_DETECTORS
 import io.github.bert0ns.cribrum.pipeline.IndexWorker
@@ -78,7 +78,7 @@ class GalleryWorld(val app: CribrumApp, val root: File, val clock: MovableClock 
 
     /** Signals waiting for [commit], by detector and path. */
     private val pending = mutableMapOf<String, MutableMap<String, MutableList<Signal>>>()
-    private val rows = mutableListOf<ImageRef>()
+    private val rows = mutableListOf<MediaRef>()
 
     fun review(trash: Trash = this.trash) = Review(
         app.index,
@@ -108,24 +108,24 @@ class GalleryWorld(val app: CribrumApp, val root: File, val clock: MovableClock 
     }
 
     /** Draws [bitmap] into the folder, dated [at], with the size of a real photo, and gives it its [signals]. */
-    fun picture(folder: String, name: String, bitmap: Bitmap, bytes: Long, at: LocalDateTime, vararg signals: Signal): ImageRef {
+    fun picture(folder: String, name: String, bitmap: Bitmap, bytes: Long, at: LocalDateTime, vararg signals: Signal): MediaRef {
         val file = File(unique(folder, name))
         GalleryPictures.write(file, bitmap, bytes)
         file.setLastModified(at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
-        return add(file.toImageRef(), signals.toList())
+        return add(file.toMediaRef(), signals.toList())
     }
 
     /** A row with no file behind it. */
-    fun row(folder: String, name: String, bytes: Long, at: LocalDateTime, vararg signals: Signal) = add(ImageRef(unique(folder, name), bytes, at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() * 1_000_000), signals.toList())
+    fun row(folder: String, name: String, bytes: Long, at: LocalDateTime, vararg signals: Signal) = add(MediaRef(unique(folder, name), bytes, at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() * 1_000_000), signals.toList())
 
-    private fun add(ref: ImageRef, signals: List<Signal>): ImageRef {
+    private fun add(ref: MediaRef, signals: List<Signal>): MediaRef {
         rows += ref
         for (signal in signals) pending.getOrPut(signal.detectorId) { mutableMapOf() }.getOrPut(ref.path) { mutableListOf() } += signal
         return ref
     }
 
     /** A near duplicate group: the best copy first, then the copies to trash. */
-    fun group(id: String, category: Category, best: ImageRef, copies: List<Pair<ImageRef, Float>>, vararg more: Pair<String, String>) {
+    fun group(id: String, category: Category, best: MediaRef, copies: List<Pair<MediaRef, Float>>, vararg more: Pair<String, String>) {
         fun evidence(role: Role) = arrayOf(GROUP_KEY to id, ROLE_KEY to role.value, *more)
         val signals = pending.getOrPut(detectorOf.getValue(category).first) { mutableMapOf() }
         signals.getOrPut(best.path) { mutableListOf() } += signal(category, 0f, *evidence(Role.BEST))
@@ -151,7 +151,7 @@ class GalleryWorld(val app: CribrumApp, val root: File, val clock: MovableClock 
     }
 
     /** Puts [images] in the trash on the days given by [daysAgo], as if the user had trashed them then. */
-    fun trashed(images: List<ImageRef>, daysAgo: (Int) -> Long) = runBlocking {
+    fun trashed(images: List<MediaRef>, daysAgo: (Int) -> Long) = runBlocking {
         val today = clock.now
         images.forEachIndexed { index, image ->
             clock.now = today.minusSeconds(daysAgo(index) * 86_400)

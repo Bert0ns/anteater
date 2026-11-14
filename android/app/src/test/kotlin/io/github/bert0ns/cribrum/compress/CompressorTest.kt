@@ -10,10 +10,10 @@ import io.github.bert0ns.cribrum.hashing.perceptualHash
 import io.github.bert0ns.cribrum.index.memoryIndex
 import io.github.bert0ns.cribrum.metadata.readMetadata
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Signal
-import io.github.bert0ns.cribrum.model.toImageRef
+import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.pipeline.Embedder
 import io.github.bert0ns.cribrum.pipeline.Pipeline
 import io.github.bert0ns.cribrum.review.Review
@@ -68,27 +68,27 @@ class CompressorTest {
     private var flagged = emptySet<String>()
     private val trash by lazy {
         AppTrash({ listOf(volume) }, clock, favorites = { it intersect flagged }) { paths ->
-            paths.forEach { told += Triple(it, ExifInterface(it).getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL), File(it).toImageRef().mtimeNs) }
+            paths.forEach { told += Triple(it, ExifInterface(it).getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL), File(it).toMediaRef().mtimeNs) }
         }
     }
     private val index = memoryIndex()
     private var free: () -> Long = { Long.MAX_VALUE }
     private val compressor by lazy { Compressor(trash, index, { free() }, clock) }
 
-    private fun photo(name: String, bytes: ByteArray, tags: Map<String, String> = mapOf(ExifInterface.TAG_DATETIME_ORIGINAL to TAKEN)): ImageRef {
+    private fun photo(name: String, bytes: ByteArray, tags: Map<String, String> = mapOf(ExifInterface.TAG_DATETIME_ORIGINAL to TAKEN)): MediaRef {
         val file = File(camera, name)
         file.writeBytes(bytes)
         if (tags.isNotEmpty()) {
             ExifInterface(file).apply { tags.forEach(::setAttribute) }.saveAttributes()
         }
         Files.setLastModifiedTime(file.toPath(), FileTime.from(MTIME_NS, TimeUnit.NANOSECONDS))
-        return file.toImageRef()
+        return file.toMediaRef()
     }
 
-    private fun compress(image: ImageRef, level: CompressionLevel) = runBlocking { compressor.compress(image, level) }
+    private fun compress(image: MediaRef, level: CompressionLevel) = runBlocking { compressor.compress(image, level) }
 
-    private fun assertUntouched(image: ImageRef, bytes: ByteArray) {
-        assertEquals(image, File(image.path).toImageRef())
+    private fun assertUntouched(image: MediaRef, bytes: ByteArray) {
+        assertEquals(image, File(image.path).toMediaRef())
         assertArrayEquals(bytes, File(image.path).readBytes())
         assertEquals(listOf(File(image.path).name), camera.list()!!.toList())
         assertEquals(0, runBlocking { trash.trashed() }.size)
@@ -103,7 +103,7 @@ class CompressorTest {
 
         assertEquals(image.path, copy.path)
         assertTrue(copy.size < image.size)
-        assertEquals(copy, File(image.path).toImageRef())
+        assertEquals(copy, File(image.path).toMediaRef())
         assertEquals(listOf("a.jpg"), camera.list()!!.toList())
         val item = runBlocking { trash.trashed() }.single()
         assertEquals(image, item.original)
@@ -148,7 +148,7 @@ class CompressorTest {
 
         val copy = (compress(image, CompressionLevel.HIGH) as Compression.Done).copy
 
-        assertEquals(copy, File(image.path).toImageRef())
+        assertEquals(copy, File(image.path).toMediaRef())
         assertEquals(listOf(image), runBlocking { trash.trashed() }.map { it.original })
     }
 
@@ -188,7 +188,7 @@ class CompressorTest {
         assertEquals(original, listed())
         // The page row did not stop the scan from reading the restored original's headers.
         assertEquals(listOf(image.size), headersRead)
-        assertEquals(emptyList<ImageRef>(), runBlocking { index.jpegsToRead() })
+        assertEquals(emptyList<MediaRef>(), runBlocking { index.jpegsToRead() })
     }
 
     @Test
@@ -199,13 +199,13 @@ class CompressorTest {
             override val id = "seen"
             override val version = 1
 
-            override suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal> = emptyList<Signal>().also { read += "detector ${image.size}" }
+            override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> = emptyList<Signal>().also { read += "detector ${image.size}" }
         }
         val group = object : GroupDetector {
             override val id = "group"
             override val version = 1
 
-            override suspend fun analyze(images: List<ImageRef>, context: AnalysisContext): Map<ImageRef, List<Signal>> = images.associateWith {
+            override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> = images.associateWith {
                 read += "group ${it.size}"
                 context.contentHash(it)
                 emptyList()
@@ -252,7 +252,7 @@ class CompressorTest {
         assertEquals(steps.map { "$it ${copy.size}" }.toSet(), read.toSet())
         assertNotEquals(originalHash, index.contentHash(image.path))
         assertEquals(contentHash(copy), index.contentHash(image.path))
-        assertEquals(emptyList<ImageRef>(), index.jpegsToRead())
+        assertEquals(emptyList<MediaRef>(), index.jpegsToRead())
     }
 
     @Test
@@ -501,7 +501,7 @@ class CompressorTest {
         assertEquals(TAKEN, ExifInterface(out).getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL))
         assertEquals(null, readJpeg(out).marker)
         assertUntouched(image, bytes)
-        assertEquals(emptyList<ImageRef>(), runBlocking { index.images() })
+        assertEquals(emptyList<MediaRef>(), runBlocking { index.images() })
         assertEquals(emptyList<Triple<String, String?, Long>>(), told)
     }
 

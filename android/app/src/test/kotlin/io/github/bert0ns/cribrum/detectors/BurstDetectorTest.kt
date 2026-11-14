@@ -7,11 +7,11 @@ import io.github.bert0ns.cribrum.imaging.unit
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
-import io.github.bert0ns.cribrum.model.toImageRef
+import io.github.bert0ns.cribrum.model.toMediaRef
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -34,8 +34,8 @@ class BurstDetectorTest {
     private val start = LocalDateTime.of(2024, 5, 1, 10, 0, 0)
 
     private class Shots(val root: File, val start: LocalDateTime) {
-        val meta = mutableMapOf<ImageRef, ImageMetadata>()
-        val vectors = mutableMapOf<ImageRef, FloatArray>()
+        val meta = mutableMapOf<MediaRef, ImageMetadata>()
+        val vectors = mutableMapOf<MediaRef, FloatArray>()
 
         fun add(
             name: String,
@@ -43,10 +43,10 @@ class BurstDetectorTest {
             blur: Int = 0,
             camera: String = "Pixel 8",
             vector: FloatArray? = null,
-        ): ImageRef {
+        ): MediaRef {
             val file = File(root, "$name.jpg").apply { parentFile?.mkdirs() }
             TestImage.texture(640, 480, seed = 0).blurred(blur).save(file, Bitmap.CompressFormat.JPEG)
-            val ref = file.toImageRef()
+            val ref = file.toMediaRef()
             val captured = seconds?.let { start.plusSeconds(it) }
             meta[ref] = ImageMetadata(640, 480, "image/jpeg", "Google", camera, captured)
             if (vector != null) {
@@ -55,7 +55,7 @@ class BurstDetectorTest {
             return ref
         }
 
-        fun run(): Map<ImageRef, List<Signal>> = runBlocking {
+        fun run(): Map<MediaRef, List<Signal>> = runBlocking {
             val context = AnalysisContext(
                 metadata = { meta.getValue(it) },
                 embedding = { vectors[it] ?: throw MissingEmbedding(it) },
@@ -64,7 +64,7 @@ class BurstDetectorTest {
         }
     }
 
-    private fun role(signals: Map<ImageRef, List<Signal>>, image: ImageRef): String = signals.getValue(image).single().evidence.getValue(ROLE_KEY)
+    private fun role(signals: Map<MediaRef, List<Signal>>, image: MediaRef): String = signals.getValue(image).single().evidence.getValue(ROLE_KEY)
 
     @Test
     fun `shots seconds apart form a burst with the sharpest as best`() {
@@ -87,7 +87,7 @@ class BurstDetectorTest {
 
     @Test
     fun `the sharpness lookup picks the best shot, to one decimal as blur stores it`() = runBlocking {
-        val photos = List(3) { ImageRef("/fake/$it.jpg", 1000, 0) }
+        val photos = List(3) { MediaRef("/fake/$it.jpg", 1000, 0) }
         val sharpness = mapOf(photos[0] to 50.04, photos[1] to 50.01, photos[2] to 25.0)
         val context = AnalysisContext(
             metadata = { ImageMetadata(640, 480, "image/jpeg", "Google", "Pixel 8", start.plusSeconds(photos.indexOf(it).toLong())) },
@@ -158,7 +158,7 @@ class BurstDetectorTest {
             val jpegStart = byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte(), 0xe0.toByte())
             writeBytes(jpegStart + "corrupt".toByteArray())
         }
-        val brokenRef = brokenFile.toImageRef()
+        val brokenRef = brokenFile.toMediaRef()
         shots.meta[brokenRef] = ImageMetadata(640, 480, "image/jpeg", "Google", "Pixel 8", start.plusSeconds(1))
 
         val signals = shots.run()

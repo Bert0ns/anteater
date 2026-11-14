@@ -5,7 +5,7 @@ from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
 from typing import Protocol
 
-from cribrum_lab.model import ImageRef
+from cribrum_lab.model import MediaRef
 
 # ISO base media brands of HEIF and AVIF images. Videos (e.g. "isom", "mp42") are left out.
 _HEIF_BRANDS = {
@@ -17,7 +17,7 @@ _HEAD_SIZE = 64
 
 
 class ImageSource(Protocol):
-    def scan(self) -> Iterator[ImageRef]: ...
+    def scan(self) -> Iterator[MediaRef]: ...
 
     @property
     def walked_roots(self) -> list[Path]:
@@ -33,9 +33,9 @@ class NotImages(Protocol):
     """What the walk remembers of the files it sniffed and found not to be images, so it does
     not read their head again while their size and mtime stay the same."""
 
-    def not_images(self) -> Iterable[ImageRef]: ...
+    def not_images(self) -> Iterable[MediaRef]: ...
 
-    def add_not_images(self, files: list[ImageRef]) -> None:
+    def add_not_images(self, files: list[MediaRef]) -> None:
         """Stores the files; one already stored with the same path is replaced."""
         ...
 
@@ -67,7 +67,7 @@ class FilesystemImageSource:
     def __init__(
         self,
         root: Path,
-        indexed: Callable[[], Iterable[ImageRef]] = list,
+        indexed: Callable[[], Iterable[MediaRef]] = list,
         *,
         not_images: NotImages | None = None,
     ) -> None:
@@ -78,14 +78,14 @@ class FilesystemImageSource:
         """The root once the walk listed every folder; a folder that cannot be listed, or a
         missing root, leaves it out."""
 
-    def scan(self) -> Iterator[ImageRef]:
+    def scan(self) -> Iterator[MediaRef]:
         self.walked_roots = []
         listed_all = True
         known = set(self._indexed())
         remembered = list(self._not_images.not_images()) if self._not_images is not None else []
         remembered_set = set(remembered)
         met: set[Path] = set()  # non-images this walk met, remembered or newly sniffed
-        sniffed: list[ImageRef] = []
+        sniffed: list[MediaRef] = []
 
         def on_error(_: OSError) -> None:
             nonlocal listed_all
@@ -103,7 +103,7 @@ class FilesystemImageSource:
                     info = path.lstat()
                     if not stat.S_ISREG(info.st_mode):
                         continue
-                    image = ImageRef(path, info.st_size, info.st_mtime_ns)
+                    image = MediaRef(path, info.st_size, info.st_mtime_ns)
                     if image not in known:
                         again = image in remembered_set
                         if again or not _is_image(path):

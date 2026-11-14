@@ -46,7 +46,7 @@ class ReviewState(Enum):
 
 
 @dataclass(frozen=True)
-class ImageRef:
+class MediaRef:
     """Identifies an image file. Size and mtime detect changes between scans."""
 
     path: Path
@@ -84,7 +84,7 @@ class Signal:
 class IndexedImage:
     """An image as the ranker sees it."""
 
-    ref: ImageRef
+    ref: MediaRef
     review_state: ReviewState = ReviewState.UNREVIEWED
     signals: tuple[Signal, ...] = ()
     seen_when_kept: frozenset[tuple[Category | Protection, str, str]] = frozenset()

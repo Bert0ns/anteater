@@ -1,7 +1,7 @@
 package io.github.bert0ns.cribrum.ui.gallery
 
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -63,8 +63,8 @@ fun GalleryWorld.library(pictures: Set<Category> = emptySet(), others: Boolean =
         val big = drawn(Category.NEAR_DUPLICATE) && group < 16
         val copies = if (big) 2 else 1
         val at = taken(group)
-        val best: ImageRef
-        val inferior: List<Pair<ImageRef, Float>>
+        val best: MediaRef
+        val inferior: List<Pair<MediaRef, Float>>
         if (big) {
             val scene = 2_000 + group
             best = picture(CAMERA, cameraName(at), GalleryPictures.scene(scene), 4_600_000L, at)

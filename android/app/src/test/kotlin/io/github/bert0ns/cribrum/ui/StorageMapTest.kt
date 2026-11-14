@@ -1,6 +1,6 @@
 package io.github.bert0ns.cribrum.ui
 
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -9,7 +9,7 @@ import org.junit.Test
 class StorageMapTest {
     private val bounds = MapRect(0.0, 0.0, 100.0, 100.0)
 
-    private fun ref(path: String, size: Long) = ImageRef(path, size, 0L)
+    private fun ref(path: String, size: Long) = MediaRef(path, size, 0L)
 
     @Test
     fun `squarify empty weights returns empty list`() {

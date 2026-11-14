@@ -8,10 +8,10 @@ import pytest
 from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, Role
 from cribrum_lab.index import ImageIndex, IndexVersionError
 from cribrum_lab.metadata import ImageMetadata
-from cribrum_lab.model import Category, ImageRef, Protection, ReviewState, Signal
+from cribrum_lab.model import Category, MediaRef, Protection, ReviewState, Signal
 from cribrum_lab.ranker import Ranker
 
-PHOTO = ImageRef(Path("/photos/a.jpg"), 100, 1)
+PHOTO = MediaRef(Path("/photos/a.jpg"), 100, 1)
 META = ImageMetadata(4000, 3000, "image/jpeg", "Google", "Pixel 8", datetime(2024, 5, 1, 10, 20))
 BLUR = Signal("blur", 1, Category.BLURRY, 0.7, {"variance": "12.5"})
 
@@ -25,19 +25,19 @@ def index():
 def test_record_reports_new_and_changed_images(index):
     assert index.record(PHOTO)
     assert not index.record(PHOTO)
-    assert index.record(ImageRef(PHOTO.path, 101, 1))
-    assert index.record(ImageRef(PHOTO.path, 101, 2))
-    assert index.images() == [ImageRef(PHOTO.path, 101, 2)]
+    assert index.record(MediaRef(PHOTO.path, 101, 1))
+    assert index.record(MediaRef(PHOTO.path, 101, 2))
+    assert index.images() == [MediaRef(PHOTO.path, 101, 2)]
 
 
 def test_record_all_counts_the_new_and_changed_images_and_leaves_the_rest(index):
-    other = ImageRef(Path("/photos/b.jpg"), 5, 5)
-    fresh = ImageRef(Path("/photos/c.jpg"), 7, 7)
+    other = MediaRef(Path("/photos/b.jpg"), 5, 5)
+    fresh = MediaRef(Path("/photos/c.jpg"), 7, 7)
     index.record(PHOTO)
     index.record(other)
     index.set_metadata(other.path, META)
 
-    changed_other = ImageRef(other.path, 6, 5)
+    changed_other = MediaRef(other.path, 6, 5)
     assert index.record_all([PHOTO, changed_other, fresh]) == 2
 
     assert index.images() == [PHOTO, changed_other, fresh]
@@ -48,8 +48,8 @@ def test_a_batch_that_fails_part_way_leaves_the_index_as_it_was(index):
     index.record(PHOTO)
 
     def batch():
-        yield ImageRef(Path("/photos/new-0.jpg"), 1, 1)
-        yield ImageRef(Path("/photos/new-1.jpg"), 1, 1)
+        yield MediaRef(Path("/photos/new-0.jpg"), 1, 1)
+        yield MediaRef(Path("/photos/new-1.jpg"), 1, 1)
         raise OSError("disk full")
 
     with pytest.raises(OSError):
@@ -68,7 +68,7 @@ def test_changed_image_drops_its_stale_data_but_keeps_the_review_decision(index)
     index.set_signals(PHOTO.path, "blur", 1, [BLUR])
     index.set_review_state(PHOTO.path, ReviewState.KEPT)
 
-    index.record(ImageRef(PHOTO.path, 200, 5))  # edited, or just touched by a sync tool
+    index.record(MediaRef(PHOTO.path, 200, 5))  # edited, or just touched by a sync tool
 
     assert index.metadata(PHOTO.path) is None
     assert index.unreadable() == []
@@ -120,7 +120,7 @@ def test_embeddings_are_stored_per_model_version(index):
 
 
 def test_deleting_the_embeddings_leaves_the_rest_of_the_index_as_it_was(index):
-    other = ImageRef(Path("/photos/b.jpg"), 5, 5)
+    other = MediaRef(Path("/photos/b.jpg"), 5, 5)
     index.record(PHOTO)
     index.record(other)
     index.set_embeddings(
@@ -269,7 +269,7 @@ def test_leaving_kept_forgets_the_recorded_signals(index):
 
 def test_indexed_images_lists_unanalyzed_images_too(index):
     index.record(PHOTO)
-    other = ImageRef(Path("/photos/b.jpg"), 5, 5)
+    other = MediaRef(Path("/photos/b.jpg"), 5, 5)
     index.record(other)
     index.set_signals(other.path, "blur", 1, [BLUR])
 
@@ -277,8 +277,8 @@ def test_indexed_images_lists_unanalyzed_images_too(index):
 
 
 def test_images_without_metadata_leave_out_unreadable_ones(index):
-    other = ImageRef(Path("/photos/b.jpg"), 5, 5)
-    broken = ImageRef(Path("/photos/c.jpg"), 5, 5)
+    other = MediaRef(Path("/photos/b.jpg"), 5, 5)
+    broken = MediaRef(Path("/photos/c.jpg"), 5, 5)
     for image in [PHOTO, other, broken]:
         index.record(image)
     index.set_metadata(PHOTO.path, META)
@@ -299,7 +299,7 @@ def test_forget_removes_an_image_and_its_data(index):
 
 
 def test_signals_of_many_images_at_once(index):
-    other = ImageRef(Path("/photos/b.jpg"), 5, 5)
+    other = MediaRef(Path("/photos/b.jpg"), 5, 5)
     index.record(PHOTO)
     index.record(other)
 
@@ -319,7 +319,7 @@ def test_signals_of_many_store_nothing_if_one_image_is_missing(index):
 
 
 def test_hashed_paths_lists_the_images_that_have_a_perceptual_hash(index):
-    other = ImageRef(Path("/photos/b.jpg"), 100, 1)
+    other = MediaRef(Path("/photos/b.jpg"), 100, 1)
     index.record(PHOTO)
     index.record(other)
 
@@ -357,24 +357,24 @@ def test_a_group_fingerprint_keeps_the_paths_whose_content_hash_failed(index):
 
 
 def test_not_images_are_stored_by_path_the_newest_size_and_mtime_winning(index):
-    photo = ImageRef(Path("/photos/a.jpg"), 100, 1)
-    other = ImageRef(Path("/photos/b.jpg"), 5, 5)
+    photo = MediaRef(Path("/photos/a.jpg"), 100, 1)
+    other = MediaRef(Path("/photos/b.jpg"), 5, 5)
     index.add_not_images([photo, other])
-    index.add_not_images([ImageRef(photo.path, 7, 1)])
+    index.add_not_images([MediaRef(photo.path, 7, 1)])
 
-    assert set(index.not_images()) == {ImageRef(photo.path, 7, 1), other}
+    assert set(index.not_images()) == {MediaRef(photo.path, 7, 1), other}
 
     index.forget_not_images([other.path])
 
-    assert index.not_images() == [ImageRef(photo.path, 7, 1)]
+    assert index.not_images() == [MediaRef(photo.path, 7, 1)]
 
 
 def test_not_images_are_no_images_and_forgetting_an_image_leaves_them_alone(index):
-    note = ImageRef(Path("/photos/notes.txt"), 5, 5)
+    note = MediaRef(Path("/photos/notes.txt"), 5, 5)
     index.add_not_images([note])
     assert index.images() == []
 
-    index.record(ImageRef(Path("/photos/a.jpg"), 100, 1))
+    index.record(MediaRef(Path("/photos/a.jpg"), 100, 1))
     index.forget([Path("/photos/a.jpg")])
 
     assert index.not_images() == [note]

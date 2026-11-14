@@ -4,7 +4,7 @@ package io.github.bert0ns.cribrum.detectors
 
 import io.github.bert0ns.cribrum.folders.isMessagingFolder
 import io.github.bert0ns.cribrum.model.Category
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.prompts.VERSION
 import io.github.bert0ns.cribrum.prompts.classify
@@ -24,7 +24,7 @@ class ForwardedDetector : Detector {
     override val category = Category.FORWARDED
     override val usesEmbeddings = true
 
-    override suspend fun analyze(image: ImageRef, context: AnalysisContext): List<Signal> {
+    override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
         val (probability, prompt) = classify(context.embedding(image)).getValue("forwarded")
         val messaging = isMessagingFolder(image.path)
         val cameraExif = context.metadata(image).hasCameraExif

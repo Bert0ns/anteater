@@ -3,7 +3,7 @@ package io.github.bert0ns.cribrum.ui.gallery
 import io.github.bert0ns.cribrum.compress.BatchResult
 import io.github.bert0ns.cribrum.compress.BatchState
 import io.github.bert0ns.cribrum.compress.CompressionLevel
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.ui.CompressBatches
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -71,5 +71,5 @@ class GalleryBatches(initial: BatchState = BatchState.Idle) : CompressBatches {
 
     override fun cancel() = Unit
 
-    override suspend fun undo(result: BatchResult): List<ImageRef> = emptyList()
+    override suspend fun undo(result: BatchResult): List<MediaRef> = emptyList()
 }

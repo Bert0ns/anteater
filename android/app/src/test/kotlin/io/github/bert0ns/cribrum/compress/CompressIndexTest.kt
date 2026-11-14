@@ -2,7 +2,7 @@ package io.github.bert0ns.cribrum.compress
 
 import io.github.bert0ns.cribrum.index.memoryIndex
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
-import io.github.bert0ns.cribrum.model.ImageRef
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ReviewState
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -22,8 +22,8 @@ class CompressIndexTest {
 
     private fun test(block: suspend () -> Unit) = runBlocking { block() }
 
-    private suspend fun photo(path: String, size: Long, info: JpegInfo? = ELIGIBLE, mime: String = "image/jpeg"): ImageRef {
-        val image = ImageRef(path, size, 1)
+    private suspend fun photo(path: String, size: Long, info: JpegInfo? = ELIGIBLE, mime: String = "image/jpeg"): MediaRef {
+        val image = MediaRef(path, size, 1)
         index.record(image)
         index.setMetadata(path, ImageMetadata(4000, 3000, mime))
         if (info != null) index.setJpeg(path, info)
@@ -68,7 +68,7 @@ class CompressIndexTest {
         photo("/p/a.png", 10, info = null, mime = "image/png")
 
         assertEquals(listOf("/p/new.jpg"), index.jpegsToRead().map { it.path })
-        index.record(ImageRef("/p/read.jpg", 11, 2))
+        index.record(MediaRef("/p/read.jpg", 11, 2))
         index.setMetadata("/p/read.jpg", ImageMetadata(4000, 3000, "image/jpeg"))
         assertEquals(listOf("/p/new.jpg", "/p/read.jpg"), index.jpegsToRead().map { it.path })
         assertEquals(emptyList<String>(), listed())
