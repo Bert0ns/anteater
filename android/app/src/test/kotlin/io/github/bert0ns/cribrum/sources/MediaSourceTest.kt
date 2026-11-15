@@ -671,6 +671,29 @@ class MediaStoreSourceTest {
     }
 
     @Test
+    fun `skips a path not_images holds with the same size and mtime, and takes it again once it changes`() {
+        val audioOnly = write("Movies/audio.mp4")
+        val changed = write("Movies/changed.mp4")
+        val fresh = write("Movies/fresh.mp4")
+        FakeMedia.videos = listOf(audioOnly to "video/mp4", changed to "video/mp4", fresh to "video/mp4")
+        FakeMedia.paths = emptyList()
+        Robolectric.setupContentProvider(FakeMedia::class.java, MediaStore.AUTHORITY)
+        val remembered = listOf(File(audioOnly).toMediaRef(), File(changed).toMediaRef().let { it.copy(mtimeNs = it.mtimeNs - 1) })
+        val notImages = object : NotImages {
+            override suspend fun notImages(): Collection<MediaRef> = remembered
+
+            override suspend fun addNotImages(files: List<MediaRef>) = error("MediaStore sniffs nothing")
+
+            override suspend fun forgetNotImages(paths: Collection<String>) = error("only the walk forgets")
+        }
+        val resolver = ApplicationProvider.getApplicationContext<Context>().contentResolver
+
+        val found = runBlocking { MediaStoreSource(resolver, listOf(root), notImages).scan().toList() }
+
+        assertEquals(listOf(changed, fresh), found.map { it.path })
+    }
+
+    @Test
     fun `skips the app trash, the system trash and pending files`() {
         val trashed = write("$TRASH_FOLDER/0b1c/IMG_1.jpg")
         val systemTrash = write("DCIM/Camera/.trashed-1760000000-IMG_2.jpg")

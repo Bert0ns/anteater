@@ -190,9 +190,10 @@ internal fun isSkipped(root: File, file: File): Boolean {
  * The images and videos MediaStore indexes, on every volume, the SD card included. It misses `.nomedia`
  * folders, which the deep scan covers, and leaves out what the deep scan leaves out. A video is one only in a
  * container the deep scan takes, by the MIME type MediaStore gave it. It walks no folder, so it reports no
- * walked root. [volumes] tell which folder is the root of a path.
+ * walked root. [volumes] tell which folder is the root of a path. A path [notImages] holds with the same size and mtime is
+ * left out, as the walk does: the walk found it is no video, such as an audio-only MP4, and MediaStore lists it all the same.
  */
-class MediaStoreSource(private val resolver: ContentResolver, private val volumes: List<File>) : MediaSource {
+class MediaStoreSource(private val resolver: ContentResolver, private val volumes: List<File>, private val notImages: NotImages? = null) : MediaSource {
     override val walkedRoots: List<File> = emptyList()
 
     @Volatile
@@ -206,6 +207,7 @@ class MediaStoreSource(private val resolver: ContentResolver, private val volume
         counts = emptyMap()
         var rows = 0
         var duplicates = 0
+        val remembered = notImages?.notImages().orEmpty().associateBy { it.path }
         // The query and the stats are one section; the emits wait for the collector, so they stay out of it. Without an emit
         // per row, each row checks for a stopped scan itself, so a stop does not wait for the stats of every row.
         val media = trace("Walk.mediaStore") {
@@ -231,7 +233,8 @@ class MediaStoreSource(private val resolver: ContentResolver, private val volume
                 val file = File(path)
                 if (isSkipped(volumes.firstOrNull(file::startsWith) ?: File("/"), file)) return@mapNotNull null
                 try {
-                    if (Files.isRegularFile(file.toPath(), LinkOption.NOFOLLOW_LINKS)) file.toMediaRef(type) else null
+                    if (!Files.isRegularFile(file.toPath(), LinkOption.NOFOLLOW_LINKS)) return@mapNotNull null
+                    file.toMediaRef(type).takeUnless { ref -> remembered[path]?.let { it.size == ref.size && it.mtimeNs == ref.mtimeNs } == true }
                 } catch (_: IOException) {
                     null
                 }
