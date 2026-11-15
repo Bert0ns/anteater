@@ -3,6 +3,9 @@ package io.github.bert0ns.cribrum.ui
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -68,5 +71,34 @@ class FreeNowTest {
         compose.onNodeWithText("Delete").performClick()
 
         assertTrue(confirmed)
+    }
+
+    @Test
+    fun `the snackbar and its Undo outlast their time while the dialog asks, and get it all again after Cancel`() {
+        val state = SnackbarHostState()
+        var asking by mutableStateOf(false)
+        var result: SnackbarResult? = null
+        val items = decision(2_300_000_000).trashed.map { TrashedImage(it, Instant.EPOCH, File("/trash/${it.path}"), Instant.EPOCH) }
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            AppSnackbarHost(state)
+            if (asking) FreeNowDialog(items, onConfirm = {}, onDismiss = { asking = false })
+            LaunchedEffect(Unit) {
+                result = state.showFreeNow(FreeNowVisuals(decision(2_300_000_000), "1 image moved to the trash, 2.3 GB", "Undo", "Free 2.3 GB now") { asking = true }, 10_000) { asking }
+            }
+        }
+        compose.mainClock.advanceTimeBy(4_000)
+
+        compose.onNodeWithText("Free 2.3 GB now").performClick()
+        compose.mainClock.advanceTimeBy(60_000) // the user reads the dialog for a minute
+        compose.onNodeWithText("Undo").assertExists()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.mainClock.advanceTimeBy(9_000)
+        compose.onNodeWithText("Undo").assertExists()
+        assertNull(result)
+        compose.mainClock.advanceTimeBy(2_000)
+
+        compose.onNodeWithText("Undo").assertDoesNotExist()
+        assertEquals(SnackbarResult.Dismissed, result)
     }
 }

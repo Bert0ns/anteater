@@ -44,6 +44,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.pluralStringResource
@@ -88,6 +89,7 @@ import io.github.bert0ns.cribrum.ui.icon
 import io.github.bert0ns.cribrum.ui.label
 import io.github.bert0ns.cribrum.ui.readableWidth
 import io.github.bert0ns.cribrum.ui.rememberHeat
+import io.github.bert0ns.cribrum.ui.showFreeNow
 import io.github.bert0ns.cribrum.ui.trailHue
 import kotlinx.coroutines.launch
 import java.io.File
@@ -218,12 +220,15 @@ private fun AppContent(model: ReviewViewModel) {
     val undo = stringResource(R.string.undo)
     // A page that trashed more than 1 GB offers to delete it for good now, after a dialog (§9).
     val freeNowLabel = decision?.let(::freeNowBytes)?.let { stringResource(R.string.free_now, Formatter.formatShortFileSize(context, it)) }
+    // Material's own time for a long snackbar, which the accessibility settings can lengthen.
+    val accessibility = LocalAccessibilityManager.current
+    val freeNowTimeout = accessibility?.calculateRecommendedTimeoutMillis(10_000, containsIcons = true, containsText = true, containsControls = true) ?: 10_000
     LaunchedEffect(decision) {
         if (decision == null || trashedMessage == null) return@LaunchedEffect
         val result = if (freeNowLabel == null) {
             snackbar.showSnackbar(trashedMessage, undo, withDismissAction = true, duration = SnackbarDuration.Long)
         } else {
-            snackbar.showSnackbar(FreeNowVisuals(decision, trashedMessage, undo, freeNowLabel) { model.askFreeNow(decision) })
+            snackbar.showFreeNow(FreeNowVisuals(decision, trashedMessage, undo, freeNowLabel) { model.askFreeNow(decision) }, freeNowTimeout) { state.freeNow?.decision == decision }
         }
         if (result == SnackbarResult.ActionPerformed) {
             haptics.performHapticFeedback(Haptic.TICK.type)
