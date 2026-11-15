@@ -203,9 +203,16 @@ class Pipeline(
      *
      * Every run walks and records images and videos. [images] and [videos] pick the steps after the walk (docs/design.md §4):
      * the image steps alone for "Scan now", the video steps alone for "Scan videos", and both, videos after every image
-     * step, for a night pass once "Scan videos" has run.
+     * step, for a night pass once "Scan videos" has run. A run that does both calls [imagesDone] with the stats so far once
+     * the image steps end, so a stop in the video steps does not lose that the photos were scanned.
      */
-    suspend fun run(source: MediaSource, images: Boolean = true, videos: Boolean = false, progress: Progress = { _, _, _ -> }): Stats = withContext(Dispatchers.IO) {
+    suspend fun run(
+        source: MediaSource,
+        images: Boolean = true,
+        videos: Boolean = false,
+        imagesDone: suspend (Stats) -> Unit = {},
+        progress: Progress = { _, _, _ -> },
+    ): Stats = withContext(Dispatchers.IO) {
         val stats = Stats()
         val found = LinkedHashSet<String>()
         val before = index.reviewStates()
@@ -259,7 +266,13 @@ class Pipeline(
         stats.forgotten = gone.size
 
         if (images) imageSteps(found, stats, progress)
+        if (images && videos) imagesDone(counted(found, stats))
         if (videos) videoSteps(stats, progress)
+        counted(found, stats)
+    }
+
+    /** Fills in the counts of what the walk [found], and drops the failures the user can do nothing about. */
+    private suspend fun counted(found: Set<String>, stats: Stats): Stats {
         val unreadable = index.unreadable().toSet()
         stats.unreadablePaths = found.filter { it in unreadable }
         stats.unreadable = stats.unreadablePaths.size
@@ -269,7 +282,7 @@ class Pipeline(
         // An image forgotten, trashed or moved since the walk failed because of that, and the user can do nothing about it.
         val statesNow = index.reviewStates()
         stats.failures.removeAll { it.path.isNotEmpty() && (!File(it.path).isFile || statesNow[it.path].let { state -> state == null || state == ReviewState.TRASHED }) }
-        stats
+        return stats
     }
 
     /** Every step after the walk for the images found, the group detectors last. */

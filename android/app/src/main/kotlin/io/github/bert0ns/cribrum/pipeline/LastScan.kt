@@ -47,11 +47,19 @@ class LastScan(private val preferences: SharedPreferences) {
 
     /**
      * Runs [scan] and keeps its report, with how long it took on the monotonic [elapsed] clock, and logs the
-     * times, the image counts and the group detectors that ran or skipped under [TIME_TAG]. A scan that throws or is cancelled leaves the previous one.
+     * times, the image counts and the group detectors that ran or skipped under [TIME_TAG]. A scan that throws or is cancelled leaves the previous one,
+     * or the report of its image steps if it called the function it is given once they ended: a night pass stopped in its video steps
+     * still scanned the photos.
      */
-    suspend fun run(images: Boolean = true, videos: Boolean = false, now: () -> Long = System::currentTimeMillis, elapsed: () -> Long = SystemClock::elapsedRealtime, scan: suspend () -> Stats): Stats {
+    suspend fun run(
+        images: Boolean = true,
+        videos: Boolean = false,
+        now: () -> Long = System::currentTimeMillis,
+        elapsed: () -> Long = SystemClock::elapsedRealtime,
+        scan: suspend (imagesDone: suspend (Stats) -> Unit) -> Stats,
+    ): Stats {
         val start = elapsed()
-        val stats = scan()
+        val stats = scan { record(it, now(), elapsed() - start, images = true, videos = false) }
         val durationMs = elapsed() - start
         record(stats, now(), durationMs, images, videos)
         Log.i(TIME_TAG, "images ${stats.images}")

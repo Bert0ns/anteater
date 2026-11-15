@@ -382,7 +382,13 @@ class IndexingWorkTest {
     }
 
     /** The real scan, with a pipeline whose readers say which of an image and a video it read. */
-    private class ReadingScan(context: Context, parameters: WorkerParameters, private val reads: MutableCollection<String>, private val done: CompletableDeferred<Unit>) : IndexWorker(context, parameters) {
+    private class ReadingScan(
+        context: Context,
+        parameters: WorkerParameters,
+        private val reads: MutableCollection<String>,
+        private val done: CompletableDeferred<Unit>,
+        private val readingVideo: () -> Unit = {},
+    ) : IndexWorker(context, parameters) {
         override fun hasStorageAccess() = true
 
         override suspend fun setForegroundInfo(info: ForegroundInfo) {}
@@ -399,6 +405,7 @@ class IndexingWorkTest {
             },
             videoMetadataReader = {
                 reads += "video"
+                readingVideo()
                 throw UnreadableVideo(it)
             },
         )
@@ -412,6 +419,9 @@ class IndexingWorkTest {
         }
     }
 
+    /** Runs as a video is read. */
+    private var readingVideo: () -> Unit = {}
+
     /** What a scan that [start] asks for reads, of an image and a video the index holds without their metadata. */
     private fun reads(start: () -> Unit): List<String> {
         val image = File(folder.root, "a.jpg").apply { writeText("a") }.toMediaRef()
@@ -419,7 +429,7 @@ class IndexingWorkTest {
         runBlocking { (app as CribrumApp).index.recordAll(listOf(image, video)) }
         val reads = ConcurrentLinkedQueue<String>()
         val done = CompletableDeferred<Unit>()
-        workerFactory = { ctx, params -> ReadingScan(ctx, params, reads, done) }
+        workerFactory = { ctx, params -> ReadingScan(ctx, params, reads, done, readingVideo) }
         start()
         runBlocking { withTimeout(10_000) { done.await() } }
         return reads.toList()
@@ -440,6 +450,26 @@ class IndexingWorkTest {
         (app as CribrumApp).videoScans.ran = true
 
         assertEquals(listOf("image", "video"), reads(::nightPass))
+    }
+
+    @Test
+    fun `a night pass stopped in its video part records that the photos were scanned, and keeps the time of the videos`() {
+        val appInstance = app as CribrumApp
+        appInstance.videoScans.ran = true
+        // A "Scan videos" ran before, and no photo scan has finished yet.
+        appInstance.lastScan.record(Stats(), finishedAt = 100, images = false, videos = true)
+        assertNull(appInstance.lastScan.report!!.imagesAt)
+
+        // The stop comes while the video is read, and the read ends after it, so the pipeline sees the cancel.
+        readingVideo = { runBlocking { Indexing.stop(app) } }
+
+        assertEquals(listOf("image", "video"), reads(::nightPass))
+
+        runBlocking { withTimeout(10_000) { while (IndexWorker.running.isLocked) yield() } }
+        val report = appInstance.lastScan.report!!
+        assertTrue(report.imagesAt!! > 100)
+        assertEquals(100L, report.videosAt)
+        assertFalse(report.videos)
     }
 
     @Test
