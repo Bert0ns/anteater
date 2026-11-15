@@ -273,6 +273,7 @@ dependencies {
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.coil.compose)
+    implementation(libs.coil.video)
     implementation(libs.compose.material.icons)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
