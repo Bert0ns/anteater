@@ -246,6 +246,26 @@ class PipelineTest {
     }
 
     @Test
+    fun `a video whose read fails some other way is a failure and is read again at the next scan`() {
+        val clip = videos().getValue("clip")
+        var fail = true
+        val pipeline = Pipeline(
+            index,
+            detectors = emptyList(),
+            groupDetectors = emptyList(),
+            videoMetadataReader = { if (fail && it == clip) throw IllegalStateException("media server died") else readVideo(it) },
+        )
+
+        val first = runBlocking { pipeline.run(source, videos = true) }
+        fail = false
+        runBlocking { pipeline.run(source, videos = true) }
+
+        assertEquals(listOf(Failure(clip.path, "metadata", "IllegalStateException: media server died")), first.failures)
+        assertFalse(clip.path in first.unreadablePaths)
+        assertEquals(clipMeta, runBlocking { index.videoMetadata(clip.path) })
+    }
+
+    @Test
     fun `a video whose track the phone does not see keeps its row through the next scan`() {
         val prores = videos().getValue("prores") // the reader marks it unreadable, as the retriever does a codec it lacks
         val walk = FilesystemMediaSource(root, notImages = index) { index.images() }

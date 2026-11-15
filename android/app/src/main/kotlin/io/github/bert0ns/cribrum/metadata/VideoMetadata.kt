@@ -45,7 +45,9 @@ fun readVideoMetadata(file: File, zone: ZoneId = ZoneId.systemDefault()): VideoM
     try {
         try {
             retriever.setDataSource(file.path)
-        } catch (error: RuntimeException) {
+        } catch (error: IllegalArgumentException) {
+            // What the native layer throws for a file it cannot parse. Another error, such as a media server that died, may
+            // pass: it reaches the pipeline as a failure, and the next scan reads the file again.
             throw UnreadableVideo(file, error)
         }
         fun key(key: Int): String? = retriever.extractMetadata(key)

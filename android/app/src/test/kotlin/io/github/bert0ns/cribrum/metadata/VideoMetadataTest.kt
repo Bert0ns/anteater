@@ -144,4 +144,12 @@ class VideoMetadataTest {
 
         for (file in listOf(broken, sizeless)) assertThrows(UnreadableVideo::class.java) { readVideoMetadata(file, ROME) }
     }
+
+    @Test
+    fun `another error from the retriever is not unreadable, so the next scan tries again`() {
+        val file = folder.newFile()
+        ShadowMediaMetadataRetriever.addException(DataSource.toDataSource(file.path), IllegalStateException("media server died"))
+
+        assertThrows(IllegalStateException::class.java) { readVideoMetadata(file, ROME) }
+    }
 }
