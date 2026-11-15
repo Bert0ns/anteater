@@ -108,7 +108,7 @@ internal class FakePlayer(private val lengthMs: Long = 61_000) : SimpleBasePlaye
 }
 
 /** The players a screen under test made, as [LocalPlayerFactory] gives them out. */
-internal class Players {
+internal class Players(private val lengthMs: Long = 61_000) {
     val made = mutableListOf<FakePlayer>()
-    val factory: (Context) -> Player = { FakePlayer().also(made::add) }
+    val factory: (Context) -> Player = { FakePlayer(lengthMs).also(made::add) }
 }

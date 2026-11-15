@@ -431,12 +431,32 @@ val scenes: List<Scene> = listOf(
         click(plural(R.plurals.videos_trash, 1, 1, Formatter.formatShortFileSize(app, 1_460_000_000L).replace(' ', '\u00A0')))
         awaitText(plural(R.plurals.videos_summary_title, 1, 1))
     },
-    Scene("videos-largest-full-size", "Largest videos, a video at full size", "Look at a frame of the video, with its length and size, select it with the checkbox, swipe to the next one, or close the view. The video does not play yet.", Variant.base) {
+    Scene("videos-largest-full-size", "Largest videos, a video at full size", "Look at a frame of the video, with its length and size, and the strip of frames across it. Play it, select it with the checkbox, swipe to the next one, or close the view.", Variant.base) {
         videoLibrary()
         val model = app()
         openVideos(model)
         described("VID_20261019")[0].performTouchInput { longClick() }
         awaitTag("fullSize")
+    },
+    Scene("videos-largest-playing", "Largest videos, a video playing", "Pause the video, drag the seek bar, jump to one of the five frames, mute it, or swipe to the next video, which stops this one. Robolectric draws no video, so the picture stays the frame.", Variant.base) {
+        videoLibrary()
+        val model = app()
+        openVideos(model)
+        described("VID_20261019")[0].performTouchInput { longClick() }
+        awaitTag("fullSize")
+        described(str(R.string.video_play))[0].performClick()
+        await("the video plays") { described(str(R.string.video_pause)).fetchSemanticsNodes().isNotEmpty() }
+    },
+    Scene("videos-largest-play-failed", "Largest videos, a video that fails to play", "Read that the video cannot be played. The frame stays, and the video can still be selected, kept or trashed.", Variant.base) {
+        videoLibrary()
+        val model = app()
+        openVideos(model)
+        described("VID_20261019")[0].performTouchInput { longClick() }
+        awaitTag("fullSize")
+        described(str(R.string.video_play))[0].performClick()
+        await("the video plays") { players.made.isNotEmpty() }
+        players.made.single().fail()
+        awaitText(str(R.string.video_play_failed))
     },
     Scene("videos-largest-unreadable-full-size", "Largest videos, a video that cannot be read at full size", "Read that the video cannot be read. It stays in the list so it can still be kept or trashed.", Variant.base) {
         videoLibrary()
@@ -517,7 +537,7 @@ val scenes: List<Scene> = listOf(
         described("IMG_")[0].performTouchInput { longClick() }
         awaitTag("fullSize")
     },
-    Scene("trash-video-full-size", "Trash, a video at full size", "Look at a frame of a trashed video, with its length and size, before restoring it or deleting it for good, tick the checkbox to select it, read its folder and its days left, swipe to the next one, or close the view. The video does not play yet.", Variant.base) {
+    Scene("trash-video-full-size", "Trash, a video at full size", "Look at a frame of a trashed video, with its length and size and the strip of frames across it, play it before restoring it or deleting it for good, tick the checkbox to select it, read its folder and its days left, swipe to the next one, or close the view.", Variant.base) {
         val model = app(trashed(this))
         openTrash(model)
         awaitModel(model, "the items") { it.state.value.trashed.isNotEmpty() }
