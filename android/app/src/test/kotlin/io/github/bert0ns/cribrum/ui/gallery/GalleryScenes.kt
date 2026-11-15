@@ -26,6 +26,7 @@ import io.github.bert0ns.cribrum.pipeline.Failure
 import io.github.bert0ns.cribrum.pipeline.Indexing
 import io.github.bert0ns.cribrum.pipeline.ScanProgress
 import io.github.bert0ns.cribrum.pipeline.Stats
+import io.github.bert0ns.cribrum.pipeline.VIDEO_METADATA_STEP
 import io.github.bert0ns.cribrum.review.ReviewOrder
 import io.github.bert0ns.cribrum.trash.Trash
 import io.github.bert0ns.cribrum.trash.TrashedImage
@@ -356,7 +357,7 @@ val scenes: List<Scene> = listOf(
         awaitText(str(R.string.undo))
     },
     // Videos
-    Scene("videos-tab", "Clean, the Videos tab", "See how many videos wait for a review and how much space they can free, or open the largest videos. The Photos tab is one tap away, and the tab used last opens first.", Variant.wide) {
+    Scene("videos-tab", "Clean, the Videos tab", "See how many videos Scan videos has not analysed yet, how many wait for a review and how much space they can free. Start Scan videos, or open the largest videos. The Photos tab is one tap away, and the tab used last opens first.", Variant.wide) {
         world.library()
         videoLibrary()
         val model = app()
@@ -364,7 +365,7 @@ val scenes: List<Scene> = listOf(
         click(str(R.string.tab_videos))
         awaitText(str(R.string.videos_largest))
     },
-    Scene("videos-tab-before-scan", "Clean, the Videos tab before a scan has found a video", "Read that videos appear after the next scan, and go to the Photos tab to scan.", Variant.base) {
+    Scene("videos-tab-before-scan", "Clean, the Videos tab before a scan has found a video", "Read that videos appear after the next scan, and start Scan videos to look for them.", Variant.base) {
         world.library()
         world.commit()
         val model = app()
@@ -372,7 +373,16 @@ val scenes: List<Scene> = listOf(
         click(str(R.string.tab_videos))
         awaitText(str(R.string.videos_after_scan))
     },
-    Scene("videos-tab-scanning", "Clean, a scan running, seen from the Videos tab", "Watch the scan's phase and count from either tab and stop it. Scan now is not offered here.", Variant.base) {
+    Scene("videos-tab-no-videos", "Clean, the Videos tab once a scan found no video", "Read that the phone has no video. Scan videos looks again.", Variant.base) {
+        world.library()
+        world.commit()
+        app.lastScan.record(Stats(images = 2_350), finishedAt = lastNight())
+        val model = app()
+        awaitHome(model)
+        click(str(R.string.tab_videos))
+        awaitText(str(R.string.videos_none_found))
+    },
+    Scene("videos-tab-scanning", "Clean, a photo scan running, seen from the Videos tab", "Watch the photo scan's phase and count from either tab and stop it. Scan videos comes back when it ends.", Variant.base) {
         world.library()
         videoLibrary()
         val model = app()
@@ -380,6 +390,25 @@ val scenes: List<Scene> = listOf(
         click(str(R.string.tab_videos))
         RunningScanWorker.progress = ScanProgress("detectors", 4_320, 10_220, 11 * 60_000L)
         Indexing.scanNow(app)
+        awaitText(str(R.string.scan_stop))
+    },
+    Scene("videos-tab-video-scan", "Clean, Scan videos reading the videos", "Watch the video scan's own phases, its count and the time left, and stop it. What it finished stays.", Variant.wide) {
+        world.library()
+        videoLibrary()
+        val model = app()
+        awaitHome(model)
+        click(str(R.string.tab_videos))
+        RunningScanWorker.progress = ScanProgress(VIDEO_METADATA_STEP, 312, 1_419, 9 * 60_000L)
+        Indexing.scanVideos(app)
+        awaitText(str(R.string.scan_stop))
+    },
+    Scene("clean-video-scan", "Clean, the Photos tab while Scan videos runs", "Read that the video scan is running, follow its phase and stop it. Scan now comes back when it ends.", Variant.base) {
+        world.library()
+        world.commit()
+        val model = app()
+        awaitHome(model)
+        RunningScanWorker.progress = ScanProgress("scan", 3_870, 0)
+        Indexing.scanVideos(app)
         awaitText(str(R.string.scan_stop))
     },
     Scene("videos-largest", "Largest videos, the list with nothing selected", "Look at the videos from the largest, with their length and size, one with a heart from the gallery and one that cannot be read. Tap a video to select it, hold one to see it full size.", Variant.full) {
@@ -648,7 +677,7 @@ val scenes: List<Scene> = listOf(
         awaitText(str(R.string.storage_map_empty))
     },
     // Settings
-    Scene("settings-top", "Settings, the top: what the user changes", "Choose how long the trash keeps images, remove an excluded folder, open the storage map or the detection thresholds, or turn the haptics off.", Variant.full) {
+    Scene("settings-top", "Settings, the top: what the user changes", "Choose how long the trash keeps images, remove an excluded folder, open the storage map or the detection thresholds, turn the haptics off, or keep videos out of the night scan.", Variant.full) {
         settings(app())
     },
     Scene("settings-bottom", "Settings, scrolled to the end", "Read how many images and videos are indexed and the space they take, the storage the app takes, delete the analysis data, or read the version and open the website or the source.", Variant.base) {
