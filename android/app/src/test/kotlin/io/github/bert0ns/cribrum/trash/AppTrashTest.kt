@@ -91,6 +91,61 @@ class AppTrashTest {
         assertTrue(trashed().isEmpty())
     }
 
+    /** The file's inode: a rename keeps it, a copy gets a new one. */
+    private fun inode(file: File): Any = Files.getAttribute(file.toPath(), "unix:ino")
+
+    @Test
+    fun `a video moves by rename on its volume, both ways, never by copy`() = test {
+        val clip = video("DCIM/Camera/big.mp4")
+        val before = inode(File(clip.path))
+
+        moveToTrash(listOf(clip))
+        assertEquals(before, inode(trashed().single().file))
+        restore(listOf(clip))
+
+        assertEquals(before, inode(File(clip.path)))
+    }
+
+    @Test
+    fun `a file on another volume goes to that volume's trash and back, by rename`() = runBlocking {
+        val card = folder.newFolder("card")
+        val trash = AppTrash({ listOf(volume, card) }, clock)
+        val clip = File(card, "DCIM/clip.mp4").apply {
+            parentFile!!.mkdirs()
+            writeText("mp4 bytes")
+        }.toMediaRef(MediaType.VIDEO)
+        val before = inode(File(clip.path))
+
+        trash.moveToTrash(listOf(clip))
+        val item = trash.trashed().single()
+        assertEquals(File(card, TRASH_FOLDER), item.file.parentFile!!.parentFile)
+        assertEquals(before, inode(item.file))
+        assertEquals(listOf(clip), trash.restore(listOf(clip)))
+
+        assertEquals(before, inode(File(clip.path)))
+        assertFalse(File(volume, TRASH_FOLDER).exists())
+    }
+
+    @Test
+    fun `an item whose original path is on another volume stays in the trash, since moving it there would copy it`() = runBlocking {
+        val card = folder.newFolder("card")
+        val trash = AppTrash({ listOf(volume, card) }, clock)
+        val clip = video("DCIM/clip.mp4")
+        trash.moveToTrash(listOf(clip))
+        // A trash folder copied by hand from the card to the phone, say: the record names the card.
+        val origin = File(trash.trashed().single().file.parentFile, "origin.properties")
+        val props = Properties().apply { origin.inputStream().use(::load) }
+        val elsewhere = File(card, "DCIM/clip.mp4").path
+        props["path"] = elsewhere
+        origin.outputStream().use { props.store(it, null) }
+        val moved = clip.copy(path = elsewhere)
+
+        assertEquals(emptyList<MediaRef>(), trash.restore(listOf(moved)))
+
+        assertFalse(File(elsewhere).exists())
+        assertEquals(listOf(moved), trash.trashed().map { it.original })
+    }
+
     @Test
     fun `an item written before the trash recorded media types reads as an image`() = test {
         val image = photo("DCIM/before.jpg")
