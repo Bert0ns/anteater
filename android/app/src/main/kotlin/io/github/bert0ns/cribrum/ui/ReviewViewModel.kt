@@ -18,6 +18,7 @@ import io.github.bert0ns.cribrum.review.Page
 import io.github.bert0ns.cribrum.review.Review
 import io.github.bert0ns.cribrum.review.ReviewGroup
 import io.github.bert0ns.cribrum.review.ReviewOrder
+import io.github.bert0ns.cribrum.review.VideoItem
 import io.github.bert0ns.cribrum.sources.FavoriteRequests
 import io.github.bert0ns.cribrum.sources.favoritePaths
 import io.github.bert0ns.cribrum.tracing.traceSuspend
@@ -53,19 +54,22 @@ sealed interface Screen {
     data object Settings : Screen
     data object StorageMap : Screen
     data object Thresholds : Screen
+
+    /** "Largest videos" (docs/design.md §6.5, §8), opened from the Videos tab of Clean. */
+    data object Videos : Screen
 }
 
 /** The destination of the bar that this screen belongs to, and the one it goes back to. */
 val Screen.destination: Destination
     get() = when (this) {
-        Screen.Home, is Screen.Category -> Destination.Clean
+        Screen.Home, is Screen.Category, Screen.Videos -> Destination.Clean
         is Screen.Trash -> from
         Screen.Compress -> Destination.Compress
         Screen.Settings, Screen.Thresholds, Screen.StorageMap -> Destination.Settings
     }
 
 /** A full screen view covers the navigation bar. */
-val Screen.coversNavigation: Boolean get() = this is Screen.Category || this is Screen.Trash || this == Screen.Thresholds || this == Screen.StorageMap
+val Screen.coversNavigation: Boolean get() = this is Screen.Category || this == Screen.Videos || this is Screen.Trash || this == Screen.Thresholds || this == Screen.StorageMap
 
 /** What the "Free now" dialog deletes: the trash items [decision] made that are still in the trash. */
 data class FreeNow(val decision: Decision, val items: List<TrashedImage>)
@@ -80,6 +84,14 @@ data class ReviewState(
     val freeableBytes: Long = 0,
     /** Nothing is indexed yet, so the home screen points to "Scan now". */
     val indexEmpty: Boolean = false,
+    /** The tab of Clean the home shows, the one used last. */
+    val cleanTab: CleanTab = CleanTab.PHOTOS,
+    /** "Largest videos": every video not reviewed, largest first. Read with the home and again when the page opens. */
+    val videos: List<VideoItem> = emptyList(),
+    /** The index holds a video, reviewed or not: before that, the Videos tab says videos appear after the next scan. */
+    val videosIndexed: Boolean = false,
+    /** Paths of the videos selected on "Largest videos". Nothing is selected for the user. */
+    val videoSelected: Set<String> = emptySet(),
     val page: List<ReviewGroup> = emptyList(),
     /** Candidates the open category has left, the page included. */
     val remaining: Int = 0,
@@ -152,7 +164,7 @@ class ReviewViewModel @JvmOverloads constructor(
     init {
         // The first read of the preferences can block, so it stays off the main thread.
         load {
-            withContext(Dispatchers.IO) { it.copy(retentionDays = app.trashRetention.days, hapticsEnabled = app.haptics.enabled) }
+            withContext(Dispatchers.IO) { it.copy(retentionDays = app.trashRetention.days, hapticsEnabled = app.haptics.enabled, cleanTab = app.cleanTab.tab) }
         }
     }
 
@@ -164,7 +176,7 @@ class ReviewViewModel @JvmOverloads constructor(
         refreshJob?.cancel()
         refreshJob = load {
             val lastScan = withContext(Dispatchers.IO) { app.lastScan.report }
-            it.copy(indexEmpty = app.index.imageCount() == 0, lastScan = lastScan).withOverview(review.overview())
+            it.copy(indexEmpty = app.index.imageCount() == 0, lastScan = lastScan).withOverview(review.overview()).withVideos()
         }
     }
 
@@ -179,6 +191,39 @@ class ReviewViewModel @JvmOverloads constructor(
         val grouping = app.reviewOrder[category]
         it.copy(screen = Screen.Category(category), lastDecision = null, lastExclusion = null, skipped = emptySet(), reviewOrder = grouping)
             .showing(pageFor(category, it, skipped = emptySet(), grouping = grouping))
+    }
+
+    /** The tab Clean opens on from now on, and shows now. */
+    fun selectCleanTab(tab: CleanTab) {
+        app.cleanTab.tab = tab
+        queue { it.copy(cleanTab = tab) }
+    }
+
+    /** Opens "Largest videos", read again: the videos change with each scan and each trash. Nothing is selected for the user. */
+    fun openVideos() = load {
+        it.copy(screen = Screen.Videos, lastDecision = null, lastExclusion = null, videoSelected = emptySet()).withVideos()
+    }
+
+    /** A video that left the list while the tap waited for a change has no selection to flip. */
+    fun toggleVideo(path: String) = queue {
+        if (it.videos.none { item -> item.video.path == path }) return@queue it
+        it.copy(videoSelected = if (path in it.videoSelected) it.videoSelected - path else it.videoSelected + path)
+    }
+
+    /**
+     * Trashes the videos in [paths], or keeps them: the selection the user saw, so a confirmation of one that is no longer on
+     * screen does nothing. A favourite is not trashed unless the dialog asked about it (§6.2): one the gallery marked since
+     * shows the list again with the new heart and the selection, and trashes nothing.
+     */
+    fun applyVideos(paths: Set<String>, trash: Boolean) = load { state ->
+        if (state.screen != Screen.Videos || paths.isEmpty() || paths != state.videoSelected) return@load state
+        val chosen = state.videos.filter { it.video.path in paths }.map { it.video }
+        if (trash) {
+            val confirmed = state.videos.filter { it.isFavorite }.map { it.video.path }
+            if (!confirmed.containsAll(review.favoritesAmong(chosen))) return@load state.withVideos().copy(favoriteAppeared = true)
+        }
+        val decision = if (trash) review.apply(chosen, emptyList()) else review.apply(emptyList(), chosen)
+        state.copy(lastDecision = decision, videoSelected = emptySet()).withVideos()
     }
 
     /** Remembered for the category, and applied to the page at once. The user's marks on images that stay on the page stay. */
@@ -334,6 +379,12 @@ class ReviewViewModel @JvmOverloads constructor(
         it.withThresholds(app.thresholds.values)
     }
 
+    /** "Largest videos" read again, with whether the index holds any video at all. The selection keeps the videos still listed. */
+    private suspend fun ReviewState.withVideos(): ReviewState {
+        val videos = review.largestVideos()
+        return copy(videos = videos, videosIndexed = videos.isNotEmpty() || app.index.hasVideos(), videoSelected = videoSelected intersect videos.mapTo(HashSet()) { it.video.path })
+    }
+
     private fun ReviewState.withOverview(overview: Overview) = copy(categories = overview.categories, freeableBytes = overview.freeableBytes)
 
     private suspend fun ReviewState.withThresholds(thresholds: Map<Category, Float>) = copy(thresholds = thresholds, thresholdCounts = review.counts(thresholds))
@@ -389,8 +440,8 @@ class ReviewViewModel @JvmOverloads constructor(
      */
     private suspend fun ReviewState.home(): ReviewState {
         val lastScan = withContext(Dispatchers.IO) { app.lastScan.report }
-        return copy(screen = Screen.Home, page = emptyList(), lastDecision = null, lastExclusion = null, skipped = emptySet(), indexEmpty = app.index.imageCount() == 0, lastScan = lastScan)
-            .withOverview(review.overview())
+        return copy(screen = Screen.Home, page = emptyList(), videoSelected = emptySet(), lastDecision = null, lastExclusion = null, skipped = emptySet(), indexEmpty = app.index.imageCount() == 0, lastScan = lastScan)
+            .withOverview(review.overview()).withVideos()
     }
 
     /** An image that left the page while the tap waited for a change has no mark to flip. */
@@ -454,8 +505,10 @@ class ReviewViewModel @JvmOverloads constructor(
         if (state.lastDecision != decision) return@load state
         val stayed = review.undo(decision)
         val elsewhere = elsewhere(decision.items, stayed)
-        val category = (state.screen as? Screen.Category)?.category ?: return@load state.copy(lastDecision = null, stayedInTrash = stayed, stayedElsewhere = elsewhere)
-        state.showing(pageFor(category, state)).copy(lastDecision = null, stayedInTrash = stayed, stayedElsewhere = elsewhere)
+        val undone = state.copy(lastDecision = null, stayedInTrash = stayed, stayedElsewhere = elsewhere)
+        if (state.screen == Screen.Videos) return@load undone.withVideos()
+        val category = (state.screen as? Screen.Category)?.category ?: return@load undone
+        undone.showing(pageFor(category, state))
     }
 
     /**

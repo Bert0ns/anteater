@@ -8,6 +8,7 @@ import io.github.bert0ns.cribrum.metadata.ImageMetadata
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Role
@@ -963,6 +964,167 @@ class ReviewViewModelTest {
         settle(model) { it.state.value.lastDecision != null }
 
         assertEquals(setOf("/sdcard/a.jpg", "/sdcard/b.jpg"), trash.moves.single().map { it.path }.toSet())
+    }
+
+    private fun clip(path: String, size: Long, unreadable: Boolean = false) = runBlocking {
+        app.index.record(MediaRef(path, size, 1L, MediaType.VIDEO))
+        if (unreadable) app.index.setUnreadable(path)
+    }
+
+    private fun videoPaths(model: ReviewViewModel) = model.state.value.videos.map { it.video.path }
+
+    @Test
+    fun `the home reads the videos, largest first, and knows whether the index holds any`() {
+        val empty = ReviewViewModel(app)
+        empty.refresh()
+        settle(empty) { true }
+        assertFalse(empty.state.value.videosIndexed)
+
+        clip("/sdcard/small.mp4", 10)
+        clip("/sdcard/big.mp4", 300)
+        val model = ReviewViewModel(app)
+        model.refresh()
+        settle(model) { it.state.value.videos.isNotEmpty() }
+
+        assertEquals(listOf("/sdcard/big.mp4", "/sdcard/small.mp4"), videoPaths(model))
+        assertTrue(model.state.value.videosIndexed)
+    }
+
+    @Test
+    fun `a video that was all reviewed leaves the list, but the tab does not say videos wait for a scan`() {
+        clip("/sdcard/a.mp4", 10)
+        runBlocking { app.index.setReviewState("/sdcard/a.mp4", ReviewState.KEPT) }
+        val model = ReviewViewModel(app)
+        model.refresh()
+        settle(model) { it.state.value.videosIndexed }
+
+        assertEquals(emptyList<String>(), videoPaths(model))
+    }
+
+    @Test
+    fun `largest videos opens with nothing selected, a tap selects and a second tap unselects`() {
+        clip("/sdcard/a.mp4", 10)
+        clip("/sdcard/b.mp4", 20)
+        val model = ReviewViewModel(app)
+        model.openVideos()
+        settle(model) { videoPaths(it).size == 2 }
+
+        assertEquals(Screen.Videos, model.state.value.screen)
+        assertEquals(emptySet<String>(), model.state.value.videoSelected)
+        model.toggleVideo("/sdcard/a.mp4")
+        model.toggleVideo("/sdcard/gone.mp4") // not on the list: nothing to flip
+        settle(model) { it.state.value.videoSelected.isNotEmpty() }
+        assertEquals(setOf("/sdcard/a.mp4"), model.state.value.videoSelected)
+        model.toggleVideo("/sdcard/a.mp4")
+        settle(model) { it.state.value.videoSelected.isEmpty() }
+    }
+
+    @Test
+    fun `trashing the selected videos moves them, takes them off the list and offers Undo, which brings them back`() {
+        clip("/sdcard/a.mp4", 10)
+        clip("/sdcard/b.mp4", 20)
+        val trash = RecordingTrash()
+        val model = ReviewViewModel(app, Review(app.index, trash))
+        model.openVideos()
+        settle(model) { videoPaths(it).size == 2 }
+        model.toggleVideo("/sdcard/b.mp4")
+        settle(model) { it.state.value.videoSelected.isNotEmpty() }
+
+        model.applyVideos(setOf("/sdcard/b.mp4"), trash = true)
+        settle(model) { it.state.value.lastDecision != null }
+
+        assertEquals(listOf("/sdcard/b.mp4"), trash.moves.single().map { it.path })
+        assertEquals(listOf("/sdcard/a.mp4"), videoPaths(model))
+        assertEquals(emptySet<String>(), model.state.value.videoSelected)
+
+        model.undo(model.state.value.lastDecision!!)
+        settle(model) { videoPaths(it).size == 2 }
+
+        assertEquals(listOf("/sdcard/b.mp4", "/sdcard/a.mp4"), videoPaths(model))
+    }
+
+    @Test
+    fun `keeping the selected videos marks them kept and takes them off the list, trashing nothing`() {
+        clip("/sdcard/a.mp4", 10)
+        clip("/sdcard/b.mp4", 20)
+        val trash = RecordingTrash()
+        val model = ReviewViewModel(app, Review(app.index, trash))
+        model.openVideos()
+        settle(model) { videoPaths(it).size == 2 }
+        model.toggleVideo("/sdcard/b.mp4")
+        settle(model) { it.state.value.videoSelected.isNotEmpty() }
+
+        model.applyVideos(setOf("/sdcard/b.mp4"), trash = false)
+        settle(model) { it.state.value.lastDecision != null }
+
+        assertEquals(emptyList<MediaRef>(), trash.moves.flatten())
+        assertEquals(listOf("/sdcard/a.mp4"), videoPaths(model))
+        runBlocking { assertEquals(ReviewState.KEPT, app.index.reviewState("/sdcard/b.mp4")) }
+    }
+
+    @Test
+    fun `a selection the user did not see does nothing`() {
+        clip("/sdcard/a.mp4", 10)
+        val trash = RecordingTrash()
+        val model = ReviewViewModel(app, Review(app.index, trash))
+        model.openVideos()
+        settle(model) { videoPaths(it).size == 1 }
+
+        model.applyVideos(setOf("/sdcard/a.mp4"), trash = true) // nothing is selected
+
+        settle(model) { true }
+        assertEquals(emptyList<List<MediaRef>>(), trash.moves)
+    }
+
+    @Test
+    fun `a video that became a favourite since the list was read is not trashed until the user has seen it`() {
+        clip("/sdcard/a.mp4", 10)
+        var favorites = emptySet<String>()
+        val trash = RecordingTrash()
+        val model = ReviewViewModel(app, Review(app.index, trash, favorites = { favorites }))
+        model.openVideos()
+        settle(model) { videoPaths(it).size == 1 }
+        model.toggleVideo("/sdcard/a.mp4")
+        settle(model) { it.state.value.videoSelected.isNotEmpty() }
+        favorites = setOf("/sdcard/a.mp4") // hearted in the gallery meanwhile
+
+        model.applyVideos(setOf("/sdcard/a.mp4"), trash = true)
+        settle(model) { it.state.value.favoriteAppeared }
+
+        assertEquals(emptyList<List<MediaRef>>(), trash.moves)
+        assertEquals(listOf(true), model.state.value.videos.map { it.isFavorite })
+        assertEquals(setOf("/sdcard/a.mp4"), model.state.value.videoSelected) // the selection stays, so the next tap asks
+
+        model.applyVideos(setOf("/sdcard/a.mp4"), trash = true) // now the screen's dialog has asked about the heart
+        settle(model) { it.state.value.lastDecision != null }
+
+        assertEquals(listOf("/sdcard/a.mp4"), trash.moves.single().map { it.path })
+    }
+
+    @Test
+    fun `Clean opens on the tab the user used last`() {
+        val model = ReviewViewModel(app)
+        model.selectCleanTab(CleanTab.VIDEOS)
+        settle(model) { it.state.value.cleanTab == CleanTab.VIDEOS }
+
+        val reopened = ReviewViewModel(app)
+        settle(reopened) { it.state.value.cleanTab == CleanTab.VIDEOS }
+    }
+
+    @Test
+    fun `Back from largest videos returns to the home, with nothing selected`() {
+        clip("/sdcard/a.mp4", 10)
+        val model = ReviewViewModel(app)
+        model.openVideos()
+        settle(model) { videoPaths(it).size == 1 }
+        model.toggleVideo("/sdcard/a.mp4")
+        settle(model) { it.state.value.videoSelected.isNotEmpty() }
+
+        model.back()
+        settle(model) { it.state.value.screen == Screen.Home }
+
+        assertEquals(emptySet<String>(), model.state.value.videoSelected)
+        assertEquals(Destination.Clean, model.state.value.screen.destination)
     }
 
     /** A view model on a page of [count] blurry images, whose favourite requests the user answers with [granted] and the gallery records. */

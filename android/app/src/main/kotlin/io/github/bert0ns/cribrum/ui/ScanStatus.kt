@@ -47,7 +47,10 @@ fun ScanStatus(
     heat: Heat? = null,
     compressing: Boolean = false,
     lastScanAt: Long? = null,
+    /** False on the Videos tab, where "Scan now" is not offered: its progress and Stop still show while a scan runs. */
+    canStart: Boolean = true,
 ) {
+    if (progress == null && !canStart) return
     Column(modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         when {
             // A scan does not start under a compression (design §9), so the button waits for it to end.

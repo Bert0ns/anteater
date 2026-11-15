@@ -62,6 +62,8 @@ import io.github.bert0ns.cribrum.ui.AllFilesAccess
 import io.github.bert0ns.cribrum.ui.AppSnackbarHost
 import io.github.bert0ns.cribrum.ui.CategoryList
 import io.github.bert0ns.cribrum.ui.CategoryScreen
+import io.github.bert0ns.cribrum.ui.CleanTab
+import io.github.bert0ns.cribrum.ui.CleanTabs
 import io.github.bert0ns.cribrum.ui.CompressScreen
 import io.github.bert0ns.cribrum.ui.CompressViewModel
 import io.github.bert0ns.cribrum.ui.CribrumTheme
@@ -80,6 +82,8 @@ import io.github.bert0ns.cribrum.ui.SettingsScreen
 import io.github.bert0ns.cribrum.ui.StorageMapScreen
 import io.github.bert0ns.cribrum.ui.ThresholdsScreen
 import io.github.bert0ns.cribrum.ui.TrashScreen
+import io.github.bert0ns.cribrum.ui.VideosScreen
+import io.github.bert0ns.cribrum.ui.VideosTab
 import io.github.bert0ns.cribrum.ui.WithHaptics
 import io.github.bert0ns.cribrum.ui.allFilesAccessSettings
 import io.github.bert0ns.cribrum.ui.categoryName
@@ -175,10 +179,12 @@ fun App(model: ReviewViewModel = viewModel()) {
 internal fun appliedMessage(context: Context, decision: Decision): String {
     val resources = context.resources
     val size = Formatter.formatShortFileSize(context, decision.trashed.sumOf { it.size }).replace(' ', '\u00A0')
+    // "File" once a video is among them: "image" would be wrong.
+    val files = (decision.trashed + decision.kept + decision.failed).any { it.mediaType == MediaType.VIDEO }
     return listOfNotNull(
-        decision.trashed.takeIf { it.isNotEmpty() }?.let { resources.getQuantityString(R.plurals.trashed_snackbar, it.size, it.size, size) },
-        if (decision.trashed.isEmpty() && decision.failed.isEmpty()) resources.getQuantityString(R.plurals.kept_snackbar, decision.kept.size, decision.kept.size) else null,
-        decision.failed.takeIf { it.isNotEmpty() }?.let { resources.getQuantityString(R.plurals.not_moved_snackbar, it.size, it.size) },
+        decision.trashed.takeIf { it.isNotEmpty() }?.let { resources.getQuantityString(if (files) R.plurals.trashed_files_snackbar else R.plurals.trashed_snackbar, it.size, it.size, size) },
+        if (decision.trashed.isEmpty() && decision.failed.isEmpty()) resources.getQuantityString(if (files) R.plurals.kept_files_snackbar else R.plurals.kept_snackbar, decision.kept.size, decision.kept.size) else null,
+        decision.failed.takeIf { it.isNotEmpty() }?.let { resources.getQuantityString(if (files) R.plurals.not_moved_files_snackbar else R.plurals.not_moved_snackbar, it.size, it.size) },
     ).joinToString(". ")
 }
 
@@ -275,7 +281,7 @@ private fun AppContent(model: ReviewViewModel) {
         model.dismissChangeFailed()
     }
     val favoriteAppeared = state.favoriteAppeared
-    val favoriteAppearedMessage = stringResource(R.string.favorite_appeared_snackbar)
+    val favoriteAppearedMessage = stringResource(if (state.screen == Screen.Videos) R.string.favorite_appeared_videos_snackbar else R.string.favorite_appeared_snackbar)
     LaunchedEffect(favoriteAppeared) {
         if (!favoriteAppeared) return@LaunchedEffect
         snackbar.showSnackbar(favoriteAppearedMessage, withDismissAction = true, duration = SnackbarDuration.Long)
@@ -316,7 +322,7 @@ private fun AppContent(model: ReviewViewModel) {
     ) {
         Scaffold(
             // The category screen has its own host, above the trash button.
-            snackbarHost = { if (screen !is Screen.Category) AppSnackbarHost(snackbar) },
+            snackbarHost = { if (screen !is Screen.Category && screen != Screen.Videos) AppSnackbarHost(snackbar) },
             topBar = {
                 TopAppBar(
                     title = {
@@ -325,6 +331,7 @@ private fun AppContent(model: ReviewViewModel) {
                                 Screen.Home -> stringResource(R.string.app_name)
                                 Screen.Compress -> stringResource(R.string.nav_compress)
                                 is Screen.Category -> categoryName(screen.category)
+                                Screen.Videos -> stringResource(R.string.videos_largest)
                                 is Screen.Trash -> stringResource(R.string.trash)
                                 // The bar's own label, which the #322 fix keeps short enough for a font scale of 1.5.
                                 Screen.Settings -> stringResource(R.string.nav_settings)
@@ -359,17 +366,30 @@ private fun AppContent(model: ReviewViewModel) {
                 val body: @Composable () -> Unit = {
                     when (screen) {
                         Screen.Home -> Column(Modifier.readableWidth()) {
+                            CleanTabs(state.cleanTab, model::selectCleanTab)
+                            val photos = state.cleanTab == CleanTab.PHOTOS
+                            // "Scan now" stays on Photos; a running scan shows its progress and Stop on both tabs.
                             ScanStatus(
                                 progress,
                                 onScan = { Indexing.scanNow(context) },
                                 onStop = { scope.launch { Indexing.stop(context) } },
-                                indexEmpty = state.indexEmpty,
+                                indexEmpty = state.indexEmpty && photos,
                                 heat = rememberHeat(running = progress != null),
                                 compressing = compressing,
                                 lastScanAt = state.lastScan?.finishedAt,
+                                canStart = photos,
                             )
-                            CategoryList(state.categories, state.freeableBytes, model::open)
+                            if (photos) CategoryList(state.categories, state.freeableBytes, model::open) else VideosTab(state.videos, state.videosIndexed, model::openVideos)
                         }
+                        Screen.Videos -> VideosScreen(
+                            state.videos,
+                            state.videoSelected,
+                            model::toggleVideo,
+                            model::applyVideos,
+                            snackbar = snackbar,
+                            retentionDays = state.retentionDays,
+                            loading = state.loading,
+                        )
                         is Screen.Category -> CategoryScreen(
                             state.page,
                             state.remaining,

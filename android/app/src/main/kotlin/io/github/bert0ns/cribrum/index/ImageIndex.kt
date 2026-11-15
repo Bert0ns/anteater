@@ -386,6 +386,9 @@ class ImageIndex(private val db: IndexDatabase) :
      */
     suspend fun unreviewedVideos(): List<IndexedVideo> = dao.unreviewedVideos().map { IndexedVideo(MediaRef(it.path, it.size, it.mtimeNs, MediaType.of(it.mediaType)), it.unreadable, it.durationMs) }
 
+    /** Whether the index holds a video, reviewed or not: false until a scan has found one. */
+    suspend fun hasVideos(): Boolean = dao.hasVideos()
+
     /** The EXIF capture time of each image that has one, to order the review by date. The ranker never sees it. A time that does not parse is left out. */
     suspend fun capturedAt(): Map<String, LocalDateTime> = dao.capturedAt().mapNotNull { row ->
         runCatching { LocalDateTime.parse(row.capturedAt) }.getOrNull()?.let { row.path to it }

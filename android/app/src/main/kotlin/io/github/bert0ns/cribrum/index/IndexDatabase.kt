@@ -251,6 +251,9 @@ interface IndexDao {
     @Query("SELECT path, size, mtime_ns, media_type, unreadable, duration_ms FROM images WHERE media_type = 'video' AND review_state = 'unreviewed' ORDER BY size DESC, path")
     suspend fun unreviewedVideos(): List<StoredVideo>
 
+    @Query("SELECT EXISTS(SELECT 1 FROM images WHERE media_type = 'video')")
+    suspend fun hasVideos(): Boolean
+
     @Query("DELETE FROM images WHERE path IN (:paths)")
     suspend fun forget(paths: List<String>): Int
 

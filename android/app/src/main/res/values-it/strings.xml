@@ -201,6 +201,51 @@
     </plurals>
     <string name="video_details">Video, %1$s</string>
     <string name="video_unreadable">Non leggibile</string>
+    <string name="tab_photos">Foto</string>
+    <string name="tab_videos">Video</string>
+    <string name="videos_largest">Video più grandi</string>
+    <plurals name="videos_count">
+        <item quantity="one">%d video</item>
+        <item quantity="other">%d video</item>
+        <item quantity="many">%d di video</item>
+    </plurals>
+    <string name="videos_after_scan">I video compaiono dopo la prossima scansione. Tocca Scansiona ora nella scheda Foto.</string>
+    <string name="videos_none_left">Non ci sono altri video da rivedere.</string>
+    <string name="videos_hint">Tocca un video per selezionarlo, tienilo premuto per vederlo a schermo intero. Nessun video è selezionato in anticipo.</string>
+    <plurals name="videos_trash">
+        <item quantity="one">Cestina %1$d video, %2$s</item>
+        <item quantity="other">Cestina %1$d video, %2$s</item>
+        <item quantity="many">Cestina %1$d di video, %2$s</item>
+    </plurals>
+    <string name="videos_keep">Tieni</string>
+    <string name="video_tile_selected">Selezionato</string>
+    <string name="video_tile_not_selected">Non selezionato</string>
+    <plurals name="videos_summary_title">
+        <item quantity="one">Spostare %d video nel cestino?</item>
+        <item quantity="other">Spostare %d video nel cestino?</item>
+        <item quantity="many">Spostare %d di video nel cestino?</item>
+    </plurals>
+    <plurals name="videos_summary_body">
+        <item quantity="one">Occupano %1$s. Puoi ripristinare i file dal cestino per %2$d giorno.</item>
+        <item quantity="other">Occupano %1$s. Puoi ripristinare i file dal cestino per %2$d giorni.</item>
+        <item quantity="many">Occupano %1$s. Puoi ripristinare i file dal cestino per %2$d di giorni.</item>
+    </plurals>
+    <string name="favorite_appeared_videos_snackbar">Un video è diventato preferito nel frattempo. Controlla l\'elenco.</string>
+    <plurals name="trashed_files_snackbar">
+        <item quantity="one">%1$d file spostato nel cestino, %2$s</item>
+        <item quantity="other">%1$d file spostati nel cestino, %2$s</item>
+        <item quantity="many">%1$d di file spostati nel cestino, %2$s</item>
+    </plurals>
+    <plurals name="kept_files_snackbar">
+        <item quantity="one">%d file tenuto</item>
+        <item quantity="other">%d file tenuti</item>
+        <item quantity="many">%d di file tenuti</item>
+    </plurals>
+    <plurals name="not_moved_files_snackbar">
+        <item quantity="one">%d file è cambiato dopo la scansione ed è rimasto dov\'era</item>
+        <item quantity="other">%d file sono cambiati dopo la scansione e sono rimasti dov\'erano</item>
+        <item quantity="many">%d di file sono cambiati dopo la scansione e sono rimasti dov\'erano</item>
+    </plurals>
     <string name="empty_trash_body">Libera %1$s e non si può annullare.</string>
     <string name="delete">Elimina</string>
     <string name="delete_selected">Elimina %1$d</string>
