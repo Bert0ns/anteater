@@ -115,8 +115,14 @@ object Indexing {
      */
     suspend fun stop(context: Context) {
         val manager = WorkManager.getInstance(context)
-        manager.getWorkInfosByTagFlow(TAG).first().filter { it.state == WorkInfo.State.RUNNING }.forEach { manager.cancelWorkById(it.id) }
+        manager.getWorkInfosByTagFlow(TAG).first().filter { it.state == WorkInfo.State.RUNNING || it.waits() }.forEach { manager.cancelWorkById(it.id) }
     }
+
+    /**
+     * A request of "Scan now" or "Scan videos" that waits to start, like one WorkManager put back after its process was killed.
+     * The nightly request waits for the night, and is no scan until it runs.
+     */
+    private fun WorkInfo.waits() = !state.isFinished && state != WorkInfo.State.RUNNING && NIGHTLY_TAG !in tags
 
     /**
      * Later passes only process new or changed files, so a daily one while charging is cheap.
@@ -220,14 +226,18 @@ object Indexing {
         }
     }
 
-    /** The running scan's progress, from "Scan now" or the nightly request, or null when none runs. */
+    /**
+     * The running scan's progress, from "Scan now", "Scan videos" or the nightly request, then a request of the first two that
+     * waits to start, or null when none does. A tap on either button while one waits adds nothing, so both tabs show it.
+     */
     fun progress(context: Context): Flow<ScanProgress?> = WorkManager.getInstance(context).getWorkInfosByTagFlow(TAG).map { infos ->
+        fun kindOf(info: WorkInfo) = if (VIDEO_TAG in info.tags) ScanKind.VIDEOS else ScanKind.IMAGES
         infos.firstOrNull { it.state == WorkInfo.State.RUNNING }?.let { info ->
             val data = info.progress
             // Until the worker reports, its request says which scan it is.
-            val kind = data.getString(KIND)?.let(ScanKind::valueOf) ?: if (VIDEO_TAG in info.tags) ScanKind.VIDEOS else ScanKind.IMAGES
+            val kind = data.getString(KIND)?.let(ScanKind::valueOf) ?: kindOf(info)
             ScanProgress(data.getString(STEP).orEmpty(), data.getInt(DONE, 0), data.getInt(TOTAL, 0), data.getLong(LEFT_MS, -1).takeIf { it >= 0 }, kind)
-        }
+        } ?: infos.firstOrNull { it.waits() }?.let { ScanProgress("", 0, 0, kind = kindOf(it), waiting = true) }
     }
 
     /** Every storage volume walked in full, then what MediaStore knows on top. [indexed] is what the index already has. */
@@ -240,8 +250,11 @@ object Indexing {
 /** The normal scan's steps, or the video scan's, each numbered on their own (docs/design.md §4). */
 enum class ScanKind { IMAGES, VIDEOS }
 
-/** [leftMs] is the time left of the current phase, null until the estimate is stable (docs/design.md §4). */
-data class ScanProgress(val step: String, val done: Int, val total: Int, val leftMs: Long? = null, val kind: ScanKind = ScanKind.IMAGES)
+/**
+ * [leftMs] is the time left of the current phase, null until the estimate is stable (docs/design.md §4). [waiting] is a
+ * scan whose request waits to start, which has no step yet.
+ */
+data class ScanProgress(val step: String, val done: Int, val total: Int, val leftMs: Long? = null, val kind: ScanKind = ScanKind.IMAGES, val waiting: Boolean = false)
 
 /**
  * The night rule (docs/design.md §4): the night pass analyses videos only once the user has run "Scan videos", and the switch
