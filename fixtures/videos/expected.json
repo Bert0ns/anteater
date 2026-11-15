@@ -77,6 +77,9 @@
   "phone_may_not_read": [
     "prores.mov"
   ],
+  "frame_rate_may_differ": [
+    "clip.webm"
+  ],
   "no_video_track": [
     "audio.mp4"
   ],

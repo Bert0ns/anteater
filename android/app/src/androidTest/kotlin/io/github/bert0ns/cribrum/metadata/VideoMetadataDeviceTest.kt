@@ -20,6 +20,7 @@ class VideoMetadataDeviceTest {
     private val expected = JSONObject(assets.open("expected.json").bufferedReader().readText())
     private val zone = ZoneId.of(expected.getString("zone"))
     private val mayNotRead = expected.getJSONArray("phone_may_not_read").let { names -> List(names.length(), names::getString) }
+    private val frameRateMayDiffer = expected.getJSONArray("frame_rate_may_differ").let { names -> List(names.length(), names::getString) }
 
     private fun copy(name: String): File = File(ApplicationProvider.getApplicationContext<Context>().cacheDir, name).apply {
         assets.open(name).use { input -> outputStream().use(input::copyTo) }
@@ -52,7 +53,9 @@ class VideoMetadataDeviceTest {
                 }
                 assertEquals(name, listOf(wanted.width, wanted.height, wanted.durationMs), listOf(read.width, read.height, read.durationMs))
             } else {
-                assertEquals(name, wanted, readVideoMetadata(copy(name), zone))
+                val read = readVideoMetadata(copy(name), zone)
+                // A container that counts no frames: the phone gives the rate it declares, or none (docs/design.md §4).
+                assertEquals(name, wanted, if (name in frameRateMayDiffer) read.copy(frameRate = wanted.frameRate) else read)
             }
         }
     }

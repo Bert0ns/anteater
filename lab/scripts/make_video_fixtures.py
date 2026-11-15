@@ -115,6 +115,9 @@ def main() -> None:
         },
         # The phone reads these or marks them unreadable, and never drops them.
         "phone_may_not_read": ["prores.mov"],
+        # A container that counts no frames: each side gives the rate it declares, if any, so the
+        # phone's may differ from the lab's (docs/design.md, section 4).
+        "frame_rate_may_differ": ["clip.webm"],
         # FFmpeg is sure these have no video track, so the lab drops them. The phone cannot tell
         # one from a track its extractor does not know, so it marks them unreadable.
         "no_video_track": ["audio.mp4"],
