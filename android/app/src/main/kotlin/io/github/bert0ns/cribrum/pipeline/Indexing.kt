@@ -353,7 +353,7 @@ open class IndexWorker(context: Context, parameters: WorkerParameters) : Corouti
             // A night pass takes the videos after the images once "Scan videos" has run (docs/design.md §4).
             val videos = videoScan || nightly && app.videoScans.nightly
             MobileClip(::loadVision).use { embedder ->
-                app.lastScan.run {
+                app.lastScan.run(images = !videoScan, videos = videos) {
                     val stats = pipeline(app, embedder).run(Indexing.deviceSource(applicationContext, app.index::images, app.index), images = !videoScan, videos = videos, progress = ::report)
                     stats.failures.addAll(trashFailures)
                     stats
