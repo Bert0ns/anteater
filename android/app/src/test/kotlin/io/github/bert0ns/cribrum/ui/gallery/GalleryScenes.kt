@@ -11,6 +11,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.compress.BatchResult
 import io.github.bert0ns.cribrum.compress.BatchState
@@ -23,6 +26,7 @@ import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.pipeline.Failure
+import io.github.bert0ns.cribrum.pipeline.IndexWorker
 import io.github.bert0ns.cribrum.pipeline.Indexing
 import io.github.bert0ns.cribrum.pipeline.ScanProgress
 import io.github.bert0ns.cribrum.pipeline.Stats
@@ -35,6 +39,7 @@ import io.github.bert0ns.cribrum.ui.Screen
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
 import java.io.File
+import java.time.Duration
 
 /** Read before the list: what a reviewer needs to know about how the images were made. */
 const val NOTES = "Notes: every picture is drawn in code and the numbers are made up. " +
@@ -409,6 +414,16 @@ val scenes: List<Scene> = listOf(
         awaitHome(model)
         RunningScanWorker.progress = ScanProgress("scan", 3_870, 0)
         Indexing.scanVideos(app)
+        awaitText(str(R.string.scan_stop))
+    },
+    Scene("clean-scan-waiting", "Clean, the Photos tab while a Scan videos waits to start", "Read that a video scan is about to start, as after the phone restarted in the middle of one, and stop it. Scan now comes back when it ends.", Variant.base) {
+        world.library()
+        world.commit()
+        val model = app()
+        awaitHome(model)
+        // A request WorkManager put back after its process was killed: it waits, here for its delay, to start again.
+        val request = OneTimeWorkRequestBuilder<IndexWorker>().addTag(Indexing.TAG).addTag(Indexing.VIDEO_TAG).setInitialDelay(Duration.ofHours(1)).build()
+        WorkManager.getInstance(app).enqueueUniqueWork(Indexing.WORK, ExistingWorkPolicy.KEEP, request)
         awaitText(str(R.string.scan_stop))
     },
     Scene("videos-largest", "Largest videos, the list with nothing selected", "Look at the videos from the largest, with their length and size, one with a heart from the gallery and one that cannot be read. Tap a video to select it, hold one to see it full size.", Variant.full) {
