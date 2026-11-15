@@ -1,5 +1,6 @@
 package io.github.bert0ns.cribrum.ui
 
+import android.media.MediaMetadataRetriever
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,6 +25,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.trash.TrashedImage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -32,6 +34,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowMediaMetadataRetriever
 import java.io.File
 import java.time.Duration
 import java.time.Instant
@@ -247,5 +250,47 @@ class TrashScreenTest {
         compose.onAllNodesWithText("Select all")[1].performClick()
 
         assertEquals(listOf(sticker), chosen)
+    }
+
+    private val clip = run {
+        val at = Instant.now() - Duration.ofDays(3)
+        TrashedImage(MediaRef("/sdcard/DCIM/clip.mp4", 412_000_000, 0, MediaType.VIDEO), at, File("/sdcard/.cribrum-trash/v/clip.mp4"), at + Duration.ofDays(30) - Duration.ofHours(12))
+    }
+
+    @Test
+    fun `a trashed video has its own section and shows its duration and size`() {
+        ShadowMediaMetadataRetriever.addMetadata(clip.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "102000")
+        compose.setContent { TrashScreen(trashed + clip, emptySet(), {}, { _, _ -> }, {}, {}) }
+
+        compose.onNodeWithText("2 images").assertExists()
+        compose.onNodeWithText("1 video").assertExists()
+        compose.onNodeWithContentDescription("clip.mp4. Video, 01:42, 412 MB. 27 days left").assertExists()
+    }
+
+    @Test
+    fun `a video whose duration cannot be read still says its size`() {
+        compose.setContent { TrashScreen(listOf(clip), emptySet(), {}, { _, _ -> }, {}, {}) }
+
+        compose.onNodeWithContentDescription("clip.mp4. Video, 412 MB. 27 days left").assertExists()
+    }
+
+    @Test
+    fun `holding a video opens its frame full size, with its size and days left`() {
+        compose.setContent { TrashScreen(listOf(clip), emptySet(), {}, { _, _ -> }, {}, {}) }
+
+        compose.onNodeWithContentDescription("clip.mp4", substring = true).performTouchInput { longClick() }
+
+        compose.onNodeWithTag("fullSize").assertExists()
+        compose.onNodeWithText("Video, 412 MB").assertExists()
+        compose.onNodeWithText("27 days left").assertExists()
+    }
+
+    @Test
+    fun `deleting a video for good counts files, not images`() {
+        compose.setContent { TrashScreen(trashed + clip, emptySet(), {}, { _, _ -> }, {}, {}) }
+
+        compose.onNodeWithText("Empty trash").performClick()
+
+        compose.onNodeWithText("Delete 3 files for good?").assertExists()
     }
 }

@@ -586,7 +586,7 @@ private val FavoriteOutline: ImageVector by lazy {
 
 /** Pinch zooms. A drag pans only while zoomed, so at scale 1 it is left to the pager to change page. */
 @Composable
-private fun ZoomableImage(path: String, onClose: () -> Unit) {
+internal fun ZoomableImage(path: String, onClose: () -> Unit) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     TracedAsyncImage(
