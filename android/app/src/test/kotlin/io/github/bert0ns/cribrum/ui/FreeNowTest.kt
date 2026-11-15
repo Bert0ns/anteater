@@ -1,5 +1,6 @@
 package io.github.bert0ns.cribrum.ui
 
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.LaunchedEffect
@@ -96,6 +97,29 @@ class FreeNowTest {
         compose.mainClock.advanceTimeBy(9_000)
         compose.onNodeWithText("Undo").assertExists()
         assertNull(result)
+        compose.mainClock.advanceTimeBy(2_000)
+
+        compose.onNodeWithText("Undo").assertDoesNotExist()
+        assertEquals(SnackbarResult.Dismissed, result)
+    }
+
+    @Test
+    fun `the time starts once the snackbar is on screen, not while another one holds the host`() {
+        val state = SnackbarHostState()
+        var result: SnackbarResult? = null
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            AppSnackbarHost(state)
+            LaunchedEffect(Unit) { state.showSnackbar("Stays in the trash", duration = SnackbarDuration.Short) }
+            LaunchedEffect(Unit) {
+                result = state.showFreeNow(FreeNowVisuals(decision(2_300_000_000), "1 image moved to the trash, 2.3 GB", "Undo", "Free 2.3 GB now") {}, 10_000) { false }
+            }
+        }
+        compose.mainClock.advanceTimeBy(9_000) // the first snackbar leaves at 4 s: the other has had 5 s of its own, or 1 s
+        compose.onNodeWithText("Undo").assertExists()
+        assertNull(result)
+        compose.mainClock.advanceTimeBy(4_000)
+        compose.onNodeWithText("Undo").assertExists()
         compose.mainClock.advanceTimeBy(2_000)
 
         compose.onNodeWithText("Undo").assertDoesNotExist()

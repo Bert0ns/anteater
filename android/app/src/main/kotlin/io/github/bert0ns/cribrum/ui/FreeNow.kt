@@ -68,11 +68,13 @@ internal class FreeNowVisuals(
 }
 
 /**
- * Shows [visuals] until the user acts, or until [timeoutMillis] pass with no dialog [asking]. The time stops while the
+ * Shows [visuals] until the user acts, or until [timeoutMillis] pass on screen with no dialog [asking]. The time stops while the
  * dialog asks and starts again in full after a Cancel, so reading the dialog never costs the page its Undo.
  */
 internal suspend fun SnackbarHostState.showFreeNow(visuals: FreeNowVisuals, timeoutMillis: Long, asking: () -> Boolean): SnackbarResult = coroutineScope {
     val timer = launch {
+        // showSnackbar waits behind a snackbar already on the host, and the ten seconds are the ones on screen.
+        while (currentSnackbarData?.visuals !== visuals) delay(TICK_MILLIS)
         var taps = visuals.freeTaps
         var left = timeoutMillis
         while (left > 0) {
