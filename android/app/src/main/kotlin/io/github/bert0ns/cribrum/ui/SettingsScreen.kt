@@ -226,6 +226,8 @@ fun SettingsScreen(
             )
         }
         if (storage != null) {
+            item { Size(R.string.settings_storage_images, mediaTotal(R.plurals.category_images, storage.images)) }
+            item { Size(R.string.settings_storage_videos, mediaTotal(R.plurals.videos_count, storage.videos)) }
             storage.app?.let { item { Size(R.string.settings_storage_app, size(it)) } }
             item { Size(R.string.settings_storage_index, stringResource(R.string.settings_storage_index_size, size(storage.index))) }
             storage.cache?.let { item { Size(R.string.settings_storage_cache, size(it)) } }
@@ -261,6 +263,9 @@ private fun SectionTitle(title: Int) = Text(
 
 @Composable
 private fun Size(label: Int, size: String) = ListItem(headlineContent = { Text(stringResource(label)) }, supportingContent = { Text(size) })
+
+@Composable
+private fun mediaTotal(count: Int, total: MediaTotal) = stringResource(R.string.scan_joined, pluralStringResource(count, total.count, total.count), size(total.bytes))
 
 @Composable
 private fun size(bytes: Long) = Formatter.formatShortFileSize(LocalContext.current, bytes)
