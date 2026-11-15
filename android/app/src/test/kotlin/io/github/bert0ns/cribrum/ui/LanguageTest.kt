@@ -11,11 +11,13 @@ import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.pipeline.Coverage
 import io.github.bert0ns.cribrum.pipeline.FailedFile
 import io.github.bert0ns.cribrum.pipeline.ScanReport
@@ -23,6 +25,7 @@ import io.github.bert0ns.cribrum.ranker.THRESHOLDS
 import io.github.bert0ns.cribrum.review.CategorySummary
 import io.github.bert0ns.cribrum.review.ReviewGroup
 import io.github.bert0ns.cribrum.review.ReviewItem
+import io.github.bert0ns.cribrum.review.VideoItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Rule
@@ -52,6 +55,18 @@ class LanguageTest {
         compose.onNodeWithText("1 immagine · 1,0 MB").assertExists()
         compose.onNodeWithText("3 immagini · 3,0 MB").assertExists()
         compose.onAllNodesWithText("Blurry").assertCountEquals(0)
+    }
+
+    @Test
+    @Config(qualifiers = "it")
+    fun `a favourite video is Preferito, and its dialog agrees with video in the masculine`() {
+        val clip = VideoItem(MediaRef("/sdcard/Movies/clip.mp4", 1_500_000_000, 0, MediaType.VIDEO), 61_000, unreadable = false, isFavorite = true)
+        compose.setContent { VideosScreen(listOf(clip), setOf(clip.video.path), {}, { _, _ -> }) }
+
+        compose.onNodeWithContentDescription("clip.mp4. Video, 01:01, 1,5 GB. Selezionato. Preferito").assertExists()
+        compose.onNode(hasText("Cestina 1 video", substring = true)).performClick()
+        compose.onNodeWithText("1 di questi è tra i preferiti della galleria. Spostarlo comunque nel cestino?").assertExists()
+        compose.onNodeWithText("In tutto 1,5", substring = true).assertExists()
     }
 
     @Test

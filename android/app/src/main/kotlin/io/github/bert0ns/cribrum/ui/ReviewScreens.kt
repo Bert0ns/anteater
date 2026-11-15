@@ -275,10 +275,10 @@ internal fun SelectedCheck(modifier: Modifier = Modifier) {
 
 /** Tells the image is a favourite in the gallery. The dark disc keeps the heart legible on a light photo, and the pink on a dark one. */
 @Composable
-internal fun FavoriteHeart(modifier: Modifier = Modifier) {
+internal fun FavoriteHeart(modifier: Modifier = Modifier, description: String = stringResource(R.string.favorite)) {
     Icon(
         Icons.Filled.Favorite,
-        contentDescription = stringResource(R.string.favorite),
+        contentDescription = description,
         tint = Color(0xFFFF6B81),
         modifier = modifier.background(Color.Black.copy(alpha = 0.55f), CircleShape).padding(3.dp).size(18.dp),
     )

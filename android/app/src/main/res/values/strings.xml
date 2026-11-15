@@ -184,6 +184,12 @@
         <item quantity="one">That is %1$s. You can restore the files from the trash for %2$d day.</item>
         <item quantity="other">That is %1$s. You can restore the files from the trash for %2$d days.</item>
     </plurals>
+    <plurals name="videos_summary_favorites">
+        <item quantity="one">%d of them is a favourite in your gallery. Move it to the trash anyway?</item>
+        <item quantity="other">%d of them are favourites in your gallery. Move them to the trash anyway?</item>
+    </plurals>
+    <!-- The heart and the tile of a favourite video: its own string, since the Italian word agrees with "video". -->
+    <string name="favorite_video">Favourite</string>
     <string name="favorite_appeared_videos_snackbar">A video became a favourite meanwhile. Check the list.</string>
     <!-- What the snackbar says after a page of videos, where "image" would be wrong. -->
     <plurals name="trashed_files_snackbar">

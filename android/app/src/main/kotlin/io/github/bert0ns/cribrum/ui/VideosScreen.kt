@@ -183,7 +183,7 @@ fun VideosScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(pluralStringResource(R.plurals.videos_summary_body, retentionDays, size, retentionDays))
-                    Text(pluralStringResource(R.plurals.summary_favorites, favorites, favorites), fontWeight = FontWeight.Bold)
+                    Text(pluralStringResource(R.plurals.videos_summary_favorites, favorites, favorites), fontWeight = FontWeight.Bold)
                 }
             },
             confirmButton = {
@@ -218,7 +218,7 @@ private fun VideoTile(item: VideoItem, selected: Boolean, onHold: () -> Unit, on
         add(stringResource(R.string.tile_description, File(path).name, videoDetails(item.video.size, length)))
         if (item.unreadable) add(stringResource(R.string.video_unreadable))
         add(stringResource(if (selected) R.string.video_tile_selected else R.string.video_tile_not_selected))
-        if (item.isFavorite) add(stringResource(R.string.favorite))
+        if (item.isFavorite) add(stringResource(R.string.favorite_video))
     }
     val toggle = stringResource(if (selected) R.string.action_deselect else R.string.action_select)
     val open = stringResource(R.string.action_open_full_size)
@@ -270,7 +270,7 @@ private fun FullSize(videos: List<VideoItem>, start: VideoItem, selected: Set<St
     FullSizeViewer(videos.map { it.video.path }, start.video.path, onClose, image) { page ->
         val item = videos.getOrNull(page) ?: return@FullSizeViewer // the list emptied under the dialog; the screen closes it next
         FullSizeToggle(item.video.path in selected, stringResource(R.string.video_tile_selected), MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary) { onToggle(item.video.path) }
-        FullSizeBar(item.video.path, item.isFavorite) {
+        FullSizeBar(item.video.path, item.isFavorite, heart = { if (item.isFavorite) FavoriteHeart(description = stringResource(R.string.favorite_video)) }) {
             Text(videoDetails(item.video.size, item.lengthText()), color = Color.White, style = MaterialTheme.typography.bodyMedium)
         }
     }

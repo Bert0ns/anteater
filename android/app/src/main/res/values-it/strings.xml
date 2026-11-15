@@ -226,10 +226,16 @@
         <item quantity="many">Spostare %d di video nel cestino?</item>
     </plurals>
     <plurals name="videos_summary_body">
-        <item quantity="one">Occupano %1$s. Puoi ripristinare i file dal cestino per %2$d giorno.</item>
-        <item quantity="other">Occupano %1$s. Puoi ripristinare i file dal cestino per %2$d giorni.</item>
-        <item quantity="many">Occupano %1$s. Puoi ripristinare i file dal cestino per %2$d di giorni.</item>
+        <item quantity="one">In tutto %1$s. Puoi ripristinare i file dal cestino per %2$d giorno.</item>
+        <item quantity="other">In tutto %1$s. Puoi ripristinare i file dal cestino per %2$d giorni.</item>
+        <item quantity="many">In tutto %1$s. Puoi ripristinare i file dal cestino per %2$d di giorni.</item>
     </plurals>
+    <plurals name="videos_summary_favorites">
+        <item quantity="one">%d di questi è tra i preferiti della galleria. Spostarlo comunque nel cestino?</item>
+        <item quantity="other">%d di questi sono tra i preferiti della galleria. Spostarli comunque nel cestino?</item>
+        <item quantity="many">%d di questi sono tra i preferiti della galleria. Spostarli comunque nel cestino?</item>
+    </plurals>
+    <string name="favorite_video">Preferito</string>
     <string name="favorite_appeared_videos_snackbar">Un video è diventato preferito nel frattempo. Controlla l\'elenco.</string>
     <plurals name="trashed_files_snackbar">
         <item quantity="one">%1$d file spostato nel cestino, %2$s</item>
