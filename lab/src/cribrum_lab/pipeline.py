@@ -101,6 +101,8 @@ class Stats:
     """Per-image analyses left for a run with embeddings."""
     failures: list[str] = field(default_factory=list)
     """Analyses that raised. They are not stored, so the next run retries them."""
+    unknown_brands: dict[str, int] = field(default_factory=dict)
+    """The ftyp and EBML files the walk sniffed and turned away, by the brand it did not know."""
 
 
 def run(
@@ -137,6 +139,7 @@ def run(
         progress("scan", len(found), 0)
     stats.new_or_changed += index.record_all(batch)
     walked = source.walked_roots
+    stats.unknown_brands = dict(source.unknown_brands)
     gone = [
         p
         for p in (i.path for i in index.images())

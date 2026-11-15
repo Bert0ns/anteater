@@ -72,6 +72,13 @@ def _scan(index: ImageIndex, folder: Path, jobs: int, embedder: pipeline.Embedde
         f"{stats.detector_runs} detector runs, {stats.skipped} waiting for embeddings",
         file=sys.stderr,
     )
+    # A video format the walk's list misses shows here (docs/design.md, section 4).
+    brands = " ".join(f"{brand!r} {count}" for brand, count in sorted(stats.unknown_brands.items()))
+    print(
+        f"unknown containers: {sum(stats.unknown_brands.values())}"
+        + (f" ({brands})" if brands else ""),
+        file=sys.stderr,
+    )
     for failure in stats.failures:
         print(f"failed: {failure}", file=sys.stderr)
 

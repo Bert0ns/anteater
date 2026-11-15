@@ -33,3 +33,15 @@ def test_evaluate_prints_recall(tmp_path, capsys):
 
     assert "recall: 100% (1/1)" in capsys.readouterr().out
     assert "recall: 100%" in (tmp_path / "r.txt").read_text()
+
+
+def test_scan_prints_the_brands_the_walk_did_not_know(tmp_path, capsys):
+    folder = tmp_path / "device"
+    folder.mkdir()
+    for name in ("a.mp4", "b.mp4"):
+        (folder / name).write_bytes(b"\x00\x00\x00\x10ftypdash\x00\x00\x02\x00")
+    index = str(tmp_path / "index.sqlite")
+
+    main(["--index", index, "scan", str(folder), "--jobs", "1", "--no-embeddings"])
+
+    assert "unknown containers: 2 ('dash' 2)" in capsys.readouterr().err

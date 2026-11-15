@@ -1,6 +1,7 @@
 """Media sources: where images and videos come from. Mirrors docs/design.md, sections 4 and 7."""
 
 import stat
+from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import replace
 from pathlib import Path
@@ -19,6 +20,9 @@ _VIDEO_BRANDS = {
     b"isom", b"iso2", b"iso3", b"iso4", b"iso5", b"iso6", b"mp41", b"mp42", b"avc1", b"mmp4",
     b"XAVC", b"qt  ", b"3gp4", b"3gp5", b"3gp6", b"3gp7", b"3g2a", b"M4V ", b"M4VH", b"M4VP",
 }  # fmt: skip
+_NOT_VIDEO_BRANDS = {b"M4A ", b"M4B ", b"M4P ", b"crx "}
+"""Major brands of what is known not to be a video: audio, and Canon's raw photos. The walk turns
+them away without counting them as an unknown brand."""
 _EBML = b"\x1a\x45\xdf\xa3"
 """The start of a Matroska or WebM file, whose DocType element follows within a few bytes."""
 _HEAD_SIZE = 64
@@ -87,9 +91,13 @@ class FilesystemMediaSource:
         self.walked_roots: list[Path] = []
         """The root once the walk listed every folder; a folder that cannot be listed, or a
         missing root, leaves it out."""
+        self.unknown_brands: Counter[str] = Counter()
+        """The files the last `scan` sniffed and turned away although they are an ftyp or EBML
+        container, by the brand it did not know: a video format the list misses shows here."""
 
     def scan(self) -> Iterator[MediaRef]:
         self.walked_roots = []
+        self.unknown_brands = Counter()
         listed_all = True
         # By path, so a file the index holds is yielded with the media type it was recorded with.
         known = {ref.path: ref for ref in self._indexed()}
@@ -120,7 +128,12 @@ class FilesystemMediaSource:
                         image = indexed
                     else:
                         again = image in remembered_set
-                        media_type = None if again else _media_type(path)
+                        media_type = None
+                        if not again:
+                            head = _head(path)
+                            media_type = _media_type(head)
+                            if media_type is None and (brand := _unknown_brand(head)):
+                                self.unknown_brands[brand] += 1
                         if media_type is None:
                             met.add(path)
                             if self._not_images is not None and not again:
@@ -148,14 +161,17 @@ class FilesystemMediaSource:
             self.walked_roots = [self.root]
 
 
-def _media_type(path: Path) -> MediaType | None:
-    """What the head of the file says it is, or None for neither an image nor a video."""
+def _head(path: Path) -> bytes:
+    with path.open("rb") as file:
+        return file.read(_HEAD_SIZE)
+
+
+def _media_type(head: bytes) -> MediaType | None:
+    """What the head of a file says it is, or None for neither an image nor a video."""
     # The walk remembers the files this refused, by size and mtime (docs/design.md, section 4).
     # A change that lets the head accept more, such as a new format or HEIF brand, must empty
     # `not_images` in the same change: bump SCHEMA_VERSION in index.py, which refuses older
     # files. Otherwise those files are never sniffed again.
-    with path.open("rb") as file:
-        head = file.read(_HEAD_SIZE)
     ftyp = head[4:8] == b"ftyp"
     if (
         head.startswith(b"\xff\xd8\xff")  # JPEG
@@ -170,6 +186,30 @@ def _media_type(path: Path) -> MediaType | None:
     ):
         return MediaType.VIDEO
     return None
+
+
+def _unknown_brand(head: bytes) -> str | None:
+    """For a head `_media_type` turned away, the brand of its ftyp or EBML container when it is
+    not one known to be something other than a video: an ftyp major brand, or `ebml/` and the
+    DocType. None for a file that is no such container."""
+    if head[4:8] == b"ftyp" and len(head) >= 12:
+        brand = head[8:12]
+        return None if brand in _NOT_VIDEO_BRANDS else _printable(brand)
+    if head.startswith(_EBML):
+        return "ebml/" + _printable(_doc_type(head))
+    return None
+
+
+def _doc_type(head: bytes) -> bytes:
+    """The DocType element of an EBML header (ID 0x4282, a one-byte size), or b"?"."""
+    at = head.find(b"\x42\x82")
+    if at < 0 or at + 2 >= len(head) or not head[at + 2] & 0x80:
+        return b"?"
+    return head[at + 3 : at + 3 + (head[at + 2] & 0x7F)]
+
+
+def _printable(text: bytes) -> str:
+    return "".join(c if " " <= c <= "~" else "?" for c in text.decode("latin-1"))
 
 
 def _ftyp_brands(head: bytes) -> list[bytes]:

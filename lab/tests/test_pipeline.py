@@ -885,3 +885,11 @@ def test_no_image_step_receives_a_video(photos, index, monkeypatch):
     assert {step for step, _ in seen} >= {"metadata", "embedding", "fast", "embedded", "group"}
     assert [step for step, path in seen if path == clip] == []
     assert index.images()[1] == video  # found, and kept with its media type
+
+
+def test_a_run_reports_the_containers_the_walk_turned_away_by_an_unknown_brand(photos, index):
+    (photos / "DCIM/Camera/a.mp4").write_bytes(b"\x00\x00\x00\x10ftypdash\x00\x00\x02\x00")
+
+    stats = pipeline.run(photos, index, detectors=[], group_detectors=[])
+
+    assert stats.unknown_brands == {"dash": 1}
