@@ -259,6 +259,8 @@ class TrashScreenTest {
 
     @Test
     fun `a trashed video has its own section and shows its duration and size`() {
+        // A trash file of its own: the lengths read are kept for the process, and the other tests read none for theirs.
+        val clip = clip.copy(file = File("/sdcard/.cribrum-trash/d/clip.mp4"))
         ShadowMediaMetadataRetriever.addMetadata(clip.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "102000")
         compose.setContent { TrashScreen(trashed + clip, emptySet(), {}, { _, _ -> }, {}, {}) }
 
@@ -299,5 +301,22 @@ class TrashScreenTest {
         compose.setContent { TrashScreen(trashed + clip, emptySet(), {}, { _, _ -> }, {}, {}) }
 
         compose.onNodeWithText("The trash still takes up 412 MB.").assertExists()
+    }
+
+    @Test
+    fun `a video's length is read once, so a tile that comes back opens no new retriever`() {
+        val again = clip.copy(file = File("/sdcard/.cribrum-trash/w/clip.mp4"))
+        ShadowMediaMetadataRetriever.addMetadata(again.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "102000")
+        var shown by mutableStateOf(true)
+        compose.setContent { if (shown) TrashScreen(listOf(again), emptySet(), {}, { _, _ -> }, {}, {}) }
+        compose.onNodeWithContentDescription("clip.mp4. Video, 01:42, 412 MB. 27 days left").assertExists()
+
+        shown = false
+        compose.waitForIdle()
+        // A retriever opened again would read this.
+        ShadowMediaMetadataRetriever.addMetadata(again.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "5000")
+        shown = true
+
+        compose.onNodeWithContentDescription("clip.mp4. Video, 01:42, 412 MB. 27 days left").assertExists()
     }
 }
