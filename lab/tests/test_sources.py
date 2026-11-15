@@ -417,3 +417,23 @@ def test_reports_no_walked_root_when_the_root_is_missing(tmp_path):
     list(source.scan())
 
     assert source.walked_roots == []
+
+
+def test_counts_the_containers_it_turns_away_by_an_unknown_brand(tmp_path):
+    write(tmp_path / "a.mp4", ftyp(b"dash", b"iso6"))
+    write(tmp_path / "b.mp4", ftyp(b"dash"))
+    write(tmp_path / "c.f4v", ftyp(b"f4v ", b"isom"))
+    write(tmp_path / "d.mka", b"\x1a\x45\xdf\xa3\x9f\x42\x82\x84none")
+    # Known brands of what is not a video, and files with no container, are not counted.
+    write(tmp_path / "e.m4a", ftyp(b"M4A ", b"M4A ", b"mp42", b"isom"))
+    write(tmp_path / "f.cr3", ftyp(b"crx ", b"crx ", b"isom"))
+    write(tmp_path / "g.mp4", MP4)
+    write(tmp_path / "h.txt", b"not media")
+    store = MemoryNotImages()
+    source = FilesystemMediaSource(tmp_path, not_images=store)
+
+    list(source.scan())
+
+    assert source.unknown_brands == {"dash": 2, "f4v ": 1, "ebml/none": 1}
+    list(source.scan())  # a file the walk remembers is not sniffed again, so not counted again
+    assert source.unknown_brands == {}
