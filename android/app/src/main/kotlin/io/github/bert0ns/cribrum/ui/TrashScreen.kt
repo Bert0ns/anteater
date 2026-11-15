@@ -1,10 +1,13 @@
 // The trash (docs/design.md §9): what is in it, how long it stays, and the way back.
 package io.github.bert0ns.cribrum.ui
 
+import android.media.MediaMetadataRetriever
+import android.text.format.DateUtils
 import android.text.format.Formatter
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,14 +16,18 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -29,11 +36,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -45,9 +54,17 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import coil3.decode.Decoder
+import coil3.request.ImageRequest
+import coil3.video.VideoFrameDecoder
 import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.folders.isStickerFolder
+import io.github.bert0ns.cribrum.model.MediaType
+import io.github.bert0ns.cribrum.tracing.traced
 import io.github.bert0ns.cribrum.trash.TrashedImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.Duration
 import java.time.Instant
@@ -84,7 +101,8 @@ fun TrashScreen(
         Text(stringResource(R.string.trash_hint), Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
         // Stickers apart, as in the review: thousands of them would bury the photos.
         val (stickers, others) = trashed.partition { isStickerFolder(it.original.path) }
-        val sections = listOf(R.plurals.trash_section_images to others, R.plurals.trash_section_stickers to stickers)
+        val (videos, images) = others.partition { it.isVideo }
+        val sections = listOf(R.plurals.trash_section_images to images, R.plurals.trash_section_videos to videos, R.plurals.trash_section_stickers to stickers)
         LazyVerticalGrid(GridCells.Adaptive(110.dp), Modifier.weight(1f)) {
             for ((title, section) in sections.filter { it.second.isNotEmpty() }) {
                 item(span = { GridItemSpan(maxLineSpan) }, key = "section-$title") {
@@ -119,7 +137,7 @@ fun TrashScreen(
         val files = targets.map { it.file.path }.toSet()
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text(pluralStringResource(R.plurals.empty_trash_title, targets.size, targets.size)) },
+            title = { Text(pluralStringResource(if (targets.any { it.isVideo }) R.plurals.delete_files_title else R.plurals.empty_trash_title, targets.size, targets.size)) },
             text = { Text(stringResource(R.string.empty_trash_body, Formatter.formatShortFileSize(LocalContext.current, targets.sumOf { it.original.size }))) },
             confirmButton = {
                 TextButton({
@@ -135,15 +153,51 @@ fun TrashScreen(
         if (fullSize != null && fullSize !in trashed) fullSize = null
     }
     fullSize?.let { start ->
-        FullSizeViewer(trashed.map { it.file.path }, start.file.path, onClose = { fullSize = null }) { page ->
+        val close = { fullSize = null }
+        // A video shows its frame until #388 plays it.
+        val image: @Composable (Int) -> Unit = { page ->
+            trashed.getOrNull(page)?.let { item ->
+                if (item.isVideo) VideoFrame(item.file, "Trash.fullSize", Modifier.fillMaxSize().clickable(onClick = close), ContentScale.Fit) else ZoomableImage(item.file.path, close)
+            }
+        }
+        FullSizeViewer(trashed.map { it.file.path }, start.file.path, onClose = close, image = image) { page ->
             val item = trashed.getOrNull(page) ?: return@FullSizeViewer
             FullSizeToggle(item.file.path in selected, stringResource(R.string.tile_selected), MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary) { onSelect(item) }
             FullSizeBar(item.original.path, item.favorite) {
+                if (item.isVideo) Text(videoDetails(item, rememberDuration(item.file)), color = Color.White, style = MaterialTheme.typography.bodyMedium)
                 Text(pluralStringResource(R.plurals.trash_tile_days_left, daysLeft(item).toInt(), daysLeft(item)), color = Color.White, style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
 }
+
+private val TrashedImage.isVideo get() = original.mediaType == MediaType.VIDEO
+
+/** Decodes a frame of the file whatever its name says: the trash knows it holds a video. */
+private val videoFrames = Decoder.Factory { result, options, _ -> VideoFrameDecoder(result.source, options) }
+
+@Composable
+private fun VideoFrame(file: File, section: String, modifier: Modifier, contentScale: ContentScale = ContentScale.Crop) {
+    val context = LocalContext.current
+    val request = remember(file, section, context) { ImageRequest.Builder(context).data(file).decoderFactory(videoFrames).traced(section).build() }
+    AsyncImage(request, null, modifier, contentScale = contentScale)
+}
+
+/** The video's length as a player shows it ("01:42"), or null until it is read or when it cannot be. */
+@Composable
+private fun rememberDuration(file: File): String? = produceState<String?>(null, file) {
+    value = withContext(Dispatchers.IO) {
+        runCatching {
+            MediaMetadataRetriever().use {
+                it.setDataSource(file.path)
+                it.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+            }
+        }.getOrNull()
+    }?.let { DateUtils.formatElapsedTime(it / 1000) }
+}.value
+
+@Composable
+private fun videoDetails(item: TrashedImage, duration: String?): String = stringResource(R.string.video_details, listOfNotNull(duration, Formatter.formatShortFileSize(LocalContext.current, item.original.size)).joinToString(", "))
 
 private fun daysLeft(item: TrashedImage) = ceil(Duration.between(Instant.now(), item.purgeAt).toMillis() / MILLIS_PER_DAY).toLong().coerceAtLeast(0)
 
@@ -154,7 +208,9 @@ private fun LazyGridScope.trashItems(trashed: List<TrashedImage>, selected: Set<
         val open = stringResource(R.string.action_open_full_size)
         val daysText = stringResource(R.string.days_left, daysLeft)
         val spokenDays = pluralStringResource(R.plurals.trash_tile_days_left, daysLeft.toInt(), daysLeft)
-        val description = stringResource(R.string.tile_description, File(item.original.path).name, spokenDays)
+        val duration = if (item.isVideo) rememberDuration(item.file) else null
+        val details = if (item.isVideo) videoDetails(item, duration) else null
+        val description = stringResource(R.string.tile_description, File(item.original.path).name, listOfNotNull(details, spokenDays).joinToString(". "))
         Box(
             Modifier.aspectRatio(1f).padding(2.dp)
                 .border(if (isSelected) 3.dp else 0.dp, if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
@@ -170,7 +226,21 @@ private fun LazyGridScope.trashItems(trashed: List<TrashedImage>, selected: Set<
                     )
                 },
         ) {
-            TracedAsyncImage(File(item.file.path), "Trash.tile", null, Modifier.fillMaxSize(), tile = true)
+            if (item.isVideo) {
+                VideoFrame(item.file, "Trash.videoTile", Modifier.fillMaxSize())
+                Row(Modifier.align(Alignment.TopStart).clearAndSetSemantics {}.background(Color.Black.copy(alpha = 0.6f)).padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.PlayArrow, null, Modifier.size(16.dp), tint = Color.White)
+                    if (duration != null) Text(duration, color = Color.White, style = MaterialTheme.typography.labelSmall)
+                }
+                Text(
+                    Formatter.formatShortFileSize(LocalContext.current, item.original.size),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.align(Alignment.BottomEnd).clearAndSetSemantics {}.background(Color.Black.copy(alpha = 0.6f)).padding(4.dp),
+                )
+            } else {
+                TracedAsyncImage(File(item.file.path), "Trash.tile", null, Modifier.fillMaxSize(), tile = true)
+            }
             if (isSelected) SelectedCheck(Modifier.align(Alignment.TopEnd).padding(4.dp))
             Text(
                 daysText,

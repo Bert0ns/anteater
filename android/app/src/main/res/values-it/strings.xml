@@ -162,6 +162,11 @@
         <item quantity="other">%d immagini</item>
         <item quantity="many">%d di immagini</item>
     </plurals>
+    <plurals name="trash_section_videos">
+        <item quantity="one">%d video</item>
+        <item quantity="other">%d video</item>
+        <item quantity="many">%d di video</item>
+    </plurals>
     <plurals name="trash_section_stickers">
         <item quantity="one">%d sticker di WhatsApp</item>
         <item quantity="other">%d sticker di WhatsApp</item>
@@ -172,6 +177,12 @@
         <item quantity="other">Eliminare %d immagini definitivamente?</item>
         <item quantity="many">Eliminare %d di immagini definitivamente?</item>
     </plurals>
+    <plurals name="delete_files_title">
+        <item quantity="one">Eliminare %d file definitivamente?</item>
+        <item quantity="other">Eliminare %d file definitivamente?</item>
+        <item quantity="many">Eliminare %d di file definitivamente?</item>
+    </plurals>
+    <string name="video_details">Video, %1$s</string>
     <string name="empty_trash_body">Libera %1$s e non si può annullare.</string>
     <string name="delete">Elimina</string>
     <string name="delete_selected">Elimina %1$d</string>

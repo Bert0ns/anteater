@@ -119,6 +119,10 @@
         <item quantity="one">%d image</item>
         <item quantity="other">%d images</item>
     </plurals>
+    <plurals name="trash_section_videos">
+        <item quantity="one">%d video</item>
+        <item quantity="other">%d videos</item>
+    </plurals>
     <plurals name="trash_section_stickers">
         <item quantity="one">%d WhatsApp sticker</item>
         <item quantity="other">%d WhatsApp stickers</item>
@@ -127,6 +131,13 @@
         <item quantity="one">Delete %d image for good?</item>
         <item quantity="other">Delete %d images for good?</item>
     </plurals>
+    <!-- The title when the files include a video: "images" would be wrong. -->
+    <plurals name="delete_files_title">
+        <item quantity="one">Delete %d file for good?</item>
+        <item quantity="other">Delete %d files for good?</item>
+    </plurals>
+    <!-- A trashed video's length (when it could be read) and size, such as "Video, 01:42, 412 MB". -->
+    <string name="video_details">Video, %1$s</string>
     <string name="empty_trash_body">This frees %1$s and cannot be undone.</string>
     <string name="delete">Delete</string>
     <string name="delete_selected">Delete %1$d</string>
