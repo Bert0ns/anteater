@@ -261,8 +261,8 @@ class ImageIndex:
         with self._db:
             updated = self._db.execute(
                 """UPDATE images SET width = ?, height = ?, duration_ms = ?, frame_rate = ?,
-                   bitrate = ?, has_audio = ?, video_codec = ?, hdr = ?, captured_at = ?
-                   WHERE path = ?""",
+                   bitrate = ?, has_audio = ?, video_codec = ?, hdr = ?, captured_at = ?,
+                   captured_instant = ? WHERE path = ?""",
                 (
                     metadata.width,
                     metadata.height,
@@ -273,6 +273,7 @@ class ImageIndex:
                     metadata.video_codec,
                     metadata.hdr,
                     captured_at,
+                    metadata.captured_instant,
                     str(path),
                 ),
             )
@@ -281,12 +282,23 @@ class ImageIndex:
     def video_metadata(self, path: Path) -> VideoMetadata | None:
         row = self._db.execute(
             """SELECT width, height, duration_ms, frame_rate, bitrate, has_audio, video_codec, hdr,
-               captured_at FROM images WHERE path = ? AND width IS NOT NULL""",
+               captured_at, captured_instant FROM images WHERE path = ? AND width IS NOT NULL""",
             (str(path),),
         ).fetchone()
         if row is None:
             return None
-        width, height, duration_ms, frame_rate, bitrate, has_audio, codec, hdr, captured_at = row
+        (
+            width,
+            height,
+            duration_ms,
+            frame_rate,
+            bitrate,
+            has_audio,
+            codec,
+            hdr,
+            captured_at,
+            instant,
+        ) = row
         return VideoMetadata(
             width,
             height,
@@ -297,6 +309,7 @@ class ImageIndex:
             codec,
             bool(hdr),
             datetime.fromisoformat(captured_at) if captured_at else None,
+            instant,
         )
 
     def set_content_hash(self, path: Path, digest: str) -> None:

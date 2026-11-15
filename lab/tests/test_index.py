@@ -15,7 +15,16 @@ PHOTO = MediaRef(Path("/photos/a.jpg"), 100, 1)
 META = ImageMetadata(4000, 3000, "image/jpeg", "Google", "Pixel 8", datetime(2024, 5, 1, 10, 20))
 VIDEO = MediaRef(Path("/videos/v.mp4"), 900, 1, MediaType.VIDEO)
 VIDEO_META = VideoMetadata(
-    1080, 1920, 12_345, 29.97, 8_000_000, True, "video/hevc", True, datetime(2024, 5, 1, 12, 20)
+    1080,
+    1920,
+    12_345,
+    29.97,
+    8_000_000,
+    True,
+    "video/hevc",
+    True,
+    datetime(2024, 5, 1, 12, 20),
+    1714558800000,
 )
 BLUR = Signal("blur", 1, Category.BLURRY, 0.7, {"variance": "12.5"})
 

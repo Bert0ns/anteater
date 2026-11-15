@@ -59,6 +59,8 @@ class VideoMetadata:
     """The transfer function is PQ or HLG."""
     captured_at: datetime | None = None
     """The MP4 creation time, which is UTC, turned into local time as an EXIF time is."""
+    captured_instant: int | None = None
+    """The same moment as epoch milliseconds in UTC, which no zone moves (docs/design.md, 7)."""
 
 
 # FFmpeg codec names to the MIME types of Android's MediaFormat, so both sides store one value.
@@ -98,6 +100,7 @@ def read_video_metadata(path: Path, zone: tzinfo | None = None) -> VideoMetadata
             duration_ms = round(container.duration / 1000) if container.duration else None
             created = container.metadata.get("creation_time")
             mp4 = "mp4" in container.format.name.split(",")  # Android reads no Matroska date
+            moment = _creation_time(created) if mp4 and created else None
             return VideoMetadata(
                 width=width,
                 height=height,
@@ -107,7 +110,8 @@ def read_video_metadata(path: Path, zone: tzinfo | None = None) -> VideoMetadata
                 has_audio=bool(container.streams.audio),
                 video_codec=_CODEC_MIME.get(codec.name),
                 hdr=codec.color_trc in _HDR_TRANSFERS,
-                captured_at=_local(created, zone) if mp4 and created else None,
+                captured_at=moment.astimezone(zone).replace(tzinfo=None) if moment else None,
+                captured_instant=round(moment.timestamp() * 1000) if moment else None,
             )
     except (av.FFmpegError, OSError) as error:
         raise UnreadableVideo(path) from error
@@ -121,14 +125,14 @@ def _frame_rate(stream: av.video.stream.VideoStream) -> float | None:
     return round(float(stream.average_rate), 2) if stream.average_rate else None
 
 
-def _local(utc: str, zone: tzinfo | None) -> datetime | None:
+def _creation_time(utc: str) -> datetime | None:
     try:
         moment = datetime.fromisoformat(utc)
     except ValueError:
         return None
     if moment.year < 1971:  # a camera with no clock writes zero, which is 1904 or 1970
         return None
-    return moment.astimezone(zone).replace(tzinfo=None)
+    return moment
 
 
 def read_metadata(path: Path) -> ImageMetadata:

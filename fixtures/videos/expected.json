@@ -10,7 +10,8 @@
       "has_audio": true,
       "video_codec": "video/avc",
       "hdr": false,
-      "captured_at": "2024-05-01T12:20:30"
+      "captured_at": "2024-05-01T12:20:30",
+      "captured_instant": 1714558830000
     },
     "rotated.mp4": {
       "width": 48,
@@ -21,7 +22,8 @@
       "has_audio": false,
       "video_codec": "video/avc",
       "hdr": false,
-      "captured_at": "2024-05-01T12:20:35"
+      "captured_at": "2024-05-01T12:20:35",
+      "captured_instant": 1714558835000
     },
     "ntsc.mp4": {
       "width": 64,
@@ -32,7 +34,8 @@
       "has_audio": false,
       "video_codec": "video/avc",
       "hdr": false,
-      "captured_at": null
+      "captured_at": null,
+      "captured_instant": null
     },
     "prores.mov": {
       "width": 64,
@@ -43,7 +46,8 @@
       "has_audio": false,
       "video_codec": null,
       "hdr": false,
-      "captured_at": null
+      "captured_at": null,
+      "captured_instant": null
     },
     "hdr.mp4": {
       "width": 64,
@@ -54,7 +58,8 @@
       "has_audio": false,
       "video_codec": "video/hevc",
       "hdr": true,
-      "captured_at": null
+      "captured_at": null,
+      "captured_instant": null
     },
     "clip.webm": {
       "width": 64,
@@ -65,7 +70,8 @@
       "has_audio": true,
       "video_codec": "video/x-vnd.on2.vp9",
       "hdr": false,
-      "captured_at": null
+      "captured_at": null,
+      "captured_instant": null
     }
   },
   "phone_may_not_read": [

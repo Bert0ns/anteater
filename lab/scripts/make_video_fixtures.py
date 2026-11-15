@@ -6,7 +6,8 @@ Every video is ffmpeg's test pattern and a sine tone, a second long and 64 x 48,
 expected.json holds what both readers must read, written here from the parameters each file
 is made with, not read back from the files. The bitrate is the file's size over its duration,
 so it is computed from the file. The capture times are UTC in the files and local time in
-expected.json, in the zone it names (docs/design.md, section 7).
+expected.json, in the zone it names, and the same moments as epoch milliseconds in UTC
+(docs/design.md, section 7).
 """
 
 import json
@@ -58,7 +59,9 @@ def main() -> None:
     # A video's head, so the walk takes it, and no moov box after it.
     (OUT / "broken.mp4").write_bytes((OUT / "clip.mp4").read_bytes()[:32] + bytes(2048))
 
-    def video(name, width, height, duration_ms, frame_rate, has_audio, codec, hdr, captured_at):
+    def video(
+        name, width, height, duration_ms, frame_rate, has_audio, codec, hdr, captured_at, instant
+    ):
         size = (OUT / name).stat().st_size
         return {
             "width": width,
@@ -70,23 +73,44 @@ def main() -> None:
             "video_codec": codec,
             "hdr": hdr,
             "captured_at": captured_at,
+            "captured_instant": instant,
         }
 
     expected = {
         "zone": ZONE,
         "videos": {
             "clip.mp4": video(
-                "clip.mp4", 64, 48, 1000, 30.0, True, "video/avc", False, "2024-05-01T12:20:30"
+                "clip.mp4",
+                64,
+                48,
+                1000,
+                30.0,
+                True,
+                "video/avc",
+                False,
+                "2024-05-01T12:20:30",
+                1714558830000,  # 10:20:30 UTC
             ),
             "rotated.mp4": video(
-                "rotated.mp4", 48, 64, 1000, 25.0, False, "video/avc", False, "2024-05-01T12:20:35"
+                "rotated.mp4",
+                48,
+                64,
+                1000,
+                25.0,
+                False,
+                "video/avc",
+                False,
+                "2024-05-01T12:20:35",
+                1714558835000,  # 10:20:35 UTC
             ),
-            "ntsc.mp4": video("ntsc.mp4", 64, 48, 1001, 29.97, False, "video/avc", False, None),
-            "prores.mov": video("prores.mov", 64, 48, 1000, 30.0, False, None, False, None),
-            "hdr.mp4": video("hdr.mp4", 64, 48, 1000, 30.0, False, "video/hevc", True, None),
+            "ntsc.mp4": video(
+                "ntsc.mp4", 64, 48, 1001, 29.97, False, "video/avc", False, None, None
+            ),
+            "prores.mov": video("prores.mov", 64, 48, 1000, 30.0, False, None, False, None, None),
+            "hdr.mp4": video("hdr.mp4", 64, 48, 1000, 30.0, False, "video/hevc", True, None, None),
             # Opus adds its 8 ms of pre-skip. A Matroska date is not read (docs/design.md, 7).
             "clip.webm": video(
-                "clip.webm", 64, 48, 1008, 30.0, True, "video/x-vnd.on2.vp9", False, None
+                "clip.webm", 64, 48, 1008, 30.0, True, "video/x-vnd.on2.vp9", False, None, None
             ),
         },
         # The phone reads these or marks them unreadable, and never drops them.

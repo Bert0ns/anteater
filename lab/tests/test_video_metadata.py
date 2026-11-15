@@ -31,6 +31,7 @@ def test_reads_the_golden_values(name):
     assert meta.video_codec == want["video_codec"]
     assert meta.hdr == want["hdr"]
     assert meta.captured_at == captured_at
+    assert meta.captured_instant == want["captured_instant"]
 
 
 def test_the_capture_time_is_the_local_time_of_the_zone_at_that_instant():
@@ -38,6 +39,7 @@ def test_the_capture_time_is_the_local_time_of_the_zone_at_that_instant():
     meta = read_video_metadata(FIXTURES / "clip.mp4", ZoneInfo("America/New_York"))
 
     assert meta.captured_at == datetime(2024, 5, 1, 6, 20, 30)
+    assert meta.captured_instant == 1714558830000  # the moment itself does not move with the zone
 
 
 @pytest.mark.parametrize("name", EXPECTED["no_video_track"])
