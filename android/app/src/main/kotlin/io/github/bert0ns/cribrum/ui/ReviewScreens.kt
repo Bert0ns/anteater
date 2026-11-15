@@ -58,7 +58,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -378,7 +377,7 @@ fun CategoryScreen(
                 }
             }
         }
-        SnackbarHost(snackbar)
+        AppSnackbarHost(snackbar)
         if (images.isNotEmpty()) {
             Buttons(Modifier.fillMaxWidth().padding(16.dp)) {
                 Button(onClick = { if (favorites > 0) askFavorites = true else apply() }, enabled = !loading) {

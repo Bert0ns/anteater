@@ -102,6 +102,13 @@
     </plurals>
     <string name="change_failed_snackbar">That did not work. Try again.</string>
     <string name="favorite_appeared_snackbar">An image became a favourite meanwhile. Check the page.</string>
+    <!-- The snackbar action after trashing more than 1 GB at once, with the real figure: "Free 2.3 GB now". -->
+    <string name="free_now">Free %1$s now</string>
+    <!-- %1$d files, %2$s their size. Only what was just trashed goes, not the rest of the trash. -->
+    <plurals name="free_now_body">
+        <item quantity="one">This frees %2$s. Only the file you just trashed is deleted, and it cannot be restored.</item>
+        <item quantity="other">This frees %2$s. Only the %1$d files you just trashed are deleted, and they cannot be restored.</item>
+    </plurals>
     <string name="undo">Undo</string>
     <string name="trash_empty">The trash is empty.</string>
     <string name="trash_hint">Tap to select, hold to see full size.</string>

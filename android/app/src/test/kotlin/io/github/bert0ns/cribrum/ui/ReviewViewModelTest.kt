@@ -1366,6 +1366,34 @@ class ReviewViewModelTest {
     }
 
     @Test
+    fun `freeing the space of a page deletes for good only what the page trashed, and ends its undo`() {
+        val volume = folder.newFolder()
+        val trash = AppTrash({ listOf(volume) })
+        fun file(name: String) = File(volume, name).apply { writeText("0123456789") }.toMediaRef()
+        val older = file("older.jpg")
+        val blurred = file("blurred.jpg")
+        runBlocking {
+            app.index.record(older)
+            trash.moveToTrash(listOf(older))
+            app.index.setReviewState(older.path, ReviewState.TRASHED)
+            app.index.record(blurred)
+            app.index.setSignals(blurred.path, "blur", 1, listOf(Signal("blur", 1, Category.BLURRY, 0.9f)))
+        }
+        val model = ReviewViewModel(app, Review(app.index, trash))
+        model.open(Category.BLURRY)
+        settle(model) { paths(it) == listOf(blurred.path) }
+        applyShown(model)
+        settle(model) { it.state.value.lastDecision != null }
+
+        model.freeNow(model.state.value.lastDecision!!)
+        settle(model) { it.state.value.lastDecision == null }
+
+        assertEquals(listOf(older), runBlocking { trash.trashed() }.map { it.original })
+        assertFalse(File(blurred.path).exists())
+        assertEquals(mapOf(older.path to ReviewState.TRASHED), runBlocking { app.index.reviewStates() })
+    }
+
+    @Test
     fun `deleting the selection purges only the selected images, through the trash`() {
         val images = listOf("one", "two", "three").map { MediaRef("/sdcard/$it.jpg", 1_000, 1L) }
         val trash = PurgingTrash(images)
