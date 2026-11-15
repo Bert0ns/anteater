@@ -882,6 +882,7 @@ def test_no_image_step_receives_a_video(photos, index, monkeypatch):
     )
 
     assert stats.failures == []
+    assert stats.images == 3  # the scan log's image count leaves the video out
     assert {step for step, _ in seen} >= {"metadata", "embedding", "fast", "embedded", "group"}
     assert [step for step, path in seen if path == clip] == []
     assert index.images()[1] == video  # found, and kept with its media type

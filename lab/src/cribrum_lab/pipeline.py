@@ -147,7 +147,6 @@ def run(
     ]
     index.forget(gone)
     stats.forgotten = len(gone)
-    stats.images = len(found)
 
     # The metadata read from an image header, and every step after it but the group detectors,
     # take images only: a video is recorded and nothing more (docs/design.md, section 4).
@@ -165,6 +164,7 @@ def run(
 
     media = [i for i in index.images() if i.path in found]
     images = [i for i in media if i.media_type is MediaType.IMAGE]
+    stats.images = len(images)
     readable = [i for i in images if i.path not in unreadable]
     # The home screen lists candidates as soon as these are stored; the embeddings come after.
     fast = [d for d in detectors if not getattr(d, "uses_embeddings", False)]

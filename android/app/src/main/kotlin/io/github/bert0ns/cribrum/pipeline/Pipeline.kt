@@ -244,7 +244,6 @@ class Pipeline(
                 .keys.forEach { index.restoreReviewState(it, ReviewState.UNREVIEWED, emptySet(), emptySet()) }
         }
         stats.forgotten = gone.size
-        stats.images = found.size
 
         // The metadata read from an image header, and every step after it but the group detectors, take images only:
         // a video is recorded and nothing more (docs/design.md §4).
@@ -264,6 +263,7 @@ class Pipeline(
 
         val media = index.images().filter { it.path in found }
         val images = media.filter { it.mediaType == MediaType.IMAGE }
+        stats.images = images.size
         val readable = images.filter { it.path !in unreadable } // group detectors still see the unreadable files
         // The home screen lists candidates as soon as these are stored; the embeddings come after.
         phase("detectors", stats) {
