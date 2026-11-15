@@ -233,6 +233,92 @@ class PipelineTest {
     }
 
     @Test
+    fun `a normal scan never opens a video, even one whose file fails on open`() {
+        photos()
+        // The size of an image, so the exact duplicates would hash it if they took videos.
+        val clip = File(root, "DCIM/Camera/clip.mp4").apply { writeBytes(ByteArray(File(root, "DCIM/Camera/a.png").length().toInt())) }
+        val video = clip.toMediaRef(MediaType.VIDEO)
+        runBlocking { index.record(video) } // as an earlier walk left it: this one does not sniff it again
+        assumeTrue("the file still opens (running as root?)", clip.setReadable(false) && !clip.canRead())
+        val hashed = ConcurrentLinkedQueue<String>()
+        val pipeline = Pipeline(index, embedder = MeanColorEmbedder(), contentHasher = { contentHash(it).also { _ -> hashed += it.path } })
+
+        val stats = try {
+            runBlocking { pipeline.run(FilesystemMediaSource(root) { index.images() }) }
+        } finally {
+            clip.setReadable(true)
+        }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertFalse(clip.path in stats.unreadablePaths)
+        assertFalse(clip.path in hashed)
+        assertEquals(1, stats.videos)
+        assertEquals(video, runBlocking { index.images() }.single { it.mediaType == MediaType.VIDEO })
+    }
+
+    @Test
+    fun `a run asked for both takes the videos after every image step`() {
+        videos()
+        val steps = mutableListOf<String>()
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(ExactDuplicateDetector()), videoMetadataReader = ::readVideo)
+
+        runBlocking { pipeline.run(source, videos = true) { step, _, _ -> steps += step } }
+
+        assertTrue(steps.indexOf(VIDEO_METADATA_STEP) > steps.lastIndexOf("exact_duplicate"))
+    }
+
+    @Test
+    fun `a run for videos alone walks, reads the videos and runs no image step`() {
+        val clip = videos().getValue("clip")
+        val seen = ConcurrentLinkedQueue<Pair<String, String>>()
+        val pipeline = Pipeline(
+            index,
+            detectors = listOf(SeenDetector("detector", seen)),
+            groupDetectors = listOf(SeenGroup(seen)),
+            metadataReader = { throw AssertionError("read ${it.name}") },
+            jpegReader = { throw AssertionError("read ${it.name}") },
+            videoMetadataReader = ::readVideo,
+        )
+
+        val stats = runBlocking { pipeline.run(source, images = false, videos = true) }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(emptyList<Pair<String, String>>(), seen.toList())
+        assertEquals(clipMeta, runBlocking { index.videoMetadata(clip.path) })
+        assertEquals(3 to 3, stats.images to stats.videos)
+        assertEquals("the images wait for a normal scan", 3, runBlocking { index.withoutMetadata() }.size)
+        assertEquals(listOf("walk", "videoMetadata"), stats.phaseMs.keys.toList())
+    }
+
+    @Test
+    fun `a video scan stopped in the middle of a batch keeps the batches before it, and the next one reads the rest`() {
+        repeat(7) { File(root, "DCIM/Camera/$it.mp4").apply { parentFile!!.mkdirs() }.writeBytes(byteArrayOf(0, 0, 0, 0x18) + "ftypisom".toByteArray() + ByteArray(12)) }
+        val reads = AtomicInteger()
+        lateinit var scan: Job
+        val reader = { file: File ->
+            if (reads.incrementAndGet() == 6) {
+                // One reader and batches of two: the first four are stored, and the fifth waits in the batch this read would fill.
+                runBlocking { withTimeout(10_000) { while (index.withoutMetadata().size > 3) delay(10) } }
+                scan.cancel()
+            }
+            clipMeta
+        }
+        fun videoScan(read: (File) -> VideoMetadata) = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), videoMetadataReader = read, storeBatch = 2, readers = 1)
+
+        runBlocking {
+            scan = launch(Dispatchers.Default) { videoScan(reader).run(source, images = false, videos = true) }
+            scan.join()
+        }
+
+        assertEquals(3, runBlocking { index.withoutMetadata() }.size)
+        val read = ConcurrentLinkedQueue<File>()
+        val stats = runBlocking { videoScan { clipMeta.also { _ -> read += it } }.run(source, images = false, videos = true) }
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals("only what the stop left", 3, read.size)
+        assertEquals(emptyList<MediaRef>(), runBlocking { index.withoutMetadata() })
+    }
+
+    @Test
     fun `a video whose header does not read stays in the index, unreadable`() {
         val videos = videos()
         val broken = videos.getValue("broken")
