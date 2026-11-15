@@ -118,10 +118,11 @@ class VideoMetadataTest {
     }
 
     @Test
-    fun `a file that reads with no video track is not a video`() {
-        val audio = video(mapOf(METADATA_KEY_HAS_AUDIO to "yes"))
+    fun `a file whose video track the retriever does not see is unreadable, not dropped`() {
+        // An audio-only MP4, or a ProRes MOV whose codec the extractor does not know: the retriever says the same of both.
+        val unseen = video(mapOf(METADATA_KEY_HAS_AUDIO to "yes"))
 
-        assertThrows(NoVideoTrack::class.java) { readVideoMetadata(audio, ROME) }
+        assertThrows(UnreadableVideo::class.java) { readVideoMetadata(unseen, ROME) }
     }
 
     @Test

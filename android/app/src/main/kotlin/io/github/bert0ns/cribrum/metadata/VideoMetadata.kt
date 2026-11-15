@@ -34,9 +34,6 @@ data class VideoMetadata(
 /** The file looks like a video but its header can't be read. */
 class UnreadableVideo(file: File, cause: Throwable? = null) : IOException(file.path, cause)
 
-/** The container reads and holds no video track, such as an audio-only MP4. */
-class NoVideoTrack(file: File) : IOException(file.path)
-
 /** What MediaMetadataRetriever writes for a date: the MP4 creation time, in UTC. */
 private val RETRIEVER_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss.SSS'Z'")
 
@@ -52,7 +49,9 @@ fun readVideoMetadata(file: File, zone: ZoneId = ZoneId.systemDefault()): VideoM
             throw UnreadableVideo(file, error)
         }
         fun key(key: Int): String? = retriever.extractMetadata(key)
-        if (key(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO) != "yes") throw NoVideoTrack(file)
+        // The extractor sees only the codecs it knows: a ProRes or MJPEG MOV looks like it has no video. Such a file stays
+        // in the index, unreadable, where an audio-only MP4 shows as an unreadable video too (docs/design.md §4).
+        if (key(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO) != "yes") throw UnreadableVideo(file)
         val codedWidth = key(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull()?.takeIf { it > 0 }
         val codedHeight = key(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull()?.takeIf { it > 0 }
         if (codedWidth == null || codedHeight == null) throw UnreadableVideo(file)

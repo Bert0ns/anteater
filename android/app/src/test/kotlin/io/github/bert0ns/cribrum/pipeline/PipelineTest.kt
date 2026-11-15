@@ -19,7 +19,6 @@ import io.github.bert0ns.cribrum.imaging.TestImage
 import io.github.bert0ns.cribrum.index.ImageIndex
 import io.github.bert0ns.cribrum.index.memoryIndex
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
-import io.github.bert0ns.cribrum.metadata.NoVideoTrack
 import io.github.bert0ns.cribrum.metadata.UnreadableImage
 import io.github.bert0ns.cribrum.metadata.UnreadableVideo
 import io.github.bert0ns.cribrum.metadata.VideoMetadata
@@ -192,14 +191,13 @@ class PipelineTest {
     private fun videos(): Map<String, File> {
         photos()
         val head = byteArrayOf(0, 0, 0, 0x18) + "ftypisom".toByteArray() + ByteArray(12)
-        return listOf("clip", "audio", "broken").associateWith { File(root, "DCIM/Camera/$it.mp4").apply { writeBytes(head) } }
+        return listOf("clip", "prores", "broken").associateWith { File(root, "DCIM/Camera/$it.mp4").apply { writeBytes(head) } }
     }
 
     private val clipMeta = VideoMetadata(64, 48, 1000, 30.0, 44_880, true, "video/avc", false, LocalDateTime.of(2024, 5, 1, 12, 20, 30))
 
     private fun readVideo(file: File): VideoMetadata = when (file.nameWithoutExtension) {
         "clip" -> clipMeta
-        "audio" -> throw NoVideoTrack(file)
         else -> throw UnreadableVideo(file)
     }
 
@@ -236,29 +234,30 @@ class PipelineTest {
 
     @Test
     fun `a video whose header does not read stays in the index, unreadable`() {
-        val broken = videos().getValue("broken")
+        val videos = videos()
+        val broken = videos.getValue("broken")
         val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), videoMetadataReader = ::readVideo)
 
         val stats = runBlocking { pipeline.run(source, videos = true) }
 
-        assertEquals(listOf(broken.path), stats.unreadablePaths)
+        assertEquals(listOf(broken.path, videos.getValue("prores").path).sorted(), stats.unreadablePaths.sorted())
         assertEquals(emptyList<Failure>(), stats.failures)
         assertEquals(emptyList<MediaRef>(), runBlocking { index.withoutMetadata() })
     }
 
     @Test
-    fun `a file with no video track leaves the index and the walk does not sniff it again`() {
-        val audio = videos().getValue("audio")
+    fun `a video whose track the phone does not see keeps its row through the next scan`() {
+        val prores = videos().getValue("prores") // the reader marks it unreadable, as the retriever does a codec it lacks
         val walk = FilesystemMediaSource(root, notImages = index) { index.images() }
         val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), videoMetadataReader = ::readVideo)
 
         val stats = runBlocking { pipeline.run(walk, videos = true) }
-        val again = runBlocking { pipeline.run(walk, videos = true) }
+        runBlocking { pipeline.run(walk, videos = true) }
 
-        assertFalse(audio.path in runBlocking { index.images() }.map { it.path })
-        assertEquals(listOf(audio.toMediaRef()), runBlocking { index.notImages() }.toList())
-        assertEquals(1, stats.forgotten)
-        assertEquals(0, again.newOrChanged)
+        assertEquals(0, stats.forgotten)
+        assertEquals(prores.toMediaRef(MediaType.VIDEO), runBlocking { index.images() }.single { it.path == prores.path })
+        assertTrue(prores.path in runBlocking { index.unreadable() })
+        assertEquals(emptyList<MediaRef>(), runBlocking { index.notImages() }.toList())
     }
 
     @Test

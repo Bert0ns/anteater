@@ -31,7 +31,6 @@ import io.github.bert0ns.cribrum.hashing.toHex
 import io.github.bert0ns.cribrum.imaging.Pixels
 import io.github.bert0ns.cribrum.index.ImageIndex
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
-import io.github.bert0ns.cribrum.metadata.NoVideoTrack
 import io.github.bert0ns.cribrum.metadata.UnreadableImage
 import io.github.bert0ns.cribrum.metadata.UnreadableVideo
 import io.github.bert0ns.cribrum.metadata.VideoMetadata
@@ -272,7 +271,7 @@ class Pipeline(
         if (videos) {
             val pendingVideos = withoutMetadata.filter { it.mediaType == MediaType.VIDEO }
             phase("videoMetadata", stats) {
-                readAndStore(pendingVideos, VIDEO_METADATA_STEP, progress, read = { attempt { videoMetadataReader(it) } }) { batch -> storeVideoMetadata(batch, pendingVideos, stats) }
+                readAndStore(pendingVideos, VIDEO_METADATA_STEP, progress, read = { attempt { videoMetadataReader(it) } }) { batch -> storeVideoMetadata(batch, stats) }
             }
         }
         val unreadable = index.unreadable().toSet()
@@ -764,25 +763,16 @@ class Pipeline(
         }
     }
 
-    /**
-     * As [storeMetadata], with [UnreadableVideo] for a header that does not read. A file with no video track is neither
-     * an image nor a video: it leaves the index and goes to `not_images`, so the walk does not sniff it again until it changes.
-     */
-    private suspend fun storeVideoMetadata(batch: List<Pair<String, Result<VideoMetadata>>>, videos: List<MediaRef>, stats: Stats) = traceSuspend("Pipeline.storeVideoMetadata") {
+    /** As [storeMetadata], with [UnreadableVideo]: a video the phone cannot read keeps its row and its size. */
+    private suspend fun storeVideoMetadata(batch: List<Pair<String, Result<VideoMetadata>>>, stats: Stats) = traceSuspend("Pipeline.storeVideoMetadata") {
         for ((path, result) in batch) {
-            result.exceptionOrNull()?.takeIf { it !is UnreadableVideo && it !is NoVideoTrack }?.let { stats.failures += Failure(path, "metadata", failureMessage(it)) }
+            result.exceptionOrNull()?.takeIf { it !is UnreadableVideo }?.let { stats.failures += Failure(path, "metadata", failureMessage(it)) }
         }
         index.batch(batch.map { it.first }) { recorded ->
             for ((path, result) in batch) {
                 if (path !in recorded) continue // the row went while the scan ran
                 result.fold({ index.setVideoMetadata(path, it) }, { if (it is UnreadableVideo) index.setUnreadable(path) })
             }
-        }
-        val noVideo = batch.filter { it.second.exceptionOrNull() is NoVideoTrack }.mapTo(HashSet()) { it.first }
-        if (noVideo.isNotEmpty()) {
-            index.forget(noVideo)
-            index.addNotImages(videos.filter { it.path in noVideo })
-            stats.forgotten += noVideo.size
         }
     }
 

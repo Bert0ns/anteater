@@ -19,6 +19,7 @@ class VideoMetadataDeviceTest {
     private val assets = InstrumentationRegistry.getInstrumentation().context.assets
     private val expected = JSONObject(assets.open("expected.json").bufferedReader().readText())
     private val zone = ZoneId.of(expected.getString("zone"))
+    private val mayNotRead = expected.getJSONArray("phone_may_not_read").let { names -> List(names.length(), names::getString) }
 
     private fun copy(name: String): File = File(ApplicationProvider.getApplicationContext<Context>().cacheDir, name).apply {
         assets.open(name).use { input -> outputStream().use(input::copyTo) }
@@ -40,14 +41,25 @@ class VideoMetadataDeviceTest {
                 want.getBoolean("hdr"),
                 if (want.isNull("captured_at")) null else LocalDateTime.parse(want.getString("captured_at")),
             )
-            assertEquals(name, wanted, readVideoMetadata(copy(name), zone))
+            if (name in mayNotRead) {
+                // A codec the phone's extractor may not know: it reads the file or marks it unreadable, never drops it.
+                val read = try {
+                    readVideoMetadata(copy(name), zone)
+                } catch (_: UnreadableVideo) {
+                    continue
+                }
+                assertEquals(name, wanted, read)
+            } else {
+                assertEquals(name, wanted, readVideoMetadata(copy(name), zone))
+            }
         }
     }
 
+    /** The lab drops these, and the phone cannot tell one from a track it does not know, so it keeps them unreadable. */
     @Test
-    fun aFileWithOnlyAudioHasNoVideoTrack() {
+    fun aFileWithOnlyAudioIsUnreadable() {
         val names = expected.getJSONArray("no_video_track")
-        for (i in 0 until names.length()) assertThrows(names.getString(i), NoVideoTrack::class.java) { readVideoMetadata(copy(names.getString(i)), zone) }
+        for (i in 0 until names.length()) assertThrows(names.getString(i), UnreadableVideo::class.java) { readVideoMetadata(copy(names.getString(i)), zone) }
     }
 
     @Test
