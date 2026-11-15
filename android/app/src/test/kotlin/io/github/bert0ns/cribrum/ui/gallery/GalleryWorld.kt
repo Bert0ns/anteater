@@ -2,6 +2,7 @@ package io.github.bert0ns.cribrum.ui.gallery
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
@@ -16,6 +17,7 @@ import io.github.bert0ns.cribrum.mobileclip.MODEL_VERSION
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
@@ -30,7 +32,9 @@ import io.github.bert0ns.cribrum.trash.Trash
 import io.github.bert0ns.cribrum.ui.ReviewViewModel
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
+import org.robolectric.shadows.ShadowMediaMetadataRetriever
 import java.io.File
+import java.io.RandomAccessFile
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDateTime
@@ -113,6 +117,26 @@ class GalleryWorld(val app: CribrumApp, val root: File, val clock: MovableClock 
         GalleryPictures.write(file, bitmap, bytes)
         file.setLastModified(at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
         return add(file.toMediaRef(), signals.toList())
+    }
+
+    /** A video file of [bytes], dated [at]. Its content is zeros: [showVideos] gives the retriever its frame and length. */
+    fun video(folder: String, name: String, bytes: Long, at: LocalDateTime): MediaRef {
+        val file = File(unique(folder, name))
+        file.parentFile?.mkdirs()
+        RandomAccessFile(file, "rw").use { it.setLength(bytes) }
+        file.setLastModified(at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
+        return add(file.toMediaRef(MediaType.VIDEO), emptyList())
+    }
+
+    /**
+     * Gives Robolectric's retriever a frame and a length for each video in the trash, by the file's path there: [frames]
+     * picks the frame from a video's position in the trash's list. It decodes none, and the trash screen reads both.
+     */
+    fun showVideos(frames: (Int) -> Bitmap) = runBlocking {
+        trash.trashed().filter { it.original.mediaType == MediaType.VIDEO }.forEachIndexed { index, item ->
+            ShadowMediaMetadataRetriever.addMetadata(item.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, (42_000L + index * 377_000L).toString())
+            ShadowMediaMetadataRetriever.addFrame(item.file.path, 0, frames(index))
+        }
     }
 
     /** A row with no file behind it. */

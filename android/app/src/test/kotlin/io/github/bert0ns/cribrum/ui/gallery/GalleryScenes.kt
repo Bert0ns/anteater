@@ -1,11 +1,15 @@
 package io.github.bert0ns.cribrum.ui.gallery
 
+import android.text.format.Formatter
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.compress.BatchResult
@@ -278,6 +282,22 @@ val scenes: List<Scene> = listOf(
         openCategory(model, R.string.category_blurry)
         confirmApply(model)
     },
+    Scene("review-snackbar-free-now", "Review, the snackbar after a page that trashed more than 1 GB", "Read how much went to the trash, free that space now or undo the page. The photos here are made larger than real ones: videos will reach 1 GB once their review is built.", Variant.base) {
+        bigPage(world)
+        val model = app()
+        openCategory(model, R.string.category_blurry)
+        confirmApply(model)
+        awaitText(freeNowLabel(model))
+    },
+    Scene("review-free-now-confirm", "Review, the confirmation before freeing the space of the last page", "Read how many files go for good, that only the ones just trashed go and that they cannot be restored, then delete them or cancel.", Variant.base) {
+        bigPage(world)
+        val model = app()
+        openCategory(model, R.string.category_blurry)
+        confirmApply(model)
+        click(freeNowLabel(model))
+        val count = model.state.value.lastDecision!!.trashed.size
+        awaitText(plural(R.plurals.delete_files_title, count, count))
+    },
     Scene("review-favorite-appeared", "Review, the page back after a photo on it became a favourite", "Read why nothing went to the trash, find the new heart, then trash the page again or keep the favourite.", Variant.base) {
         world.library(pictures = setOf(Category.BLURRY))
         world.commit()
@@ -314,7 +334,7 @@ val scenes: List<Scene> = listOf(
         clickDescription(str(R.string.trash))
         await("the trash, still reading") { model.state.value.screen is Screen.Trash && model.state.value.loading }
     },
-    Scene("trash-items", "Trash with photos, screenshots and stickers, nothing selected", "Select photos to bring them back, select all, hold one to see it full size, empty the trash, or go back. The days left count down to the automatic deletion.", Variant.full) {
+    Scene("trash-items", "Trash with photos, videos, screenshots and stickers, nothing selected", "Select photos or videos to bring them back, select all, hold one to see it full size, read how much space the trash still takes, empty the trash, or go back. The days left count down to the automatic deletion, and a video shows its length and size.", Variant.full) {
         val model = app(trashed(this))
         openTrash(model)
         awaitModel(model, "the items") { it.state.value.trashed.isNotEmpty() }
@@ -332,7 +352,7 @@ val scenes: List<Scene> = listOf(
         awaitModel(model, "the items") { it.state.value.trashed.isNotEmpty() }
         click(str(R.string.empty_trash))
         val count = model.state.value.trashed.size
-        awaitText(plural(R.plurals.empty_trash_title, count, count))
+        awaitText(plural(R.plurals.delete_files_title, count, count))
     },
     Scene("trash-full-size", "Trash, a photo at full size", "Look at a trashed photo before restoring it or deleting it for good, tick the checkbox to select it, read its folder and its days left, swipe to the next one, or close the view.", Variant.base) {
         val model = app(trashed(this))
@@ -340,6 +360,20 @@ val scenes: List<Scene> = listOf(
         awaitModel(model, "the items") { it.state.value.trashed.isNotEmpty() }
         described("IMG_")[0].performTouchInput { longClick() }
         awaitTag("fullSize")
+    },
+    Scene("trash-video-full-size", "Trash, a video at full size", "Look at a frame of a trashed video, with its length and size, before restoring it or deleting it for good, tick the checkbox to select it, read its folder and its days left, swipe to the next one, or close the view. The video does not play yet.", Variant.base) {
+        val model = app(trashed(this))
+        openTrash(model)
+        awaitModel(model, "the items") { it.state.value.trashed.isNotEmpty() }
+        scrollToVideos()
+        described("VID_")[0].performTouchInput { longClick() }
+        awaitTag("fullSize")
+    },
+    Scene("trash-videos", "Trash, scrolled to its videos", "Read each video's length, size and days left on its frame, select videos to bring them back or to delete them for good, or hold one to see it full size.", Variant.base) {
+        val model = app(trashed(this))
+        openTrash(model)
+        awaitModel(model, "the items") { it.state.value.trashed.isNotEmpty() }
+        scrollToVideos()
     },
     // Compress
     Scene("compress-empty", "Compress, nothing to compress", "Read why the list is empty, or open the sheet of what can be compressed.", Variant.base) {
@@ -519,12 +553,31 @@ val scenes: List<Scene> = listOf(
     },
 )
 
-/** Photos, screenshots and stickers in the trash, trashed between one and 25 days ago, with the app on the empty home. */
+/** The label of the snackbar's offer, with the size of the last page as the app writes it in the scene's language. */
+private fun Gallery.freeNowLabel(model: ReviewViewModel) = str(R.string.free_now, Formatter.formatShortFileSize(app, model.state.value.lastDecision!!.trashed.sumOf { it.size }))
+
+private fun Gallery.scrollToVideos() {
+    compose.onNode(hasScrollAction()).performScrollToNode(hasContentDescription("VID_", substring = true))
+    settle()
+}
+
+/** Twelve blurry photos of about 92 MB each: one page that trashes more than 1 GB. */
+private fun bigPage(world: GalleryWorld) {
+    repeat(12) { world.picture(CAMERA, cameraName(taken(it)), GalleryPictures.blurred(GalleryPictures.scene(1_000 + it)), 92_000_000L + it * 100_000L, taken(it), world.signal(Category.BLURRY, 0.99f - it * 0.01f)) }
+    world.commit()
+}
+
+/**
+ * Photos, videos, screenshots and stickers in the trash, trashed between one and 25 days ago, with the app on the empty
+ * home. The three videos have a frame and a length from Robolectric's retriever ([GalleryWorld.showVideos]).
+ */
 private fun trashed(gallery: Gallery): ReviewViewModel = with(gallery) {
     val photos = (0 until 12).map { world.picture(CAMERA, cameraName(taken(it)), GalleryPictures.scene(5_000 + it), 3_500_000L + it * 90_000L, taken(it)) }
+    val videos = (0 until 3).map { world.video(CAMERA, "VID_20261020_18${it}500.mp4", 180_000_000L + it * 230_000_000L, taken(it)) }
     val shots = (0 until 3).map { world.picture(SCREENSHOTS, "Screenshot_2026102$it-1${it}2030.png", GalleryPictures.screenshot(5_100 + it), 1_800_000L, taken(it)) }
     val stickers = (0 until 4).map { world.picture(STICKERS, "${500_000 + it}-$it.webp", GalleryPictures.sticker(5_200 + it), 120_000L, taken(it)) }
     world.commit(scanned = false)
-    world.trashed(photos + shots + stickers) { 1L + it * 2 }
+    world.trashed(photos + videos + shots + stickers) { 1L + it * 2 }
+    world.showVideos { GalleryPictures.scene(5_300 + it) }
     return world.model()
 }
