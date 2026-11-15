@@ -5,6 +5,7 @@ import android.content.Context
 import android.media.MediaScannerConnection
 import android.os.storage.StorageManager
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.sources.FavoriteRequests
 import io.github.bert0ns.cribrum.sources.queryFavoritesAmong
@@ -226,7 +227,7 @@ class AppTrash(
     private fun move(image: MediaRef, compressedCopy: MediaRef? = null, favorite: Boolean = false): File? {
         val file = File(image.path)
         if (file.name == ORIGIN) return null
-        if (!file.isFile || runCatching { file.toMediaRef() }.getOrNull() != image) return null
+        if (!file.isFile || runCatching { file.toMediaRef(image.mediaType) }.getOrNull() != image) return null
         val root = rootOf(file) ?: return null
         val folder = File(root, UUID.randomUUID().toString())
         try {
@@ -265,6 +266,7 @@ class AppTrash(
         origin["path"] = image.path
         origin["size"] = image.size.toString()
         origin["mtime_ns"] = image.mtimeNs.toString()
+        origin["media_type"] = image.mediaType.value
         origin["trashed_at"] = trashedAt.toString()
         origin["seen_at"] = seenAt.toString()
         if (compressedCopy != null) {
@@ -300,10 +302,12 @@ class AppTrash(
         val size = origin.getProperty("size")?.toLongOrNull() ?: return null
         val mtimeNs = origin.getProperty("mtime_ns")?.toLongOrNull() ?: return null
         val purgeAt = maxOf(trashedAt, seenAt) + retention()
+        // An item written before the trash recorded media types holds an image.
+        val mediaType = origin.getProperty("media_type")?.let(MediaType::of) ?: MediaType.IMAGE
         val compressedSize = origin.getProperty("compressed_size")?.toLongOrNull()
         val compressedMtimeNs = origin.getProperty("compressed_mtime_ns")?.toLongOrNull()
         TrashedImage(
-            MediaRef(path, size, mtimeNs),
+            MediaRef(path, size, mtimeNs, mediaType),
             trashedAt,
             file,
             purgeAt,

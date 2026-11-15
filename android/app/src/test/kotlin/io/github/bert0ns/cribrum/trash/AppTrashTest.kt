@@ -1,6 +1,7 @@
 package io.github.bert0ns.cribrum.trash
 
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.toMediaRef
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -61,7 +62,47 @@ class AppTrashTest {
         return file.toMediaRef()
     }
 
+    private fun video(path: String): MediaRef = File(photo(path, "mp4 bytes").path).toMediaRef(MediaType.VIDEO)
+
     private fun test(block: suspend AppTrash.() -> Unit) = runBlocking { trash.block() }
+
+    @Test
+    fun `a video moves to the trash and back as a video`() = test {
+        val clip = video("DCIM/Camera/clip.mp4")
+
+        assertEquals(listOf(clip), moveToTrash(listOf(clip)))
+        assertEquals(clip, trashed().single().original)
+
+        assertEquals(listOf(clip), restore(listOf(clip)))
+        assertEquals(clip, File(clip.path).toMediaRef(MediaType.VIDEO))
+        assertTrue(trashed().isEmpty())
+    }
+
+    @Test
+    fun `a video is purged as a video, on request and once it expired`() = test {
+        val chosen = video("DCIM/Camera/chosen.mp4")
+        val old = video("DCIM/Camera/old.mp4")
+        moveToTrash(listOf(chosen, old))
+
+        assertEquals(listOf(chosen), purge(listOf(chosen)))
+        clock.now += Duration.ofDays(31)
+
+        assertEquals(listOf(old), purgeExpired().purged)
+        assertTrue(trashed().isEmpty())
+    }
+
+    @Test
+    fun `an item written before the trash recorded media types reads as an image`() = test {
+        val image = photo("DCIM/before.jpg")
+        moveToTrash(listOf(image))
+        val origin = File(trashed().single().file.parentFile, "origin.properties")
+        val props = Properties().apply { origin.inputStream().use(::load) }
+        props.remove("media_type")
+        origin.outputStream().use { props.store(it, null) }
+
+        assertEquals(image, trashed().single().original)
+        assertEquals(listOf(image), restore(listOf(image)))
+    }
 
     @Test
     fun `moving takes the file out of its folder and keeps where it was`() = test {
