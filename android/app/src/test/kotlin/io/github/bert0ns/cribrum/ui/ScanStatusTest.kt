@@ -43,6 +43,20 @@ class ScanStatusTest {
     }
 
     @Test
+    fun `on the Videos tab there is no Scan now while nothing runs, and a running scan still shows with its Stop`() {
+        var progress by mutableStateOf<ScanProgress?>(null)
+        compose.setContent { ScanStatus(progress, onScan = {}, canStart = false) }
+
+        compose.onNodeWithText("Scan now").assertDoesNotExist()
+        compose.onNodeWithText("Stop scanning").assertDoesNotExist()
+
+        progress = ScanProgress("detectors", 12, 100)
+
+        compose.onNodeWithText("Analyzing the images: 12 of 100").assertExists()
+        compose.onNodeWithText("Stop scanning").assertExists()
+    }
+
+    @Test
     fun `an index with images says nothing about being empty`() {
         compose.setContent { ScanStatus(progress = null, onScan = {}, indexEmpty = false) }
 
