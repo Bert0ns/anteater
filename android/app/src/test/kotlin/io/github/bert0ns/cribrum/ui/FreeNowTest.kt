@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.review.Decision
+import io.github.bert0ns.cribrum.trash.TrashedImage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -17,6 +18,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.File
+import java.time.Instant
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36]) // Compose tests reach InputManager.getInstance, which SDK 37 removed
@@ -54,7 +57,8 @@ class FreeNowTest {
     fun `the dialog says how many files go and that they cannot be restored, and deletes only on confirm`() {
         var confirmed = false
         var dismissed = false
-        compose.setContent { FreeNowDialog(decision(2_000_000_000, 300_000_000), onConfirm = { confirmed = true }, onDismiss = { dismissed = true }) }
+        val items = decision(2_000_000_000, 300_000_000).trashed.map { TrashedImage(it, Instant.EPOCH, File("/trash/${it.path}"), Instant.EPOCH) }
+        compose.setContent { FreeNowDialog(items, onConfirm = { confirmed = true }, onDismiss = { dismissed = true }) }
 
         compose.onNodeWithText("Delete 2 files for good?").assertExists()
         compose.onNodeWithText("This frees 2.3 GB. Only the 2 files you just trashed are deleted, and they cannot be restored.").assertExists()

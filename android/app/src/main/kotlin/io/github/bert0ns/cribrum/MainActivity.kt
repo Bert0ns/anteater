@@ -217,14 +217,13 @@ private fun AppContent(model: ReviewViewModel) {
     val trashedMessage = decision?.let { appliedMessage(context, it) }
     val undo = stringResource(R.string.undo)
     // A page that trashed more than 1 GB offers to delete it for good now, after a dialog (§9).
-    var freeNow by remember { mutableStateOf<Decision?>(null) }
     val freeNowLabel = decision?.let(::freeNowBytes)?.let { stringResource(R.string.free_now, Formatter.formatShortFileSize(context, it)) }
     LaunchedEffect(decision) {
         if (decision == null || trashedMessage == null) return@LaunchedEffect
         val result = if (freeNowLabel == null) {
             snackbar.showSnackbar(trashedMessage, undo, withDismissAction = true, duration = SnackbarDuration.Long)
         } else {
-            snackbar.showSnackbar(FreeNowVisuals(decision, trashedMessage, undo, freeNowLabel) { freeNow = decision })
+            snackbar.showSnackbar(FreeNowVisuals(decision, trashedMessage, undo, freeNowLabel) { model.askFreeNow(decision) })
         }
         if (result == SnackbarResult.ActionPerformed) {
             haptics.performHapticFeedback(Haptic.TICK.type)
@@ -233,12 +232,11 @@ private fun AppContent(model: ReviewViewModel) {
             model.dismissUndo(decision)
         }
     }
-    freeNow?.let { asked ->
-        FreeNowDialog(asked, onConfirm = {
-            freeNow = null
-            snackbar.currentSnackbarData?.takeIf { (it.visuals as? FreeNowVisuals)?.decision == asked }?.dismiss()
-            model.freeNow(asked)
-        }, onDismiss = { freeNow = null })
+    state.freeNow?.let { asked ->
+        FreeNowDialog(asked.items, onConfirm = {
+            snackbar.currentSnackbarData?.takeIf { (it.visuals as? FreeNowVisuals)?.decision == asked.decision }?.dismiss()
+            model.confirmFreeNow()
+        }, onDismiss = model::cancelFreeNow)
     }
     val stayed = state.stayedInTrash
     val stayedMessage = if (stayed.isEmpty()) null else pluralStringResource(R.plurals.stayed_in_trash_snackbar, stayed.size, stayed.size)

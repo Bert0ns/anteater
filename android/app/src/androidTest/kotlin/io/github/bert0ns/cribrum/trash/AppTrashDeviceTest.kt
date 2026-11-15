@@ -83,7 +83,7 @@ class AppTrashDeviceTest {
     fun moveAndRestore() = runBlocking {
         val image = photo("a.jpg")
 
-        assertEquals(listOf(image), trash.moveToTrash(listOf(image)))
+        assertEquals(listOf(image), trash.moveToTrash(listOf(image)).map { it.original })
         assertFalse(File(image.path).exists())
         val item = trash.trashed().single { it.original == image }
         assertTrue(item.file.path.startsWith(File(folder, TRASH_FOLDER).path))

@@ -515,7 +515,7 @@ class PipelineTest {
     private fun trashed(path: String): MediaRef {
         val ref = refOf(path)
         runBlocking {
-            assertEquals(listOf(ref), trash.moveToTrash(listOf(ref)))
+            assertEquals(listOf(ref), trash.moveToTrash(listOf(ref)).map { it.original })
             index.setReviewState(ref.path, ReviewState.TRASHED)
         }
         return ref

@@ -676,7 +676,8 @@ class ReviewTest {
 
         val decision = apply(listOf(bad), listOf(good))
 
-        assertEquals(Decision(listOf(bad), listOf(good), emptyList(), mapOf(good.path to PreviousReview(ReviewState.UNREVIEWED, emptySet(), emptySet()))), decision)
+        assertEquals(Decision(listOf(bad), listOf(good), emptyList(), mapOf(good.path to PreviousReview(ReviewState.UNREVIEWED, emptySet(), emptySet()))), decision.copy(items = emptyList()))
+        assertEquals(listOf(bad), decision.items.map { it.original })
         assertFalse(File(bad.path).exists())
         assertEquals(ReviewState.TRASHED, index.reviewState(bad.path))
         assertEquals(ReviewState.KEPT, index.reviewState(good.path))

@@ -24,6 +24,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.review.Decision
+import io.github.bert0ns.cribrum.trash.TrashedImage
 
 /** "1 GB" as the app shows sizes: Android's formatter counts in powers of 1000. */
 private const val FREE_NOW_BYTES = 1_000_000_000L
@@ -67,11 +68,11 @@ internal fun AppSnackbarHost(state: SnackbarHostState, modifier: Modifier = Modi
     }
 }
 
-/** Asks before deleting for good the files [decision] just trashed (D6), and says how many and that they cannot come back. */
+/** Asks before deleting for good [items], what the last page trashed and is still in the trash (D6), and says how many and that they cannot come back. */
 @Composable
-internal fun FreeNowDialog(decision: Decision, onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    val count = decision.trashed.size
-    val size = Formatter.formatShortFileSize(LocalContext.current, decision.trashed.sumOf { it.size })
+internal fun FreeNowDialog(items: List<TrashedImage>, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val count = items.size
+    val size = Formatter.formatShortFileSize(LocalContext.current, items.sumOf { it.original.size })
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(pluralStringResource(R.plurals.delete_files_title, count, count)) },

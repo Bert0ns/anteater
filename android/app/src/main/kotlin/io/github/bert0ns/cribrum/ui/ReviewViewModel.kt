@@ -66,6 +66,9 @@ val Screen.destination: Destination
 /** A full screen view covers the navigation bar. */
 val Screen.coversNavigation: Boolean get() = this is Screen.Category || this is Screen.Trash || this == Screen.Thresholds || this == Screen.StorageMap
 
+/** What the "Free now" dialog deletes: the trash items [decision] made that are still in the trash. */
+data class FreeNow(val decision: Decision, val items: List<TrashedImage>)
+
 /** A lower retention that would purge [expiring] trashed images at the next scan, waiting for the user's confirmation. */
 data class RetentionChange(val days: Int, val expiring: Int)
 
@@ -86,6 +89,8 @@ data class ReviewState(
     val selected: Set<String> = emptySet(),
     /** The last applied page, until the user undoes it or moves on. */
     val lastDecision: Decision? = null,
+    /** The "Free now" dialog of [lastDecision], with the trash items of that page still in the trash, while it asks. */
+    val freeNow: FreeNow? = null,
     /** Ids of the groups skipped in the open category. They stay unreviewed and return when it is reopened. */
     val skipped: Set<String> = emptySet(),
     val loading: Boolean = false,
@@ -450,13 +455,27 @@ class ReviewViewModel @JvmOverloads constructor(
     }
 
     /**
-     * Deletes for good the files [decision] trashed, and nothing else in the trash, once the user confirmed it (D6).
-     * The files are gone, so its Undo is too.
+     * Opens the "Free now" dialog of [decision], the page the snackbar shows, with what that page still has in the trash:
+     * a restore or a delete on the trash screen may have taken some. With nothing left, or for an older page, it opens nothing.
      */
-    fun freeNow(decision: Decision) = load { state ->
-        review.purge(decision.trashed)
+    fun askFreeNow(decision: Decision) = load { state ->
+        if (state.lastDecision != decision) return@load state
+        val left = review.stillTrashed(decision.items)
+        state.copy(freeNow = if (left.isEmpty()) null else FreeNow(decision, left))
+    }
+
+    fun cancelFreeNow() = queue { it.copy(freeNow = null) }
+
+    /**
+     * Deletes for good the trash items the dialog listed, and no other item, once the user confirmed it (D6). The
+     * files are gone, so the page's Undo is too. A second confirm finds no dialog and does nothing.
+     */
+    fun confirmFreeNow() = load { state ->
+        val asked = state.freeNow ?: return@load state
+        review.purgeItems(asked.items)
         state.copy(
-            lastDecision = state.lastDecision.takeUnless { it == decision },
+            freeNow = null,
+            lastDecision = state.lastDecision.takeUnless { it == asked.decision },
             trashed = if (state.screen is Screen.Trash) review.trashed() else state.trashed,
         )
     }
