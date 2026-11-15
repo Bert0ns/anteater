@@ -221,6 +221,25 @@ class AppTrashTest {
         assertTrue(File(inside, item.file.name).exists())
     }
 
+    private fun itemAt(original: String, trashFile: File) = TrashedImage(MediaRef(original, 1, 0), Instant.EPOCH, trashFile, Instant.EPOCH)
+
+    @Test
+    fun `an item is on its volume when its path reaches it through a symlink, as the sdcard alias reaches the real volume`() {
+        val alias = File(folder.root, "sdcard")
+        assumeTrue(runCatching { Files.createSymbolicLink(alias.toPath(), volume.toPath()) }.isSuccess)
+        val file = File(volume, ".cribrum-trash/item/a.jpg")
+
+        assertFalse(itemAt(File(alias, "DCIM/a.jpg").path, file).awayFromItsVolume)
+        assertFalse(itemAt(File(volume, "DCIM/a.jpg").path, File(alias, ".cribrum-trash/item/a.jpg")).awayFromItsVolume)
+    }
+
+    @Test
+    fun `an item whose path is on another volume is away from its volume`() {
+        val other = folder.newFolder("other")
+
+        assertTrue(itemAt(File(other, "DCIM/a.jpg").path, File(volume, ".cribrum-trash/item/a.jpg")).awayFromItsVolume)
+    }
+
     @Test
     fun `an item with a media type this build does not know reads as an image, so it is listed, restored and purged`() = test {
         val image = photo("DCIM/later.jpg")

@@ -67,7 +67,8 @@ data class TrashedImage(
 val TrashedImage.awayFromItsVolume: Boolean
     get() {
         val volume = file.parentFile?.parentFile?.parentFile ?: return false
-        return !original.path.startsWith(volume.path + File.separator)
+        // Canonical, as restore compares it: a path can reach its volume through a symlink.
+        return !File(original.path).canonicalPath.startsWith(volume.canonicalPath + File.separator)
     }
 
 interface Trash {
