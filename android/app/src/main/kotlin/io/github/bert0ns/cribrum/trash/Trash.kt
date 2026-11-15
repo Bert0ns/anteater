@@ -145,6 +145,8 @@ class AppTrash(
         val restored = images.filter { image ->
             val item = byOriginal[image] ?: return@filter false
             val target = File(image.path)
+            // Files.move copies across volumes, and a 900 MB video must come back by rename or not at all.
+            if (rootOf(target)?.canonicalFile != item.file.parentFile?.parentFile?.canonicalFile) return@filter false
             val copy = item.compressedCopy
             val copyFolder = if (copy != null && target.exists()) move(copy, favorite = flagged(listOf(copy.path)).isNotEmpty()) ?: return@filter false else null
             target.parentFile?.mkdirs()
