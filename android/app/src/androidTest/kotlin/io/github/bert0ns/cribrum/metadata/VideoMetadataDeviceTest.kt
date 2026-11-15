@@ -40,6 +40,7 @@ class VideoMetadataDeviceTest {
                 want.getString("video_codec"),
                 want.getBoolean("hdr"),
                 if (want.isNull("captured_at")) null else LocalDateTime.parse(want.getString("captured_at")),
+                if (want.isNull("captured_instant")) null else want.getLong("captured_instant"),
             )
             if (name in mayNotRead) {
                 // A codec the phone's extractor may not know: it reads the file or marks it unreadable, never drops it.

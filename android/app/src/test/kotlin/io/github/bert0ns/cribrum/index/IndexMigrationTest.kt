@@ -167,6 +167,7 @@ class IndexMigrationTest {
             assertEquals(listOf(MediaRef("/videos/clip.mp4", 900, 2, MediaType.VIDEO)), runBlocking { it.withoutMetadata() })
             assertEquals(4000, runBlocking { it.metadata("/photos/a.jpg") }?.width)
             assertNull(runBlocking { it.videoMetadata("/photos/a.jpg") }?.durationMs)
+            assertNull(runBlocking { it.videoMetadata("/photos/a.jpg") }?.capturedInstant)
         }
     }
 }

@@ -200,6 +200,7 @@ data class StoredVideoMetadata(
     @ColumnInfo(name = "video_codec") val videoCodec: String?,
     val hdr: Boolean?,
     @ColumnInfo(name = "captured_at") val capturedAt: String?,
+    @ColumnInfo(name = "captured_instant") val capturedInstant: Long?,
 )
 
 data class StoredPathMetadata(val path: String, @Embedded val metadata: StoredMetadata)
@@ -275,8 +276,8 @@ interface IndexDao {
 
     @Query(
         """UPDATE images SET width = :width, height = :height, duration_ms = :durationMs, frame_rate = :frameRate,
-           bitrate = :bitrate, has_audio = :hasAudio, video_codec = :videoCodec, hdr = :hdr, captured_at = :capturedAt
-           WHERE path = :path""",
+           bitrate = :bitrate, has_audio = :hasAudio, video_codec = :videoCodec, hdr = :hdr, captured_at = :capturedAt,
+           captured_instant = :capturedInstant WHERE path = :path""",
     )
     suspend fun setVideoMetadata(
         path: String,
@@ -289,11 +290,12 @@ interface IndexDao {
         videoCodec: String?,
         hdr: Boolean,
         capturedAt: String?,
+        capturedInstant: Long?,
     ): Int
 
     @Query(
-        """SELECT width, height, duration_ms, frame_rate, bitrate, has_audio, video_codec, hdr, captured_at
-           FROM images WHERE path = :path AND width IS NOT NULL""",
+        """SELECT width, height, duration_ms, frame_rate, bitrate, has_audio, video_codec, hdr, captured_at,
+           captured_instant FROM images WHERE path = :path AND width IS NOT NULL""",
     )
     suspend fun videoMetadata(path: String): StoredVideoMetadata?
 

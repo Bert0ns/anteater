@@ -148,6 +148,7 @@ class ImageIndex(private val db: IndexDatabase) :
                 metadata.videoCodec,
                 metadata.hdr,
                 metadata.capturedAt?.format(ISO_SECONDS),
+                metadata.capturedInstant,
             ),
             path,
         )
@@ -164,6 +165,7 @@ class ImageIndex(private val db: IndexDatabase) :
             row.videoCodec,
             row.hdr == true,
             row.capturedAt?.let { LocalDateTime.parse(it) },
+            row.capturedInstant,
         )
     }
 

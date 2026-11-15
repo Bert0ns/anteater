@@ -77,7 +77,7 @@ class VideoMetadataTest {
         val meta = readVideoMetadata(file, ROME)
 
         // 125,000 bytes over 10 s is 100,000 bits per second.
-        val expected = VideoMetadata(1920, 1080, 10_000, 30.0, 100_000, true, "video/hevc", true, LocalDateTime.of(2024, 5, 1, 12, 20, 30))
+        val expected = VideoMetadata(1920, 1080, 10_000, 30.0, 100_000, true, "video/hevc", true, LocalDateTime.of(2024, 5, 1, 12, 20, 30), 1_714_558_830_000)
         assertEquals(expected, meta)
     }
 
@@ -99,12 +99,16 @@ class VideoMetadataTest {
         // Winter time in Rome, and summer time would give 12:20:30.
         assertEquals(LocalDateTime.of(2024, 1, 1, 11, 20, 30), readVideoMetadata(file, ROME).capturedAt)
         assertEquals(LocalDateTime.of(2024, 1, 1, 5, 20, 30), readVideoMetadata(file, ZoneId.of("America/New_York")).capturedAt)
+        // The moment itself does not move with the zone: 2024-01-01T10:20:30Z.
+        assertEquals(1_704_104_430_000, readVideoMetadata(file, ZoneId.of("America/New_York")).capturedInstant)
     }
 
     @Test
     fun `a zero creation time or one that does not parse is no capture time`() {
         for (date in listOf("19040101T000000.000Z", "19700101T000000.000Z", "not a date")) {
-            assertNull(date, readVideoMetadata(video(clip + (METADATA_KEY_DATE to date)), ROME).capturedAt)
+            val meta = readVideoMetadata(video(clip + (METADATA_KEY_DATE to date)), ROME)
+            assertNull(date, meta.capturedAt)
+            assertNull(date, meta.capturedInstant)
         }
     }
 

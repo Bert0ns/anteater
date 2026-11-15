@@ -46,7 +46,7 @@ private val NOT_IMAGES_METHODS = setOf("notImages", "addNotImages", "forgetNotIm
 private val JPEG_METHODS = setOf("jpegsToRead", "setJpeg", "setJpegBeforeScan", "compressible", "jpegCounts")
 private val META = ImageMetadata(4000, 3000, "image/jpeg", "Google", "Pixel 8", LocalDateTime.of(2024, 5, 1, 10, 20))
 private val VIDEO = MediaRef("/videos/v.mp4", 900, 1, MediaType.VIDEO)
-private val VIDEO_META = VideoMetadata(1080, 1920, 12_345, 29.97, 8_000_000, true, "video/hevc", true, LocalDateTime.of(2024, 5, 1, 12, 20))
+private val VIDEO_META = VideoMetadata(1080, 1920, 12_345, 29.97, 8_000_000, true, "video/hevc", true, LocalDateTime.of(2024, 5, 1, 12, 20), 1_714_558_800_000)
 private val BLUR = Signal("blur", 1, Category.BLURRY, 0.7f, mapOf("variance" to "12.5"))
 
 fun memoryIndex() = ImageIndex(

@@ -8,6 +8,7 @@ import android.media.MediaMetadataRetriever
 import java.io.File
 import java.io.IOException
 import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -29,6 +30,8 @@ data class VideoMetadata(
     val hdr: Boolean,
     /** The MP4 creation time, which is UTC, turned into local time as an EXIF time is (docs/design.md §7). */
     val capturedAt: LocalDateTime? = null,
+    /** The same moment as epoch milliseconds in UTC, which no zone moves (docs/design.md §7). */
+    val capturedInstant: Long? = null,
 )
 
 /** The file looks like a video but its header can't be read. */
@@ -60,6 +63,7 @@ fun readVideoMetadata(file: File, zone: ZoneId = ZoneId.systemDefault()): VideoM
         val rotated = (key(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0) % 180 != 0
         val durationMs = key(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()?.takeIf { it > 0 }
         val format = videoFormat(file)
+        val created = creationTime(key(MediaMetadataRetriever.METADATA_KEY_DATE))
         return VideoMetadata(
             width = if (rotated) codedHeight else codedWidth,
             height = if (rotated) codedWidth else codedHeight,
@@ -69,7 +73,8 @@ fun readVideoMetadata(file: File, zone: ZoneId = ZoneId.systemDefault()): VideoM
             hasAudio = key(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes",
             videoCodec = format?.getString(MediaFormat.KEY_MIME),
             hdr = key(MediaMetadataRetriever.METADATA_KEY_COLOR_TRANSFER)?.toIntOrNull() in HDR_TRANSFERS,
-            capturedAt = local(key(MediaMetadataRetriever.METADATA_KEY_DATE), zone),
+            capturedAt = created?.atZoneSameInstant(zone)?.toLocalDateTime(),
+            capturedInstant = created?.toInstant()?.toEpochMilli(),
         )
     } finally {
         retriever.release()
@@ -104,12 +109,12 @@ private fun videoFormat(file: File): MediaFormat? {
     }
 }
 
-private fun local(utc: String?, zone: ZoneId): LocalDateTime? {
+private fun creationTime(utc: String?): OffsetDateTime? {
     val moment = try {
         utc?.let { LocalDateTime.parse(it, RETRIEVER_DATE) } ?: return null
     } catch (_: DateTimeParseException) {
         return null
     }
     if (moment.year < 1971) return null // a camera with no clock writes zero, which is 1904 or 1970
-    return moment.atOffset(ZoneOffset.UTC).atZoneSameInstant(zone).toLocalDateTime()
+    return moment.atOffset(ZoneOffset.UTC)
 }
