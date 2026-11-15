@@ -192,6 +192,35 @@ class AppTrashTest {
         assertTrue(File(image.path).exists())
     }
 
+    /** The folder of [item], moved under a `.cribrum-trash` folder that is no volume's, as a trash folder copied by hand would be. */
+    private fun lookAlike(item: TrashedImage): File {
+        val copy = File(folder.newFolder("elsewhere", UUID.randomUUID().toString(), ".cribrum-trash"), UUID.randomUUID().toString())
+        item.file.parentFile!!.run { copyRecursively(copy) && deleteRecursively() }
+        return File(copy, item.file.name)
+    }
+
+    @Test
+    fun `purging items refuses an item in a look-alike trash folder outside the volumes, and the rest still go`() = test {
+        val real = moveToTrash(listOf(photo("DCIM/real.jpg"))).single()
+        val fake = lookAlike(moveToTrash(listOf(photo("DCIM/fake.jpg"))).single())
+
+        assertEquals(listOf(real.original), purgeItems(listOf(fake, real.file)))
+
+        assertTrue(fake.exists())
+        assertTrue(trashed().isEmpty())
+    }
+
+    @Test
+    fun `purging items refuses a trash folder that is no volume's own, even one that holds a valid item`() = test {
+        val nested = File(volume, "DCIM/.cribrum-trash").also { it.mkdirs() }
+        val item = moveToTrash(listOf(photo("DCIM/nested.jpg"))).single()
+        val inside = File(nested, "item").also { item.file.parentFile!!.copyRecursively(it) }
+
+        assertEquals(emptyList<MediaRef>(), purgeItems(listOf(File(inside, item.file.name))))
+
+        assertTrue(File(inside, item.file.name).exists())
+    }
+
     @Test
     fun `an item with a media type this build does not know reads as an image, so it is listed, restored and purged`() = test {
         val image = photo("DCIM/later.jpg")

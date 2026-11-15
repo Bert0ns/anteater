@@ -235,10 +235,14 @@ class AppTrash(
     }
 
     override suspend fun purgeItems(files: Collection<File>): List<MediaRef> = io {
+        // Compared canonically, as restore does: only an item folder directly inside a volume's own trash goes. A bad entry is skipped.
+        val roots = volumes().map { File(it, TRASH_FOLDER).canonicalFile }
         files.mapNotNull { file ->
-            val folder = file.parentFile?.takeIf { it.parentFile?.name == TRASH_FOLDER } ?: return@mapNotNull null
-            val item = readItem(folder)?.takeIf { it.file == file } ?: return@mapNotNull null
-            item.original.takeIf { deleteItem(folder) }
+            runCatching {
+                val folder = file.parentFile?.takeIf { it.canonicalFile.parentFile in roots } ?: return@runCatching null
+                val item = readItem(folder)?.takeIf { it.file == file } ?: return@runCatching null
+                item.original.takeIf { deleteItem(folder) }
+            }.getOrNull()
         }
     }
 
