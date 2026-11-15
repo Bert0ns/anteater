@@ -437,7 +437,7 @@ class ReviewViewModelTest {
         val model = ReviewViewModel(app)
         model.openStorageMap()
         settle(model) { it.state.value.storageMap.size == 1 }
-        assertEquals(3, model.state.value.storageMap.single().imageCount)
+        assertEquals(3, model.state.value.storageMap.single().count)
 
         model.excludeFolder("/sdcard/Family")
         settle(model) { it.state.value.lastExclusion == "/sdcard/Family" }
@@ -446,6 +446,23 @@ class ReviewViewModelTest {
         assertEquals(listOf("/sdcard/Family"), runBlocking { app.index.excludedFolders() })
         model.open(Category.BLURRY)
         settle(model) { paths(it) == listOf("/sdcard/Other/c.jpg") }
+    }
+
+    @Test
+    fun `the storage map counts a video, and excluding its folder takes it off the map`() {
+        blurry("/sdcard/Family/a.jpg", 0.9f)
+        runBlocking { app.index.record(MediaRef("/sdcard/Family/v.mp4", 9_000, 1L, MediaType.VIDEO)) }
+        val model = ReviewViewModel(app)
+        model.openStorageMap()
+        settle(model) { it.state.value.storageMap.size == 1 }
+        val root = model.state.value.storageMap.single()
+        assertEquals(2, root.count)
+        assertEquals(1, root.videoCount)
+        assertEquals(9_000L, root.videoSize)
+
+        model.excludeFolder("/sdcard/Family")
+        settle(model) { it.state.value.lastExclusion != null }
+        assertEquals(Folder.EMPTY, model.state.value.storageMap.single())
     }
 
     @Test
@@ -464,7 +481,7 @@ class ReviewViewModelTest {
         model.undoExclusion()
         settle(model) { it.state.value.lastExclusion == null }
 
-        assertEquals(2, model.state.value.storageMap.single().imageCount)
+        assertEquals(2, model.state.value.storageMap.single().count)
         assertEquals(emptyList<String>(), runBlocking { app.index.excludedFolders() })
     }
 

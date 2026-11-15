@@ -66,11 +66,11 @@ private const val SATURATION = 0.6f
 private const val DIMMED_ALPHA = 0.35f
 
 @Composable
-private fun summary(size: Long, imageCount: Int): String = pluralStringResource(
+private fun summary(size: Long, count: Int): String = pluralStringResource(
     R.plurals.storage_map_summary,
-    imageCount,
+    count,
     Formatter.formatShortFileSize(LocalContext.current, size),
-    imageCount,
+    count,
 )
 
 @Composable
@@ -104,7 +104,9 @@ fun StorageMapScreen(
                 // The name, as the blocks and the list say it: the path took lines and told little more.
                 val headline = if (targetFolder.path.isEmpty() || (atRoot && selected == null)) stringResource(R.string.storage_map_root) else targetFolder.name
                 val size = if (isDirectFiles) targetFolder.directSize else targetFolder.size
-                val count = if (isDirectFiles) targetFolder.directImageCount else targetFolder.imageCount
+                val count = if (isDirectFiles) targetFolder.directCount else targetFolder.count
+                val videoSize = if (isDirectFiles) targetFolder.directVideoSize else targetFolder.videoSize
+                val videoCount = if (isDirectFiles) targetFolder.directVideoCount else targetFolder.videoCount
                 val summary = summary(size, count)
 
                 val details = if (isDirectFiles) stringResource(R.string.storage_map_card_details_direct, summary) else summary
@@ -119,6 +121,13 @@ fun StorageMapScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (videoCount > 0) {
+                    Text(
+                        text = pluralStringResource(R.plurals.storage_map_video, videoCount, Formatter.formatShortFileSize(LocalContext.current, videoSize), videoCount),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 // The visible way in, beside the second tap on a block.
                 val canOpen = selected != null && !isDirectFiles && selected.folder != currentFolder
                 // The direct files block has no folder of its own: excluding it would hide the subfolders too.
@@ -133,7 +142,7 @@ fun StorageMapScreen(
             }
         }
 
-        if (currentFolder.imageCount <= 0) {
+        if (currentFolder.count <= 0) {
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 Text(
                     text = stringResource(R.string.storage_map_empty),
@@ -257,7 +266,7 @@ fun StorageMapScreen(
                         val open = stringResource(R.string.storage_map_open)
                         ListItem(
                             headlineContent = { Text(folder.name) },
-                            supportingContent = { Text(summary(folder.size, folder.imageCount)) },
+                            supportingContent = { Text(summary(folder.size, folder.count)) },
                             leadingContent = {
                                 Box(
                                     modifier = Modifier
@@ -295,7 +304,7 @@ private fun BlockLabel(block: TreemapBlock, selected: Boolean, dimmed: Boolean, 
     val rect = block.rect
     val width = with(density) { rect.width.toFloat().toDp() }
     val height = with(density) { rect.height.toFloat().toDp() }
-    val size = summary(if (block.isDirectFiles) block.folder.directSize else block.folder.size, if (block.isDirectFiles) block.folder.directImageCount else block.folder.imageCount)
+    val size = summary(if (block.isDirectFiles) block.folder.directSize else block.folder.size, if (block.isDirectFiles) block.folder.directCount else block.folder.count)
     val name = if (block.isDirectFiles) stringResource(R.string.storage_map_card_details_direct, size) else block.folder.name
     val description = if (block.isDirectFiles) name else stringResource(R.string.scan_joined, name, size)
     val open = stringResource(R.string.storage_map_open)

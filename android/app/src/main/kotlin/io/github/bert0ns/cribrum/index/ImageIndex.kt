@@ -377,8 +377,11 @@ class ImageIndex(private val db: IndexDatabase) :
 
     suspend fun removeExcludedFolder(path: String) = write { dao.deleteExcludedFolder(path) }
 
-    /** Every indexed image not in the trash, with its path, size, and mtime. No video, until the storage map shows them (#386). */
+    /** Every indexed image not in the trash, with its path, size, and mtime. No video: the review and the scan steps are for images. */
     suspend fun notTrashed(): List<MediaRef> = dao.notTrashed().map(::ref)
+
+    /** Every indexed image and video not in the trash, for the storage map and the figures in Settings (#386). */
+    suspend fun notTrashedMedia(): List<MediaRef> = dao.notTrashedMedia().map(::ref)
 
     /**
      * Every video the user has not reviewed, largest first: not in the trash and not kept. The excluded folders are the

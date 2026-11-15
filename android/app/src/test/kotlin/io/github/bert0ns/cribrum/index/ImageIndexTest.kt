@@ -108,6 +108,16 @@ class ImageIndexTest {
     }
 
     @Test
+    fun `notTrashedMedia holds the videos as well, and leaves out the trashed ones`() = test {
+        recordAll(listOf(PHOTO, VIDEO))
+        assertEquals(listOf(PHOTO, VIDEO), notTrashedMedia())
+        assertEquals(listOf(PHOTO), notTrashed())
+
+        setReviewState(VIDEO.path, ReviewState.TRASHED)
+        assertEquals(listOf(PHOTO), notTrashedMedia())
+    }
+
+    @Test
     fun `a video is recorded with its media type and the ranker never sees it`() = test {
         val video = MediaRef("/videos/v.mp4", 900, 1, MediaType.VIDEO)
         recordAll(listOf(PHOTO, video))
@@ -938,6 +948,7 @@ class ImageIndexTest {
         "reviewState" to { reviewState(PHOTO.path) },
         "excludedFolders" to { excludedFolders() },
         "notTrashed" to { notTrashed() },
+        "notTrashedMedia" to { notTrashedMedia() },
         "unreviewedVideos" to { unreviewedVideos() },
         "hasVideos" to { hasVideos() },
         "capturedAt" to { capturedAt() },

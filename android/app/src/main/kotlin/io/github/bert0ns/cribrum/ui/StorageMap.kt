@@ -1,6 +1,7 @@
 package io.github.bert0ns.cribrum.ui
 
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import kotlin.math.max
 import kotlin.math.min
 
@@ -22,15 +23,21 @@ data class MapRect(
 data class Folder(
     val name: String,
     val path: String,
+    /** Images and videos together. */
     val size: Long,
-    val imageCount: Int,
+    val count: Int,
+    /** The part of [size] and [count] that is video. */
+    val videoSize: Long = 0L,
+    val videoCount: Int = 0,
     val children: List<Folder> = emptyList(),
 ) {
     val directSize: Long get() = size - children.sumOf { it.size }
-    val directImageCount: Int get() = imageCount - children.sumOf { it.imageCount }
+    val directCount: Int get() = count - children.sumOf { it.count }
+    val directVideoSize: Long get() = videoSize - children.sumOf { it.videoSize }
+    val directVideoCount: Int get() = videoCount - children.sumOf { it.videoCount }
 
     companion object {
-        val EMPTY = Folder(name = "", path = "", size = 0L, imageCount = 0)
+        val EMPTY = Folder(name = "", path = "", size = 0L, count = 0)
     }
 }
 
@@ -39,52 +46,62 @@ private class MutableFolder(
     val path: String,
 ) {
     var directSize: Long = 0L
-    var directImageCount: Int = 0
+    var directCount: Int = 0
+    var directVideoSize: Long = 0L
+    var directVideoCount: Int = 0
     val subfolders = mutableMapOf<String, MutableFolder>()
 
     fun toFolder(): Folder {
         val childFolders = subfolders.values.map { it.toFolder() }.sortedByDescending { it.size }
         val totalSize = directSize + childFolders.sumOf { it.size }
-        val totalCount = directImageCount + childFolders.sumOf { it.imageCount }
         return Folder(
             name = name,
             path = path,
             size = totalSize,
-            imageCount = totalCount,
+            count = directCount + childFolders.sumOf { it.count },
+            videoSize = directVideoSize + childFolders.sumOf { it.videoSize },
+            videoCount = directVideoCount + childFolders.sumOf { it.videoCount },
             children = childFolders,
         )
+    }
+
+    fun add(file: MediaRef) {
+        directSize += file.size
+        directCount += 1
+        if (file.mediaType == MediaType.VIDEO) {
+            directVideoSize += file.size
+            directVideoCount += 1
+        }
     }
 }
 
 /**
- * Builds a [Folder] tree from a list of images. Common single-child parent
+ * Builds a [Folder] tree from a list of images and videos. Common single-child parent
  * folders with no direct files are collapsed so the tree starts at the first branching point.
  */
-fun buildFolderTree(images: List<MediaRef>): Folder {
-    if (images.isEmpty()) return Folder.EMPTY
+fun buildFolderTree(files: List<MediaRef>): Folder {
+    if (files.isEmpty()) return Folder.EMPTY
 
     val root = MutableFolder(name = "", path = "")
-    for (image in images) {
-        val parts = image.path.split('/').filter { it.isNotEmpty() }
+    for (file in files) {
+        val parts = file.path.split('/').filter { it.isNotEmpty() }
         if (parts.size <= 1) {
-            root.directSize += image.size
-            root.directImageCount += 1
+            root.add(file)
         } else {
             val folderSegments = parts.dropLast(1)
             var current = root
             var currentPath = ""
-            val isAbsolute = image.path.startsWith("/")
+            val isAbsolute = file.path.startsWith("/")
             for (segment in folderSegments) {
                 currentPath = if (currentPath.isEmpty() && !isAbsolute) segment else "$currentPath/$segment"
                 current = current.subfolders.getOrPut(segment) { MutableFolder(segment, currentPath) }
             }
-            current.directSize += image.size
-            current.directImageCount += 1
+            current.add(file)
         }
     }
 
     var result = root.toFolder()
-    while (result.children.size == 1 && result.directImageCount == 0) {
+    while (result.children.size == 1 && result.directCount == 0) {
         result = result.children.single()
     }
     return result
@@ -224,7 +241,7 @@ fun trailHue(trail: List<Folder>): Float = trail.zipWithNext().fold(ROOT_HUE) { 
     childHue(hue, rank)
 }
 
-/** One rectangle to place: a subfolder, or the images that sit directly in [folder]. */
+/** One rectangle to place: a subfolder, or the files that sit directly in [folder]. */
 private class Slot(val folder: Folder, val size: Long, val isDirectFiles: Boolean)
 
 /**

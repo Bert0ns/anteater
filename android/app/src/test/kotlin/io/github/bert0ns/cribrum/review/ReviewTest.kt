@@ -1231,7 +1231,7 @@ class ReviewTest {
     }
 
     @Test
-    fun `a video is in no category, no figure and not on the storage map`() = runBlocking {
+    fun `a video is in no category and no figure, and it is on the storage map until it is trashed or its folder is excluded`() = runBlocking {
         val photo = image("DCIM/a.jpg", blurry(0.9f))
         val video = File(volume, "DCIM/clip.mp4").apply { writeText("clip") }.toMediaRef(MediaType.VIDEO)
         index.record(video)
@@ -1241,7 +1241,14 @@ class ReviewTest {
 
         assertEquals(1, overview.categories.single { it.category == Category.BLURRY }.count)
         assertEquals(photo.size, overview.freeableBytes)
-        assertEquals(listOf(photo), review.notTrashed())
+        assertEquals(listOf(photo, video), review.notTrashedMedia())
+
+        index.setReviewState(video.path, ReviewState.TRASHED)
+        assertEquals(listOf(photo), review.notTrashedMedia())
+
+        index.setReviewState(video.path, ReviewState.UNREVIEWED)
+        review.excludeFolder(File(video.path).parent!!)
+        assertEquals(emptyList<MediaRef>(), review.notTrashedMedia())
     }
 
     private fun video(path: String, bytes: Int): MediaRef = runBlocking {

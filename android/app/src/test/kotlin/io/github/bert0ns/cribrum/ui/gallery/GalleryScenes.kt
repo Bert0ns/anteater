@@ -616,13 +616,21 @@ val scenes: List<Scene> = listOf(
         click(str(R.string.storage_map_open))
         awaitModel(model, "the zoom") { it.state.value.storageMap.size > 1 }
     },
-    Scene("map-selected", "Storage map, a folder selected with its details", "Read the folder's name, size and count, open it with Show contents, or exclude it from the review and the map.", Variant.base + Variant.italianDark + Variant.italianLargeText) {
+    Scene("map-selected", "Storage map, a folder selected with its details", "Read the folder's name, size and count and how much of its space is video, open it with Show contents, or exclude it from the review and the map.", Variant.base + Variant.italianDark + Variant.italianLargeText) {
         world.library(others = true)
         world.commit()
         val model = app()
         openMap(model) { it.state.value.screen == Screen.StorageMap && it.state.value.storageMap.isNotEmpty() }
         compose.onNodeWithTag("storage_map").performTouchInput { click(Offset(60f, 60f)) }
         awaitText(str(R.string.storage_map_exclude))
+    },
+    Scene("map-selected-videos", "Storage map, a folder that holds videos selected", "Read how much of the folder's space is video, next to its size and count, or open it to find the videos.", Variant.base + Variant.italianDark) {
+        world.library(others = true)
+        world.commit()
+        val model = app()
+        openMap(model) { it.state.value.screen == Screen.StorageMap && it.state.value.storageMap.isNotEmpty() }
+        click("DCIM") // a row selects its folder, as a block does
+        awaitText("Video:", substring = true)
     },
     Scene("map-excluded-snackbar", "Storage map, after excluding a folder", "Undo the exclusion from the snackbar. The map starts again from its root without the folder.", Variant.base) {
         world.library(others = true)
@@ -633,7 +641,7 @@ val scenes: List<Scene> = listOf(
         click(str(R.string.storage_map_exclude))
         awaitText(str(R.string.undo))
     },
-    Scene("map-empty", "Storage map, nothing found yet", "Read that no images were found yet. Scan from Clean to fill the map.", Variant.base) {
+    Scene("map-empty", "Storage map, nothing found yet", "Read that no images or videos were found yet. Scan from Clean to fill the map.", Variant.base) {
         world.commit(scanned = false)
         val model = app()
         openMap(model) { it.state.value.screen == Screen.StorageMap }
@@ -643,7 +651,7 @@ val scenes: List<Scene> = listOf(
     Scene("settings-top", "Settings, the top: what the user changes", "Choose how long the trash keeps images, remove an excluded folder, open the storage map or the detection thresholds, or turn the haptics off.", Variant.full) {
         settings(app())
     },
-    Scene("settings-bottom", "Settings, scrolled to the end", "Read the storage the app takes, delete the analysis data, or read the version and open the website or the source.", Variant.base) {
+    Scene("settings-bottom", "Settings, scrolled to the end", "Read how many images and videos are indexed and the space they take, the storage the app takes, delete the analysis data, or read the version and open the website or the source.", Variant.base) {
         settings(app())
         scrollToEnd()
     },

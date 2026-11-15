@@ -1,5 +1,6 @@
 package io.github.bert0ns.cribrum.ui
 
+import android.text.format.Formatter
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertCountEquals
@@ -22,6 +23,7 @@ import androidx.work.testing.WorkManagerTestInitHelper
 import io.github.bert0ns.cribrum.App
 import io.github.bert0ns.cribrum.CribrumApp
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.ReviewState
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -144,23 +146,40 @@ class StorageMapScreenTest {
     }
 
     @Test
+    fun `a selected folder says how much of its space is video, and says nothing when it holds none`() {
+        val mixed = buildFolderTree(
+            listOf(
+                MediaRef("/s/Movies/a.mp4", 8_000_000L, 0L, MediaType.VIDEO),
+                MediaRef("/s/Movies/b.jpg", 1_000_000L, 0L),
+                MediaRef("/s/Pictures/c.jpg", 1_000_000L, 0L),
+            ),
+        )
+        compose.setContent { StorageMapScreen(currentFolder = mixed, onZoomIn = {}) }
+
+        compose.onNodeWithText("Movies").performClick()
+        compose.onNodeWithText("Video: ${Formatter.formatShortFileSize(app, 8_000_000L)} \u2022 1 video", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Pictures").performClick()
+        compose.onNodeWithText("Video:", substring = true).assertDoesNotExist()
+    }
+
+    @Test
     fun `images of size zero are not shown as an empty index`() {
         val zeros = buildFolderTree(listOf(MediaRef("/a/1.jpg", 0L, 0L), MediaRef("/a/2.jpg", 0L, 0L)))
         compose.setContent { StorageMapScreen(currentFolder = zeros, onZoomIn = {}) }
 
-        compose.onNodeWithText("No images found yet").assertDoesNotExist()
+        compose.onNodeWithText("No images or videos found yet").assertDoesNotExist()
     }
 
     @Test
     fun `storage map shows empty message when there are no images`() {
         compose.setContent {
             StorageMapScreen(
-                currentFolder = Folder(name = "", path = "", size = 0L, imageCount = 0),
+                currentFolder = Folder(name = "", path = "", size = 0L, count = 0),
                 onZoomIn = {},
             )
         }
 
-        compose.onNodeWithText("No images found yet").assertIsDisplayed()
+        compose.onNodeWithText("No images or videos found yet").assertIsDisplayed()
     }
 
     /** Navigation runs on the view model scope, so the screen changes after the click returns. */

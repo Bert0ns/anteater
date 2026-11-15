@@ -407,7 +407,7 @@ class ReviewViewModel @JvmOverloads constructor(
         state.copy(screen = Screen.StorageMap, storageMap = trail)
     }
 
-    private suspend fun storageMapRoot() = traceSuspend("StorageMap.build") { listOf(buildFolderTree(review.notTrashed())) }
+    private suspend fun storageMapRoot() = traceSuspend("StorageMap.build") { listOf(buildFolderTree(review.notTrashedMedia())) }
 
     fun zoomStorageMap(folder: Folder) = load { state ->
         state.copy(storageMap = state.storageMap + folder)
