@@ -466,6 +466,25 @@ class ReviewViewModelTest {
     }
 
     @Test
+    fun `settings counts the indexed images and videos, the ones in an excluded folder left out`() {
+        blurry("/sdcard/Family/a.jpg", 0.9f)
+        runBlocking {
+            app.index.record(MediaRef("/sdcard/Family/v.mp4", 9_000, 1L, MediaType.VIDEO))
+            app.index.record(MediaRef("/sdcard/Other/w.mp4", 4_000, 1L, MediaType.VIDEO))
+        }
+        val model = ReviewViewModel(app)
+        model.openSettings()
+        settle(model) { it.state.value.storage != null }
+        assertEquals(MediaTotal(1, 1_000L), model.state.value.storage?.images)
+        assertEquals(MediaTotal(2, 13_000L), model.state.value.storage?.videos)
+
+        model.excludeFolder("/sdcard/Family")
+        model.openSettings()
+        settle(model) { it.state.value.storage?.videos == MediaTotal(1, 4_000L) }
+        assertEquals(MediaTotal(0, 0L), model.state.value.storage?.images)
+    }
+
+    @Test
     fun `undoing an exclusion made on the storage map puts the folder back on the map`() {
         blurry("/sdcard/Family/a.jpg", 0.9f)
         blurry("/sdcard/Other/c.jpg", 0.8f)

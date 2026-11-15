@@ -258,7 +258,7 @@ class SettingsScreenTest {
 
     @Test
     fun `settings lists the four sizes and the embeddings next to their delete item`() {
-        compose.setContent { SettingsScreen(storage = StorageUse(app = 20_000_000, cache = 3_000_000, index = 1_000_000, embeddings = 5_000_000, trash = 42_000_000), embeddingCount = 3) }
+        compose.setContent { SettingsScreen(storage = StorageUse(app = 20_000_000, cache = 3_000_000, index = 1_000_000, embeddings = 5_000_000, trash = 42_000_000, images = NO_MEDIA, videos = NO_MEDIA), embeddingCount = 3) }
 
         for ((label, bytes) in listOf("App" to 20_000_000L, "Cache" to 3_000_000L, "Scan data" to 1_000_000L, "Files in the trash" to 42_000_000L)) {
             compose.onNode(hasScrollAction()).performScrollToNode(hasText(label))
@@ -271,12 +271,25 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun `settings hides the app and cache lines when Android does not say`() {
-        compose.setContent { SettingsScreen(storage = StorageUse(app = null, cache = null, index = 1_000_000, embeddings = 0, trash = 0)) }
+    fun `settings shows the indexed images and videos with their space`() {
+        val storage = StorageUse(app = null, cache = null, index = 0, embeddings = 0, trash = 0, images = MediaTotal(9_568, 2_500_000_000L), videos = MediaTotal(1_419, 59_800_000_000L))
+        compose.setContent { SettingsScreen(storage = storage) }
 
-        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Delete the analysis data"))
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Indexed videos"))
+        compose.onNodeWithText("Indexed images").assertExists()
+        compose.onNodeWithText("9568 images · ${Formatter.formatShortFileSize(context, 2_500_000_000L)}").assertExists()
+        compose.onNodeWithText("1419 videos · ${Formatter.formatShortFileSize(context, 59_800_000_000L)}").assertExists()
+    }
+
+    @Test
+    fun `settings hides the app and cache lines when Android does not say`() {
+        compose.setContent { SettingsScreen(storage = StorageUse(app = null, cache = null, index = 1_000_000, embeddings = 0, trash = 0, images = NO_MEDIA, videos = NO_MEDIA)) }
+
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Scan data"))
         compose.onNodeWithText("Scan data").assertExists()
         compose.onNodeWithText("App").assertDoesNotExist()
         compose.onNodeWithText("Cache").assertDoesNotExist()
     }
 }
+
+private val NO_MEDIA = MediaTotal(0, 0L)

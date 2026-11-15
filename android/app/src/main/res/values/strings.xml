@@ -288,6 +288,8 @@
     <string name="settings_storage_index_size">%s, without the analysis data</string>
     <string name="settings_storage_cache">Cache</string>
     <string name="settings_storage_trash">Files in the trash</string>
+    <string name="settings_storage_images">Indexed images</string>
+    <string name="settings_storage_videos">Indexed videos</string>
     <string name="settings_embeddings_size">About %s, an estimate</string>
     <string name="settings_delete_embeddings">Delete the analysis data</string>
     <plurals name="settings_embeddings_stored">
