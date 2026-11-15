@@ -169,8 +169,13 @@ object Indexing {
     /** How many phases the video scan has, numbered on their own (docs/design.md §4). #393 adds the frames. */
     internal const val VIDEO_PHASES = 2
 
-    /** The steps of the video part of a night pass, which come after the image steps and are numbered as the video scan's. */
-    private val VIDEO_STEPS = setOf(VIDEO_METADATA_STEP)
+    /**
+     * Every step of the video part after the walk, with its number and title in the video scan's list. A night pass that does
+     * both tells its video steps from the image steps by these names, so a new video step goes here (a test checks it).
+     */
+    private val VIDEO_STEP_PHASES = mapOf(VIDEO_METADATA_STEP to (2 to R.string.scan_phase_video_metadata))
+
+    internal val VIDEO_STEPS: Set<String> = VIDEO_STEP_PHASES.keys
 
     /** The scan a step belongs to: every step of "Scan videos", and the video steps of a night pass that does both. */
     internal fun kindOf(step: String, videoScan: Boolean) = if (videoScan || step in VIDEO_STEPS) ScanKind.VIDEOS else ScanKind.IMAGES
@@ -182,10 +187,8 @@ object Indexing {
      * the detector, and the step is empty until the walk sends its first progress.
      */
     private fun phase(step: String, kind: ScanKind) = when {
-        kind == ScanKind.VIDEOS -> when (step) {
-            "", "scan" -> 1 to R.string.scan_phase_video_scan
-            else -> 2 to R.string.scan_phase_video_metadata
-        }
+        // The walk, and a scan that has reported nothing yet.
+        kind == ScanKind.VIDEOS -> VIDEO_STEP_PHASES[step] ?: (1 to R.string.scan_phase_video_scan)
         else -> when (step) {
             "", "scan" -> 1 to R.string.scan_phase_scan
             "metadata", JPEG_STEP -> 2 to R.string.scan_phase_metadata

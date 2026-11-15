@@ -268,6 +268,31 @@ class PipelineTest {
     }
 
     @Test
+    fun `every step of the video part has its own phase in the video scan's list`() {
+        videos()
+        fun steps(images: Boolean): List<String> {
+            val steps = mutableListOf<String>()
+            val fresh = memoryIndex()
+            try {
+                val pipeline = Pipeline(fresh, detectors = emptyList(), groupDetectors = listOf(ExactDuplicateDetector()), videoMetadataReader = ::readVideo)
+                runBlocking { pipeline.run(source, images = images, videos = true) { step, _, _ -> steps += step } }
+            } finally {
+                fresh.close()
+            }
+            return steps
+        }
+        val alone = steps(images = false)
+        val both = steps(images = true)
+
+        assertTrue(alone.isNotEmpty())
+        assertEquals(emptyList<String>(), alone.filter { it != "scan" && it !in Indexing.VIDEO_STEPS })
+        // In a pass that does both, everything from the first video step on is the video part.
+        val videoPart = both.drop(both.indexOfFirst { it in Indexing.VIDEO_STEPS })
+        assertTrue(videoPart.isNotEmpty())
+        assertEquals(emptyList<String>(), videoPart.filter { it !in Indexing.VIDEO_STEPS })
+    }
+
+    @Test
     fun `a run for videos alone walks, reads the videos and runs no image step`() {
         val clip = videos().getValue("clip")
         val seen = ConcurrentLinkedQueue<Pair<String, String>>()
