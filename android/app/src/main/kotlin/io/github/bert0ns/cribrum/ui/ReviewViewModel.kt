@@ -23,6 +23,7 @@ import io.github.bert0ns.cribrum.sources.favoritePaths
 import io.github.bert0ns.cribrum.tracing.traceSuspend
 import io.github.bert0ns.cribrum.trash.TrashRetention
 import io.github.bert0ns.cribrum.trash.TrashedImage
+import io.github.bert0ns.cribrum.trash.awayFromItsVolume
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -118,6 +119,8 @@ data class ReviewState(
     val lastExclusion: String? = null,
     /** Images a restore or an undo left in the trash because a file has their path, until the snackbar goes. */
     val stayedInTrash: List<MediaRef> = emptyList(),
+    /** Those of [stayedInTrash] the trash refused because their path is on another volume than its own, which needs its own reason. */
+    val stayedElsewhere: List<MediaRef> = emptyList(),
     /** The last change failed and the screen is as it was, until the snackbar goes. */
     val changeFailed: Boolean = false,
     /** An apply showed the page again because an image on it became a favourite meanwhile, until the snackbar goes. */
@@ -450,8 +453,9 @@ class ReviewViewModel @JvmOverloads constructor(
     fun undo(decision: Decision) = load { state ->
         if (state.lastDecision != decision) return@load state
         val stayed = review.undo(decision)
-        val category = (state.screen as? Screen.Category)?.category ?: return@load state.copy(lastDecision = null, stayedInTrash = stayed)
-        state.showing(pageFor(category, state)).copy(lastDecision = null, stayedInTrash = stayed)
+        val elsewhere = elsewhere(decision.items, stayed)
+        val category = (state.screen as? Screen.Category)?.category ?: return@load state.copy(lastDecision = null, stayedInTrash = stayed, stayedElsewhere = elsewhere)
+        state.showing(pageFor(category, state)).copy(lastDecision = null, stayedInTrash = stayed, stayedElsewhere = elsewhere)
     }
 
     /**
@@ -485,7 +489,10 @@ class ReviewViewModel @JvmOverloads constructor(
     fun dismissUndo(decision: Decision) = queue { if (it.lastDecision == decision) it.copy(lastDecision = null) else it }
 
     /** Dismisses [images], the ones the snackbar shows, and only while they are still the last. */
-    fun dismissStayedInTrash(images: List<MediaRef>) = queue { if (it.stayedInTrash == images) it.copy(stayedInTrash = emptyList()) else it }
+    fun dismissStayedInTrash(images: List<MediaRef>) = queue { if (it.stayedInTrash == images) it.copy(stayedInTrash = emptyList(), stayedElsewhere = emptyList()) else it }
+
+    /** Which of [stayed] the trash refused because their item is away from its volume, from [items], the trash items asked for. */
+    private fun elsewhere(items: List<TrashedImage>, stayed: List<MediaRef>): List<MediaRef> = items.filter { it.original in stayed && it.awayFromItsVolume }.map { it.original }
 
     fun dismissChangeFailed() = queue { it.copy(changeFailed = false) }
 
@@ -502,10 +509,11 @@ class ReviewViewModel @JvmOverloads constructor(
     }
 
     fun restoreSelected() = load { state ->
-        val asked = state.trashed.filter { it.file.path in state.selected }.map { it.original }
+        val items = state.trashed.filter { it.file.path in state.selected }
+        val asked = items.map { it.original }
         val stayed = asked - review.restore(asked).toSet()
         val trashed = review.trashed()
-        state.copy(trashed = trashed, selected = trashed.filter { it.original in stayed }.map { it.file.path }.toSet(), stayedInTrash = stayed)
+        state.copy(trashed = trashed, selected = trashed.filter { it.original in stayed }.map { it.file.path }.toSet(), stayedInTrash = stayed, stayedElsewhere = elsewhere(items, stayed))
     }
 
     /**

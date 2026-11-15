@@ -1289,6 +1289,32 @@ class ReviewViewModelTest {
     }
 
     @Test
+    fun `restoring an item whose path is on another volume says so`() {
+        val phone = folder.newFolder("phone")
+        val card = folder.newFolder("card")
+        val trash = AppTrash({ listOf(phone, card) })
+        val image = File(phone, "a.jpg").apply { writeText("0123456789") }.toMediaRef()
+        runBlocking { trash.moveToTrash(listOf(image)) }
+        // A trash folder copied by hand from the card: its record names the card.
+        val origin = File(runBlocking { trash.trashed() }.single().file.parentFile, "origin.properties")
+        val props = java.util.Properties().apply { origin.inputStream().use(::load) }
+        val elsewhere = image.copy(path = File(card, "a.jpg").path)
+        props["path"] = elsewhere.path
+        origin.outputStream().use { props.store(it, null) }
+        val model = ReviewViewModel(app, Review(app.index, trash))
+        model.openTrash()
+        settle(model) { it.state.value.trashed.size == 1 }
+        model.selectAll(model.state.value.trashed, true)
+        settle(model) { it.state.value.selected.size == 1 }
+
+        model.restoreSelected()
+        settle(model) { it.state.value.stayedInTrash.isNotEmpty() }
+
+        assertEquals(listOf(elsewhere), model.state.value.stayedInTrash)
+        assertEquals(listOf(elsewhere), model.state.value.stayedElsewhere)
+    }
+
+    @Test
     fun `undo of a page whose file now has another file at its path says it stayed in the trash`() {
         twoPages(more = 0)
         val trash = OccupiedTrash(emptyList())

@@ -3,6 +3,7 @@ package io.github.bert0ns.cribrum
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.review.Decision
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -40,5 +41,26 @@ class AppliedMessageTest {
         val message = appliedMessage(context, Decision(trashed = images.take(1), kept = emptyList(), failed = images.drop(1)))
 
         assertEquals("1 image moved to the trash, 1.0 MB. 2 images changed since the scan and stayed where they were", message)
+    }
+
+    private val clip = MediaRef("/sdcard/clip.mp4", 1_000_000, 0, MediaType.VIDEO)
+
+    @Test
+    fun `what stays in the trash is called an image while all of it is images`() {
+        assertEquals("1 image stays in the trash: a file now has its name, or its folder is gone", stayedMessage(context, images.take(1), emptyList()))
+    }
+
+    @Test
+    fun `what stays in the trash is called a file once a video is among it`() {
+        assertEquals("2 files stay in the trash: a file now has their name, or their folder is gone", stayedMessage(context, listOf(images[0], clip), emptyList()))
+    }
+
+    @Test
+    fun `a file refused because its folder is on another volume gets its own reason`() {
+        assertEquals(
+            "1 image stays in the trash: a file now has its name, or its folder is gone. " +
+                "1 file stays in the trash: its folder is on another storage, and Cribrum does not copy files back",
+            stayedMessage(context, listOf(images[0], clip), listOf(clip)),
+        )
     }
 }
