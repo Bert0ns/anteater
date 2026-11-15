@@ -36,3 +36,7 @@ Group detectors (exact and near duplicates, bursts) run over all the images at o
 ## `decode/`
 
 Three-frame animated GIF and WebP of 64 × 48 pixels for the android decoding tests, made by `lab/scripts/make_decode_fixtures.py`. They are not part of `expected.json`: the lab has no expected values for them. Never add personal photos here either.
+
+## `videos/`
+
+Synthetic videos of a second each, ffmpeg's test pattern and a sine tone, a few KB each, made by `lab/scripts/make_video_fixtures.py` with ffmpeg on the PATH. `expected.json` holds what both metadata readers must read, from the parameters each file is made with: the lab's `tests/test_video_metadata.py` reads them with PyAV, and the app's `VideoMetadataDeviceTest` with the phone's parsers. Capture times are local time in the zone the file names (`docs/design.md`, section 7). `audio.mp4` has no video track and `broken.mp4` has a video head and nothing a parser can read. Never add personal videos here.
