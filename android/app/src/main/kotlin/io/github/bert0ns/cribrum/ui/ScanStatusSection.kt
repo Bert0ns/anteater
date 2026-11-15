@@ -41,7 +41,14 @@ fun LazyListScope.scanStatusSection(coverage: List<Coverage>, lastScan: ScanRepo
                     if (lastScan == null) {
                         Text(stringResource(R.string.settings_scan_status_none))
                     } else {
-                        Text(DateUtils.formatDateTime(context, lastScan.finishedAt, DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_ABBREV_MONTH))
+                        // Which scan it was: "Video scan · Nov 4, 03:12".
+                        val name = when {
+                            lastScan.images && lastScan.videos -> R.string.scan_kind_both
+                            lastScan.videos -> R.string.scan_kind_videos
+                            else -> R.string.scan_kind_images
+                        }
+                        val time = DateUtils.formatDateTime(context, lastScan.finishedAt, DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_ABBREV_MONTH)
+                        Text(stringResource(R.string.scan_joined, stringResource(name), time))
                         lastScan.durationMs?.let { Text(stringResource(R.string.settings_scan_status_duration, if (it < 60_000) "${it / 1000} s" else DateUtils.formatElapsedTime(it / 1000))) }
                         Text(pluralStringResource(R.plurals.settings_scan_status_unreadable, lastScan.unreadable, lastScan.unreadable))
                         if (lastScan.unreadableFiles.isNotEmpty()) Text(stringResource(R.string.settings_scan_status_unreadable_hint))

@@ -301,6 +301,19 @@ class ImageIndexTest {
     }
 
     @Test
+    fun `the videos that wait for Scan videos leave out the read, the unreadable, the trashed and the images`() = test {
+        val read = MediaRef("/videos/read.mp4", 1, 1, MediaType.VIDEO)
+        val broken = MediaRef("/videos/broken.mp4", 2, 1, MediaType.VIDEO)
+        val trashed = MediaRef("/videos/trashed.mp4", 3, 1, MediaType.VIDEO)
+        recordAll(listOf(PHOTO, VIDEO, read, broken, trashed))
+        setVideoMetadata(read.path, VIDEO_META)
+        setUnreadable(broken.path)
+        setReviewState(trashed.path, ReviewState.TRASHED)
+
+        assertEquals(1, videosWaiting())
+    }
+
+    @Test
     fun `a changed video drops its metadata`() = test {
         record(VIDEO)
         setVideoMetadata(VIDEO.path, VIDEO_META)
@@ -962,6 +975,7 @@ class ImageIndexTest {
         "notTrashedMedia" to { notTrashedMedia() },
         "unreviewedVideos" to { unreviewedVideos() },
         "hasVideos" to { hasVideos() },
+        "videosWaiting" to { videosWaiting() },
         "capturedAt" to { capturedAt() },
         "indexedMedia" to { indexedMedia() },
         "getVersion" to { version },

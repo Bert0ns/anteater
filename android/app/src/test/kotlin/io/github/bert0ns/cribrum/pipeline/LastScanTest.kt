@@ -70,6 +70,7 @@ class LastScanTest {
         assertEquals(listOf("walk", "metadata"), report.phaseMs.keys.toList())
         val log = listOf(
             "images 12",
+            "videos 0",
             "new or changed 2",
             "walk 40000 ms",
             "metadata 1500 ms",
@@ -91,6 +92,7 @@ class LastScanTest {
 
         val log = listOf(
             "images 12",
+            "videos 0",
             "new or changed 0",
             "walk folders 3",
             "trash items 4",
@@ -103,6 +105,37 @@ class LastScanTest {
             "total 0 ms",
         )
         assertEquals(log, ShadowLog.getLogsForTag(LastScan.TIME_TAG).map { it.msg })
+    }
+
+    @Test
+    fun `a report says which scan ran, and when the photos and the videos were last scanned`() {
+        val lastScan = LastScan(preferences)
+
+        lastScan.record(Stats(), finishedAt = 10)
+        lastScan.record(Stats(videos = 3), finishedAt = 20, images = false, videos = true)
+
+        val video = lastScan.report!!
+        assertEquals(false to true, video.images to video.videos)
+        assertEquals(10L to 20L, video.imagesAt to video.videosAt)
+        assertEquals(3, video.videosFound)
+
+        lastScan.record(Stats(), finishedAt = 30, images = true, videos = true)
+
+        val night = lastScan.report!!
+        assertEquals(true to true, night.images to night.videos)
+        assertEquals(30L to 30L, night.imagesAt to night.videosAt)
+    }
+
+    @Test
+    fun `a report saved before the video scan reads as a normal scan that counted no video`() {
+        preferences.edit().putString("last_scan", """{"finished_at":7,"unreadable":0,"failures":{},"files":[]}""").commit()
+
+        val report = LastScan(preferences).report!!
+
+        assertEquals(true to false, report.images to report.videos)
+        assertEquals(7L, report.imagesAt)
+        assertNull(report.videosAt)
+        assertNull(report.videosFound)
     }
 
     @Test
@@ -139,7 +172,7 @@ class LastScanTest {
 
         scan.record(Stats(), finishedAt = 2)
 
-        assertEquals(ScanReport(finishedAt = 2, unreadable = 0, failures = emptyMap(), files = emptyList()), scan.report)
+        assertEquals(ScanReport(finishedAt = 2, unreadable = 0, failures = emptyMap(), files = emptyList(), videosFound = 0), scan.report)
     }
 
     @Test
@@ -150,7 +183,7 @@ class LastScanTest {
         assertThrows(IllegalStateException::class.java) { runBlocking { scan.run(now = { 2 }) { error("disk gone") } } }
         assertThrows(CancellationException::class.java) { runBlocking { scan.run(now = { 3 }) { throw CancellationException("stopped") } } }
 
-        assertEquals(ScanReport(finishedAt = 1, unreadable = 1, failures = emptyMap(), files = emptyList(), durationMs = 0, phaseMs = mapOf("walk" to 7L)), scan.report)
+        assertEquals(ScanReport(finishedAt = 1, unreadable = 1, failures = emptyMap(), files = emptyList(), durationMs = 0, phaseMs = mapOf("walk" to 7L), videosFound = 0), scan.report)
         runBlocking { scan.run(now = { 4 }) { Stats() } }
         assertEquals(4, scan.report!!.finishedAt)
     }

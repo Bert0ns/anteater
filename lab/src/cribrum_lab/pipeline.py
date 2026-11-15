@@ -1,5 +1,5 @@
 """Analysis pipeline: scan → metadata → detectors that read no embedding → embeddings →
-detectors that read one → group detectors.
+detectors that read one → group detectors, then the video steps when a run asks for them.
 
 Every step stores its results as it goes and skips what the index already holds for the
 same detector version, so an interrupted run resumes where it stopped and a second run on
@@ -109,6 +109,8 @@ class Stats:
     """Per-image analyses left for a run with embeddings."""
     failures: list[str] = field(default_factory=list)
     """Analyses that raised. They are not stored, so the next run retries them."""
+    videos: int = 0
+    """The videos the walk found."""
     no_video_track: int = 0
     """Files the video step found to have no video track, which left the index. They are still on
     disk, so they are not among the `forgotten`."""
@@ -125,6 +127,7 @@ def run(
     jobs: int = 1,
     progress: Progress | None = None,
     record_batch: int = RECORD_BATCH,
+    images: bool = True,
     videos: bool = False,
     zone: tzinfo | None = None,
 ) -> Stats:
@@ -133,9 +136,11 @@ def run(
     Images under it that are gone leave the index, unless the scan could not list the root in
     full: then it cannot tell a deleted file from a folder it could not read.
 
-    Videos are found and recorded, and with `videos` their metadata is read too: the video
-    steps run only when asked (docs/design.md, section 4). A video's capture time goes to the
-    local time of `zone`, the machine's own when None.
+    Every run walks and records images and videos. `images` and `videos` pick the steps after
+    the walk, as the app's scans do (docs/design.md, section 4): the image steps alone by
+    default, the video steps alone for "Scan videos", and both, videos after images, for a night
+    pass after "Scan videos". A video's capture time goes to the local time of `zone`, the
+    machine's own when None.
 
     Without an `embedder` no embeddings are computed. Per-image detectors that need one
     are skipped, without storing anything, so a later run with an embedder runs them.
@@ -165,37 +170,42 @@ def run(
     index.forget(gone)
     stats.forgotten = len(gone)
 
+    if images:
+        _image_steps(found, index, detectors, group_detectors, embedder, jobs, stats, progress)
+    if videos:
+        _video_steps(index, stats, progress, zone)
+    media = [i for i in index.images() if i.path in found]
+    stats.images = sum(i.media_type is MediaType.IMAGE for i in media)
+    stats.videos = len(media) - stats.images
+    stats.unreadable = len(set(index.unreadable()) & found)
+    return stats
+
+
+def _image_steps(
+    found: set[Path],
+    index: ImageIndex,
+    detectors: Sequence[Detector],
+    group_detectors: Sequence[GroupDetector],
+    embedder: Embedder | None,
+    jobs: int,
+    stats: Stats,
+    progress: Progress,
+) -> None:
+    """Every step after the walk for the images found, the group detectors last."""
     # The metadata read from an image header, and every step after it but the group detectors,
     # take images only: a video is recorded and nothing more (docs/design.md, section 4).
-    without_metadata = index.without_metadata()
-    pending = _stickers_last([i for i in without_metadata if i.media_type is MediaType.IMAGE])
+    pending = _stickers_last(
+        [i for i in index.without_metadata() if i.media_type is MediaType.IMAGE]
+    )
     for done, image in enumerate(pending, 1):
         try:
             index.set_metadata(image.path, read_metadata(image.path))
         except UnreadableImage:
             index.set_unreadable(image.path)
         progress("metadata", done, len(pending))
-    pending_videos = (
-        [i for i in without_metadata if i.media_type is MediaType.VIDEO] if videos else []
-    )
-    for done, video in enumerate(pending_videos, 1):
-        try:
-            index.set_video_metadata(video.path, read_video_metadata(video.path, zone))
-        except NoVideoTrack:
-            # Neither an image nor a video: the walk does not sniff it again until it changes.
-            index.forget([video.path])
-            index.add_not_images([video])
-            stats.no_video_track += 1
-        except UnreadableVideo:
-            index.set_unreadable(video.path)
-        progress("video_metadata", done, len(pending_videos))
     unreadable = set(index.unreadable())
-    stats.unreadable = len(unreadable & found)
-
     media = [i for i in index.images() if i.path in found]
-    images = [i for i in media if i.media_type is MediaType.IMAGE]
-    stats.images = len(images)
-    readable = [i for i in images if i.path not in unreadable]
+    readable = [i for i in media if i.media_type is MediaType.IMAGE and i.path not in unreadable]
     # The home screen lists candidates as soon as these are stored; the embeddings come after.
     fast = [d for d in detectors if not getattr(d, "uses_embeddings", False)]
     _analyze_each(
@@ -296,7 +306,22 @@ def run(
         index.set_group_fingerprint(detector.id, detector.version, fingerprint, sorted(hash_failed))
         stats.detector_runs += 1
         progress(detector.id, 1, 1)
-    return stats
+
+
+def _video_steps(index: ImageIndex, stats: Stats, progress: Progress, zone: tzinfo | None) -> None:
+    """The video steps, which only a run asked for videos takes: the metadata today."""
+    pending = [i for i in index.without_metadata() if i.media_type is MediaType.VIDEO]
+    for done, video in enumerate(pending, 1):
+        try:
+            index.set_video_metadata(video.path, read_video_metadata(video.path, zone))
+        except NoVideoTrack:
+            # Neither an image nor a video: the walk does not sniff it again until it changes.
+            index.forget([video.path])
+            index.add_not_images([video])
+            stats.no_video_track += 1
+        except UnreadableVideo:
+            index.set_unreadable(video.path)
+        progress("video_metadata", done, len(pending))
 
 
 def _stickers_last(images: list[MediaRef]) -> list[MediaRef]:

@@ -55,6 +55,7 @@ import io.github.bert0ns.cribrum.compress.BatchState
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.pipeline.Indexing
+import io.github.bert0ns.cribrum.pipeline.ScanKind
 import io.github.bert0ns.cribrum.ranker.GROUP_CATEGORIES
 import io.github.bert0ns.cribrum.review.Decision
 import io.github.bert0ns.cribrum.review.ReviewOrder
@@ -232,8 +233,8 @@ private fun AppContent(model: ReviewViewModel) {
     // The home and the thresholds read the whole index, so they reload when a scan ends or a phase that can add
     // candidates is over: the candidates of the early detectors still show while the embeddings are computed.
     val reloads = remember { HomeReloads() }
-    LaunchedEffect(progress == null, progress?.step) {
-        val reload = reloads.next(progress?.step)
+    LaunchedEffect(progress == null, progress?.step, progress?.kind) {
+        val reload = reloads.next(progress?.step, progress?.kind ?: ScanKind.IMAGES)
         if (reload && state.screen == Screen.Home) model.refresh()
         if (state.screen == Screen.Settings) model.reloadSettings() // at each step: the embeddings change their count
         if (reload && state.screen == Screen.Thresholds) model.reloadThresholds()
@@ -368,18 +369,22 @@ private fun AppContent(model: ReviewViewModel) {
                         Screen.Home -> Column(Modifier.readableWidth()) {
                             CleanTabs(state.cleanTab, model::selectCleanTab)
                             val photos = state.cleanTab == CleanTab.PHOTOS
-                            // "Scan now" stays on Photos; a running scan shows its progress and Stop on both tabs.
+                            // "Scan now" on Photos and "Scan videos" on Videos; a running scan shows its progress and Stop on both tabs.
                             ScanStatus(
                                 progress,
-                                onScan = { Indexing.scanNow(context) },
+                                onScan = { if (photos) Indexing.scanNow(context) else Indexing.scanVideos(context) },
                                 onStop = { scope.launch { Indexing.stop(context) } },
                                 indexEmpty = state.indexEmpty && photos,
                                 heat = rememberHeat(running = progress != null),
                                 compressing = compressing,
-                                lastScanAt = state.lastScan?.finishedAt,
-                                canStart = photos,
+                                lastScanAt = if (photos) state.lastScan?.imagesAt else state.lastScan?.videosAt,
+                                kind = if (photos) ScanKind.IMAGES else ScanKind.VIDEOS,
                             )
-                            if (photos) CategoryList(state.categories, state.freeableBytes, model::open) else VideosTab(state.videos, state.videosIndexed, model::openVideos)
+                            if (photos) {
+                                CategoryList(state.categories, state.freeableBytes, model::open)
+                            } else {
+                                VideosTab(state.videos, state.videosIndexed, model::openVideos, waiting = state.videosWaiting, noVideos = state.lastScan?.videosFound == 0)
+                            }
                         }
                         Screen.Videos -> VideosScreen(
                             state.videos,
@@ -431,6 +436,8 @@ private fun AppContent(model: ReviewViewModel) {
                             onDeleteEmbeddings = model::deleteEmbeddings,
                             hapticsEnabled = state.hapticsEnabled,
                             onHapticsChange = model::setHaptics,
+                            videosAtNight = state.videosAtNight,
+                            onVideosAtNightChange = model::setVideosAtNight,
                             coverage = state.coverage,
                             lastScan = state.lastScan,
                             lastScanFailed = state.lastScanFailed,

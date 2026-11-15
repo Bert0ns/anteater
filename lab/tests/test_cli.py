@@ -69,6 +69,22 @@ def test_scan_reads_the_videos_only_with_the_flag(tmp_path):
         assert stored.video_metadata(clip.resolve()).duration_ms == 1000
 
 
+def test_scan_with_only_videos_reads_the_videos_and_no_image(tmp_path, capsys):
+    folder = tmp_path / "device"
+    folder.mkdir()
+    clip = folder / "clip.mp4"
+    shutil.copy(Path(__file__).resolve().parents[2] / "fixtures/videos/clip.mp4", clip)
+    Image.new("RGB", (64, 48)).save(folder / "a.png")
+    index = tmp_path / "index.sqlite"
+
+    main(["--index", str(index), "scan", str(folder), "--jobs", "1", "--only-videos"])
+
+    with ImageIndex(index) as stored:
+        assert stored.video_metadata(clip.resolve()).duration_ms == 1000
+        assert stored.metadata(folder.resolve() / "a.png") is None
+    assert "1 images, 1 videos" in capsys.readouterr().err
+
+
 def test_scan_reads_the_capture_times_in_the_zone_it_is_given_and_warns_about_utc(tmp_path, capsys):
     folder = tmp_path / "device"
     folder.mkdir()

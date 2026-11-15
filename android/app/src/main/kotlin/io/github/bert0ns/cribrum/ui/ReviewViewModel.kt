@@ -90,6 +90,8 @@ data class ReviewState(
     val videos: List<VideoItem> = emptyList(),
     /** The index holds a video, reviewed or not: before that, the Videos tab says videos appear after the next scan. */
     val videosIndexed: Boolean = false,
+    /** The videos the video steps have not read yet, which the Videos tab says wait for "Scan videos". */
+    val videosWaiting: Int = 0,
     /** Paths of the videos selected on "Largest videos". Nothing is selected for the user. */
     val videoSelected: Set<String> = emptySet(),
     val page: List<ReviewGroup> = emptyList(),
@@ -111,6 +113,8 @@ data class ReviewState(
     val retentionDays: Int = TrashRetention.DEFAULT_DAYS,
     val pendingRetention: RetentionChange? = null,
     val hapticsEnabled: Boolean = true,
+    /** The switch in Settings that lets the night pass analyse videos once "Scan videos" has run. */
+    val videosAtNight: Boolean = true,
     /** How the open category is grouped by date or sorted by size. Off until the user picks one. */
     val reviewOrder: ReviewOrder = ReviewOrder.OFF,
     /** Folders the user asked never to be suggested again, shown in settings. */
@@ -164,7 +168,7 @@ class ReviewViewModel @JvmOverloads constructor(
     init {
         // The first read of the preferences can block, so it stays off the main thread.
         load {
-            withContext(Dispatchers.IO) { it.copy(retentionDays = app.trashRetention.days, hapticsEnabled = app.haptics.enabled, cleanTab = app.cleanTab.tab) }
+            withContext(Dispatchers.IO) { it.copy(retentionDays = app.trashRetention.days, hapticsEnabled = app.haptics.enabled, videosAtNight = app.videoScans.atNight, cleanTab = app.cleanTab.tab) }
         }
     }
 
@@ -176,7 +180,7 @@ class ReviewViewModel @JvmOverloads constructor(
         refreshJob?.cancel()
         refreshJob = load {
             val lastScan = withContext(Dispatchers.IO) { app.lastScan.report }
-            it.copy(indexEmpty = app.index.imageCount() == 0, lastScan = lastScan).withOverview(review.overview()).withVideos()
+            it.copy(indexEmpty = photosUnscanned(lastScan), lastScan = lastScan).withOverview(review.overview()).withVideos()
         }
     }
 
@@ -350,6 +354,11 @@ class ReviewViewModel @JvmOverloads constructor(
         queue { it.copy(hapticsEnabled = enabled) }
     }
 
+    fun setVideosAtNight(enabled: Boolean) {
+        app.videoScans.atNight = enabled
+        queue { it.copy(videosAtNight = enabled) }
+    }
+
     fun cancelRetention() = queue { it.copy(pendingRetention = null) }
 
     private fun ReviewState.withRetention(days: Int): ReviewState {
@@ -379,10 +388,10 @@ class ReviewViewModel @JvmOverloads constructor(
         it.withThresholds(app.thresholds.values)
     }
 
-    /** "Largest videos" read again, with whether the index holds any video at all. The selection keeps the videos still listed. */
+    /** "Largest videos" read again, with whether the index holds any video at all and how many wait for "Scan videos". The selection keeps the videos still listed. */
     private suspend fun ReviewState.withVideos(): ReviewState {
         val videos = review.largestVideos()
-        return copy(videos = videos, videosIndexed = videos.isNotEmpty() || app.index.hasVideos(), videoSelected = videoSelected intersect videos.mapTo(HashSet()) { it.video.path })
+        return copy(videos = videos, videosIndexed = videos.isNotEmpty() || app.index.hasVideos(), videosWaiting = app.index.videosWaiting(), videoSelected = videoSelected intersect videos.mapTo(HashSet()) { it.video.path })
     }
 
     private fun ReviewState.withOverview(overview: Overview) = copy(categories = overview.categories, freeableBytes = overview.freeableBytes)
@@ -440,9 +449,16 @@ class ReviewViewModel @JvmOverloads constructor(
      */
     private suspend fun ReviewState.home(): ReviewState {
         val lastScan = withContext(Dispatchers.IO) { app.lastScan.report }
-        return copy(screen = Screen.Home, page = emptyList(), videoSelected = emptySet(), lastDecision = null, lastExclusion = null, skipped = emptySet(), indexEmpty = app.index.imageCount() == 0, lastScan = lastScan)
+        return copy(screen = Screen.Home, page = emptyList(), videoSelected = emptySet(), lastDecision = null, lastExclusion = null, skipped = emptySet(), indexEmpty = photosUnscanned(lastScan), lastScan = lastScan)
             .withOverview(review.overview()).withVideos()
     }
+
+    /**
+     * The Photos tab's first-scan state: no image indexed, or only "Scan videos" has run, which records the images it walks
+     * past and analyses none. A report from a build before it reads as a photo scan, and an install that never started
+     * "Scan videos" goes by the index alone.
+     */
+    private suspend fun photosUnscanned(lastScan: ScanReport?): Boolean = app.index.imageCount() == 0 || lastScan?.imagesAt == null && withContext(Dispatchers.IO) { app.videoScans.ran }
 
     /** An image that left the page while the tap waited for a change has no mark to flip. */
     fun toggle(image: MediaRef) = queue {

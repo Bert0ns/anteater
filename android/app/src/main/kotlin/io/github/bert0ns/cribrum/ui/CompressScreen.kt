@@ -532,7 +532,7 @@ private fun BatchProgress(batch: BatchState, progress: ScanProgress?, onCancel: 
                 else -> {
                     Text(stringResource(R.string.compress_waiting_scan), style = MaterialTheme.typography.titleMedium)
                     // What the batch waits for: the scan's phase, which says how far it is.
-                    if (progress != null) Text(Indexing.phaseText(LocalResources.current, progress.step) + " · " + stringResource(Indexing.phaseTitle(progress.step)))
+                    if (progress != null) Text(Indexing.phaseText(LocalResources.current, progress.step, progress.kind) + " · " + stringResource(Indexing.phaseTitle(progress.step, progress.kind)))
                 }
             }
         }

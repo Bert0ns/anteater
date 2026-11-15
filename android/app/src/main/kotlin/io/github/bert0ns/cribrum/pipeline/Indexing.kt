@@ -1,10 +1,11 @@
-// Background indexing with WorkManager (docs/design.md §4): a scan when the user asks for one, and
-// an incremental one every night while the phone charges.
+// Background indexing with WorkManager (docs/design.md §4): a scan when the user asks for one, "Scan now" or
+// "Scan videos", and an incremental one every night while the phone charges.
 package io.github.bert0ns.cribrum.pipeline
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.content.res.Resources
 import android.os.Environment
@@ -20,6 +21,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.ForegroundInfo
+import androidx.work.OneTimeWorkRequest
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequest
 import androidx.work.PeriodicWorkRequestBuilder
@@ -77,6 +79,12 @@ object Indexing {
     /** Only on the nightly request: its worker skips the scan outside the night. */
     const val NIGHTLY_TAG = "index-nightly-scan"
 
+    /** Only on a "Scan videos" request: its worker runs the walk and then only the video steps. */
+    const val VIDEO_TAG = "index-videos"
+
+    /** The [ScanKind] the running scan reports, which a night pass that does both changes as it goes. */
+    const val KIND = "kind"
+
     /** The time the nightly scan is aimed at. */
     private val NIGHT_START = LocalTime.of(2, 0)
 
@@ -88,8 +96,17 @@ object Indexing {
     private val NIGHT_END = LocalTime.of(6, 0)
 
     /** Starts a scan now, unless one is running. */
-    fun scanNow(context: Context) {
-        WorkManager.getInstance(context).enqueueUniqueWork(WORK, ExistingWorkPolicy.KEEP, OneTimeWorkRequestBuilder<IndexWorker>().addTag(TAG).build())
+    fun scanNow(context: Context) = enqueue(context, OneTimeWorkRequestBuilder<IndexWorker>().addTag(TAG))
+
+    /** Starts "Scan videos" now, unless a scan is running: the walk, then only the video steps. */
+    fun scanVideos(context: Context) = enqueue(context, OneTimeWorkRequestBuilder<IndexWorker>().addTag(TAG).addTag(VIDEO_TAG))
+
+    /**
+     * Both buttons share one unique work, so a tap on one while the other's request waits to start adds nothing: the button
+     * of the other tab is only hidden once the scan runs, and two requests would run one after the other.
+     */
+    private fun enqueue(context: Context, request: OneTimeWorkRequest.Builder) {
+        WorkManager.getInstance(context).enqueueUniqueWork(WORK, ExistingWorkPolicy.KEEP, request.build())
     }
 
     /**
@@ -146,28 +163,52 @@ object Indexing {
         WorkManager.getInstance(context).updateWork(nightlyBuilder().setId(id).setNextScheduleTimeOverride(next).build())
     }
 
-    /** How many phases a scan has. A rescan may skip one, so the number a user sees can jump. */
+    /** How many phases the normal scan has. A rescan may skip one, so the number a user sees can jump. */
     internal const val PHASES = 5
 
+    /** How many phases the video scan has, numbered on their own (docs/design.md §4). #393 adds the frames. */
+    internal const val VIDEO_PHASES = 2
+
     /**
-     * The number and the title of a [Pipeline] step. The step of a group detector is named after
+     * Every step of the video part after the walk, with its number and title in the video scan's list. A night pass that does
+     * both tells its video steps from the image steps by these names, so a new video step goes here (a test checks it).
+     */
+    private val VIDEO_STEP_PHASES = mapOf(VIDEO_METADATA_STEP to (2 to R.string.scan_phase_video_metadata))
+
+    internal val VIDEO_STEPS: Set<String> = VIDEO_STEP_PHASES.keys
+
+    /** The scan a step belongs to: every step of "Scan videos", and the video steps of a night pass that does both. */
+    internal fun kindOf(step: String, videoScan: Boolean) = if (videoScan || step in VIDEO_STEPS) ScanKind.VIDEOS else ScanKind.IMAGES
+
+    internal fun phases(kind: ScanKind) = if (kind == ScanKind.VIDEOS) VIDEO_PHASES else PHASES
+
+    /**
+     * The number and the title of a [Pipeline] step in the scan [kind]. The step of a group detector is named after
      * the detector, and the step is empty until the walk sends its first progress.
      */
-    private fun phase(step: String) = when (step) {
-        "", "scan" -> 1 to R.string.scan_phase_scan
-        "metadata", JPEG_STEP -> 2 to R.string.scan_phase_metadata
-        "detectors" -> 3 to R.string.scan_phase_analysis
-        CLASSIFY_STEP -> 4 to R.string.scan_phase_classification
-        else -> 5 to R.string.scan_phase_groups
+    private fun phase(step: String, kind: ScanKind) = when {
+        // The walk, and a scan that has reported nothing yet.
+        kind == ScanKind.VIDEOS -> VIDEO_STEP_PHASES[step] ?: (1 to R.string.scan_phase_video_scan)
+        else -> when (step) {
+            "", "scan" -> 1 to R.string.scan_phase_scan
+            "metadata", JPEG_STEP -> 2 to R.string.scan_phase_metadata
+            "detectors" -> 3 to R.string.scan_phase_analysis
+            CLASSIFY_STEP -> 4 to R.string.scan_phase_classification
+            else -> 5 to R.string.scan_phase_groups
+        }
     }
 
     @StringRes
-    internal fun phaseTitle(step: String) = phase(step).second
+    internal fun phaseTitle(step: String, kind: ScanKind = ScanKind.IMAGES) = phase(step, kind).second
 
-    internal fun phaseNumber(step: String) = phase(step).first
+    internal fun phaseNumber(step: String, kind: ScanKind = ScanKind.IMAGES) = phase(step, kind).first
 
     /** "Phase 3 of 5". */
-    internal fun phaseText(resources: Resources, step: String) = resources.getString(R.string.scan_phase_number, phaseNumber(step), PHASES)
+    internal fun phaseText(resources: Resources, step: String, kind: ScanKind = ScanKind.IMAGES) = resources.getString(R.string.scan_phase_number, phaseNumber(step, kind), phases(kind))
+
+    /** "Photo scan" or "Video scan", which the progress and the notification show. */
+    @StringRes
+    internal fun scanName(kind: ScanKind) = if (kind == ScanKind.VIDEOS) R.string.scan_kind_videos else R.string.scan_kind_images
 
     /** The time left, rounded to the minute: "About 12 min left in this step", or "Less than a minute left in this step". */
     internal fun timeLeft(resources: Resources, ms: Long): String {
@@ -181,8 +222,11 @@ object Indexing {
 
     /** The running scan's progress, from "Scan now" or the nightly request, or null when none runs. */
     fun progress(context: Context): Flow<ScanProgress?> = WorkManager.getInstance(context).getWorkInfosByTagFlow(TAG).map { infos ->
-        infos.firstOrNull { it.state == WorkInfo.State.RUNNING }?.progress?.let {
-            ScanProgress(it.getString(STEP).orEmpty(), it.getInt(DONE, 0), it.getInt(TOTAL, 0), it.getLong(LEFT_MS, -1).takeIf { left -> left >= 0 })
+        infos.firstOrNull { it.state == WorkInfo.State.RUNNING }?.let { info ->
+            val data = info.progress
+            // Until the worker reports, its request says which scan it is.
+            val kind = data.getString(KIND)?.let(ScanKind::valueOf) ?: if (VIDEO_TAG in info.tags) ScanKind.VIDEOS else ScanKind.IMAGES
+            ScanProgress(data.getString(STEP).orEmpty(), data.getInt(DONE, 0), data.getInt(TOTAL, 0), data.getLong(LEFT_MS, -1).takeIf { it >= 0 }, kind)
         }
     }
 
@@ -193,8 +237,35 @@ object Indexing {
     }
 }
 
+/** The normal scan's steps, or the video scan's, each numbered on their own (docs/design.md §4). */
+enum class ScanKind { IMAGES, VIDEOS }
+
 /** [leftMs] is the time left of the current phase, null until the estimate is stable (docs/design.md §4). */
-data class ScanProgress(val step: String, val done: Int, val total: Int, val leftMs: Long? = null)
+data class ScanProgress(val step: String, val done: Int, val total: Int, val leftMs: Long? = null, val kind: ScanKind = ScanKind.IMAGES)
+
+/**
+ * The night rule (docs/design.md §4): the night pass analyses videos only once the user has run "Scan videos", and the switch
+ * in Settings turns that off.
+ */
+class VideoScanSetting(private val preferences: SharedPreferences) {
+    /** "Scan videos" has started once. A stopped or killed one counts: the user asked for videos, and the night goes on with them. */
+    var ran: Boolean
+        get() = preferences.getBoolean(KEY_RAN, false)
+        set(value) = preferences.edit { putBoolean(KEY_RAN, value) }
+
+    /** The switch in Settings, on until the user turns it off. */
+    var atNight: Boolean
+        get() = preferences.getBoolean(KEY_AT_NIGHT, true)
+        set(value) = preferences.edit { putBoolean(KEY_AT_NIGHT, value) }
+
+    /** Whether the night pass takes the videos, after the images. */
+    val nightly: Boolean get() = ran && atNight
+
+    private companion object {
+        const val KEY_RAN = "video_scan_ran"
+        const val KEY_AT_NIGHT = "video_scan_at_night"
+    }
+}
 
 /**
  * Purges the expired trash, then runs the pipeline over the whole device. It runs in the
@@ -203,8 +274,12 @@ data class ScanProgress(val step: String, val done: Int, val total: Int, val lef
  * resumes where it was.
  */
 open class IndexWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
+    private val nightly get() = Indexing.NIGHTLY_TAG in tags
+
+    /** A "Scan videos" request: the walk, then only the video steps. */
+    private val videoScan get() = Indexing.VIDEO_TAG in tags
+
     override suspend fun doWork(): Result {
-        val nightly = Indexing.NIGHTLY_TAG in tags
         try {
             if (nightly && !Indexing.isNight(Indexing.now(applicationContext))) return Result.success()
             // Two scans would share the index and the model. A nightly run gives way to one already running. "Scan now"
@@ -222,7 +297,13 @@ open class IndexWorker(context: Context, parameters: WorkerParameters) : Corouti
                 !locked -> Result.success()
                 else -> try {
                     // A compression batch asked for or running goes first, and the scan after it reads its copies (docs/design.md §9).
-                    if (CompressBatch.busy) Result.success() else scan()
+                    if (CompressBatch.busy) {
+                        Result.success()
+                    } else {
+                        // The user asked for videos, so the night takes them from now on, whether this scan ends or not.
+                        if (videoScan) (applicationContext as CribrumApp).videoScans.ran = true
+                        scan()
+                    }
                 } finally {
                     running.unlock()
                     // Once the lock is free, so the job does not take the ending scan for a new one (docs/design.md §8).
@@ -255,7 +336,7 @@ open class IndexWorker(context: Context, parameters: WorkerParameters) : Corouti
             return Result.failure()
         }
         try {
-            setForegroundInfo(foregroundInfo("scan", applicationContext.getString(R.string.scan_starting)))
+            setForegroundInfo(getForegroundInfo())
             isForeground = true
         } catch (e: IllegalStateException) {
             Log.w(Indexing.TAG, "Foreground service start refused, continuing in background", e)
@@ -272,9 +353,11 @@ open class IndexWorker(context: Context, parameters: WorkerParameters) : Corouti
                 trashFailures += Failure("", "trash", failureMessage(error))
             }
             // The model loads when the first batch needs it, and the session is closed when the scan ends.
+            // A night pass takes the videos after the images once "Scan videos" has run (docs/design.md §4).
+            val videos = videoScan || nightly && app.videoScans.nightly
             MobileClip(::loadVision).use { embedder ->
-                app.lastScan.run {
-                    val stats = pipeline(app, embedder).run(Indexing.deviceSource(applicationContext, app.index::images, app.index), progress = ::report)
+                app.lastScan.run(images = !videoScan, videos = videos) {
+                    val stats = pipeline(app, embedder).run(Indexing.deviceSource(applicationContext, app.index::images, app.index), images = !videoScan, videos = videos, progress = ::report)
                     stats.failures.addAll(trashFailures)
                     stats
                 }
@@ -315,13 +398,14 @@ open class IndexWorker(context: Context, parameters: WorkerParameters) : Corouti
     protected suspend fun report(step: String, done: Int, total: Int) {
         estimate.update(step, done, total)
         val now = System.currentTimeMillis()
-        val phaseTitle = Indexing.phaseTitle(step)
+        val kind = Indexing.kindOf(step, videoScan)
+        val phaseTitle = Indexing.phaseTitle(step, kind)
         val phaseChanged = phaseTitle != title
         if (now - reported < PROGRESS_INTERVAL_MS && done != total && !phaseChanged) return
         reported = now
         title = phaseTitle
         val left = estimate.millisLeft()
-        setProgress(workDataOf(Indexing.STEP to step, Indexing.DONE to done, Indexing.TOTAL to total, Indexing.LEFT_MS to (left ?: -1L)))
+        setProgress(workDataOf(Indexing.STEP to step, Indexing.DONE to done, Indexing.TOTAL to total, Indexing.LEFT_MS to (left ?: -1L), Indexing.KIND to kind.name))
         if (isForeground && (phaseChanged || done == total || now - notified >= NOTIFICATION_INTERVAL_MS)) {
             notified = now
             // A stop that came meanwhile has had the notification removed: posting now would bring it back.
@@ -329,21 +413,23 @@ open class IndexWorker(context: Context, parameters: WorkerParameters) : Corouti
             // The service is in the foreground since scan() began, so the notification is updated in place.
             val count = if (total == 0) applicationContext.getString(R.string.scan_progress_open, done) else applicationContext.getString(R.string.scan_progress, done, total)
             val text = left?.let { applicationContext.getString(R.string.scan_joined, count, Indexing.timeLeft(applicationContext.resources, it)) } ?: count
-            val info = foregroundInfo(step, text)
+            val info = foregroundInfo(step, kind, text)
             applicationContext.getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, info.notification)
         }
     }
 
-    override suspend fun getForegroundInfo() = foregroundInfo("scan", applicationContext.getString(R.string.scan_starting))
+    override suspend fun getForegroundInfo() = foregroundInfo("scan", Indexing.kindOf("scan", videoScan), applicationContext.getString(R.string.scan_starting))
 
-    private fun foregroundInfo(step: String, text: String): ForegroundInfo {
+    private fun foregroundInfo(step: String, kind: ScanKind, text: String): ForegroundInfo {
         val manager = applicationContext.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, applicationContext.getString(R.string.scan_channel), NotificationManager.IMPORTANCE_LOW))
-        val title = applicationContext.getString(R.string.scan_joined, Indexing.phaseText(applicationContext.resources, step), applicationContext.getString(Indexing.phaseTitle(step)))
+        val title = applicationContext.getString(R.string.scan_joined, Indexing.phaseText(applicationContext.resources, step, kind), applicationContext.getString(Indexing.phaseTitle(step, kind)))
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
+            // Which scan this is, in the header beside the app's name.
+            .setSubText(applicationContext.getString(Indexing.scanName(kind)))
             .setOngoing(true)
             .setSilent(true)
             // As the compression batch can: a scan takes minutes and heats the phone. The index keeps what is done,

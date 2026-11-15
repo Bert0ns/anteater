@@ -1,5 +1,8 @@
 package io.github.bert0ns.cribrum.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -31,9 +34,9 @@ class ScanStatusSectionTest {
 
     private fun show(coverage: List<Coverage>?, lastScan: ScanReport?) = compose.setContent { SettingsScreen(coverage = coverage, lastScan = lastScan) }
 
-    private fun scrollTo(text: String) {
-        compose.onNode(hasScrollAction()).performScrollToNode(hasText(text))
-        compose.onNodeWithText(text).assertIsDisplayed()
+    private fun scrollTo(text: String, substring: Boolean = false) {
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText(text, substring = substring))
+        compose.onNodeWithText(text, substring = substring).assertIsDisplayed()
     }
 
     @Test
@@ -140,6 +143,19 @@ class ScanStatusSectionTest {
         show(coverage, ScanReport(1_700_000_000_000, unreadable = 0, failures = emptyMap(), files = emptyList()))
 
         compose.onNodeWithText("Took", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `the last scan says which scan it was`() {
+        val photos = ScanReport(1_700_000_000_000, unreadable = 0, failures = emptyMap(), files = emptyList())
+        var report by mutableStateOf(photos)
+        compose.setContent { SettingsScreen(coverage = coverage, lastScan = report) }
+
+        scrollTo("Photo scan · ", substring = true)
+        report = photos.copy(images = false, videos = true)
+        scrollTo("Video scan · ", substring = true)
+        report = photos.copy(videos = true)
+        scrollTo("Photo and video scan · ", substring = true)
     }
 
     @Test

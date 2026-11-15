@@ -152,8 +152,28 @@ class VideosScreenTest {
     fun `before a scan found a video the tab says they appear after the next scan, and has no row`() {
         compose.setContent { VideosTab(emptyList(), indexed = false, onOpen = {}) }
 
-        compose.onNodeWithText("Videos appear after the next scan. Tap Scan now on the Photos tab.").assertExists()
+        compose.onNodeWithText("Videos appear after the next scan.").assertExists()
         compose.onNodeWithText("Largest videos").assertDoesNotExist()
+    }
+
+    @Test
+    fun `once a scan has counted no video the tab says the phone has none`() {
+        compose.setContent { VideosTab(emptyList(), indexed = false, onOpen = {}, noVideos = true) }
+
+        compose.onNodeWithText("No videos found on this phone.").assertExists()
+        compose.onNodeWithText("Videos appear after the next scan.").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the tab says how many videos wait for Scan videos, and nothing once none waits`() {
+        var waiting by mutableStateOf(1_419)
+        compose.setContent { VideosTab(videos, indexed = true, onOpen = {}, waiting = waiting) }
+
+        compose.onNodeWithText("1419 videos not analysed yet").assertExists()
+
+        waiting = 0
+
+        compose.onNodeWithText("not analysed yet", substring = true).assertDoesNotExist()
     }
 
     @Test

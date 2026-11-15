@@ -32,7 +32,14 @@ def main(argv: list[str] | None = None) -> None:
     scan.add_argument(
         "--no-embeddings", action="store_true", help="skip MobileCLIP (no model download)"
     )
-    scan.add_argument("--videos", action="store_true", help="also read the videos' metadata")
+    scan.add_argument(
+        "--videos", action="store_true", help="also run the video steps, after the image steps"
+    )
+    scan.add_argument(
+        "--only-videos",
+        action="store_true",
+        help='walk, then run only the video steps, as "Scan videos" does',
+    )
     scan.add_argument(
         "--zone",
         type=ZoneInfo,
@@ -60,8 +67,8 @@ def main(argv: list[str] | None = None) -> None:
     args.index.parent.mkdir(parents=True, exist_ok=True)
     with ImageIndex(args.index) as index:
         if args.command == "scan":
-            embedder = None if args.no_embeddings else MobileClip()
-            _scan(index, args.folder, args.jobs, embedder, args.videos, args.zone)
+            embedder = None if args.no_embeddings or args.only_videos else MobileClip()
+            _scan(index, args.folder, args.jobs, embedder, args.videos, args.only_videos, args.zone)
         elif args.command == "report":
             _report(index, args.top)
         elif args.command == "label":
@@ -76,19 +83,29 @@ def _scan(
     jobs: int,
     embedder: pipeline.Embedder | None,
     videos: bool,
+    only_videos: bool,
     zone: tzinfo | None,
 ) -> None:
     if not folder.is_dir():
         sys.exit(f"not a folder: {folder}")
+    videos = videos or only_videos
     # A container or a fresh VM runs in UTC, and its clips would land hours away from the EXIF
     # times of the photos beside them (docs/design.md, section 7).
     if videos and datetime.now().astimezone(zone).tzname() == "UTC":
         print("warning: capture times go to UTC; pass --zone for the phone's zone", file=sys.stderr)
     stats = pipeline.run(
-        folder, index, embedder=embedder, jobs=jobs, progress=_progress, videos=videos, zone=zone
+        folder,
+        index,
+        embedder=embedder,
+        jobs=jobs,
+        progress=_progress,
+        images=not only_videos,
+        videos=videos,
+        zone=zone,
     )
     print(
-        f"\r\033[K{stats.images} images, {stats.new_or_changed} new or changed, "
+        f"\r\033[K{stats.images} images, {stats.videos} videos, "
+        f"{stats.new_or_changed} new or changed, "
         f"{stats.forgotten} gone, {stats.unreadable} unreadable, "
         f"{stats.detector_runs} detector runs, {stats.skipped} waiting for embeddings"
         + (f", {stats.no_video_track} without a video track" if videos else ""),

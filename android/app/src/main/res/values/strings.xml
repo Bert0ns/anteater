@@ -10,15 +10,22 @@
     <string name="scan_phase_classification">Classifying the images</string>
     <string name="scan_phase_groups">Finding duplicates and bursts</string>
     <string name="scan_phase_number">Phase %1$d of %2$d</string>
+    <string name="scan_phase_video_scan">Looking for videos</string>
+    <string name="scan_phase_video_metadata">Reading the videos</string>
+    <string name="scan_kind_images">Photo scan</string>
+    <string name="scan_kind_videos">Video scan</string>
+    <string name="scan_kind_both">Photo and video scan</string>
     <string name="scan_heat_slow">The phone is hot, so the scan is slower</string>
     <string name="scan_starting">Starting…</string>
     <string name="scan_progress">%1$d of %2$d</string>
     <string name="scan_progress_open">%1$d so far</string>
     <string name="scan_now">Scan now</string>
+    <string name="scan_videos">Scan videos</string>
     <string name="scan_stop">Stop scanning</string>
     <string name="scan_empty">No images found yet. Tap Scan now to look for them. The first time takes about 15 to 20 minutes for 10,000 images, and you can leave the app. Then Cribrum scans again at night while the phone charges.</string>
     <string name="scan_last">Last scan: %1$s</string>
     <string name="scan_step_scan">Finding images: %1$d so far</string>
+    <string name="scan_step_scan_videos">Photos and videos found: %1$d so far</string>
     <string name="scan_step">%1$s: %2$d of %3$d</string>
     <string name="scan_left_minutes">About %1$d min left in this step</string>
     <string name="scan_left_hours">About %1$d h %2$d min left in this step</string>
@@ -166,7 +173,12 @@
         <item quantity="one">%d video</item>
         <item quantity="other">%d videos</item>
     </plurals>
-    <string name="videos_after_scan">Videos appear after the next scan. Tap Scan now on the Photos tab.</string>
+    <string name="videos_after_scan">Videos appear after the next scan.</string>
+    <string name="videos_none_found">No videos found on this phone.</string>
+    <plurals name="videos_waiting">
+        <item quantity="one">%d video not analysed yet</item>
+        <item quantity="other">%d videos not analysed yet</item>
+    </plurals>
     <string name="videos_none_left">No more videos to review.</string>
     <string name="videos_hint">Tap a video to select it, hold it to see it full size. Nothing is selected for you.</string>
     <plurals name="videos_trash">
@@ -268,6 +280,8 @@
     <string name="settings_trash_retention_applies">Applies to the images already in the trash too.</string>
     <string name="settings_uninstall_warning">Uninstalling keeps the trash folder, so empty it first.</string>
     <string name="settings_haptics">Haptic feedback</string>
+    <string name="settings_videos_at_night">Analyse videos at night</string>
+    <string name="settings_videos_at_night_hint">Once you have run Scan videos, the night scan also analyses new videos, after the photos.</string>
     <string name="settings_haptics_hint">A short vibration when you select, skip, keep or trash images. It also follows the phone\'s touch feedback setting.</string>
     <string name="settings_language">Language</string>
     <string name="settings_thresholds">Detection thresholds</string>
@@ -512,5 +526,6 @@
         <item quantity="other">%d originals stayed in the trash, because other files took their place. Restore them from the trash.</item>
     </plurals>
     <string name="compress_scan_blocked">A compression is running. Scan now comes back when it ends.</string>
+    <string name="compress_scan_videos_blocked">A compression is running. Scan videos comes back when it ends.</string>
     <string name="compress_undoing">Putting the originals back. This waits for a scan or a compression that is running, which can take minutes.</string>
 </resources>

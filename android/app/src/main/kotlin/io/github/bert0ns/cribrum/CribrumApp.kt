@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import io.github.bert0ns.cribrum.index.ImageIndex
 import io.github.bert0ns.cribrum.pipeline.LastScan
+import io.github.bert0ns.cribrum.pipeline.VideoScanSetting
 import io.github.bert0ns.cribrum.review.ReviewOrderSetting
 import io.github.bert0ns.cribrum.review.Thresholds
 import io.github.bert0ns.cribrum.trash.AppTrash
@@ -32,6 +33,7 @@ class CribrumApp : Application() {
     val cleanTab: CleanTabSetting by lazy { CleanTabSetting(getSharedPreferences("settings", MODE_PRIVATE)) }
     val reviewOrder: ReviewOrderSetting by lazy { ReviewOrderSetting(getSharedPreferences("settings", MODE_PRIVATE)) }
     val lastScan: LastScan by lazy { LastScan(getSharedPreferences("settings", MODE_PRIVATE)) }
+    val videoScans: VideoScanSetting by lazy { VideoScanSetting(getSharedPreferences("settings", MODE_PRIVATE)) }
     val notificationPreferences: NotificationPreferences by lazy {
         NotificationPreferences(getSharedPreferences("settings", MODE_PRIVATE))
     }

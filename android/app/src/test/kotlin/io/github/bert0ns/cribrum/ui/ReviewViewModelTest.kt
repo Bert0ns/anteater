@@ -1,5 +1,6 @@
 package io.github.bert0ns.cribrum.ui
 
+import android.content.Context
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.WorkManagerTestInitHelper
@@ -735,6 +736,33 @@ class ReviewViewModelTest {
         blurry("/sdcard/a.jpg", 0.9f)
         model.refresh()
         settle(model) { !it.state.value.indexEmpty }
+    }
+
+    @Test
+    fun `the photos read as unscanned after a first Scan videos, though it recorded them, until the image steps finish`() {
+        blurry("/sdcard/a.jpg", 0.9f)
+        app.videoScans.ran = true
+        app.lastScan.record(Stats(videos = 1), finishedAt = 5, images = false, videos = true)
+        val model = ReviewViewModel(app)
+        model.refresh()
+        settle(model) { it.state.value.lastScan != null }
+        assertTrue(model.state.value.indexEmpty)
+
+        app.lastScan.record(Stats(), finishedAt = 6)
+        model.refresh()
+        settle(model) { !it.state.value.indexEmpty }
+    }
+
+    @Test
+    fun `a report from a build before Scan videos reads as a photo scan, so the photos stay scanned`() {
+        blurry("/sdcard/a.jpg", 0.9f)
+        app.videoScans.ran = true
+        app.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().putString("last_scan", """{"finished_at":5,"unreadable":0,"failures":{},"files":[]}""").commit()
+        val model = ReviewViewModel(app)
+        model.refresh()
+        settle(model) { it.state.value.lastScan != null }
+
+        assertFalse(model.state.value.indexEmpty)
     }
 
     @Test

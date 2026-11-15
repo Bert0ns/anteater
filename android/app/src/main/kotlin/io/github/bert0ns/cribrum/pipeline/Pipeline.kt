@@ -1,5 +1,5 @@
 // Analysis pipeline: scan → metadata → detectors that read no embedding → embeddings, with the detectors
-// that read one beside them → group detectors. Mirrors lab/src/cribrum_lab/pipeline.py, which runs the
+// that read one beside them → group detectors, then the video steps when a run asks for them. Mirrors lab/src/cribrum_lab/pipeline.py, which runs the
 // embeddings and those detectors one after the other.
 package io.github.bert0ns.cribrum.pipeline
 
@@ -136,6 +136,8 @@ internal fun failureMessage(error: Throwable): String = "${error.javaClass.simpl
 
 data class Stats(
     var images: Int = 0,
+    /** The videos the walk found. */
+    var videos: Int = 0,
     var newOrChanged: Int = 0,
     var forgotten: Int = 0,
     var unreadable: Int = 0,
@@ -199,10 +201,11 @@ class Pipeline(
      * Only images under a root the source walked can be gone: an absent SD card or an unreadable
      * folder is not a deletion.
      *
-     * Videos are found and recorded, and with [videos] their metadata is read too: the video steps run only when asked
-     * (docs/design.md §4).
+     * Every run walks and records images and videos. [images] and [videos] pick the steps after the walk (docs/design.md §4):
+     * the image steps alone for "Scan now", the video steps alone for "Scan videos", and both, videos after every image
+     * step, for a night pass once "Scan videos" has run.
      */
-    suspend fun run(source: MediaSource, videos: Boolean = false, progress: Progress = { _, _, _ -> }): Stats = withContext(Dispatchers.IO) {
+    suspend fun run(source: MediaSource, images: Boolean = true, videos: Boolean = false, progress: Progress = { _, _, _ -> }): Stats = withContext(Dispatchers.IO) {
         val stats = Stats()
         val found = LinkedHashSet<String>()
         val before = index.reviewStates()
@@ -255,10 +258,25 @@ class Pipeline(
         }
         stats.forgotten = gone.size
 
+        if (images) imageSteps(found, stats, progress)
+        if (videos) videoSteps(stats, progress)
+        val unreadable = index.unreadable().toSet()
+        stats.unreadablePaths = found.filter { it in unreadable }
+        stats.unreadable = stats.unreadablePaths.size
+        val media = index.images().filter { it.path in found }
+        stats.images = media.count { it.mediaType == MediaType.IMAGE }
+        stats.videos = media.size - stats.images
+        // An image forgotten, trashed or moved since the walk failed because of that, and the user can do nothing about it.
+        val statesNow = index.reviewStates()
+        stats.failures.removeAll { it.path.isNotEmpty() && (!File(it.path).isFile || statesNow[it.path].let { state -> state == null || state == ReviewState.TRASHED }) }
+        stats
+    }
+
+    /** Every step after the walk for the images found, the group detectors last. */
+    private suspend fun imageSteps(found: Set<String>, stats: Stats, progress: Progress) {
         // The metadata read from an image header, and every step after it but the group detectors, take images only:
         // a video is recorded and nothing more (docs/design.md §4).
-        val withoutMetadata = index.withoutMetadata()
-        val pending = stickersLast(withoutMetadata.filter { it.mediaType == MediaType.IMAGE })
+        val pending = stickersLast(index.withoutMetadata().filter { it.mediaType == MediaType.IMAGE })
         phase("metadata", stats) {
             readAndStore(pending, "metadata", progress, read = { attempt { metadataReader(it) } }) { batch -> storeMetadata(batch, stats) }
         }
@@ -268,20 +286,9 @@ class Pipeline(
             readAndStore(jpegs, JPEG_STEP, progress, read = { attempt { jpegReader(it) } }) { batch -> storeJpegs(batch, stats) }
         }
         index.jpegCounts().forEach { Log.i(JPEG_TAG, "${it.status} gain_map=${it.gainMap} ${it.count}") }
-        if (videos) {
-            val pendingVideos = withoutMetadata.filter { it.mediaType == MediaType.VIDEO }
-            phase("videoMetadata", stats) {
-                readAndStore(pendingVideos, VIDEO_METADATA_STEP, progress, read = { attempt { videoMetadataReader(it) } }) { batch -> storeVideoMetadata(batch, stats) }
-            }
-        }
         val unreadable = index.unreadable().toSet()
-        stats.unreadablePaths = found.filter { it in unreadable }
-        stats.unreadable = stats.unreadablePaths.size
-
         val media = index.images().filter { it.path in found }
-        val images = media.filter { it.mediaType == MediaType.IMAGE }
-        stats.images = images.size
-        val readable = images.filter { it.path !in unreadable } // group detectors still see the unreadable files
+        val readable = media.filter { it.mediaType == MediaType.IMAGE && it.path !in unreadable } // group detectors still see the unreadable files
         // The home screen lists candidates as soon as these are stored; the embeddings come after.
         phase("detectors", stats) {
             analyzeEach(stickersLast(readable), detectors.filter { !it.usesEmbeddings }, "detectors", stats, progress)
@@ -347,10 +354,14 @@ class Pipeline(
                 }
             }
         }
-        // An image forgotten, trashed or moved since the walk failed because of that, and the user can do nothing about it.
-        val statesNow = index.reviewStates()
-        stats.failures.removeAll { it.path.isNotEmpty() && (!File(it.path).isFile || statesNow[it.path].let { state -> state == null || state == ReviewState.TRASHED }) }
-        stats
+    }
+
+    /** The video steps, which only a run asked for videos takes: the metadata today. */
+    private suspend fun videoSteps(stats: Stats, progress: Progress) {
+        val pending = index.withoutMetadata().filter { it.mediaType == MediaType.VIDEO }
+        phase("videoMetadata", stats) {
+            readAndStore(pending, VIDEO_METADATA_STEP, progress, read = { attempt { videoMetadataReader(it) } }) { batch -> storeVideoMetadata(batch, stats) }
+        }
     }
 
     /** The real images first: a sticker only delays them, since the home screen lists candidates as they are stored. */

@@ -19,8 +19,11 @@ import io.github.bert0ns.cribrum.CribrumApp
 import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.detectors.AnalysisContext
 import io.github.bert0ns.cribrum.detectors.GroupDetector
+import io.github.bert0ns.cribrum.metadata.UnreadableImage
+import io.github.bert0ns.cribrum.metadata.UnreadableVideo
 import io.github.bert0ns.cribrum.mobileclip.MobileClip
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.model.toMediaRef
@@ -55,6 +58,7 @@ import java.time.Duration
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.util.TimeZone
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 
 /** Stands in for the scan itself: counts the scans that start, reports progress and waits for [gate]. */
@@ -320,7 +324,150 @@ class IndexingWorkTest {
         assertEquals(1, scans.get())
     }
 
+    @Test
+    fun `Scan videos asked for while Scan now runs adds nothing, and the progress says it is the photo scan`() {
+        Indexing.scanNow(app)
+        runBlocking { withTimeout(10_000) { Indexing.progress(app).filterNotNull().first() } }
+
+        Indexing.scanVideos(app)
+
+        assertEquals(1, scans.get())
+        assertEquals(1, scheduled().size)
+        assertFalse(Indexing.VIDEO_TAG in scheduled().single().tags)
+        assertEquals(ScanKind.IMAGES, runBlocking { withTimeout(10_000) { Indexing.progress(app).filterNotNull().first() } }.kind)
+        assertFalse((app as CribrumApp).videoScans.ran)
+    }
+
+    @Test
+    fun `Scan now asked for while Scan videos runs adds nothing, and the progress says it is the video scan`() {
+        Indexing.scanVideos(app)
+        runBlocking { withTimeout(10_000) { Indexing.progress(app).filterNotNull().first() } }
+
+        Indexing.scanNow(app)
+
+        assertEquals(1, scans.get())
+        assertTrue(Indexing.VIDEO_TAG in scheduled().single().tags)
+        assertEquals(ScanKind.VIDEOS, runBlocking { withTimeout(10_000) { Indexing.progress(app).filterNotNull().first() } }.kind)
+    }
+
+    @Test
+    fun `the nightly run does not start a second scan on top of Scan videos`() {
+        Indexing.scanVideos(app)
+        Indexing.schedulePeriodic(app, now)
+        runBlocking { withTimeout(10_000) { Indexing.progress(app).filterNotNull().first() } }
+
+        startNightlyAt(at(22, 2, 30))
+
+        assertEquals(1, scans.get())
+    }
+
+    @Test
+    fun `stopping Scan videos frees the lock, keeps the previous report, and the night still takes the videos`() {
+        val appInstance = app as CribrumApp
+        appInstance.lastScan.record(Stats(), finishedAt = 100)
+        val before = appInstance.lastScan.report
+        Indexing.scanVideos(app)
+        runBlocking { withTimeout(10_000) { Indexing.progress(app).filterNotNull().first() } }
+
+        runBlocking { Indexing.stop(app) }
+
+        runBlocking {
+            withTimeout(10_000) {
+                Indexing.progress(app).first { it == null }
+                while (IndexWorker.running.isLocked) yield()
+            }
+        }
+        assertEquals(before, appInstance.lastScan.report)
+        assertTrue(appInstance.videoScans.nightly)
+    }
+
+    /** The real scan, with a pipeline whose readers say which of an image and a video it read. */
+    private class ReadingScan(context: Context, parameters: WorkerParameters, private val reads: MutableCollection<String>, private val done: CompletableDeferred<Unit>) : IndexWorker(context, parameters) {
+        override fun hasStorageAccess() = true
+
+        override suspend fun setForegroundInfo(info: ForegroundInfo) {}
+
+        override suspend fun purgeExpired(app: CribrumApp) = ExpiredPurge.NONE
+
+        override fun pipeline(app: CribrumApp, embedder: MobileClip) = Pipeline(
+            app.index,
+            detectors = emptyList(),
+            groupDetectors = emptyList(),
+            metadataReader = {
+                reads += "image"
+                throw UnreadableImage(it)
+            },
+            videoMetadataReader = {
+                reads += "video"
+                throw UnreadableVideo(it)
+            },
+        )
+
+        override suspend fun scan(): Result {
+            try {
+                return super.scan()
+            } finally {
+                done.complete(Unit)
+            }
+        }
+    }
+
+    /** What a scan that [start] asks for reads, of an image and a video the index holds without their metadata. */
+    private fun reads(start: () -> Unit): List<String> {
+        val image = File(folder.root, "a.jpg").apply { writeText("a") }.toMediaRef()
+        val video = File(folder.root, "v.mp4").apply { writeText("v") }.toMediaRef(MediaType.VIDEO)
+        runBlocking { (app as CribrumApp).index.recordAll(listOf(image, video)) }
+        val reads = ConcurrentLinkedQueue<String>()
+        val done = CompletableDeferred<Unit>()
+        workerFactory = { ctx, params -> ReadingScan(ctx, params, reads, done) }
+        start()
+        runBlocking { withTimeout(10_000) { done.await() } }
+        return reads.toList()
+    }
+
+    private fun nightPass() {
+        Indexing.schedulePeriodic(app, now)
+        startNightlyAt(at(22, 2, 30))
+    }
+
+    @Test
+    fun `the night pass reads no video before Scan videos has run`() {
+        assertEquals(listOf("image"), reads(::nightPass))
+    }
+
+    @Test
+    fun `once Scan videos has run, the night pass reads the videos after the images`() {
+        (app as CribrumApp).videoScans.ran = true
+
+        assertEquals(listOf("image", "video"), reads(::nightPass))
+    }
+
+    @Test
+    fun `the switch in Settings keeps the videos out of the night pass`() {
+        (app as CribrumApp).videoScans.apply {
+            ran = true
+            atNight = false
+        }
+
+        assertEquals(listOf("image"), reads(::nightPass))
+    }
+
+    @Test
+    fun `Scan videos reads only the videos, and turns the night's videos on`() {
+        assertEquals(listOf("video"), reads { Indexing.scanVideos(app) })
+        assertTrue((app as CribrumApp).videoScans.nightly)
+    }
+
+    @Test
+    fun `Scan now never reads a video, even once Scan videos has run`() {
+        (app as CribrumApp).videoScans.ran = true
+
+        assertEquals(listOf("image"), reads { Indexing.scanNow(app) })
+    }
+
     private fun notificationTitle() = shadowOf(app.getSystemService(NotificationManager::class.java)).allNotifications.last().extras.getString("android.title")
+
+    private fun notificationSubText() = shadowOf(app.getSystemService(NotificationManager::class.java)).allNotifications.last().extras.getString("android.subText")
 
     private fun notificationText() = shadowOf(app.getSystemService(NotificationManager::class.java)).allNotifications.last().extras.getString("android.text")
 
@@ -387,6 +534,35 @@ class IndexingWorkTest {
         runBlocking { withTimeout(10_000) { Indexing.progress(app).filterNotNull().first() } }
 
         assertEquals("Phase 4 of 5 · " + app.getString(R.string.scan_phase_classification), notificationTitle())
+    }
+
+    @Test
+    fun `the video scan numbers its own phases from 1`() {
+        assertEquals(listOf(1, 1, 2), listOf("", "scan", VIDEO_METADATA_STEP).map { Indexing.phaseNumber(it, ScanKind.VIDEOS) })
+        assertEquals(2, Indexing.phases(ScanKind.VIDEOS))
+        assertEquals(R.string.scan_phase_video_scan, Indexing.phaseTitle("scan", ScanKind.VIDEOS))
+        assertEquals(R.string.scan_phase_video_metadata, Indexing.phaseTitle(VIDEO_METADATA_STEP, ScanKind.VIDEOS))
+    }
+
+    @Test
+    fun `the notification of Scan videos shows its own phases and says it is the video scan`() {
+        steps += Triple("scan", 300, 0)
+        Indexing.scanVideos(app)
+        runBlocking { withTimeout(10_000) { Indexing.progress(app).filterNotNull().first() } }
+
+        assertEquals("Phase 1 of 2 · Looking for videos", notificationTitle())
+        assertEquals("Video scan", notificationSubText())
+    }
+
+    @Test
+    fun `a pass that does both shows the video phases after the image ones, as the video scan`() {
+        steps += Triple("near_duplicate", 1, 1)
+        steps += Triple(VIDEO_METADATA_STEP, 1, 10)
+        Indexing.scanNow(app)
+        runBlocking { withTimeout(10_000) { Indexing.progress(app).filterNotNull().first() } }
+
+        assertEquals("Phase 2 of 2 · Reading the videos", notificationTitle())
+        assertEquals("Video scan", notificationSubText())
     }
 
     private fun waitForScan(done: CompletableDeferred<Unit>, expectedNextNight: ZonedDateTime = at(23, 2)) = runBlocking {
