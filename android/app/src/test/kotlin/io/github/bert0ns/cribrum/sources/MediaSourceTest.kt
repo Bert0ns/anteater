@@ -450,7 +450,28 @@ class MediaSourceTest {
 
         runBlocking { source.scan().toList() }
 
-        assertEquals(mapOf("folders" to 2, "entries" to 4, "sniffed" to 3), source.counts)
+        assertEquals(mapOf("folders" to 2, "entries" to 4, "sniffed" to 3, "unknownContainers" to 0), source.counts)
+    }
+
+    @Test
+    fun `counts the containers it turns away by an unknown brand, each brand apart`() {
+        write("a.mp4", ftyp("dash", "iso6"))
+        write("b.mp4", ftyp("dash"))
+        write("c.f4v", ftyp("f4v ", "isom"))
+        write("d.mka", bytes(0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x82, 0x84) + ascii("none"))
+        // Known brands of what is not a video, and files with no container, are not counted.
+        write("e.m4a", ftyp("M4A ", "M4A ", "mp42", "isom"))
+        write("f.cr3", ftyp("crx ", "crx ", "isom"))
+        write("g.mp4", MP4)
+        write("h.txt", ascii("not media"))
+        val source = FilesystemMediaSource(root, notImages = MemoryNotImages())
+
+        runBlocking { source.scan().toList() }
+
+        val unknown = mapOf("unknownContainers" to 4, "unknownBrand 'dash'" to 2, "unknownBrand 'f4v '" to 1, "unknownBrand 'ebml/none'" to 1)
+        assertEquals(unknown, source.counts.filterKeys { it.startsWith("unknown") })
+        runBlocking { source.scan().toList() } // a file the walk remembers is not sniffed again, so not counted again
+        assertEquals(mapOf("unknownContainers" to 0), source.counts.filterKeys { it.startsWith("unknown") })
     }
 
     @Test
