@@ -27,7 +27,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
@@ -58,6 +57,7 @@ import io.github.bert0ns.cribrum.ranker.GROUP_CATEGORIES
 import io.github.bert0ns.cribrum.review.Decision
 import io.github.bert0ns.cribrum.review.ReviewOrder
 import io.github.bert0ns.cribrum.ui.AllFilesAccess
+import io.github.bert0ns.cribrum.ui.AppSnackbarHost
 import io.github.bert0ns.cribrum.ui.CategoryList
 import io.github.bert0ns.cribrum.ui.CategoryScreen
 import io.github.bert0ns.cribrum.ui.CompressScreen
@@ -66,6 +66,8 @@ import io.github.bert0ns.cribrum.ui.CribrumTheme
 import io.github.bert0ns.cribrum.ui.Destination
 import io.github.bert0ns.cribrum.ui.FavoriteRequestHost
 import io.github.bert0ns.cribrum.ui.Folder
+import io.github.bert0ns.cribrum.ui.FreeNowDialog
+import io.github.bert0ns.cribrum.ui.FreeNowVisuals
 import io.github.bert0ns.cribrum.ui.Haptic
 import io.github.bert0ns.cribrum.ui.HomeReloads
 import io.github.bert0ns.cribrum.ui.ReviewOrderMenu
@@ -81,6 +83,7 @@ import io.github.bert0ns.cribrum.ui.allFilesAccessSettings
 import io.github.bert0ns.cribrum.ui.categoryName
 import io.github.bert0ns.cribrum.ui.coversNavigation
 import io.github.bert0ns.cribrum.ui.destination
+import io.github.bert0ns.cribrum.ui.freeNowBytes
 import io.github.bert0ns.cribrum.ui.icon
 import io.github.bert0ns.cribrum.ui.label
 import io.github.bert0ns.cribrum.ui.readableWidth
@@ -213,15 +216,29 @@ private fun AppContent(model: ReviewViewModel) {
     val decision = state.lastDecision
     val trashedMessage = decision?.let { appliedMessage(context, it) }
     val undo = stringResource(R.string.undo)
+    // A page that trashed more than 1 GB offers to delete it for good now, after a dialog (§9).
+    var freeNow by remember { mutableStateOf<Decision?>(null) }
+    val freeNowLabel = decision?.let(::freeNowBytes)?.let { stringResource(R.string.free_now, Formatter.formatShortFileSize(context, it)) }
     LaunchedEffect(decision) {
         if (decision == null || trashedMessage == null) return@LaunchedEffect
-        val result = snackbar.showSnackbar(trashedMessage, undo, withDismissAction = true, duration = SnackbarDuration.Long)
+        val result = if (freeNowLabel == null) {
+            snackbar.showSnackbar(trashedMessage, undo, withDismissAction = true, duration = SnackbarDuration.Long)
+        } else {
+            snackbar.showSnackbar(FreeNowVisuals(decision, trashedMessage, undo, freeNowLabel) { freeNow = decision })
+        }
         if (result == SnackbarResult.ActionPerformed) {
             haptics.performHapticFeedback(Haptic.TICK.type)
             model.undo(decision)
         } else {
             model.dismissUndo(decision)
         }
+    }
+    freeNow?.let { asked ->
+        FreeNowDialog(asked, onConfirm = {
+            freeNow = null
+            snackbar.currentSnackbarData?.takeIf { (it.visuals as? FreeNowVisuals)?.decision == asked }?.dismiss()
+            model.freeNow(asked)
+        }, onDismiss = { freeNow = null })
     }
     val stayed = state.stayedInTrash
     val stayedMessage = if (stayed.isEmpty()) null else pluralStringResource(R.plurals.stayed_in_trash_snackbar, stayed.size, stayed.size)
@@ -279,7 +296,7 @@ private fun AppContent(model: ReviewViewModel) {
     ) {
         Scaffold(
             // The category screen has its own host, above the trash button.
-            snackbarHost = { if (screen !is Screen.Category) SnackbarHost(snackbar) },
+            snackbarHost = { if (screen !is Screen.Category) AppSnackbarHost(snackbar) },
             topBar = {
                 TopAppBar(
                     title = {

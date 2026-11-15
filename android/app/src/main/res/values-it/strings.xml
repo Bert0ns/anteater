@@ -144,6 +144,12 @@
     </plurals>
     <string name="change_failed_snackbar">Non ha funzionato. Riprova.</string>
     <string name="favorite_appeared_snackbar">Un\'immagine è diventata preferita nel frattempo. Controlla la pagina.</string>
+    <string name="free_now">Libera %1$s ora</string>
+    <plurals name="free_now_body">
+        <item quantity="one">Libera %2$s. Si elimina solo il file appena spostato nel cestino, e non si potrà ripristinare.</item>
+        <item quantity="other">Libera %2$s. Si eliminano solo i %1$d file appena spostati nel cestino, e non si potranno ripristinare.</item>
+        <item quantity="many">Libera %2$s. Si eliminano solo i %1$d di file appena spostati nel cestino, e non si potranno ripristinare.</item>
+    </plurals>
     <string name="undo">Annulla</string>
     <string name="trash_empty">Il cestino è vuoto.</string>
     <string name="trash_hint">Tocca per selezionare, tieni premuto per vedere a schermo intero.</string>

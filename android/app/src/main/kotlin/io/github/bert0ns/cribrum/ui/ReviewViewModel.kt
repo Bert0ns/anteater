@@ -449,6 +449,18 @@ class ReviewViewModel @JvmOverloads constructor(
         state.showing(pageFor(category, state)).copy(lastDecision = null, stayedInTrash = stayed)
     }
 
+    /**
+     * Deletes for good the files [decision] trashed, and nothing else in the trash, once the user confirmed it (D6).
+     * The files are gone, so its Undo is too.
+     */
+    fun freeNow(decision: Decision) = load { state ->
+        review.purge(decision.trashed)
+        state.copy(
+            lastDecision = state.lastDecision.takeUnless { it == decision },
+            trashed = if (state.screen is Screen.Trash) review.trashed() else state.trashed,
+        )
+    }
+
     /** Dismisses [decision], the one the snackbar shows, and only while it is still the last one: a late dismiss must not drop the Undo of the next apply. */
     fun dismissUndo(decision: Decision) = queue { if (it.lastDecision == decision) it.copy(lastDecision = null) else it }
 
