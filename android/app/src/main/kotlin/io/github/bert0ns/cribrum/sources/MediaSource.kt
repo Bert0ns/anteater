@@ -190,8 +190,10 @@ internal fun isSkipped(root: File, file: File): Boolean {
  * The images and videos MediaStore indexes, on every volume, the SD card included. It misses `.nomedia`
  * folders, which the deep scan covers, and leaves out what the deep scan leaves out. A video is one only in a
  * container the deep scan takes, by the MIME type MediaStore gave it. It walks no folder, so it reports no
- * walked root. [volumes] tell which folder is the root of a path. A path [notImages] holds with the same size and mtime is
- * left out, as the walk does: the walk found it is no video, such as an audio-only MP4, and MediaStore lists it all the same.
+ * walked root. [volumes] tell which folder is the root of a path. A video [notImages] holds with the same size and mtime,
+ * and whose head names an audio brand (`M4A `, `M4B `, `M4P `, `F4A `), is left out: the walk found it is no video, and
+ * MediaStore lists it all the same. Nothing else is left out. An image row is yielded as before, since MediaStore is how
+ * a DNG, BMP or TIFF reaches the index after the walk turned it away, and so is a video whose brand the walk does not know.
  */
 class MediaStoreSource(private val resolver: ContentResolver, private val volumes: List<File>, private val notImages: NotImages? = null) : MediaSource {
     override val walkedRoots: List<File> = emptyList()
@@ -234,7 +236,9 @@ class MediaStoreSource(private val resolver: ContentResolver, private val volume
                 if (isSkipped(volumes.firstOrNull(file::startsWith) ?: File("/"), file)) return@mapNotNull null
                 try {
                     if (!Files.isRegularFile(file.toPath(), LinkOption.NOFOLLOW_LINKS)) return@mapNotNull null
-                    file.toMediaRef(type).takeUnless { ref -> remembered[path]?.let { it.size == ref.size && it.mtimeNs == ref.mtimeNs } == true }
+                    val ref = file.toMediaRef(type)
+                    // The head is read again only for a video the walk remembered, which is a few files.
+                    ref.takeUnless { type == MediaType.VIDEO && remembered[path]?.let { it.size == ref.size && it.mtimeNs == ref.mtimeNs } == true && isAudioOnly(file) }
                 } catch (_: IOException) {
                     null
                 }
@@ -295,6 +299,17 @@ private fun head(file: File): ByteArray = file.inputStream().use { input ->
     var read = 0
     while (read < HEAD_SIZE) read += input.read(buffer, read, HEAD_SIZE - read).takeIf { it > 0 } ?: break
     buffer.copyOf(read)
+}
+
+/** Major brands of audio-only files in an MP4 container: AAC audio, an audiobook, protected audio and Flash audio. */
+private val AUDIO_BRANDS = setOf("M4A ", "M4B ", "M4P ", "F4A ")
+
+/** Whether the head of [file] names an audio-only major brand. A file whose head cannot be read is not one. */
+private fun isAudioOnly(file: File): Boolean = try {
+    val head = head(file)
+    head.size >= 12 && String(head, Charsets.ISO_8859_1).startsWith("ftyp", 4) && String(head, 8, 4, Charsets.ISO_8859_1) in AUDIO_BRANDS
+} catch (_: IOException) {
+    false
 }
 
 /** Major brands of what is known not to be a video: audio, and Canon's raw photos. The walk turns them away without counting them as an unknown brand. */
