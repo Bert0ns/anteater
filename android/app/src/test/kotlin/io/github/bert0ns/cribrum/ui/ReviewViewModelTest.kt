@@ -466,7 +466,7 @@ class ReviewViewModelTest {
     }
 
     @Test
-    fun `settings counts the indexed images and videos, the ones in an excluded folder left out`() {
+    fun `settings counts the indexed images and videos, the ones in an excluded folder too`() {
         blurry("/sdcard/Family/a.jpg", 0.9f)
         runBlocking {
             app.index.record(MediaRef("/sdcard/Family/v.mp4", 9_000, 1L, MediaType.VIDEO))
@@ -479,9 +479,11 @@ class ReviewViewModelTest {
         assertEquals(MediaTotal(2, 13_000L), model.state.value.storage?.videos)
 
         model.excludeFolder("/sdcard/Family")
+        settle(model) { it.state.value.lastExclusion != null }
         model.openSettings()
-        settle(model) { it.state.value.storage?.videos == MediaTotal(1, 4_000L) }
-        assertEquals(MediaTotal(0, 0L), model.state.value.storage?.images)
+        settle(model) { it.state.value.storage != null }
+        assertEquals(MediaTotal(1, 1_000L), model.state.value.storage?.images)
+        assertEquals(MediaTotal(2, 13_000L), model.state.value.storage?.videos)
     }
 
     @Test

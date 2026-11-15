@@ -23,7 +23,7 @@ data class StorageUse(
     val embeddings: Long,
     /** The files in the `.cribrum-trash` folders. */
     val trash: Long,
-    /** The images and the videos the storage map counts: not in the trash and not in an excluded folder. */
+    /** Every indexed image and video not in the trash. Unlike the storage map, these count the files in excluded folders, which stay in the index (docs/design.md §6.3). */
     val images: MediaTotal,
     val videos: MediaTotal,
 )
@@ -31,7 +31,7 @@ data class StorageUse(
 suspend fun measureStorage(app: CribrumApp, review: Review): StorageUse {
     val stats = withContext(Dispatchers.IO) { appStats(app) }
     val embeddings = app.index.embeddingBytes()
-    val (videos, images) = review.notTrashedMedia().partition { it.mediaType == MediaType.VIDEO }
+    val (videos, images) = app.index.notTrashedMedia().partition { it.mediaType == MediaType.VIDEO }
     return StorageUse(
         app = stats?.appBytes,
         cache = stats?.cacheBytes,

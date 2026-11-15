@@ -379,7 +379,7 @@ class Review(
 
     suspend fun removeExcludedFolder(folder: String) = index.removeExcludedFolder(folder)
 
-    /** Images and videos neither in the trash nor in an excluded folder, for the storage map and the figures in Settings (§6.3, §8). */
+    /** Images and videos neither in the trash nor in an excluded folder, for the storage map (§6.3, §8). */
     suspend fun notTrashedMedia(): List<MediaRef> {
         val excluded = index.excludedFolders()
         return index.notTrashedMedia().filterNot { isExcluded(it.path, excluded) }

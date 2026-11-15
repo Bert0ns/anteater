@@ -380,7 +380,7 @@ class ImageIndex(private val db: IndexDatabase) :
     /** Every indexed image not in the trash, with its path, size, and mtime. No video: the review and the scan steps are for images. */
     suspend fun notTrashed(): List<MediaRef> = dao.notTrashed().map(::ref)
 
-    /** Every indexed image and video not in the trash, for the storage map and the figures in Settings (#386). */
+    /** Every indexed image and video not in the trash, for the storage map and the figures in Settings, which apply the exclusions or not as they need (#386). */
     suspend fun notTrashedMedia(): List<MediaRef> = dao.notTrashedMedia().map(::ref)
 
     /**
