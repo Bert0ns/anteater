@@ -14,6 +14,7 @@ import android.os.Bundle
 import android.provider.MediaStore
 import androidx.test.core.app.ApplicationProvider
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.trash.AppTrash
 import kotlinx.coroutines.CompletableDeferred
@@ -39,7 +40,7 @@ import java.util.Collections
 
 /** A MediaStore with a few image rows, that records the system requests it is asked to build. */
 class FakeMediaStore : ContentProvider() {
-    class Row(val id: Long, val path: String, val favorite: Boolean)
+    class Row(val id: Long, val path: String, val favorite: Boolean, val video: Boolean = false)
 
     class Request(val method: String, val uris: List<Uri>, val value: Boolean?)
 
@@ -50,16 +51,20 @@ class FakeMediaStore : ContentProvider() {
         val selections = mutableListOf<String?>()
 
         fun uri(id: Long): Uri = ContentUris.withAppendedId(MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL), id)
+
+        fun videoUri(id: Long): Uri = ContentUris.withAppendedId(MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL), id)
     }
 
     override fun onCreate() = true
 
     override fun query(uri: Uri, projection: Array<String>?, selection: String?, args: Array<String>?, order: String?): Cursor {
-        queries += args?.size ?: 0
+        val video = "video" in uri.pathSegments
+        // The Images table's queries are the ones counted: a video table is asked as well, and holds only the video rows.
+        if (!video) queries += args?.size ?: 0
         val wanted = args.orEmpty().toSet()
-        selections += selection
+        if (!video) selections += selection
         return MatrixCursor(projection!!).apply {
-            for (row in rows.filter { it.path in wanted && (it.favorite || selection?.contains("${MediaStore.MediaColumns.IS_FAVORITE} = 1") != true) }) {
+            for (row in rows.filter { it.video == video && (args == null || it.path in wanted) && (it.favorite || selection?.contains("${MediaStore.MediaColumns.IS_FAVORITE} = 1") != true) }) {
                 addRow(
                     projection.map<String, Any> {
                         if (it == MediaStore.Images.Media._ID) {
@@ -148,6 +153,53 @@ class FavoriteRequestsTest {
         assertEquals(listOf(2), FakeMediaStore.queries)
         assertTrue(FakeMediaStore.selections.single()!!.endsWith("IN (?, ?) AND ${MediaStore.MediaColumns.IS_FAVORITE} = 1"))
         assertEquals(emptySet<String>(), queryFavoritesAmong(context.contentResolver, emptyList()))
+    }
+
+    @Test
+    fun `a favourite video is read from the Video table, with the favourite images`() {
+        FakeMediaStore.rows = listOf(
+            FakeMediaStore.Row(1, "/p/a.jpg", favorite = true),
+            FakeMediaStore.Row(2, "/p/clip.mp4", favorite = true, video = true),
+            FakeMediaStore.Row(3, "/p/other.mp4", favorite = false, video = true),
+        )
+
+        assertEquals(setOf("/p/a.jpg", "/p/clip.mp4"), queryFavoritePaths(context.contentResolver))
+        assertEquals(setOf("/p/clip.mp4"), queryFavoritesAmong(context.contentResolver, listOf("/p/clip.mp4", "/p/other.mp4")))
+    }
+
+    @Test
+    fun `a video without the mark goes into the request with its own Video row, next to an image`() {
+        FakeMediaStore.rows = listOf(FakeMediaStore.Row(1, "/p/a.jpg", favorite = false), FakeMediaStore.Row(4, "/p/clip.mp4", favorite = false, video = true))
+
+        ask("/p/a.jpg", "/p/clip.mp4")
+
+        assertEquals(listOf(FakeMediaStore.uri(1), FakeMediaStore.videoUri(4)), next().uris)
+    }
+
+    @Test
+    fun `a trashed favourite video is restored with a request to mark it again`() {
+        val volume = folder.newFolder("storage")
+        val clip = File(volume, "clip.mp4").apply { writeText("clip") }.toMediaRef(MediaType.VIDEO)
+        val trash = AppTrash({ listOf(volume) }, favorites = { setOf(clip.path) }, restoredFavorites = { FavoriteRequests.askAsync(context, it, { lost -> asked += lost }, noScan) })
+        runBlocking { trash.moveToTrash(listOf(clip)) }
+        FakeMediaStore.rows = listOf(FakeMediaStore.Row(9, clip.path, favorite = false, video = true))
+
+        runBlocking { trash.restore(listOf(clip)) }
+
+        assertEquals(listOf(FakeMediaStore.videoUri(9)), next().uris)
+    }
+
+    @Test
+    fun `a video is marked with a request of its own`() {
+        FakeMediaStore.rows = listOf(FakeMediaStore.Row(4, "/p/clip.mp4", favorite = false, video = true))
+
+        val marked = CoroutineScope(Dispatchers.IO).async { FavoriteRequests.set(context.contentResolver, "/p/clip.mp4", true) }
+        val request = next()
+        FavoriteRequests.launched(request)
+        FavoriteRequests.answered(granted = true)
+
+        assertEquals(listOf(FakeMediaStore.videoUri(4)), request.uris)
+        assertEquals(true, runBlocking { withTimeout(5_000) { marked.await() } })
     }
 
     @Test
