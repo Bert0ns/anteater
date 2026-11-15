@@ -477,6 +477,7 @@ class ReviewViewModel @JvmOverloads constructor(
             freeNow = null,
             lastDecision = state.lastDecision.takeUnless { it == asked.decision },
             trashed = if (state.screen is Screen.Trash) review.trashed() else state.trashed,
+            selected = state.selected - asked.items.map { it.file.path }.toSet(),
         )
     }
 

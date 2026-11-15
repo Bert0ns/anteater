@@ -1483,6 +1483,25 @@ class ReviewViewModelTest {
     }
 
     @Test
+    fun `free now confirmed on the trash screen takes the freed items out of the selection`() {
+        val world = FreeNowWorld()
+        world.blurry("selected.jpg")
+        val decision = world.applyPage()
+        world.model.openTrash()
+        settle(world.model) { it.state.value.trashed.size == 1 }
+        world.model.select(world.model.state.value.trashed.single())
+        settle(world.model) { it.state.value.selected.isNotEmpty() }
+
+        world.model.askFreeNow(decision)
+        settle(world.model) { it.state.value.freeNow != null }
+        world.model.confirmFreeNow()
+        settle(world.model) { it.state.value.freeNow == null }
+
+        assertTrue(world.model.state.value.trashed.isEmpty())
+        assertTrue(world.model.state.value.selected.isEmpty())
+    }
+
+    @Test
     fun `deleting the selection purges only the selected images, through the trash`() {
         val images = listOf("one", "two", "three").map { MediaRef("/sdcard/$it.jpg", 1_000, 1L) }
         val trash = PurgingTrash(images)
