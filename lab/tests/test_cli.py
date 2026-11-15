@@ -1,4 +1,5 @@
 import shutil
+from datetime import datetime
 from pathlib import Path
 
 from PIL import Image
@@ -66,3 +67,18 @@ def test_scan_reads_the_videos_only_with_the_flag(tmp_path):
 
     with ImageIndex(index) as stored:
         assert stored.video_metadata(clip.resolve()).duration_ms == 1000
+
+
+def test_scan_reads_the_capture_times_in_the_zone_it_is_given_and_warns_about_utc(tmp_path, capsys):
+    folder = tmp_path / "device"
+    folder.mkdir()
+    clip = folder / "clip.mp4"
+    shutil.copy(Path(__file__).resolve().parents[2] / "fixtures/videos/clip.mp4", clip)
+    index = tmp_path / "index.sqlite"
+    scan = ["--index", str(index), "scan", str(folder), "--jobs", "1", "--no-embeddings"]
+
+    main([*scan, "--videos", "--zone", "UTC"])
+
+    with ImageIndex(index) as stored:
+        assert stored.video_metadata(clip.resolve()).captured_at == datetime(2024, 5, 1, 10, 20, 30)
+    assert "warning: capture times go to UTC" in capsys.readouterr().err

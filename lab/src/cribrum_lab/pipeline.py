@@ -11,6 +11,7 @@ import multiprocessing
 from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
+from datetime import tzinfo
 from pathlib import Path
 from typing import Protocol
 
@@ -125,6 +126,7 @@ def run(
     progress: Progress | None = None,
     record_batch: int = RECORD_BATCH,
     videos: bool = False,
+    zone: tzinfo | None = None,
 ) -> Stats:
     """Analyzes every image under `root`.
 
@@ -132,7 +134,8 @@ def run(
     full: then it cannot tell a deleted file from a folder it could not read.
 
     Videos are found and recorded, and with `videos` their metadata is read too: the video
-    steps run only when asked (docs/design.md, section 4).
+    steps run only when asked (docs/design.md, section 4). A video's capture time goes to the
+    local time of `zone`, the machine's own when None.
 
     Without an `embedder` no embeddings are computed. Per-image detectors that need one
     are skipped, without storing anything, so a later run with an embedder runs them.
@@ -177,7 +180,7 @@ def run(
     )
     for done, video in enumerate(pending_videos, 1):
         try:
-            index.set_video_metadata(video.path, read_video_metadata(video.path))
+            index.set_video_metadata(video.path, read_video_metadata(video.path, zone))
         except NoVideoTrack:
             # Neither an image nor a video: the walk does not sniff it again until it changes.
             index.forget([video.path])

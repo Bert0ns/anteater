@@ -4,7 +4,9 @@
 import argparse
 import os
 import sys
+from datetime import datetime, tzinfo
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from cribrum_lab import pipeline
 from cribrum_lab.evaluation import evaluate, format_report
@@ -31,6 +33,11 @@ def main(argv: list[str] | None = None) -> None:
         "--no-embeddings", action="store_true", help="skip MobileCLIP (no model download)"
     )
     scan.add_argument("--videos", action="store_true", help="also read the videos' metadata")
+    scan.add_argument(
+        "--zone",
+        type=ZoneInfo,
+        help="time zone of the videos' capture times, such as Europe/Rome (default: the machine's)",
+    )
     report = commands.add_parser("report", help="candidates per category")
     report.add_argument("--top", type=int, default=10, help="paths listed per category")
     label = commands.add_parser("label", help="label a sample of images in the browser")
@@ -54,7 +61,7 @@ def main(argv: list[str] | None = None) -> None:
     with ImageIndex(args.index) as index:
         if args.command == "scan":
             embedder = None if args.no_embeddings else MobileClip()
-            _scan(index, args.folder, args.jobs, embedder, args.videos)
+            _scan(index, args.folder, args.jobs, embedder, args.videos, args.zone)
         elif args.command == "report":
             _report(index, args.top)
         elif args.command == "label":
@@ -69,11 +76,16 @@ def _scan(
     jobs: int,
     embedder: pipeline.Embedder | None,
     videos: bool,
+    zone: tzinfo | None,
 ) -> None:
     if not folder.is_dir():
         sys.exit(f"not a folder: {folder}")
+    # A container or a fresh VM runs in UTC, and its clips would land hours away from the EXIF
+    # times of the photos beside them (docs/design.md, section 7).
+    if videos and datetime.now().astimezone(zone).tzname() == "UTC":
+        print("warning: capture times go to UTC; pass --zone for the phone's zone", file=sys.stderr)
     stats = pipeline.run(
-        folder, index, embedder=embedder, jobs=jobs, progress=_progress, videos=videos
+        folder, index, embedder=embedder, jobs=jobs, progress=_progress, videos=videos, zone=zone
     )
     print(
         f"\r\033[K{stats.images} images, {stats.new_or_changed} new or changed, "
