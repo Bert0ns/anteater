@@ -180,7 +180,7 @@ class ReviewViewModel @JvmOverloads constructor(
         refreshJob?.cancel()
         refreshJob = load {
             val lastScan = withContext(Dispatchers.IO) { app.lastScan.report }
-            it.copy(indexEmpty = app.index.imageCount() == 0, lastScan = lastScan).withOverview(review.overview()).withVideos()
+            it.copy(indexEmpty = photosUnscanned(lastScan), lastScan = lastScan).withOverview(review.overview()).withVideos()
         }
     }
 
@@ -449,9 +449,16 @@ class ReviewViewModel @JvmOverloads constructor(
      */
     private suspend fun ReviewState.home(): ReviewState {
         val lastScan = withContext(Dispatchers.IO) { app.lastScan.report }
-        return copy(screen = Screen.Home, page = emptyList(), videoSelected = emptySet(), lastDecision = null, lastExclusion = null, skipped = emptySet(), indexEmpty = app.index.imageCount() == 0, lastScan = lastScan)
+        return copy(screen = Screen.Home, page = emptyList(), videoSelected = emptySet(), lastDecision = null, lastExclusion = null, skipped = emptySet(), indexEmpty = photosUnscanned(lastScan), lastScan = lastScan)
             .withOverview(review.overview()).withVideos()
     }
+
+    /**
+     * The Photos tab's first-scan state: no image indexed, or only "Scan videos" has run, which records the images it walks
+     * past and analyses none. A report from a build before it reads as a photo scan, and an install that never started
+     * "Scan videos" goes by the index alone.
+     */
+    private suspend fun photosUnscanned(lastScan: ScanReport?): Boolean = app.index.imageCount() == 0 || lastScan?.imagesAt == null && withContext(Dispatchers.IO) { app.videoScans.ran }
 
     /** An image that left the page while the tap waited for a change has no mark to flip. */
     fun toggle(image: MediaRef) = queue {
