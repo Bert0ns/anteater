@@ -142,6 +142,16 @@
         <item quantity="other">%d immagini restano nel cestino: un file ha ora il loro nome, oppure la loro cartella non c\'è più</item>
         <item quantity="many">%d di immagini restano nel cestino: un file ha ora il loro nome, oppure la loro cartella non c\'è più</item>
     </plurals>
+    <plurals name="stayed_in_trash_files_snackbar">
+        <item quantity="one">%d file resta nel cestino: un file ha ora il suo nome, oppure la sua cartella non c\'è più</item>
+        <item quantity="other">%d file restano nel cestino: un file ha ora il loro nome, oppure la loro cartella non c\'è più</item>
+        <item quantity="many">%d di file restano nel cestino: un file ha ora il loro nome, oppure la loro cartella non c\'è più</item>
+    </plurals>
+    <plurals name="stayed_elsewhere_snackbar">
+        <item quantity="one">%d file resta nel cestino: la sua cartella è su un\'altra memoria, e Cribrum non ricopia i file</item>
+        <item quantity="other">%d file restano nel cestino: la loro cartella è su un\'altra memoria, e Cribrum non ricopia i file</item>
+        <item quantity="many">%d di file restano nel cestino: la loro cartella è su un\'altra memoria, e Cribrum non ricopia i file</item>
+    </plurals>
     <string name="change_failed_snackbar">Non ha funzionato. Riprova.</string>
     <string name="favorite_appeared_snackbar">Un\'immagine è diventata preferita nel frattempo. Controlla la pagina.</string>
     <string name="free_now">Libera %1$s ora</string>

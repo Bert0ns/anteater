@@ -60,6 +60,16 @@ data class TrashedImage(
     val favorite: Boolean = false,
 )
 
+/**
+ * The item's original path is not on the volume whose trash holds it, such as a trash folder copied by hand, so a
+ * restore leaves it in the trash rather than copy it there (docs/design.md §9).
+ */
+val TrashedImage.awayFromItsVolume: Boolean
+    get() {
+        val volume = file.parentFile?.parentFile?.parentFile ?: return false
+        return !original.path.startsWith(volume.path + File.separator)
+    }
+
 interface Trash {
     /**
      * Moves images to the trash. Returns the item each moved image became: a file gone or changed since its scan stays

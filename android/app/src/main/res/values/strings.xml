@@ -100,6 +100,16 @@
         <item quantity="one">%d image stays in the trash: a file now has its name, or its folder is gone</item>
         <item quantity="other">%d images stay in the trash: a file now has their name, or their folder is gone</item>
     </plurals>
+    <!-- The same, once a video is among them: "image" would be wrong. -->
+    <plurals name="stayed_in_trash_files_snackbar">
+        <item quantity="one">%d file stays in the trash: a file now has its name, or its folder is gone</item>
+        <item quantity="other">%d files stay in the trash: a file now has their name, or their folder is gone</item>
+    </plurals>
+    <!-- A restore refused because the file's folder is on another storage than the trash it is in, such as a trash folder copied by hand. -->
+    <plurals name="stayed_elsewhere_snackbar">
+        <item quantity="one">%d file stays in the trash: its folder is on another storage, and Cribrum does not copy files back</item>
+        <item quantity="other">%d files stay in the trash: their folder is on another storage, and Cribrum does not copy files back</item>
+    </plurals>
     <string name="change_failed_snackbar">That did not work. Try again.</string>
     <string name="favorite_appeared_snackbar">An image became a favourite meanwhile. Check the page.</string>
     <!-- The snackbar action after trashing more than 1 GB at once, with the real figure: "Free 2.3 GB now". -->

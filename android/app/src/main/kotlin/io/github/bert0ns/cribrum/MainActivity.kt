@@ -47,12 +47,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.bert0ns.cribrum.compress.BatchState
+import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.pipeline.Indexing
 import io.github.bert0ns.cribrum.ranker.GROUP_CATEGORIES
 import io.github.bert0ns.cribrum.review.Decision
@@ -181,6 +182,22 @@ internal fun appliedMessage(context: Context, decision: Decision): String {
     ).joinToString(". ")
 }
 
+/**
+ * What the snackbar says about the files a restore or an undo left in the trash: "file" once a video is among them,
+ * and its own reason for those [elsewhere], refused because their path is on another volume.
+ */
+internal fun stayedMessage(context: Context, stayed: List<MediaRef>, elsewhere: List<MediaRef>): String {
+    val resources = context.resources
+    val taken = stayed - elsewhere.toSet()
+    return listOfNotNull(
+        taken.takeIf { it.isNotEmpty() }?.let {
+            val plural = if (it.any { ref -> ref.mediaType == MediaType.VIDEO }) R.plurals.stayed_in_trash_files_snackbar else R.plurals.stayed_in_trash_snackbar
+            resources.getQuantityString(plural, it.size, it.size)
+        },
+        elsewhere.takeIf { it.isNotEmpty() }?.let { resources.getQuantityString(R.plurals.stayed_elsewhere_snackbar, it.size, it.size) },
+    ).joinToString(". ")
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AppContent(model: ReviewViewModel) {
@@ -244,7 +261,7 @@ private fun AppContent(model: ReviewViewModel) {
         }, onDismiss = model::cancelFreeNow)
     }
     val stayed = state.stayedInTrash
-    val stayedMessage = if (stayed.isEmpty()) null else pluralStringResource(R.plurals.stayed_in_trash_snackbar, stayed.size, stayed.size)
+    val stayedMessage = if (stayed.isEmpty()) null else stayedMessage(context, stayed, state.stayedElsewhere)
     LaunchedEffect(stayed) {
         if (stayedMessage == null) return@LaunchedEffect
         snackbar.showSnackbar(stayedMessage, withDismissAction = true, duration = SnackbarDuration.Long)
