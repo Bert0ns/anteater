@@ -62,8 +62,7 @@ fun readVideoMetadata(file: File, zone: ZoneId = ZoneId.systemDefault()): VideoM
             width = if (rotated) codedHeight else codedWidth,
             height = if (rotated) codedWidth else codedHeight,
             durationMs = durationMs,
-            frameRate = format?.takeIf { it.containsKey(MediaFormat.KEY_FRAME_RATE) }?.getNumber(MediaFormat.KEY_FRAME_RATE)
-                ?.let { (it.toDouble() * 100).roundToLong() / 100.0 },
+            frameRate = frameRate(key(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)?.toLongOrNull(), format),
             bitrate = durationMs?.let { (file.length() * 8000.0 / it).roundToLong() },
             hasAudio = key(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes",
             videoCodec = format?.getString(MediaFormat.KEY_MIME),
@@ -73,6 +72,21 @@ fun readVideoMetadata(file: File, zone: ZoneId = ZoneId.systemDefault()): VideoM
     } finally {
         retriever.release()
     }
+}
+
+/**
+ * Frames over the video track's duration, as the lab computes it, rounded to two decimals: MediaFormat's own rate of an MP4
+ * is rounded to an integer, 30 for 29.97. A container that does not count its frames, such as Matroska, gives the rate
+ * it declares instead.
+ */
+private fun frameRate(frames: Long?, format: MediaFormat?): Double? {
+    val durationUs = format?.takeIf { it.containsKey(MediaFormat.KEY_DURATION) }?.getLong(MediaFormat.KEY_DURATION)
+    val rate = if (frames != null && frames > 0 && durationUs != null && durationUs > 0) {
+        frames * 1_000_000.0 / durationUs
+    } else {
+        format?.takeIf { it.containsKey(MediaFormat.KEY_FRAME_RATE) }?.getNumber(MediaFormat.KEY_FRAME_RATE)?.toDouble() ?: return null
+    }
+    return (rate * 100).roundToLong() / 100.0
 }
 
 /** The first video track's format, for the codec and the frame rate the retriever does not give. */

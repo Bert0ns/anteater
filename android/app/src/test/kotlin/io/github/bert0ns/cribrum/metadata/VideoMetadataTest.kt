@@ -6,6 +6,7 @@ import android.media.MediaMetadataRetriever.METADATA_KEY_DATE
 import android.media.MediaMetadataRetriever.METADATA_KEY_DURATION
 import android.media.MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO
 import android.media.MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO
+import android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT
 import android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT
 import android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION
 import android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH
@@ -56,8 +57,10 @@ class VideoMetadataTest {
         METADATA_KEY_DURATION to "10000",
     )
 
-    private fun hevc(frameRate: Number = 30) = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_HEVC, 1920, 1080).apply {
-        if (frameRate is Float) setFloat(MediaFormat.KEY_FRAME_RATE, frameRate) else setInteger(MediaFormat.KEY_FRAME_RATE, frameRate.toInt())
+    /** An MP4's track: its frame rate rounded to an integer, as MPEG4Extractor gives it, and the track's duration. */
+    private fun hevc(frameRate: Int = 30, durationUs: Long? = null) = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_HEVC, 1920, 1080).apply {
+        setInteger(MediaFormat.KEY_FRAME_RATE, frameRate)
+        durationUs?.let { setLong(MediaFormat.KEY_DURATION, it) }
     }
 
     @Test
@@ -106,8 +109,16 @@ class VideoMetadataTest {
     }
 
     @Test
-    fun `a frame rate given as a float is rounded to two decimals`() {
-        assertEquals(29.97, readVideoMetadata(video(clip, hevc(29.97003f)), ROME).frameRate)
+    fun `the frame rate is the frames over the track's duration, not the rate rounded to an integer`() {
+        // NTSC: 30 frames over 1.001 s, which MPEG4Extractor's own rate calls 30.
+        val ntsc = video(clip + (METADATA_KEY_VIDEO_FRAME_COUNT to "30"), hevc(frameRate = 30, durationUs = 1_001_000))
+
+        assertEquals(29.97, readVideoMetadata(ntsc, ROME).frameRate)
+    }
+
+    @Test
+    fun `without a frame count the frame rate is the one the container declares`() {
+        assertEquals(25.0, readVideoMetadata(video(clip, hevc(frameRate = 25, durationUs = 1_000_000)), ROME).frameRate)
     }
 
     @Test
