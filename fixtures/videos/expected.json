@@ -1,0 +1,55 @@
+{
+  "zone": "Europe/Rome",
+  "videos": {
+    "clip.mp4": {
+      "width": 64,
+      "height": 48,
+      "duration_ms": 1000,
+      "frame_rate": 30.0,
+      "bitrate": 44880,
+      "has_audio": true,
+      "video_codec": "video/avc",
+      "hdr": false,
+      "captured_at": "2024-05-01T12:20:30"
+    },
+    "rotated.mp4": {
+      "width": 48,
+      "height": 64,
+      "duration_ms": 1000,
+      "frame_rate": 25.0,
+      "bitrate": 27088,
+      "has_audio": false,
+      "video_codec": "video/avc",
+      "hdr": false,
+      "captured_at": "2024-05-01T12:20:35"
+    },
+    "hdr.mp4": {
+      "width": 64,
+      "height": 48,
+      "duration_ms": 1000,
+      "frame_rate": 30.0,
+      "bitrate": 40192,
+      "has_audio": false,
+      "video_codec": "video/hevc",
+      "hdr": true,
+      "captured_at": null
+    },
+    "clip.webm": {
+      "width": 64,
+      "height": 48,
+      "duration_ms": 1008,
+      "frame_rate": 30.0,
+      "bitrate": 52452,
+      "has_audio": true,
+      "video_codec": "video/x-vnd.on2.vp9",
+      "hdr": false,
+      "captured_at": null
+    }
+  },
+  "no_video_track": [
+    "audio.mp4"
+  ],
+  "unreadable": [
+    "broken.mp4"
+  ]
+}
