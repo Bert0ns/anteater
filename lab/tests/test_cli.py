@@ -1,6 +1,11 @@
+import shutil
+from datetime import datetime
+from pathlib import Path
+
 from PIL import Image
 
 from cribrum_lab.cli import main
+from cribrum_lab.index import ImageIndex
 from cribrum_lab.labels import Decision, Label, LabelStore
 
 
@@ -45,3 +50,35 @@ def test_scan_prints_the_brands_the_walk_did_not_know(tmp_path, capsys):
     main(["--index", index, "scan", str(folder), "--jobs", "1", "--no-embeddings"])
 
     assert "unknown containers: 2 ('dash' 2)" in capsys.readouterr().err
+
+
+def test_scan_reads_the_videos_only_with_the_flag(tmp_path):
+    folder = tmp_path / "device"
+    folder.mkdir()
+    clip = folder / "clip.mp4"
+    shutil.copy(Path(__file__).resolve().parents[2] / "fixtures/videos/clip.mp4", clip)
+    index = tmp_path / "index.sqlite"
+    scan = ["--index", str(index), "scan", str(folder), "--jobs", "1", "--no-embeddings"]
+
+    main(scan)
+    with ImageIndex(index) as stored:
+        assert stored.video_metadata(clip.resolve()) is None
+    main([*scan, "--videos"])
+
+    with ImageIndex(index) as stored:
+        assert stored.video_metadata(clip.resolve()).duration_ms == 1000
+
+
+def test_scan_reads_the_capture_times_in_the_zone_it_is_given_and_warns_about_utc(tmp_path, capsys):
+    folder = tmp_path / "device"
+    folder.mkdir()
+    clip = folder / "clip.mp4"
+    shutil.copy(Path(__file__).resolve().parents[2] / "fixtures/videos/clip.mp4", clip)
+    index = tmp_path / "index.sqlite"
+    scan = ["--index", str(index), "scan", str(folder), "--jobs", "1", "--no-embeddings"]
+
+    main([*scan, "--videos", "--zone", "UTC"])
+
+    with ImageIndex(index) as stored:
+        assert stored.video_metadata(clip.resolve()).captured_at == datetime(2024, 5, 1, 10, 20, 30)
+    assert "warning: capture times go to UTC" in capsys.readouterr().err

@@ -11,6 +11,7 @@ import multiprocessing
 from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
+from datetime import tzinfo
 from pathlib import Path
 from typing import Protocol
 
@@ -33,7 +34,14 @@ from cribrum_lab.detectors.sticker import StickerDetector
 from cribrum_lab.folders import is_sticker_folder
 from cribrum_lab.imaging import Pixels
 from cribrum_lab.index import ImageIndex
-from cribrum_lab.metadata import ImageMetadata, UnreadableImage, read_metadata
+from cribrum_lab.metadata import (
+    ImageMetadata,
+    NoVideoTrack,
+    UnreadableImage,
+    UnreadableVideo,
+    read_metadata,
+    read_video_metadata,
+)
 from cribrum_lab.model import Category, MediaRef, MediaType, Signal
 from cribrum_lab.sources import FilesystemMediaSource
 
@@ -101,6 +109,9 @@ class Stats:
     """Per-image analyses left for a run with embeddings."""
     failures: list[str] = field(default_factory=list)
     """Analyses that raised. They are not stored, so the next run retries them."""
+    no_video_track: int = 0
+    """Files the video step found to have no video track, which left the index. They are still on
+    disk, so they are not among the `forgotten`."""
     unknown_brands: dict[str, int] = field(default_factory=dict)
     """The ftyp and EBML files the walk sniffed and turned away, by the brand it did not know."""
 
@@ -114,11 +125,17 @@ def run(
     jobs: int = 1,
     progress: Progress | None = None,
     record_batch: int = RECORD_BATCH,
+    videos: bool = False,
+    zone: tzinfo | None = None,
 ) -> Stats:
     """Analyzes every image under `root`.
 
     Images under it that are gone leave the index, unless the scan could not list the root in
     full: then it cannot tell a deleted file from a folder it could not read.
+
+    Videos are found and recorded, and with `videos` their metadata is read too: the video
+    steps run only when asked (docs/design.md, section 4). A video's capture time goes to the
+    local time of `zone`, the machine's own when None.
 
     Without an `embedder` no embeddings are computed. Per-image detectors that need one
     are skipped, without storing anything, so a later run with an embedder runs them.
@@ -150,15 +167,28 @@ def run(
 
     # The metadata read from an image header, and every step after it but the group detectors,
     # take images only: a video is recorded and nothing more (docs/design.md, section 4).
-    pending = _stickers_last(
-        [i for i in index.without_metadata() if i.media_type is MediaType.IMAGE]
-    )
+    without_metadata = index.without_metadata()
+    pending = _stickers_last([i for i in without_metadata if i.media_type is MediaType.IMAGE])
     for done, image in enumerate(pending, 1):
         try:
             index.set_metadata(image.path, read_metadata(image.path))
         except UnreadableImage:
             index.set_unreadable(image.path)
         progress("metadata", done, len(pending))
+    pending_videos = (
+        [i for i in without_metadata if i.media_type is MediaType.VIDEO] if videos else []
+    )
+    for done, video in enumerate(pending_videos, 1):
+        try:
+            index.set_video_metadata(video.path, read_video_metadata(video.path, zone))
+        except NoVideoTrack:
+            # Neither an image nor a video: the walk does not sniff it again until it changes.
+            index.forget([video.path])
+            index.add_not_images([video])
+            stats.no_video_track += 1
+        except UnreadableVideo:
+            index.set_unreadable(video.path)
+        progress("video_metadata", done, len(pending_videos))
     unreadable = set(index.unreadable())
     stats.unreadable = len(unreadable & found)
 

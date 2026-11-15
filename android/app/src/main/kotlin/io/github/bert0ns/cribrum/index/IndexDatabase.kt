@@ -34,6 +34,15 @@ data class ImageRow(
     @ColumnInfo(name = "perceptual_hash") val perceptualHash: String? = null,
     /** `image` or `video`, from the source that found the file. */
     @ColumnInfo(name = "media_type", defaultValue = "'image'") val mediaType: String = "image",
+    // A video's own metadata (docs/design.md §7). Its capture time goes in captured_at.
+    @ColumnInfo(name = "duration_ms") val durationMs: Long? = null,
+    @ColumnInfo(name = "frame_rate") val frameRate: Double? = null,
+    val bitrate: Long? = null,
+    @ColumnInfo(name = "has_audio") val hasAudio: Boolean? = null,
+    @ColumnInfo(name = "video_codec") val videoCodec: String? = null,
+    val hdr: Boolean? = null,
+    /** The moment [capturedAt] holds, as epoch milliseconds in UTC: a video's MP4 creation time. */
+    @ColumnInfo(name = "captured_instant") val capturedInstant: Long? = null,
 )
 
 /** Which detector version last analyzed an image, even if it emitted no signal. */
@@ -181,6 +190,19 @@ data class StoredMetadata(
     @ColumnInfo(name = "captured_at") val capturedAt: String?,
 )
 
+data class StoredVideoMetadata(
+    val width: Int,
+    val height: Int,
+    @ColumnInfo(name = "duration_ms") val durationMs: Long?,
+    @ColumnInfo(name = "frame_rate") val frameRate: Double?,
+    val bitrate: Long?,
+    @ColumnInfo(name = "has_audio") val hasAudio: Boolean?,
+    @ColumnInfo(name = "video_codec") val videoCodec: String?,
+    val hdr: Boolean?,
+    @ColumnInfo(name = "captured_at") val capturedAt: String?,
+    @ColumnInfo(name = "captured_instant") val capturedInstant: Long?,
+)
+
 data class StoredPathMetadata(val path: String, @Embedded val metadata: StoredMetadata)
 
 data class StoredPerceptualHash(val path: String, @ColumnInfo(name = "perceptual_hash") val perceptualHash: String)
@@ -206,7 +228,8 @@ interface IndexDao {
         """UPDATE images SET size = :size, mtime_ns = :mtimeNs, width = NULL, height = NULL,
            mime = NULL, camera_make = NULL, camera_model = NULL, captured_at = NULL,
            unreadable = 0, content_hash = NULL, perceptual_hash = NULL, media_type = :mediaType,
-           review_state = CASE WHEN review_state = 'trashed' THEN 'unreviewed' ELSE review_state END WHERE path = :path""",
+           duration_ms = NULL, frame_rate = NULL, bitrate = NULL, has_audio = NULL, video_codec = NULL, hdr = NULL,
+           captured_instant = NULL, review_state = CASE WHEN review_state = 'trashed' THEN 'unreviewed' ELSE review_state END WHERE path = :path""",
     )
     suspend fun resetImage(path: String, size: Long, mtimeNs: Long, mediaType: String)
 
@@ -250,6 +273,31 @@ interface IndexDao {
            FROM images WHERE path = :path AND width IS NOT NULL""",
     )
     suspend fun metadata(path: String): StoredMetadata?
+
+    @Query(
+        """UPDATE images SET width = :width, height = :height, duration_ms = :durationMs, frame_rate = :frameRate,
+           bitrate = :bitrate, has_audio = :hasAudio, video_codec = :videoCodec, hdr = :hdr, captured_at = :capturedAt,
+           captured_instant = :capturedInstant WHERE path = :path""",
+    )
+    suspend fun setVideoMetadata(
+        path: String,
+        width: Int,
+        height: Int,
+        durationMs: Long?,
+        frameRate: Double?,
+        bitrate: Long?,
+        hasAudio: Boolean,
+        videoCodec: String?,
+        hdr: Boolean,
+        capturedAt: String?,
+        capturedInstant: Long?,
+    ): Int
+
+    @Query(
+        """SELECT width, height, duration_ms, frame_rate, bitrate, has_audio, video_codec, hdr, captured_at,
+           captured_instant FROM images WHERE path = :path AND width IS NOT NULL""",
+    )
+    suspend fun videoMetadata(path: String): StoredVideoMetadata?
 
     @Query("SELECT path, width, height, mime, camera_make, camera_model, captured_at FROM images WHERE width IS NOT NULL")
     suspend fun allMetadata(): List<StoredPathMetadata>
@@ -456,7 +504,7 @@ interface IndexDao {
         ImageRow::class, AnalysisRow::class, SignalRow::class, KeptSignalRow::class, KeptDetectorRow::class, EmbeddingRow::class,
         GroupRunRow::class, ExcludedFolderRow::class, NotImageRow::class, JpegRow::class,
     ],
-    version = 7,
+    version = 8,
 )
 abstract class IndexDatabase : RoomDatabase() {
     abstract fun dao(): IndexDao
@@ -524,5 +572,21 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE `images` ADD COLUMN `media_type` TEXT NOT NULL DEFAULT 'image'")
         db.execSQL("DELETE FROM `not_images`")
+    }
+}
+
+/**
+ * Version 7 had no columns for what only a video has. No video's metadata was read before, so they start empty and
+ * the first video scan reads every video (docs/design.md §7).
+ */
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `images` ADD COLUMN `duration_ms` INTEGER")
+        db.execSQL("ALTER TABLE `images` ADD COLUMN `frame_rate` REAL")
+        db.execSQL("ALTER TABLE `images` ADD COLUMN `bitrate` INTEGER")
+        db.execSQL("ALTER TABLE `images` ADD COLUMN `has_audio` INTEGER")
+        db.execSQL("ALTER TABLE `images` ADD COLUMN `video_codec` TEXT")
+        db.execSQL("ALTER TABLE `images` ADD COLUMN `hdr` INTEGER")
+        db.execSQL("ALTER TABLE `images` ADD COLUMN `captured_instant` INTEGER")
     }
 }

@@ -20,6 +20,8 @@ import io.github.bert0ns.cribrum.index.ImageIndex
 import io.github.bert0ns.cribrum.index.memoryIndex
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
 import io.github.bert0ns.cribrum.metadata.UnreadableImage
+import io.github.bert0ns.cribrum.metadata.UnreadableVideo
+import io.github.bert0ns.cribrum.metadata.VideoMetadata
 import io.github.bert0ns.cribrum.metadata.readMetadata
 import io.github.bert0ns.cribrum.mobileclip.preprocess
 import io.github.bert0ns.cribrum.model.Category
@@ -183,6 +185,99 @@ class PipelineTest {
         assertEquals("every step ran on the images", steps, seen.map { it.first }.toSet())
         assertEquals(emptyList<Pair<String, String>>(), seen.filter { it.second in setOf(clip.path, read.path) })
         assertEquals(videos, runBlocking { index.images() }.filter { it.mediaType == MediaType.VIDEO })
+    }
+
+    /** Three videos beside the photos, and a reader that tells them apart by name, since Robolectric has no media parser. */
+    private fun videos(): Map<String, File> {
+        photos()
+        val head = byteArrayOf(0, 0, 0, 0x18) + "ftypisom".toByteArray() + ByteArray(12)
+        return listOf("clip", "prores", "broken").associateWith { File(root, "DCIM/Camera/$it.mp4").apply { writeBytes(head) } }
+    }
+
+    private val clipMeta = VideoMetadata(64, 48, 1000, 30.0, 44_880, true, "video/avc", false, LocalDateTime.of(2024, 5, 1, 12, 20, 30))
+
+    private fun readVideo(file: File): VideoMetadata = when (file.nameWithoutExtension) {
+        "clip" -> clipMeta
+        else -> throw UnreadableVideo(file)
+    }
+
+    @Test
+    fun `a normal run reads no video`() {
+        videos()
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), videoMetadataReader = { throw AssertionError("read ${it.name}") })
+
+        val stats = run(pipeline)
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(3, runBlocking { index.images() }.count { it.mediaType == MediaType.VIDEO })
+        assertFalse("videoMetadata" in stats.phaseMs)
+    }
+
+    @Test
+    fun `a run asked for videos reads their metadata after the images`() {
+        val clip = videos().getValue("clip")
+        val order = ConcurrentLinkedQueue<String>()
+        val pipeline = Pipeline(
+            index,
+            detectors = emptyList(),
+            groupDetectors = emptyList(),
+            metadataReader = { readMetadata(it).also { order += "image" } },
+            videoMetadataReader = { readVideo(it).also { order += "video" } },
+        )
+
+        val stats = runBlocking { pipeline.run(source, videos = true) }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(clipMeta, runBlocking { index.videoMetadata(clip.path) })
+        assertEquals(List(3) { "image" } + "video", order.toList())
+    }
+
+    @Test
+    fun `a video whose header does not read stays in the index, unreadable`() {
+        val videos = videos()
+        val broken = videos.getValue("broken")
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), videoMetadataReader = ::readVideo)
+
+        val stats = runBlocking { pipeline.run(source, videos = true) }
+
+        assertEquals(listOf(broken.path, videos.getValue("prores").path).sorted(), stats.unreadablePaths.sorted())
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(emptyList<MediaRef>(), runBlocking { index.withoutMetadata() })
+    }
+
+    @Test
+    fun `a video whose read fails some other way is a failure and is read again at the next scan`() {
+        val clip = videos().getValue("clip")
+        var fail = true
+        val pipeline = Pipeline(
+            index,
+            detectors = emptyList(),
+            groupDetectors = emptyList(),
+            videoMetadataReader = { if (fail && it == clip) throw IllegalStateException("media server died") else readVideo(it) },
+        )
+
+        val first = runBlocking { pipeline.run(source, videos = true) }
+        fail = false
+        runBlocking { pipeline.run(source, videos = true) }
+
+        assertEquals(listOf(Failure(clip.path, "metadata", "IllegalStateException: media server died")), first.failures)
+        assertFalse(clip.path in first.unreadablePaths)
+        assertEquals(clipMeta, runBlocking { index.videoMetadata(clip.path) })
+    }
+
+    @Test
+    fun `a video whose track the phone does not see keeps its row through the next scan`() {
+        val prores = videos().getValue("prores") // the reader marks it unreadable, as the retriever does a codec it lacks
+        val walk = FilesystemMediaSource(root, notImages = index) { index.images() }
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), videoMetadataReader = ::readVideo)
+
+        val stats = runBlocking { pipeline.run(walk, videos = true) }
+        runBlocking { pipeline.run(walk, videos = true) }
+
+        assertEquals(0, stats.forgotten)
+        assertEquals(prores.toMediaRef(MediaType.VIDEO), runBlocking { index.images() }.single { it.path == prores.path })
+        assertTrue(prores.path in runBlocking { index.unreadable() })
+        assertEquals(emptyList<MediaRef>(), runBlocking { index.notImages() }.toList())
     }
 
     @Test

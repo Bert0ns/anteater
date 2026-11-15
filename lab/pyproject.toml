@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "GPL-3.0-only"
 dependencies = [
+    "av>=19.0.2",
     "numpy>=2.5.4",
     "onnxruntime>=1.31.0",
     "pillow>=13.0.0",

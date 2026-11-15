@@ -1,5 +1,6 @@
 import os
 import shutil
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -894,3 +895,61 @@ def test_a_run_reports_the_containers_the_walk_turned_away_by_an_unknown_brand(p
     stats = pipeline.run(photos, index, detectors=[], group_detectors=[])
 
     assert stats.unknown_brands == {"dash": 1}
+
+
+VIDEOS = Path(__file__).resolve().parents[2] / "fixtures" / "videos"
+
+
+@pytest.fixture
+def videos(photos):
+    """The photos, with the golden clip, an audio-only MP4 and a broken one beside them."""
+    for name in ("clip.mp4", "audio.mp4", "broken.mp4"):
+        shutil.copy(VIDEOS / name, photos / "DCIM/Camera" / name)
+    return photos.resolve() / "DCIM/Camera"
+
+
+def test_a_normal_run_reads_no_video(videos, index, monkeypatch):
+    monkeypatch.setattr(pipeline, "read_video_metadata", lambda *_: pytest.fail("read a video"))
+
+    pipeline.run(videos.parent.parent, index, detectors=[], group_detectors=[])
+
+    assert len([i for i in index.images() if i.media_type is MediaType.VIDEO]) == 3
+    assert index.video_metadata(videos / "clip.mp4") is None
+
+
+def test_a_run_asked_for_videos_reads_their_metadata_after_the_images(videos, index):
+    steps = []
+
+    stats = pipeline.run(
+        videos.parent.parent,
+        index,
+        detectors=[],
+        group_detectors=[],
+        videos=True,
+        progress=lambda step, done, total: steps.append(step),
+    )
+
+    meta = index.video_metadata(videos / "clip.mp4")
+    assert (meta.width, meta.height, meta.duration_ms, meta.has_audio) == (64, 48, 1000, True)
+    assert steps.index("video_metadata") > max(i for i, s in enumerate(steps) if s == "metadata")
+    assert stats.failures == []
+
+
+def test_a_video_whose_header_does_not_read_stays_in_the_index_unreadable(videos, index):
+    stats = pipeline.run(videos.parent.parent, index, detectors=[], group_detectors=[], videos=True)
+
+    assert videos / "broken.mp4" in index.unreadable()
+    assert stats.unreadable == 1
+    assert index.without_metadata() == []  # not read again until it changes
+
+
+def test_a_file_with_no_video_track_leaves_the_index_and_is_not_sniffed_again(videos, index):
+    audio = videos / "audio.mp4"
+
+    stats = pipeline.run(videos.parent.parent, index, detectors=[], group_detectors=[], videos=True)
+    again = pipeline.run(videos.parent.parent, index, detectors=[], group_detectors=[], videos=True)
+
+    assert audio not in {i.path for i in index.images()}
+    assert audio in {f.path for f in index.not_images()}
+    assert (stats.no_video_track, stats.forgotten) == (1, 0)  # still on disk, so not gone
+    assert again.new_or_changed == 0

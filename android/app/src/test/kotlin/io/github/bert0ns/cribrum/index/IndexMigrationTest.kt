@@ -8,10 +8,12 @@ import io.github.bert0ns.cribrum.compress.JPEG_RULES_VERSION
 import io.github.bert0ns.cribrum.compress.JpegInfo
 import io.github.bert0ns.cribrum.compress.JpegStatus
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.ReviewState
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -151,6 +153,21 @@ class IndexMigrationTest {
             assertEquals(0xffuL, runBlocking { it.perceptualHash("/photos/a.jpg") })
             assertEquals(listOf("/photos/a.jpg"), runBlocking { it.compressible(34) }.map { image -> image.path })
             assertEquals(emptyList<MediaRef>(), runBlocking { it.notImages() })
+        }
+    }
+
+    @Test
+    fun `version 7 opens with no video read yet, so a video scan reads every video`() {
+        createDatabase(context, 7).use {
+            it.execSQL("INSERT INTO images (path, size, mtime_ns, width, height, mime) VALUES ('/photos/a.jpg', 100, 1, 4000, 3000, 'image/jpeg')")
+            it.execSQL("INSERT INTO images (path, size, mtime_ns, media_type) VALUES ('/videos/clip.mp4', 900, 2, 'video')")
+        }
+
+        ImageIndex.open(context, NAME).use {
+            assertEquals(listOf(MediaRef("/videos/clip.mp4", 900, 2, MediaType.VIDEO)), runBlocking { it.withoutMetadata() })
+            assertEquals(4000, runBlocking { it.metadata("/photos/a.jpg") }?.width)
+            assertNull(runBlocking { it.videoMetadata("/photos/a.jpg") }?.durationMs)
+            assertNull(runBlocking { it.videoMetadata("/photos/a.jpg") }?.capturedInstant)
         }
     }
 }
