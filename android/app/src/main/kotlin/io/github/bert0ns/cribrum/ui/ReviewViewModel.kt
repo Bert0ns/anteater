@@ -90,6 +90,8 @@ data class ReviewState(
     val videos: List<VideoItem> = emptyList(),
     /** The index holds a video, reviewed or not: before that, the Videos tab says videos appear after the next scan. */
     val videosIndexed: Boolean = false,
+    /** The videos the video steps have not read yet, which the Videos tab says wait for "Scan videos". */
+    val videosWaiting: Int = 0,
     /** Paths of the videos selected on "Largest videos". Nothing is selected for the user. */
     val videoSelected: Set<String> = emptySet(),
     val page: List<ReviewGroup> = emptyList(),
@@ -379,10 +381,10 @@ class ReviewViewModel @JvmOverloads constructor(
         it.withThresholds(app.thresholds.values)
     }
 
-    /** "Largest videos" read again, with whether the index holds any video at all. The selection keeps the videos still listed. */
+    /** "Largest videos" read again, with whether the index holds any video at all and how many wait for "Scan videos". The selection keeps the videos still listed. */
     private suspend fun ReviewState.withVideos(): ReviewState {
         val videos = review.largestVideos()
-        return copy(videos = videos, videosIndexed = videos.isNotEmpty() || app.index.hasVideos(), videoSelected = videoSelected intersect videos.mapTo(HashSet()) { it.video.path })
+        return copy(videos = videos, videosIndexed = videos.isNotEmpty() || app.index.hasVideos(), videosWaiting = app.index.videosWaiting(), videoSelected = videoSelected intersect videos.mapTo(HashSet()) { it.video.path })
     }
 
     private fun ReviewState.withOverview(overview: Overview) = copy(categories = overview.categories, freeableBytes = overview.freeableBytes)

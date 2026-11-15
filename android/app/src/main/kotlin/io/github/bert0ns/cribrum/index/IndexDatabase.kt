@@ -257,6 +257,9 @@ interface IndexDao {
     @Query("SELECT EXISTS(SELECT 1 FROM images WHERE media_type = 'video')")
     suspend fun hasVideos(): Boolean
 
+    @Query("SELECT count(*) FROM images WHERE media_type = 'video' AND width IS NULL AND NOT unreadable AND review_state != 'trashed'")
+    suspend fun videosWaiting(): Int
+
     @Query("DELETE FROM images WHERE path IN (:paths)")
     suspend fun forget(paths: List<String>): Int
 

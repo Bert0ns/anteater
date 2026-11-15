@@ -6,7 +6,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import io.github.bert0ns.cribrum.pipeline.ScanKind
 import io.github.bert0ns.cribrum.pipeline.ScanProgress
+import io.github.bert0ns.cribrum.pipeline.VIDEO_METADATA_STEP
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -43,17 +45,45 @@ class ScanStatusTest {
     }
 
     @Test
-    fun `on the Videos tab there is no Scan now while nothing runs, and a running scan still shows with its Stop`() {
+    fun `the Videos tab offers Scan videos, and a running photo scan takes its place with its Stop`() {
+        var scans = 0
         var progress by mutableStateOf<ScanProgress?>(null)
-        compose.setContent { ScanStatus(progress, onScan = {}, canStart = false) }
+        compose.setContent { ScanStatus(progress, onScan = { scans++ }, kind = ScanKind.VIDEOS) }
 
         compose.onNodeWithText("Scan now").assertDoesNotExist()
-        compose.onNodeWithText("Stop scanning").assertDoesNotExist()
+        compose.onNodeWithText("Scan videos").performClick()
+        assertEquals(1, scans)
 
         progress = ScanProgress("detectors", 12, 100)
 
+        compose.onNodeWithText("Scan videos").assertDoesNotExist()
+        compose.onNodeWithText("Photo scan · Phase 3 of 5").assertExists()
         compose.onNodeWithText("Analyzing the images: 12 of 100").assertExists()
         compose.onNodeWithText("Stop scanning").assertExists()
+    }
+
+    @Test
+    fun `a running video scan shows on the Photos tab instead of Scan now, and says it is the video scan`() {
+        var progress by mutableStateOf(ScanProgress("scan", 300, 0, kind = ScanKind.VIDEOS))
+        compose.setContent { ScanStatus(progress, onScan = {}) }
+
+        compose.onNodeWithText("Scan now").assertDoesNotExist()
+        compose.onNodeWithText("Video scan · Phase 1 of 2").assertExists()
+        compose.onNodeWithText("Photos and videos found: 300 so far").assertExists()
+
+        progress = ScanProgress(VIDEO_METADATA_STEP, 40, 1_400, kind = ScanKind.VIDEOS)
+
+        compose.onNodeWithText("Video scan · Phase 2 of 2").assertExists()
+        compose.onNodeWithText("Reading the videos: 40 of 1400").assertExists()
+        compose.onNodeWithText("Stop scanning").assertExists()
+    }
+
+    @Test
+    fun `Scan videos waits while a compression runs`() {
+        compose.setContent { ScanStatus(progress = null, onScan = {}, compressing = true, kind = ScanKind.VIDEOS) }
+
+        compose.onNodeWithText("Scan videos").assertDoesNotExist()
+        compose.onNodeWithText("A compression is running. Scan videos comes back when it ends.").assertExists()
     }
 
     @Test
@@ -95,28 +125,28 @@ class ScanStatusTest {
     fun `a running scan says which phase it is in out of the total`() {
         compose.setContent { ScanStatus(ScanProgress("detectors", 12, 100), onScan = {}) }
 
-        compose.onNodeWithText("Phase 3 of 5").assertExists()
+        compose.onNodeWithText("Photo scan · Phase 3 of 5").assertExists()
     }
 
     @Test
     fun `the phase number shows while the scan looks for images too`() {
         compose.setContent { ScanStatus(ScanProgress("scan", 300, 0), onScan = {}) }
 
-        compose.onNodeWithText("Phase 1 of 5").assertExists()
+        compose.onNodeWithText("Photo scan · Phase 1 of 5").assertExists()
     }
 
     @Test
     fun `a scan that has reported nothing yet is in the first phase`() {
         compose.setContent { ScanStatus(ScanProgress("", 0, 0), onScan = {}) }
 
-        compose.onNodeWithText("Phase 1 of 5").assertExists()
+        compose.onNodeWithText("Photo scan · Phase 1 of 5").assertExists()
     }
 
     @Test
     fun `the phase number keeps its own line beside the time left`() {
         compose.setContent { ScanStatus(ScanProgress("detectors", 12, 100, leftMs = 12 * 60_000L), onScan = {}) }
 
-        compose.onNodeWithText("Phase 3 of 5").assertExists()
+        compose.onNodeWithText("Photo scan · Phase 3 of 5").assertExists()
     }
 
     @Test
@@ -153,7 +183,7 @@ class ScanStatusTest {
 
         compose.onNodeWithText(hot).assertExists()
         compose.onNodeWithText("12", substring = true).assertDoesNotExist()
-        compose.onNodeWithText("Phase 1 of 5").assertExists()
+        compose.onNodeWithText("Photo scan · Phase 1 of 5").assertExists()
     }
 
     @Test
@@ -196,7 +226,7 @@ class ScanStatusTest {
         compose.setContent { ScanStatus(ScanProgress("scan", 300, 0), onScan = {}, heat = Heat(HeatLevel.MODERATE, 12)) }
 
         compose.onNodeWithText("Il telefono è caldo, quindi la scansione è più lenta").assertExists()
-        compose.onNodeWithText("Fase 1 di 5").assertExists()
+        compose.onNodeWithText("Scansione delle foto · Fase 1 di 5").assertExists()
     }
 
     @Test

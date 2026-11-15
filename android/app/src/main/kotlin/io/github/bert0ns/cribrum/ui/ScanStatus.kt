@@ -30,11 +30,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.pipeline.Indexing
+import io.github.bert0ns.cribrum.pipeline.ScanKind
 import io.github.bert0ns.cribrum.pipeline.ScanProgress
 
 /**
  * The running scan with a progress bar, or a button that starts one: filled while nothing has been scanned, with
- * when the last scan ended beside it otherwise.
+ * when the last scan ended beside it otherwise. Each tab of Clean starts its own scan, and a running scan of either
+ * shows on both, saying which scan it is (docs/design.md §8).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -47,20 +49,20 @@ fun ScanStatus(
     heat: Heat? = null,
     compressing: Boolean = false,
     lastScanAt: Long? = null,
-    /** False on the Videos tab, where "Scan now" is not offered: its progress and Stop still show while a scan runs. */
-    canStart: Boolean = true,
+    /** The scan the button starts: "Scan now" on Photos, "Scan videos" on Videos. */
+    kind: ScanKind = ScanKind.IMAGES,
 ) {
-    if (progress == null && !canStart) return
+    val start = stringResource(if (kind == ScanKind.VIDEOS) R.string.scan_videos else R.string.scan_now)
     Column(modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         when {
             // A scan does not start under a compression (design §9), so the button waits for it to end.
-            progress == null && compressing -> Text(stringResource(R.string.compress_scan_blocked))
+            progress == null && compressing -> Text(stringResource(if (kind == ScanKind.VIDEOS) R.string.compress_scan_videos_blocked else R.string.compress_scan_blocked))
             progress == null && indexEmpty -> {
                 Text(stringResource(R.string.scan_empty))
-                Button(onClick = onScan) { Text(stringResource(R.string.scan_now)) }
+                Button(onClick = onScan) { Text(start) }
             }
             progress == null -> FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = onScan) { Text(stringResource(R.string.scan_now)) }
+                OutlinedButton(onClick = onScan) { Text(start) }
                 if (lastScanAt != null) {
                     val context = LocalContext.current
                     Text(
@@ -71,15 +73,15 @@ fun ScanStatus(
                 }
             }
             progress.total == 0 -> {
-                Text(Indexing.phaseText(LocalResources.current, progress.step))
-                Text(stringResource(R.string.scan_step_scan, progress.done))
+                PhaseLine(progress)
+                Text(stringResource(if (progress.kind == ScanKind.VIDEOS) R.string.scan_step_scan_videos else R.string.scan_step_scan, progress.done))
                 LinearProgressIndicator(Modifier.fillMaxWidth())
                 HeatLine(heat)
                 StopButton(onStop)
             }
             else -> {
-                Text(Indexing.phaseText(LocalResources.current, progress.step))
-                Text(stringResource(R.string.scan_step, stringResource(Indexing.phaseTitle(progress.step)), progress.done, progress.total))
+                PhaseLine(progress)
+                Text(stringResource(R.string.scan_step, stringResource(Indexing.phaseTitle(progress.step, progress.kind)), progress.done, progress.total))
                 LinearProgressIndicator({ progress.done.toFloat() / progress.total }, Modifier.fillMaxWidth())
                 // An empty line while the estimate is hidden, so the list below does not jump at each phase change.
                 Text(progress.leftMs?.let { Indexing.timeLeft(LocalResources.current, it) }.orEmpty())
@@ -88,6 +90,12 @@ fun ScanStatus(
             }
         }
     }
+}
+
+/** Which scan runs and its phase out of that scan's own: "Video scan · Phase 1 of 2". */
+@Composable
+private fun PhaseLine(progress: ScanProgress) {
+    Text(stringResource(R.string.scan_joined, stringResource(Indexing.scanName(progress.kind)), Indexing.phaseText(LocalResources.current, progress.step, progress.kind)))
 }
 
 /** The same stop as the notification's, so a scan can be stopped with notifications off too. The index keeps what is done. */

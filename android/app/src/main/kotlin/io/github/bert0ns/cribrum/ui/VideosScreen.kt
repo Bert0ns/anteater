@@ -75,15 +75,19 @@ fun CleanTabs(selected: CleanTab, onSelect: (CleanTab) -> Unit, modifier: Modifi
 }
 
 /**
- * The Videos tab: "Largest videos" with its count and the space it can free, which opens the list. Until a scan has found a
- * video, it says they appear after the next scan, where "Scan now" is (#401 adds "Scan videos" here).
+ * The Videos tab, under "Scan videos": how many videos wait for that scan, then "Largest videos" with its count and the space
+ * it can free, which opens the list. Until a scan has found a video, it says they appear after the next scan, or that the
+ * phone has none once a scan counted them ([noVideos]).
  */
 @Composable
-fun VideosTab(videos: List<VideoItem>, indexed: Boolean, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+fun VideosTab(videos: List<VideoItem>, indexed: Boolean, onOpen: () -> Unit, modifier: Modifier = Modifier, waiting: Int = 0, noVideos: Boolean = false) {
     LazyColumn(modifier.fillMaxSize()) {
         if (!indexed) {
-            item { Text(stringResource(R.string.videos_after_scan), Modifier.padding(16.dp)) }
+            item { Text(stringResource(if (noVideos) R.string.videos_none_found else R.string.videos_after_scan), Modifier.padding(16.dp)) }
             return@LazyColumn
+        }
+        if (waiting > 0) {
+            item { Text(pluralStringResource(R.plurals.videos_waiting, waiting, waiting), Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodyMedium) }
         }
         val bytes = videos.sumOf { it.video.size }
         if (bytes > 0) {

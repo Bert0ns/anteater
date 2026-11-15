@@ -1,5 +1,7 @@
 package io.github.bert0ns.cribrum.ui
 
+import io.github.bert0ns.cribrum.pipeline.ScanKind
+import io.github.bert0ns.cribrum.pipeline.VIDEO_METADATA_STEP
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -55,6 +57,26 @@ class HomeReloadsTest {
         reloads.next("burst")
 
         assertTrue(reloads.next("scan"))
+    }
+
+    @Test
+    fun `a video scan reloads after its walk and at the end`() {
+        val reloads = HomeReloads()
+        reloads.next(null)
+
+        val seen = listOf("" to false, "scan" to false, VIDEO_METADATA_STEP to true, VIDEO_METADATA_STEP to false).map { (step, reload) -> reloads.next(step, ScanKind.VIDEOS) to reload }
+
+        assertEquals(seen.map { it.second }, seen.map { it.first })
+        assertTrue(reloads.next(null))
+    }
+
+    @Test
+    fun `a night pass that goes on with the videos reloads when its image phases end`() {
+        val reloads = HomeReloads()
+        reloads.next(null)
+        reloads.next("burst")
+
+        assertTrue(reloads.next(VIDEO_METADATA_STEP, ScanKind.VIDEOS))
     }
 
     @Test
