@@ -115,3 +115,25 @@ def test_the_media_types_a_detector_accepts_are_images_only_unless_it_declares_m
 def test_different_media_types_are_a_mismatch():
     problems = parity.mismatches({"d.media_types": "image,video"}, {"d.media_types": "image"})
     assert problems == ["d.media_types: lab image,video, android image"]
+
+
+def test_a_media_types_declaration_that_wraps_over_lines_is_read_whole():
+    lab = (
+        'class D:\n    id = "d"\n    media_types = frozenset(\n'
+        "        {MediaType.IMAGE,\n         MediaType.VIDEO}\n    )\n"
+    )
+    android = (
+        'class D {\n  override val id = "d"\n  override val mediaTypes: Set<MediaType> =\n'
+        "    setOf(\n      MediaType.IMAGE,\n      MediaType.VIDEO,\n    )\n}\n"
+    )
+    android_getter = (
+        'class D {\n  override val id = "d"\n  override val mediaTypes get() = setOf(\n'
+        "    MediaType.IMAGE, MediaType.VIDEO)\n}\n"
+    )
+
+    lab_found = parity.values(lab, parity.LAB_ID, parity.LAB_VERSION, parity.LAB_CONSTANT)
+    android_found = [
+        parity.values(source, parity.ANDROID_ID, parity.ANDROID_VERSION, parity.ANDROID_CONSTANT)
+        for source in (android, android_getter)
+    ]
+    assert [lab_found, *android_found] == [{"d.media_types": "image,video"}] * 3
