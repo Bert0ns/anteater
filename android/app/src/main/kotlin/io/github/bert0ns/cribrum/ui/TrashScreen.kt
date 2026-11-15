@@ -4,6 +4,7 @@ package io.github.bert0ns.cribrum.ui
 import android.media.MediaMetadataRetriever
 import android.text.format.DateUtils
 import android.text.format.Formatter
+import android.util.LruCache
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -186,18 +187,31 @@ private fun VideoFrame(file: File, section: String, modifier: Modifier, contentS
     AsyncImage(request, null, modifier, contentScale = contentScale)
 }
 
+/**
+ * Video lengths in ms by file in the trash, [NO_LENGTH] for one that cannot be read, so a tile that scrolls back in opens
+ * no new retriever. A trash file never changes: a restore or a purge takes it away, and a new item gets a new folder.
+ */
+private val lengths = LruCache<String, Long>(500)
+
+private const val NO_LENGTH = -1L
+
 /** The video's length as a player shows it ("01:42"), or null until it is read or when it cannot be. */
 @Composable
-private fun rememberDuration(file: File): String? = produceState<String?>(null, file) {
-    value = withContext(Dispatchers.IO) {
+private fun rememberDuration(file: File): String? = produceState(lengths[file.path]?.let(::formatLength), file) {
+    if (lengths[file.path] != null) return@produceState
+    val millis = withContext(Dispatchers.IO) {
         runCatching {
             MediaMetadataRetriever().use {
                 it.setDataSource(file.path)
                 it.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
             }
         }.getOrNull()
-    }?.let { DateUtils.formatElapsedTime(it / 1000) }
+    } ?: NO_LENGTH
+    lengths.put(file.path, millis)
+    value = formatLength(millis)
 }.value
+
+private fun formatLength(millis: Long): String? = if (millis == NO_LENGTH) null else DateUtils.formatElapsedTime(millis / 1000)
 
 @Composable
 private fun videoDetails(item: TrashedImage, duration: String?): String = stringResource(R.string.video_details, listOfNotNull(duration, Formatter.formatShortFileSize(LocalContext.current, item.original.size)).joinToString(", "))
