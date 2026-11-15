@@ -173,6 +173,7 @@ class ImageIndex(private val db: IndexDatabase) :
 
     suspend fun embeddingCount(): Int = dao.embeddingCount()
 
+    /** The images the index holds, videos left out: the home shows the empty index while this is 0. */
     suspend fun imageCount(): Int = dao.imageCount()
 
     /**
