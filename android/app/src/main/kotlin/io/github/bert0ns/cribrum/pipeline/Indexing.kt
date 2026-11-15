@@ -274,7 +274,7 @@ open class IndexWorker(context: Context, parameters: WorkerParameters) : Corouti
             // The model loads when the first batch needs it, and the session is closed when the scan ends.
             MobileClip(::loadVision).use { embedder ->
                 app.lastScan.run {
-                    val stats = pipeline(app, embedder).run(Indexing.deviceSource(applicationContext, app.index::images, app.index), ::report)
+                    val stats = pipeline(app, embedder).run(Indexing.deviceSource(applicationContext, app.index::images, app.index), progress = ::report)
                     stats.failures.addAll(trashFailures)
                     stats
                 }

@@ -31,8 +31,12 @@ import io.github.bert0ns.cribrum.hashing.toHex
 import io.github.bert0ns.cribrum.imaging.Pixels
 import io.github.bert0ns.cribrum.index.ImageIndex
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
+import io.github.bert0ns.cribrum.metadata.NoVideoTrack
 import io.github.bert0ns.cribrum.metadata.UnreadableImage
+import io.github.bert0ns.cribrum.metadata.UnreadableVideo
+import io.github.bert0ns.cribrum.metadata.VideoMetadata
 import io.github.bert0ns.cribrum.metadata.readMetadata
+import io.github.bert0ns.cribrum.metadata.readVideoMetadata
 import io.github.bert0ns.cribrum.mobileclip.preprocess
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
@@ -89,6 +93,9 @@ const val JPEG_STEP = "jpeg_headers"
 
 /** The log tag of the JPEG status counts each scan writes, for the maintainer's check of the rules on a real library. */
 const val JPEG_TAG = "jpeg-status"
+
+/** The progress step of the video metadata, which runs only when the scan is asked to analyse videos. */
+const val VIDEO_METADATA_STEP = "video_metadata"
 
 /** The progress step of the embeddings and the detectors that read them, which run at once (docs/design.md §4). */
 const val CLASSIFY_STEP = "embedded_detectors"
@@ -170,6 +177,7 @@ class Pipeline(
     private val trash: Trash? = null,
     private val metadataReader: (File) -> ImageMetadata = ::readMetadata,
     private val jpegReader: (File) -> JpegInfo = ::readJpeg,
+    private val videoMetadataReader: (File) -> VideoMetadata = { readVideoMetadata(it) },
     /** Hashes an image from its task's [Pixels], so it reads the grayscale exposure already computed. */
     private val perceptualHasher: (MediaRef, Pixels) -> ULong = { _, pixels -> perceptualHash(pixels.gray(PHASH_DECODE_SIDE)) },
     private val contentHasher: (MediaRef) -> String = ::contentHash,
@@ -191,8 +199,11 @@ class Pipeline(
      * the trash becomes unreviewed, and one that is neither on disk nor in the trash leaves the index.
      * Only images under a root the source walked can be gone: an absent SD card or an unreadable
      * folder is not a deletion.
+     *
+     * Videos are found and recorded, and with [videos] their metadata is read too: the video steps run only when asked
+     * (docs/design.md §4).
      */
-    suspend fun run(source: MediaSource, progress: Progress = { _, _, _ -> }): Stats = withContext(Dispatchers.IO) {
+    suspend fun run(source: MediaSource, videos: Boolean = false, progress: Progress = { _, _, _ -> }): Stats = withContext(Dispatchers.IO) {
         val stats = Stats()
         val found = LinkedHashSet<String>()
         val before = index.reviewStates()
@@ -247,7 +258,8 @@ class Pipeline(
 
         // The metadata read from an image header, and every step after it but the group detectors, take images only:
         // a video is recorded and nothing more (docs/design.md §4).
-        val pending = stickersLast(index.withoutMetadata().filter { it.mediaType == MediaType.IMAGE })
+        val withoutMetadata = index.withoutMetadata()
+        val pending = stickersLast(withoutMetadata.filter { it.mediaType == MediaType.IMAGE })
         phase("metadata", stats) {
             readAndStore(pending, "metadata", progress, read = { attempt { metadataReader(it) } }) { batch -> storeMetadata(batch, stats) }
         }
@@ -257,6 +269,12 @@ class Pipeline(
             readAndStore(jpegs, JPEG_STEP, progress, read = { attempt { jpegReader(it) } }) { batch -> storeJpegs(batch, stats) }
         }
         index.jpegCounts().forEach { Log.i(JPEG_TAG, "${it.status} gain_map=${it.gainMap} ${it.count}") }
+        if (videos) {
+            val pendingVideos = withoutMetadata.filter { it.mediaType == MediaType.VIDEO }
+            phase("videoMetadata", stats) {
+                readAndStore(pendingVideos, VIDEO_METADATA_STEP, progress, read = { attempt { videoMetadataReader(it) } }) { batch -> storeVideoMetadata(batch, pendingVideos, stats) }
+            }
+        }
         val unreadable = index.unreadable().toSet()
         stats.unreadablePaths = found.filter { it in unreadable }
         stats.unreadable = stats.unreadablePaths.size
@@ -743,6 +761,28 @@ class Pipeline(
                 if (path !in recorded) continue // the row went while the scan ran
                 result.fold({ index.setMetadata(path, it) }, { if (it is UnreadableImage) index.setUnreadable(path) })
             }
+        }
+    }
+
+    /**
+     * As [storeMetadata], with [UnreadableVideo] for a header that does not read. A file with no video track is neither
+     * an image nor a video: it leaves the index and goes to `not_images`, so the walk does not sniff it again until it changes.
+     */
+    private suspend fun storeVideoMetadata(batch: List<Pair<String, Result<VideoMetadata>>>, videos: List<MediaRef>, stats: Stats) = traceSuspend("Pipeline.storeVideoMetadata") {
+        for ((path, result) in batch) {
+            result.exceptionOrNull()?.takeIf { it !is UnreadableVideo && it !is NoVideoTrack }?.let { stats.failures += Failure(path, "metadata", failureMessage(it)) }
+        }
+        index.batch(batch.map { it.first }) { recorded ->
+            for ((path, result) in batch) {
+                if (path !in recorded) continue // the row went while the scan ran
+                result.fold({ index.setVideoMetadata(path, it) }, { if (it is UnreadableVideo) index.setUnreadable(path) })
+            }
+        }
+        val noVideo = batch.filter { it.second.exceptionOrNull() is NoVideoTrack }.mapTo(HashSet()) { it.first }
+        if (noVideo.isNotEmpty()) {
+            index.forget(noVideo)
+            index.addNotImages(videos.filter { it.path in noVideo })
+            stats.forgotten += noVideo.size
         }
     }
 
