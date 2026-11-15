@@ -118,6 +118,17 @@ class ImageIndexTest {
     }
 
     @Test
+    fun `notTrashedMedia keeps a kept video and an unreadable one, as it keeps an image`() = test {
+        val kept = MediaRef("/videos/kept.mp4", 800, 1, MediaType.VIDEO)
+        val broken = MediaRef("/videos/broken.mp4", 700, 1, MediaType.VIDEO)
+        recordAll(listOf(kept, broken))
+        setReviewState(kept.path, ReviewState.KEPT)
+        setUnreadable(broken.path)
+
+        assertEquals(listOf(broken, kept), notTrashedMedia())
+    }
+
+    @Test
     fun `a video is recorded with its media type and the ranker never sees it`() = test {
         val video = MediaRef("/videos/v.mp4", 900, 1, MediaType.VIDEO)
         recordAll(listOf(PHOTO, video))
