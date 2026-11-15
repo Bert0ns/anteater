@@ -1,6 +1,7 @@
 package io.github.bert0ns.cribrum.ui
 
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -10,6 +11,29 @@ class StorageMapTest {
     private val bounds = MapRect(0.0, 0.0, 100.0, 100.0)
 
     private fun ref(path: String, size: Long) = MediaRef(path, size, 0L)
+
+    @Test
+    fun `a folder counts its videos with the images and keeps their size apart`() {
+        val tree = buildFolderTree(
+            listOf(
+                ref("/sd/DCIM/a.jpg", 1000L),
+                MediaRef("/sd/DCIM/v.mp4", 9000L, 0L, MediaType.VIDEO),
+                MediaRef("/sd/DCIM/Trips/w.mp4", 5000L, 0L, MediaType.VIDEO),
+                ref("/sd/DCIM/Trips/b.jpg", 2000L),
+            ),
+        )
+
+        assertEquals(17_000L, tree.size)
+        assertEquals(4, tree.count)
+        assertEquals(14_000L, tree.videoSize)
+        assertEquals(2, tree.videoCount)
+        assertEquals(10_000L, tree.directSize)
+        assertEquals(9_000L, tree.directVideoSize)
+        assertEquals(1, tree.directVideoCount)
+        val trips = tree.children.single()
+        assertEquals(5_000L, trips.videoSize)
+        assertEquals(1, trips.videoCount)
+    }
 
     @Test
     fun `squarify empty weights returns empty list`() {
@@ -93,7 +117,7 @@ class StorageMapTest {
         assertEquals("0", tree.name)
         assertEquals("/storage/emulated/0", tree.path)
         assertEquals(9000L, tree.size)
-        assertEquals(5, tree.imageCount)
+        assertEquals(5, tree.count)
         assertEquals(2, tree.children.size)
 
         val pictures = tree.children[0]
@@ -101,33 +125,33 @@ class StorageMapTest {
 
         assertEquals("Pictures", pictures.name)
         assertEquals(5500L, pictures.size)
-        assertEquals(2, pictures.imageCount)
+        assertEquals(2, pictures.count)
         assertEquals(4000L, pictures.directSize)
-        assertEquals(1, pictures.directImageCount)
+        assertEquals(1, pictures.directCount)
         assertEquals(1, pictures.children.size)
         assertEquals("Sub", pictures.children[0].name)
         assertEquals(1500L, pictures.children[0].size)
-        assertEquals(1, pictures.children[0].imageCount)
+        assertEquals(1, pictures.children[0].count)
 
         assertEquals("DCIM", dcim.name)
         assertEquals(3500L, dcim.size)
-        assertEquals(3, dcim.imageCount)
+        assertEquals(3, dcim.count)
         assertEquals(0L, dcim.directSize)
-        assertEquals(0, dcim.directImageCount)
+        assertEquals(0, dcim.directCount)
         assertEquals(2, dcim.children.size)
         assertEquals("Camera", dcim.children[0].name)
         assertEquals(3000L, dcim.children[0].size)
-        assertEquals(2, dcim.children[0].imageCount)
+        assertEquals(2, dcim.children[0].count)
         assertEquals("Screenshots", dcim.children[1].name)
         assertEquals(500L, dcim.children[1].size)
-        assertEquals(1, dcim.children[1].imageCount)
+        assertEquals(1, dcim.children[1].count)
     }
 
     @Test
     fun `folder tree with empty image list`() {
         val tree = buildFolderTree(emptyList())
         assertEquals(0L, tree.size)
-        assertEquals(0, tree.imageCount)
+        assertEquals(0, tree.count)
         assertTrue(tree.children.isEmpty())
     }
 
@@ -237,7 +261,7 @@ class StorageMapTest {
     @Test(expected = IllegalArgumentException::class)
     fun `a trail with a folder that is not a child of the previous one fails`() {
         val tree = buildFolderTree(listOf(ref("/A/x.jpg", 1L), ref("/B/y.jpg", 1L)))
-        trailHue(listOf(tree, Folder(name = "Z", path = "/Z", size = 1L, imageCount = 1)))
+        trailHue(listOf(tree, Folder(name = "Z", path = "/Z", size = 1L, count = 1)))
     }
 
     @Test
@@ -284,9 +308,9 @@ class StorageMapTest {
             name = "DCIM",
             path = "/DCIM",
             size = 5000L,
-            imageCount = 5,
+            count = 5,
             children = listOf(
-                Folder(name = "Camera", path = "/DCIM/Camera", size = 3000L, imageCount = 3),
+                Folder(name = "Camera", path = "/DCIM/Camera", size = 3000L, count = 3),
             ),
         )
         val blocks = layoutTreemap(folder, bounds, gap = 1.0, minSize = 2.0)
@@ -301,9 +325,9 @@ class StorageMapTest {
             name = "DCIM",
             path = "/DCIM",
             size = 3000L,
-            imageCount = 3,
+            count = 3,
             children = listOf(
-                Folder(name = "Camera", path = "/DCIM/Camera", size = 3000L, imageCount = 3),
+                Folder(name = "Camera", path = "/DCIM/Camera", size = 3000L, count = 3),
             ),
         )
         val blocks = layoutTreemap(folder, bounds, gap = 1.0, minSize = 2.0)

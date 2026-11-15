@@ -37,7 +37,7 @@ val COUNTS = mapOf(
 
 /**
  * Fills the index with a library: the counts of [COUNTS] as rows, and, for the categories in [pictures], drawn files that
- * the review shows first. [others] adds the photos that are no candidates, for the map and Settings.
+ * the review shows first. [others] adds the photos that are no candidates, and some videos, for the map and Settings.
  */
 fun GalleryWorld.library(pictures: Set<Category> = emptySet(), others: Boolean = false) {
     fun drawn(category: Category) = category in pictures
@@ -134,5 +134,8 @@ fun GalleryWorld.library(pictures: Set<Category> = emptySet(), others: Boolean =
         repeat(40) { index -> row("Pictures/Family/Birthday", "IMG_${index}_party.jpg", 3_500_000L, taken(index, 20)) }
         repeat(90) { index -> row("Pictures/Instagram", "IMG_$index.jpg", 900_000L, taken(index, 40)) }
         repeat(60) { index -> row("Telegram/Telegram Images", "photo_$index.jpg", 700_000L, taken(index, 40)) }
+        // Videos take most of the space, as on a phone: the map and Settings count them with the photos.
+        repeat(7) { index -> video(CAMERA, "VID_${STAMP.format(taken(index, 60))}.mp4", 640_000_000L + index * 97_000_000L, taken(index, 60)) }
+        repeat(9) { index -> video("WhatsApp/Media/WhatsApp Video", "VID-${STAMP.format(taken(index, 50))}-WA$index.mp4", 38_000_000L + index * 11_000_000L, taken(index, 50)) }
     }
 }

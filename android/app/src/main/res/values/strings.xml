@@ -357,13 +357,17 @@
     <string name="storage_map_root">All explored folders</string>
     <string name="storage_map_exclude">Exclude this folder</string>
     <string name="storage_map_open">Show contents</string>
-    <string name="settings_storage_map_hint">Where the images take space, folder by folder. Exclude a folder from there.</string>
+    <string name="settings_storage_map_hint">Where the images and videos take space, folder by folder. Exclude a folder from there.</string>
     <string name="settings_details">Scans and storage</string>
-    <string name="storage_map_empty">No images found yet</string>
+    <string name="storage_map_empty">No images or videos found yet</string>
     <string name="storage_map_no_subfolders">No subfolders</string>
     <plurals name="storage_map_summary">
-        <item quantity="one">%1$s \u2022 %2$d image</item>
-        <item quantity="other">%1$s \u2022 %2$d images</item>
+        <item quantity="one">%1$s \u2022 %2$d file</item>
+        <item quantity="other">%1$s \u2022 %2$d files</item>
+    </plurals>
+    <plurals name="storage_map_video">
+        <item quantity="one">Video: %1$s \u2022 %2$d video</item>
+        <item quantity="other">Video: %1$s \u2022 %2$d videos</item>
     </plurals>
     <!-- Compress -->
     <string name="close">Close</string>

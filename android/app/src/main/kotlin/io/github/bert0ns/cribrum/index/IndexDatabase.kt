@@ -248,6 +248,9 @@ interface IndexDao {
     @Query("SELECT path, size, mtime_ns, media_type FROM images WHERE review_state != 'trashed' AND media_type = 'image' ORDER BY path")
     suspend fun notTrashed(): List<StoredRef>
 
+    @Query("SELECT path, size, mtime_ns, media_type FROM images WHERE review_state != 'trashed' ORDER BY path")
+    suspend fun notTrashedMedia(): List<StoredRef>
+
     @Query("SELECT path, size, mtime_ns, media_type, unreadable, duration_ms FROM images WHERE media_type = 'video' AND review_state = 'unreviewed' ORDER BY size DESC, path")
     suspend fun unreviewedVideos(): List<StoredVideo>
 
