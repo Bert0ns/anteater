@@ -951,5 +951,5 @@ def test_a_file_with_no_video_track_leaves_the_index_and_is_not_sniffed_again(vi
 
     assert audio not in {i.path for i in index.images()}
     assert audio in {f.path for f in index.not_images()}
-    assert stats.forgotten == 1
+    assert (stats.no_video_track, stats.forgotten) == (1, 0)  # still on disk, so not gone
     assert again.new_or_changed == 0

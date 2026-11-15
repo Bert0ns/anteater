@@ -78,7 +78,8 @@ def _scan(
     print(
         f"\r\033[K{stats.images} images, {stats.new_or_changed} new or changed, "
         f"{stats.forgotten} gone, {stats.unreadable} unreadable, "
-        f"{stats.detector_runs} detector runs, {stats.skipped} waiting for embeddings",
+        f"{stats.detector_runs} detector runs, {stats.skipped} waiting for embeddings"
+        + (f", {stats.no_video_track} without a video track" if videos else ""),
         file=sys.stderr,
     )
     # A video format the walk's list misses shows here (docs/design.md, section 4).

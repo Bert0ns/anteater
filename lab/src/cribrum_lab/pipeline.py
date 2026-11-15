@@ -108,6 +108,9 @@ class Stats:
     """Per-image analyses left for a run with embeddings."""
     failures: list[str] = field(default_factory=list)
     """Analyses that raised. They are not stored, so the next run retries them."""
+    no_video_track: int = 0
+    """Files the video step found to have no video track, which left the index. They are still on
+    disk, so they are not among the `forgotten`."""
     unknown_brands: dict[str, int] = field(default_factory=dict)
     """The ftyp and EBML files the walk sniffed and turned away, by the brand it did not know."""
 
@@ -179,7 +182,7 @@ def run(
             # Neither an image nor a video: the walk does not sniff it again until it changes.
             index.forget([video.path])
             index.add_not_images([video])
-            stats.forgotten += 1
+            stats.no_video_track += 1
         except UnreadableVideo:
             index.set_unreadable(video.path)
         progress("video_metadata", done, len(pending_videos))
