@@ -147,6 +147,24 @@ class AppTrashTest {
     }
 
     @Test
+    fun `an item with a media type this build does not know reads as an image, so it is listed, restored and purged`() = test {
+        val image = photo("DCIM/later.jpg")
+        val expiring = photo("DCIM/expiring.jpg")
+        moveToTrash(listOf(image, expiring))
+        for (item in trashed()) {
+            val origin = File(item.file.parentFile, "origin.properties")
+            val props = Properties().apply { origin.inputStream().use(::load) }
+            props["media_type"] = "audio" // written by a later build, before a downgrade
+            origin.outputStream().use { props.store(it, null) }
+        }
+
+        assertEquals(setOf(image, expiring), trashed().map { it.original }.toSet())
+        assertEquals(listOf(image), restore(listOf(image)))
+        clock.now += Duration.ofDays(31)
+        assertEquals(listOf(expiring), purgeExpired().purged)
+    }
+
+    @Test
     fun `an item written before the trash recorded media types reads as an image`() = test {
         val image = photo("DCIM/before.jpg")
         moveToTrash(listOf(image))
