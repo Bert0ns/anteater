@@ -293,4 +293,11 @@ class TrashScreenTest {
 
         compose.onNodeWithText("Delete 3 files for good?").assertExists()
     }
+
+    @Test
+    fun `next to Empty trash the screen says how much space the trash still takes`() {
+        compose.setContent { TrashScreen(trashed + clip, emptySet(), {}, { _, _ -> }, {}, {}) }
+
+        compose.onNodeWithText("The trash still takes up 412 MB.").assertExists()
+    }
 }

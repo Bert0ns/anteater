@@ -120,9 +120,12 @@ fun TrashScreen(
         // With nothing selected, emptying the trash is the only action. With a selection, deleting it for good weighs
         // less than Restore: a text button, in the error color.
         if (selected.isEmpty()) {
+            // A trashed file frees nothing until the retention ends, and people trash videos to get space now.
+            val held = Formatter.formatShortFileSize(LocalContext.current, trashed.sumOf { it.original.size })
+            Text(stringResource(R.string.trash_holds, held), Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp), style = MaterialTheme.typography.bodySmall)
             OutlinedButton(
                 { confirmDelete = true },
-                Modifier.fillMaxWidth().padding(16.dp),
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
             ) { Text(stringResource(R.string.empty_trash)) }
