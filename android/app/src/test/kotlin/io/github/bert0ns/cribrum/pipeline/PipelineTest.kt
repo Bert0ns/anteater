@@ -178,6 +178,7 @@ class PipelineTest {
         val stats = runBlocking { pipeline.run(FilesystemMediaSource(root) { index.images() }) }
 
         assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals("the scan log's image count leaves the videos out", 4, stats.images)
         val steps = setOf("metadata", "jpeg headers", "perceptual hash", "embedding", "detector", "embedded detector", "content hash", "seen_group")
         assertEquals("every step ran on the images", steps, seen.map { it.first }.toSet())
         assertEquals(emptyList<Pair<String, String>>(), seen.filter { it.second in setOf(clip.path, read.path) })
