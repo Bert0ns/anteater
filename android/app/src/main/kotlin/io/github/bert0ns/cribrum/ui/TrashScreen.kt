@@ -1,10 +1,7 @@
 // The trash (docs/design.md §9): what is in it, how long it stays, and the way back.
 package io.github.bert0ns.cribrum.ui
 
-import android.media.MediaMetadataRetriever
-import android.text.format.DateUtils
 import android.text.format.Formatter
-import android.util.LruCache
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -37,7 +34,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -55,17 +51,10 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
-import coil3.decode.Decoder
-import coil3.request.ImageRequest
-import coil3.video.VideoFrameDecoder
 import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.folders.isStickerFolder
 import io.github.bert0ns.cribrum.model.MediaType
-import io.github.bert0ns.cribrum.tracing.traced
 import io.github.bert0ns.cribrum.trash.TrashedImage
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.time.Duration
 import java.time.Instant
@@ -168,7 +157,7 @@ fun TrashScreen(
             val item = trashed.getOrNull(page) ?: return@FullSizeViewer
             FullSizeToggle(item.file.path in selected, stringResource(R.string.tile_selected), MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary) { onSelect(item) }
             FullSizeBar(item.original.path, item.favorite) {
-                if (item.isVideo) Text(videoDetails(item, rememberDuration(item.file)), color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                if (item.isVideo) Text(videoDetails(item.original.size, rememberDuration(item.file)), color = Color.White, style = MaterialTheme.typography.bodyMedium)
                 Text(pluralStringResource(R.plurals.trash_tile_days_left, daysLeft(item).toInt(), daysLeft(item)), color = Color.White, style = MaterialTheme.typography.bodyMedium)
             }
         }
@@ -176,45 +165,6 @@ fun TrashScreen(
 }
 
 private val TrashedImage.isVideo get() = original.mediaType == MediaType.VIDEO
-
-/** Decodes a frame of the file whatever its name says: the trash knows it holds a video. */
-private val videoFrames = Decoder.Factory { result, options, _ -> VideoFrameDecoder(result.source, options) }
-
-@Composable
-private fun VideoFrame(file: File, section: String, modifier: Modifier, contentScale: ContentScale = ContentScale.Crop) {
-    val context = LocalContext.current
-    val request = remember(file, section, context) { ImageRequest.Builder(context).data(file).decoderFactory(videoFrames).traced(section).build() }
-    AsyncImage(request, null, modifier, contentScale = contentScale)
-}
-
-/**
- * Video lengths in ms by file in the trash, [NO_LENGTH] for one that cannot be read, so a tile that scrolls back in opens
- * no new retriever. A trash file never changes: a restore or a purge takes it away, and a new item gets a new folder.
- */
-private val lengths = LruCache<String, Long>(500)
-
-private const val NO_LENGTH = -1L
-
-/** The video's length as a player shows it ("01:42"), or null until it is read or when it cannot be. */
-@Composable
-private fun rememberDuration(file: File): String? = produceState(lengths[file.path]?.let(::formatLength), file) {
-    if (lengths[file.path] != null) return@produceState
-    val millis = withContext(Dispatchers.IO) {
-        runCatching {
-            MediaMetadataRetriever().use {
-                it.setDataSource(file.path)
-                it.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
-            }
-        }.getOrNull()
-    } ?: NO_LENGTH
-    lengths.put(file.path, millis)
-    value = formatLength(millis)
-}.value
-
-private fun formatLength(millis: Long): String? = if (millis == NO_LENGTH) null else DateUtils.formatElapsedTime(millis / 1000)
-
-@Composable
-private fun videoDetails(item: TrashedImage, duration: String?): String = stringResource(R.string.video_details, listOfNotNull(duration, Formatter.formatShortFileSize(LocalContext.current, item.original.size)).joinToString(", "))
 
 private fun daysLeft(item: TrashedImage) = ceil(Duration.between(Instant.now(), item.purgeAt).toMillis() / MILLIS_PER_DAY).toLong().coerceAtLeast(0)
 
@@ -226,7 +176,7 @@ private fun LazyGridScope.trashItems(trashed: List<TrashedImage>, selected: Set<
         val daysText = stringResource(R.string.days_left, daysLeft)
         val spokenDays = pluralStringResource(R.plurals.trash_tile_days_left, daysLeft.toInt(), daysLeft)
         val duration = if (item.isVideo) rememberDuration(item.file) else null
-        val details = if (item.isVideo) videoDetails(item, duration) else null
+        val details = if (item.isVideo) videoDetails(item.original.size, duration) else null
         val description = stringResource(R.string.tile_description, File(item.original.path).name, listOfNotNull(details, spokenDays).joinToString(". "))
         Box(
             Modifier.aspectRatio(1f).padding(2.dp)

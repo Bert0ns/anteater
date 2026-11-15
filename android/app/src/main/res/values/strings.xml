@@ -156,6 +156,8 @@
     </plurals>
     <!-- A trashed video's length (when it could be read) and size, such as "Video, 01:42, 412 MB". -->
     <string name="video_details">Video, %1$s</string>
+    <!-- On the tile of a video whose frame cannot be shown, in the trash and in "Largest videos". -->
+    <string name="video_unreadable">Can\'t be read</string>
     <string name="empty_trash_body">This frees %1$s and cannot be undone.</string>
     <string name="delete">Delete</string>
     <string name="delete_selected">Delete %1$d</string>

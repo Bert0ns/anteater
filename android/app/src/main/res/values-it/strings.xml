@@ -200,6 +200,7 @@
         <item quantity="many">Eliminare %d di file definitivamente?</item>
     </plurals>
     <string name="video_details">Video, %1$s</string>
+    <string name="video_unreadable">Non leggibile</string>
     <string name="empty_trash_body">Libera %1$s e non si può annullare.</string>
     <string name="delete">Elimina</string>
     <string name="delete_selected">Elimina %1$d</string>
