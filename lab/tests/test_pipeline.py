@@ -935,6 +935,40 @@ def test_a_run_asked_for_videos_reads_their_metadata_after_the_images(videos, in
     assert stats.failures == []
 
 
+def test_a_run_asked_for_both_takes_the_videos_after_every_image_step(videos, index):
+    steps = []
+
+    pipeline.run(
+        videos.parent.parent,
+        index,
+        detectors=[],
+        group_detectors=[pipeline.ExactDuplicateDetector()],
+        videos=True,
+        progress=lambda step, done, total: steps.append(step),
+    )
+
+    assert steps.index("video_metadata") > steps.index("exact_duplicate")
+
+
+def test_a_run_for_videos_alone_walks_and_runs_no_image_step(videos, index, monkeypatch):
+    monkeypatch.setattr(pipeline, "read_metadata", lambda *_: pytest.fail("read an image"))
+    seen = []
+
+    stats = pipeline.run(
+        videos.parent.parent,
+        index,
+        detectors=[Seen("fast", seen)],
+        group_detectors=[Seen("group", seen)],
+        images=False,
+        videos=True,
+    )
+
+    assert seen == []
+    assert index.video_metadata(videos / "clip.mp4").duration_ms == 1000
+    assert (stats.images, stats.videos) == (3, 2)  # the audio-only file left the index
+    assert len(index.without_metadata()) == 3  # the images wait for a normal scan
+
+
 def test_a_video_whose_header_does_not_read_stays_in_the_index_unreadable(videos, index):
     stats = pipeline.run(videos.parent.parent, index, detectors=[], group_detectors=[], videos=True)
 
