@@ -16,6 +16,7 @@ import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.pipeline.Coverage
 import io.github.bert0ns.cribrum.pipeline.Stats
 import io.github.bert0ns.cribrum.ranker.THRESHOLDS
+import io.github.bert0ns.cribrum.review.Decision
 import io.github.bert0ns.cribrum.review.PAGE_SIZE
 import io.github.bert0ns.cribrum.review.Review
 import io.github.bert0ns.cribrum.review.ReviewOrder
@@ -817,7 +818,7 @@ class ReviewViewModelTest {
 
     /** A trash whose listing waits for [release], like a big one on a slow phone. */
     private class SlowTrash(private val release: CompletableDeferred<Unit>, private val items: List<TrashedImage> = emptyList()) : Trash {
-        override suspend fun moveToTrash(images: List<MediaRef>) = images
+        override suspend fun moveToTrash(images: List<MediaRef>) = images.asItems()
 
         override suspend fun restore(images: List<MediaRef>) = images
 
@@ -827,6 +828,8 @@ class ReviewViewModelTest {
         }
 
         override suspend fun purge(images: List<MediaRef>) = images
+
+        override suspend fun purgeItems(files: Collection<File>) = emptyList<MediaRef>()
 
         override suspend fun purgeExpired() = ExpiredPurge.NONE
     }
@@ -873,10 +876,10 @@ class ReviewViewModelTest {
         val moves = mutableListOf<List<MediaRef>>()
         val restores = mutableListOf<List<MediaRef>>()
 
-        override suspend fun moveToTrash(images: List<MediaRef>): List<MediaRef> {
+        override suspend fun moveToTrash(images: List<MediaRef>): List<TrashedImage> {
             gate?.await()
             moves += images
-            return images
+            return images.asItems()
         }
 
         override suspend fun restore(images: List<MediaRef>): List<MediaRef> {
@@ -887,6 +890,8 @@ class ReviewViewModelTest {
         override suspend fun trashed() = emptyList<TrashedImage>()
 
         override suspend fun purge(images: List<MediaRef>) = images
+
+        override suspend fun purgeItems(files: Collection<File>) = emptyList<MediaRef>()
 
         override suspend fun purgeExpired() = ExpiredPurge.NONE
     }
@@ -1178,13 +1183,15 @@ class ReviewViewModelTest {
     private class StubbornTrash(held: List<MediaRef>) : Trash {
         private val inside = held.toMutableList()
 
-        override suspend fun moveToTrash(images: List<MediaRef>) = images
+        override suspend fun moveToTrash(images: List<MediaRef>) = images.asItems()
 
         override suspend fun restore(images: List<MediaRef>) = images.take(1).also { inside.removeAll(it) }
 
         override suspend fun trashed() = inside.map { TrashedImage(it, Instant.EPOCH, File(it.path), Instant.EPOCH) }
 
         override suspend fun purge(images: List<MediaRef>) = images.take(1).also { inside.removeAll(it) }
+
+        override suspend fun purgeItems(files: Collection<File>) = emptyList<MediaRef>()
 
         override suspend fun purgeExpired() = ExpiredPurge.NONE
     }
@@ -1194,7 +1201,7 @@ class ReviewViewModelTest {
         private val inside = held.toMutableList()
         val purged = mutableListOf<List<MediaRef>>()
 
-        override suspend fun moveToTrash(images: List<MediaRef>) = images
+        override suspend fun moveToTrash(images: List<MediaRef>) = images.asItems()
 
         override suspend fun restore(images: List<MediaRef>) = images
 
@@ -1204,6 +1211,8 @@ class ReviewViewModelTest {
             purged += it
             inside.removeAll(it)
         }
+
+        override suspend fun purgeItems(files: Collection<File>) = emptyList<MediaRef>()
 
         override suspend fun purgeExpired() = ExpiredPurge.NONE
     }
@@ -1240,13 +1249,15 @@ class ReviewViewModelTest {
     private class OccupiedTrash(held: List<MediaRef>, var occupied: Set<String> = emptySet()) : Trash {
         private val inside = held.toMutableList()
 
-        override suspend fun moveToTrash(images: List<MediaRef>) = images.also { inside += it }
+        override suspend fun moveToTrash(images: List<MediaRef>) = images.also { inside += it }.asItems()
 
         override suspend fun restore(images: List<MediaRef>) = images.filter { it.path !in occupied }.also { inside.removeAll(it) }
 
         override suspend fun trashed() = inside.map { TrashedImage(it, Instant.EPOCH, File(it.path), Instant.EPOCH) }
 
         override suspend fun purge(images: List<MediaRef>) = images.also { inside.removeAll(it) }
+
+        override suspend fun purgeItems(files: Collection<File>) = emptyList<MediaRef>()
 
         override suspend fun purgeExpired() = ExpiredPurge.NONE
     }
@@ -1322,13 +1333,15 @@ class ReviewViewModelTest {
 
     /** A trash that cannot be read, like a volume that went away. */
     private class BrokenTrash : Trash {
-        override suspend fun moveToTrash(images: List<MediaRef>) = images
+        override suspend fun moveToTrash(images: List<MediaRef>) = images.asItems()
 
         override suspend fun restore(images: List<MediaRef>) = images
 
         override suspend fun trashed(): List<TrashedImage> = throw IOException("volume gone")
 
         override suspend fun purge(images: List<MediaRef>) = images
+
+        override suspend fun purgeItems(files: Collection<File>) = emptyList<MediaRef>()
 
         override suspend fun purgeExpired() = ExpiredPurge.NONE
     }
@@ -1365,32 +1378,108 @@ class ReviewViewModelTest {
         assertTrue(model.state.value.selected.isEmpty())
     }
 
+    /** A trash on a folder of its own, whose clock the test moves, and a page of one blurry photo, [name], ready to apply. */
+    private inner class FreeNowWorld {
+        val volume = folder.newFolder()
+        var now: Instant = Instant.parse("2026-11-15T10:00:00Z")
+        val trash = AppTrash(
+            { listOf(volume) },
+            clock = object : java.time.Clock() {
+                override fun instant() = now
+                override fun getZone() = java.time.ZoneOffset.UTC
+                override fun withZone(zone: java.time.ZoneId) = this
+            },
+        )
+        val review = Review(app.index, trash)
+        val model = ReviewViewModel(app, review)
+
+        fun file(name: String) = File(volume, name).apply {
+            writeText("0123456789")
+            setLastModified(1_700_000_000_000)
+        }.toMediaRef()
+
+        fun blurry(name: String): MediaRef = file(name).also {
+            runBlocking {
+                app.index.record(it)
+                app.index.setReviewState(it.path, ReviewState.UNREVIEWED) // the same file may have been trashed before
+                app.index.setSignals(it.path, "blur", 1, listOf(Signal("blur", 1, Category.BLURRY, 0.9f)))
+            }
+        }
+
+        /** Trashes [ref] outside the review, as an earlier page would have. */
+        fun trashedBefore(ref: MediaRef) = runBlocking {
+            app.index.record(ref)
+            trash.moveToTrash(listOf(ref))
+            app.index.setReviewState(ref.path, ReviewState.TRASHED)
+        }
+
+        fun applyPage(): Decision {
+            model.open(Category.BLURRY)
+            settle(model) { paths(it).isNotEmpty() }
+            applyShown(model)
+            settle(model) { it.state.value.lastDecision != null }
+            return model.state.value.lastDecision!!
+        }
+
+        fun inTrash() = runBlocking { trash.trashed() }
+    }
+
     @Test
     fun `freeing the space of a page deletes for good only what the page trashed, and ends its undo`() {
-        val volume = folder.newFolder()
-        val trash = AppTrash({ listOf(volume) })
-        fun file(name: String) = File(volume, name).apply { writeText("0123456789") }.toMediaRef()
-        val older = file("older.jpg")
-        val blurred = file("blurred.jpg")
-        runBlocking {
-            app.index.record(older)
-            trash.moveToTrash(listOf(older))
-            app.index.setReviewState(older.path, ReviewState.TRASHED)
-            app.index.record(blurred)
-            app.index.setSignals(blurred.path, "blur", 1, listOf(Signal("blur", 1, Category.BLURRY, 0.9f)))
-        }
-        val model = ReviewViewModel(app, Review(app.index, trash))
-        model.open(Category.BLURRY)
-        settle(model) { paths(it) == listOf(blurred.path) }
-        applyShown(model)
-        settle(model) { it.state.value.lastDecision != null }
+        val world = FreeNowWorld()
+        val older = world.file("older.jpg").also { world.trashedBefore(it) }
+        val blurred = world.blurry("blurred.jpg")
+        val decision = world.applyPage()
 
-        model.freeNow(model.state.value.lastDecision!!)
-        settle(model) { it.state.value.lastDecision == null }
+        world.model.askFreeNow(decision)
+        settle(world.model) { it.state.value.freeNow != null }
+        assertEquals(decision.items, world.model.state.value.freeNow!!.items)
+        world.model.confirmFreeNow()
+        settle(world.model) { it.state.value.lastDecision == null && it.state.value.freeNow == null }
 
-        assertEquals(listOf(older), runBlocking { trash.trashed() }.map { it.original })
+        assertEquals(listOf(older), world.inTrash().map { it.original })
         assertFalse(File(blurred.path).exists())
         assertEquals(mapOf(older.path to ReviewState.TRASHED), runBlocking { app.index.reviewStates() })
+    }
+
+    @Test
+    fun `after the page's file was restored, free now offers nothing and never deletes an equal item trashed later`() {
+        val world = FreeNowWorld()
+        val photo = world.blurry("again.jpg")
+        val decision = world.applyPage()
+        // A sync app puts the same file back, with its size and mtime, and it is trashed again an hour later.
+        world.now += Duration.ofHours(1)
+        world.trashedBefore(world.file("again.jpg"))
+        val later = world.inTrash().first()
+        // The restore takes the page's item, the older of the two.
+        runBlocking { world.review.restore(listOf(photo)) }
+        assertEquals(listOf(later), world.inTrash())
+
+        world.model.askFreeNow(decision)
+        settle(world.model) { true }
+        assertNull(world.model.state.value.freeNow)
+        world.model.confirmFreeNow()
+        settle(world.model) { true }
+
+        assertEquals(listOf(later), world.inTrash())
+    }
+
+    @Test
+    fun `a second confirm of free now deletes nothing more, not even an equal item`() {
+        val world = FreeNowWorld()
+        val earlier = world.file("twice.jpg").also { world.trashedBefore(it) }
+        world.now += Duration.ofHours(1)
+        world.blurry("twice.jpg")
+        val decision = world.applyPage()
+
+        world.model.askFreeNow(decision)
+        settle(world.model) { it.state.value.freeNow != null }
+        world.model.confirmFreeNow()
+        world.model.confirmFreeNow() // a second tap before the dialog leaves
+        settle(world.model) { it.state.value.freeNow == null }
+
+        assertEquals(listOf(earlier), world.inTrash().map { it.original })
+        assertEquals(1, world.inTrash().size)
     }
 
     @Test
@@ -1434,7 +1523,7 @@ class ReviewViewModelTest {
         private val inside = held.mapIndexed { i, image -> TrashedImage(image, Instant.EPOCH, File("/trash/$i/${File(image.path).name}"), Instant.EPOCH) }.toMutableList()
         val purged = mutableListOf<List<MediaRef>>()
 
-        override suspend fun moveToTrash(images: List<MediaRef>) = images
+        override suspend fun moveToTrash(images: List<MediaRef>) = images.asItems()
 
         override suspend fun restore(images: List<MediaRef>) = images
 
@@ -1444,6 +1533,8 @@ class ReviewViewModelTest {
             purged += it
             for (image in it) inside.remove(inside.first { item -> item.original == image })
         }
+
+        override suspend fun purgeItems(files: Collection<File>) = emptyList<MediaRef>()
 
         override suspend fun purgeExpired() = ExpiredPurge.NONE
     }
@@ -1491,9 +1582,9 @@ class ReviewViewModelTest {
         twoPages(more = PAGE_SIZE + 1)
         var gate: CompletableDeferred<Unit>? = null
         val trash = object : Trash by RecordingTrash() {
-            override suspend fun moveToTrash(images: List<MediaRef>): List<MediaRef> {
+            override suspend fun moveToTrash(images: List<MediaRef>): List<TrashedImage> {
                 gate?.await()
-                return images
+                return images.asItems()
             }
         }
         val model = ReviewViewModel(app, Review(app.index, trash))
@@ -1582,3 +1673,6 @@ class ReviewViewModelTest {
         assertEquals(Screen.Trash(Destination.Settings), model.state.value.screen)
     }
 }
+
+/** Trash items for [this], for a fake trash that moves nothing: a file name per path, in no real folder. */
+private fun List<MediaRef>.asItems() = map { TrashedImage(it, Instant.EPOCH, File("/trash/${it.path}"), Instant.EPOCH) }

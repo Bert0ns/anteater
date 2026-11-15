@@ -61,8 +61,11 @@ data class TrashedImage(
 )
 
 interface Trash {
-    /** Moves images to the trash. Returns the ones moved: a file gone or changed since its scan stays put. */
-    suspend fun moveToTrash(images: List<MediaRef>): List<MediaRef>
+    /**
+     * Moves images to the trash. Returns the item each moved image became: a file gone or changed since its scan stays
+     * put. An item's [TrashedImage.file] is its exact name, since two items can hold equal originals.
+     */
+    suspend fun moveToTrash(images: List<MediaRef>): List<TrashedImage>
 
     /** Moves images back to their original path. Returns the ones restored: an occupied path is never overwritten. */
     suspend fun restore(images: List<MediaRef>): List<MediaRef>
@@ -74,6 +77,12 @@ interface Trash {
      * go only when it is listed twice. Returns the ones deleted: a file the system would not delete is still in the trash.
      */
     suspend fun purge(images: List<MediaRef>): List<MediaRef>
+
+    /**
+     * Deletes for good the items whose files in the trash are [files], and no other, even one with an equal original.
+     * Returns the originals it deleted: an item already gone, or a file that is no trash item, deletes nothing.
+     */
+    suspend fun purgeItems(files: Collection<File>): List<MediaRef>
 
     /** Deletes what has been in the trash for longer than the retention the user chose. Returns what it deleted. */
     suspend fun purgeExpired(): ExpiredPurge
@@ -122,10 +131,14 @@ class AppTrash(
     /** Moves a file without replacing one already there. Tests swap it to fail a step. */
     internal var mover: (File, File) -> Unit = { from, to -> Files.move(from.toPath(), to.toPath()) }
 
-    override suspend fun moveToTrash(images: List<MediaRef>): List<MediaRef> = io {
+    override suspend fun moveToTrash(images: List<MediaRef>): List<TrashedImage> = io {
         val flagged = flagged(images.map { it.path })
-        val moved = images.filter { move(it, favorite = it.path in flagged) != null }
-        changed(moved.map { it.path })
+        val moved = images.mapNotNull { image ->
+            val favorite = image.path in flagged
+            val now = clock.instant()
+            move(image, favorite = favorite, now = now)?.let { TrashedImage(image, now, File(it, File(image.path).name), now + retention(), now, favorite = favorite) }
+        }
+        changed(moved.map { it.original.path })
         moved
     }
 
@@ -211,6 +224,14 @@ class AppTrash(
         }.map { it.original }
     }
 
+    override suspend fun purgeItems(files: Collection<File>): List<MediaRef> = io {
+        files.mapNotNull { file ->
+            val folder = file.parentFile?.takeIf { it.parentFile?.name == TRASH_FOLDER } ?: return@mapNotNull null
+            val item = readItem(folder)?.takeIf { it.file == file } ?: return@mapNotNull null
+            item.original.takeIf { deleteItem(folder) }
+        }
+    }
+
     override suspend fun purgeExpired(): ExpiredPurge = io {
         val now = clock.instant()
         val expired = mutableListOf<MediaRef>()
@@ -226,7 +247,7 @@ class AppTrash(
     }
 
     /** Returns the item folder the file went to, or null if it stayed where it was. */
-    private fun move(image: MediaRef, compressedCopy: MediaRef? = null, favorite: Boolean = false): File? {
+    private fun move(image: MediaRef, compressedCopy: MediaRef? = null, favorite: Boolean = false, now: Instant = clock.instant()): File? {
         val file = File(image.path)
         if (file.name == ORIGIN) return null
         if (!file.isFile || runCatching { file.toMediaRef(image.mediaType) }.getOrNull() != image) return null
@@ -235,7 +256,6 @@ class AppTrash(
         try {
             if (!folder.mkdirs()) return null
             File(root, ".nomedia").createNewFile()
-            val now = clock.instant()
             recordWriter(folder, image, now, now, compressedCopy, favorite)
             if (file.renameTo(File(folder, file.name))) return folder
         } catch (_: IOException) {

@@ -97,12 +97,16 @@ data class Page(val groups: List<ReviewGroup>, val remaining: Int)
 /** What an image in [Decision.kept] had before: its review state, and the signals and detectors it was kept with. */
 data class PreviousReview(val state: ReviewState, val kept: Set<SignalIdentity>, val detectors: Set<String>)
 
-/** What applying a page did, so it can be undone. [previous] holds what each image in [kept] had before. */
+/**
+ * What applying a page did, so it can be undone. [previous] holds what each image in [kept] had before, and [items] the
+ * trash items the page made, which name exactly what "Free now" may delete (docs/design.md §9).
+ */
 data class Decision(
     val trashed: List<MediaRef>,
     val kept: List<MediaRef>,
     val failed: List<MediaRef>,
     val previous: Map<String, PreviousReview> = emptyMap(),
+    val items: List<TrashedImage> = emptyList(),
 )
 
 /** One ranking and the index it came from, valid while the index is at [version]. */
@@ -265,10 +269,11 @@ class Review(
     suspend fun apply(toTrash: List<MediaRef>, toKeep: List<MediaRef>): Decision = withContext(NonCancellable) {
         // Read first: a row that is missing fails before any file moves.
         val previous = toKeep.associate { it.path to PreviousReview(index.reviewState(it.path), index.keptSignals(it.path), index.keptDetectors(it.path)) }
-        val moved = trash.moveToTrash(toTrash)
+        val items = trash.moveToTrash(toTrash)
+        val moved = items.map { it.original }
         moved.forEach { index.setReviewState(it.path, ReviewState.TRASHED) }
         toKeep.forEach { index.setReviewState(it.path, ReviewState.KEPT) }
-        Decision(moved, toKeep, toTrash - moved.toSet(), previous)
+        Decision(moved, toKeep, toTrash - moved.toSet(), previous, items)
     }
 
     /**
@@ -333,6 +338,14 @@ class Review(
             index.setReviewState(it.path, if (fresh) ReviewState.UNREVIEWED else ReviewState.KEPT)
         }
         restored
+    }
+
+    /** Which of [items] are still in the trash: a restore or a delete may have taken some since. */
+    suspend fun stillTrashed(items: List<TrashedImage>): List<TrashedImage> = withContext(Dispatchers.IO) { items.filter { it.file.isFile } }
+
+    /** Deletes exactly [items] from the trash for good, never another item with an equal original, and forgets their rows as [purge] does. */
+    suspend fun purgeItems(items: List<TrashedImage>) {
+        index.forgetTrashed(trash.unheldPaths(trash.purgeItems(items.map { it.file })))
     }
 
     /** Deletes images from the trash for good, and from the index with them. An image the trash could not delete keeps its row, and so does a new file now at its path. */

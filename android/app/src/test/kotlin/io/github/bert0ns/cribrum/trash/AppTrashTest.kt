@@ -70,7 +70,7 @@ class AppTrashTest {
     fun `a video moves to the trash and back as a video`() = test {
         val clip = video("DCIM/Camera/clip.mp4")
 
-        assertEquals(listOf(clip), moveToTrash(listOf(clip)))
+        assertEquals(listOf(clip), moveToTrash(listOf(clip)).map { it.original })
         assertEquals(clip, trashed().single().original)
 
         assertEquals(listOf(clip), restore(listOf(clip)))
@@ -147,6 +147,52 @@ class AppTrashTest {
     }
 
     @Test
+    fun `moving returns the item each file became, as the trash lists it`() = test {
+        val image = photo("DCIM/n.jpg")
+
+        val moved = moveToTrash(listOf(image, photo("DCIM/gone.jpg").also { File(it.path).delete() }))
+
+        assertEquals(trashed(), moved)
+    }
+
+    /** The same file trashed twice: put back with its size and mtime, say by a sync app, and trashed again. */
+    private suspend fun AppTrash.twice(path: String): Pair<TrashedImage, TrashedImage> {
+        val first = moveToTrash(listOf(photo(path))).single()
+        clock.now += Duration.ofHours(1)
+        val second = moveToTrash(listOf(photo(path))).single()
+        assertEquals(first.original, second.original)
+        return first to second
+    }
+
+    @Test
+    fun `purging items deletes exactly the ones named, never another with an equal original`() = test {
+        val (first, second) = twice("DCIM/again.jpg")
+
+        assertEquals(listOf(first.original), purgeItems(listOf(first.file)))
+
+        assertEquals(listOf(second), trashed())
+    }
+
+    @Test
+    fun `purging an item already gone deletes nothing, even with an equal original still in the trash`() = test {
+        val (first, second) = twice("DCIM/again.jpg")
+        purgeItems(listOf(second.file))
+
+        assertEquals(emptyList<MediaRef>(), purgeItems(listOf(second.file)))
+
+        assertEquals(listOf(first), trashed())
+    }
+
+    @Test
+    fun `purging items ignores a file outside the trash`() = test {
+        val image = photo("DCIM/outside.jpg")
+
+        assertEquals(emptyList<MediaRef>(), purgeItems(listOf(File(image.path))))
+
+        assertTrue(File(image.path).exists())
+    }
+
+    @Test
     fun `an item with a media type this build does not know reads as an image, so it is listed, restored and purged`() = test {
         val image = photo("DCIM/later.jpg")
         val expiring = photo("DCIM/expiring.jpg")
@@ -181,7 +227,7 @@ class AppTrashTest {
     fun `moving takes the file out of its folder and keeps where it was`() = test {
         val image = photo("DCIM/Camera/a.jpg")
 
-        assertEquals(listOf(image), moveToTrash(listOf(image)))
+        assertEquals(listOf(image), moveToTrash(listOf(image)).map { it.original })
 
         assertFalse(File(image.path).exists())
         val item = trashed().single()
@@ -235,7 +281,7 @@ class AppTrashTest {
         val gone = photo("DCIM/f.jpg")
         File(gone.path).delete()
 
-        assertEquals(emptyList<MediaRef>(), moveToTrash(listOf(changedFile, gone)))
+        assertEquals(emptyList<TrashedImage>(), moveToTrash(listOf(changedFile, gone)))
 
         assertTrue(File(changedFile.path).exists())
         assertEquals(emptyList<TrashedImage>(), trashed())
@@ -245,7 +291,7 @@ class AppTrashTest {
     fun `a file outside every volume is not moved`() = test {
         val outside = File(folder.root, "elsewhere.jpg").apply { writeText("x") }.toMediaRef()
 
-        assertEquals(emptyList<MediaRef>(), moveToTrash(listOf(outside)))
+        assertEquals(emptyList<TrashedImage>(), moveToTrash(listOf(outside)))
 
         assertTrue(File(outside.path).exists())
     }
@@ -384,7 +430,7 @@ class AppTrashTest {
     fun `refuses to move a file named origin properties`() = test {
         val originFile = photo("DCIM/origin.properties")
 
-        assertEquals(emptyList<MediaRef>(), moveToTrash(listOf(originFile)))
+        assertEquals(emptyList<TrashedImage>(), moveToTrash(listOf(originFile)))
 
         assertTrue(File(originFile.path).isFile)
         assertTrue(trashed().isEmpty())
@@ -507,7 +553,7 @@ class AppTrashTest {
         val image = photo("DCIM/write_fail.jpg")
         recordWriter = { _, _, _, _, _, _ -> throw IOException("simulated disk full") }
 
-        assertEquals(emptyList<MediaRef>(), moveToTrash(listOf(image)))
+        assertEquals(emptyList<TrashedImage>(), moveToTrash(listOf(image)))
 
         assertTrue(File(image.path).exists())
         val trashRoot = File(volume, TRASH_FOLDER)
@@ -520,7 +566,7 @@ class AppTrashTest {
         val sourceDir = File(image.path).parentFile!!
         sourceDir.setWritable(false)
         try {
-            assertEquals(emptyList<MediaRef>(), moveToTrash(listOf(image)))
+            assertEquals(emptyList<TrashedImage>(), moveToTrash(listOf(image)))
             assertTrue(File(image.path).exists())
             val trashRoot = File(volume, TRASH_FOLDER)
             assertEquals(emptyList<File>(), trashRoot.listFiles()?.filter { it.isDirectory }.orEmpty())
@@ -657,7 +703,7 @@ class AppTrashTest {
         val image = photo("DCIM/Camera/a.jpg")
         favorites = { throw SecurityException("simulated") }
 
-        assertEquals(listOf(image), moveToTrash(listOf(image)))
+        assertEquals(listOf(image), moveToTrash(listOf(image)).map { it.original })
         assertFalse(trashed().single().favorite)
     }
 
