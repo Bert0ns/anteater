@@ -6,7 +6,7 @@
       "height": 48,
       "duration_ms": 1000,
       "frame_rate": 30.0,
-      "bitrate": 44880,
+      "bitrate": 57584,
       "has_audio": true,
       "video_codec": "video/avc",
       "hdr": false,
@@ -22,6 +22,28 @@
       "video_codec": "video/avc",
       "hdr": false,
       "captured_at": "2024-05-01T12:20:35"
+    },
+    "ntsc.mp4": {
+      "width": 64,
+      "height": 48,
+      "duration_ms": 1001,
+      "frame_rate": 29.97,
+      "bitrate": 28460,
+      "has_audio": false,
+      "video_codec": "video/avc",
+      "hdr": false,
+      "captured_at": null
+    },
+    "prores.mov": {
+      "width": 64,
+      "height": 48,
+      "duration_ms": 1000,
+      "frame_rate": 30.0,
+      "bitrate": 164872,
+      "has_audio": false,
+      "video_codec": null,
+      "hdr": false,
+      "captured_at": null
     },
     "hdr.mp4": {
       "width": 64,
@@ -46,6 +68,9 @@
       "captured_at": null
     }
   },
+  "phone_may_not_read": [
+    "prores.mov"
+  ],
   "no_video_track": [
     "audio.mp4"
   ],
