@@ -44,7 +44,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.pluralStringResource
@@ -265,16 +264,23 @@ private fun VideoTile(item: VideoItem, selected: Boolean, onHold: () -> Unit, on
     }
 }
 
-/** The videos of the list at full size, over the viewer the review and Compress share: a still frame until #388 plays them (§8). */
+/**
+ * The videos of the list at full size, over the viewer the review and Compress share: a tap on a video plays it, with the controls
+ * and the strip of frames in the bar, and a swipe to another video stops it (§8).
+ */
 @Composable
 private fun FullSize(videos: List<VideoItem>, start: VideoItem, selected: Set<String>, onToggle: (String) -> Unit, onClose: () -> Unit) {
+    val playback = rememberVideoPlayback()
     val image: @Composable (Int) -> Unit = { page ->
-        videos.getOrNull(page)?.let { VideoFrame(File(it.video.path), "Videos.fullSize", Modifier.fillMaxSize().clickable(onClick = onClose), ContentScale.Fit, it.unreadable) }
+        videos.getOrNull(page)?.let { VideoPage(File(it.video.path), "Videos.fullSize", playback, it.unreadable, onClose) }
     }
-    FullSizeViewer(videos.map { it.video.path }, start.video.path, onClose, image) { page ->
+    FullSizeViewer(videos.map { it.video.path }, start.video.path, onClose, image, onPage = { playback.stop() }) { page ->
         val item = videos.getOrNull(page) ?: return@FullSizeViewer // the list emptied under the dialog; the screen closes it next
         FullSizeToggle(item.video.path in selected, stringResource(R.string.video_tile_selected), MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary) { onToggle(item.video.path) }
         FullSizeBar(item.video.path, item.isFavorite, heart = { if (item.isFavorite) FavoriteHeart(description = stringResource(R.string.favorite_video)) }) {
+            val file = File(item.video.path)
+            val length = item.durationMs ?: if (item.unreadable) null else rememberLengthMillis(file, "${item.video.path}|${item.video.size}|${item.video.mtimeNs}")
+            VideoControls(playback, file, "Videos.fullSize", length, item.unreadable)
             Text(videoDetails(item.video.size, item.lengthText()), color = Color.White, style = MaterialTheme.typography.bodyMedium)
         }
     }

@@ -1,6 +1,7 @@
 package io.github.bert0ns.cribrum.ui
 
 import android.media.MediaMetadataRetriever
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -19,6 +20,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -29,6 +31,7 @@ import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.trash.TrashedImage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -292,6 +295,22 @@ class TrashScreenTest {
         compose.onNodeWithTag("fullSize").assertExists()
         compose.onNodeWithText("Video, 412 MB").assertExists()
         compose.onNodeWithText("27 days left").assertExists()
+    }
+
+    @Test
+    fun `a video in the trash plays at full size, and closing the view releases the player`() {
+        val players = Players()
+        compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { TrashScreen(listOf(clip), emptySet(), {}, { _, _ -> }, {}, {}) } }
+        compose.onNodeWithContentDescription("clip.mp4", substring = true).performTouchInput { longClick() }
+
+        compose.onAllNodesWithContentDescription("Play video").onFirst().performClick()
+        compose.waitForIdle()
+
+        assertEquals(listOf(clip.file.path), players.made.single().paths)
+        assertTrue(players.made.single().playing)
+        compose.onNodeWithContentDescription("Close").performClick()
+        compose.waitForIdle()
+        assertTrue(players.made.single().released)
     }
 
     @Test
