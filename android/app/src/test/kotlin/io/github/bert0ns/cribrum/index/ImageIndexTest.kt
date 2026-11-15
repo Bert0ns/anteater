@@ -114,6 +114,15 @@ class ImageIndexTest {
     }
 
     @Test
+    fun `imageCount counts the images only, so an index of videos still reads as empty`() = test {
+        record(MediaRef("/videos/v.mp4", 900, 1, MediaType.VIDEO))
+        assertEquals(0, imageCount())
+
+        record(PHOTO)
+        assertEquals(1, imageCount())
+    }
+
+    @Test
     fun `a file whose media type changed with its size is recorded with the new one`() = test {
         record(PHOTO)
         val video = MediaRef(PHOTO.path, 900, 1, MediaType.VIDEO)
