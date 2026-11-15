@@ -112,6 +112,7 @@
         <item quantity="other">%d days left</item>
     </plurals>
     <string name="restore">Restore %1$d</string>
+    <string name="trash_holds">The trash still takes up %1$s.</string>
     <string name="empty_trash">Empty trash</string>
     <string name="select_all">Select all</string>
     <string name="deselect_all">Deselect all</string>
