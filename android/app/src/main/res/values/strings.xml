@@ -165,6 +165,15 @@
     <string name="video_details">Video, %1$s</string>
     <!-- On the tile of a video whose frame cannot be shown, in the trash and in "Largest videos". -->
     <string name="video_unreadable">Can\'t be read</string>
+    <!-- The controls of a video at full size (docs/design.md §8). -->
+    <string name="video_play">Play video</string>
+    <string name="video_pause">Pause video</string>
+    <string name="video_seek">Position in the video</string>
+    <string name="video_mute">Mute</string>
+    <string name="video_unmute">Unmute</string>
+    <!-- A frame of the strip under the controls: %1$s is a time such as "01:42". -->
+    <string name="video_go_to">Go to %1$s</string>
+    <string name="video_play_failed">This video can\'t be played.</string>
     <!-- The two tabs of Clean, and "Largest videos", the first row of the Videos tab (docs/design.md §8). -->
     <string name="tab_photos">Photos</string>
     <string name="tab_videos">Videos</string>

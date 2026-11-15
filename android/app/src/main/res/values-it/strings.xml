@@ -208,6 +208,13 @@
     </plurals>
     <string name="video_details">Video, %1$s</string>
     <string name="video_unreadable">Non leggibile</string>
+    <string name="video_play">Riproduci il video</string>
+    <string name="video_pause">Metti in pausa il video</string>
+    <string name="video_seek">Posizione nel video</string>
+    <string name="video_mute">Disattiva l\'audio</string>
+    <string name="video_unmute">Attiva l\'audio</string>
+    <string name="video_go_to">Vai a %1$s</string>
+    <string name="video_play_failed">Non è possibile riprodurre questo video.</string>
     <string name="tab_photos">Foto</string>
     <string name="tab_videos">Video</string>
     <string name="videos_largest">Video più grandi</string>
