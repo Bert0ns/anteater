@@ -79,6 +79,16 @@ class ScanStatusTest {
     }
 
     @Test
+    fun `a video scan that waits to start shows on the Photos tab as starting, with its Stop`() {
+        compose.setContent { ScanStatus(ScanProgress("", 0, 0, kind = ScanKind.VIDEOS, waiting = true), onScan = {}) }
+
+        compose.onNodeWithText("Scan now").assertDoesNotExist()
+        compose.onNodeWithText("Video scan · Starting…").assertExists()
+        compose.onNodeWithText("Video scan · Phase 1 of 2").assertDoesNotExist()
+        compose.onNodeWithText("Stop scanning").assertExists()
+    }
+
+    @Test
     fun `Scan videos waits while a compression runs`() {
         compose.setContent { ScanStatus(progress = null, onScan = {}, compressing = true, kind = ScanKind.VIDEOS) }
 

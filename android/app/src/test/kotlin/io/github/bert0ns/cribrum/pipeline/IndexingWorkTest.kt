@@ -6,8 +6,10 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.work.Clock
 import androidx.work.Configuration
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.ForegroundInfo
 import androidx.work.ListenableWorker
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerFactory
@@ -58,6 +60,7 @@ import java.time.Duration
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.util.TimeZone
+import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -348,6 +351,64 @@ class IndexingWorkTest {
         assertEquals(1, scans.get())
         assertTrue(Indexing.VIDEO_TAG in scheduled().single().tags)
         assertEquals(ScanKind.VIDEOS, runBlocking { withTimeout(10_000) { Indexing.progress(app).filterNotNull().first() } }.kind)
+    }
+
+    /** A request WorkManager put back after its process was killed, which waits to start again, held by its delay. */
+    private fun waiting(videos: Boolean): UUID {
+        val builder = OneTimeWorkRequestBuilder<IndexWorker>().addTag(Indexing.TAG).setInitialDelay(Duration.ofHours(1))
+        val request = (if (videos) builder.addTag(Indexing.VIDEO_TAG) else builder).build()
+        WorkManager.getInstance(app).enqueueUniqueWork(Indexing.WORK, ExistingWorkPolicy.KEEP, request)
+        return request.id
+    }
+
+    private fun progressNow() = runBlocking { withTimeout(10_000) { Indexing.progress(app).first() } }
+
+    @Test
+    fun `a Scan videos that waits to start shows as starting, Scan now adds nothing, and the video scan runs`() {
+        val request = waiting(videos = true)
+
+        assertEquals(ScanProgress("", 0, 0, kind = ScanKind.VIDEOS, waiting = true), progressNow())
+
+        Indexing.scanNow(app)
+
+        assertEquals(0, scans.get())
+        assertEquals(listOf(request), scheduled().map { it.id })
+
+        WorkManagerTestInitHelper.getTestDriver(app)!!.setInitialDelayMet(request)
+
+        assertEquals(1, scans.get())
+        assertEquals(ScanProgress("detectors", 1, 2, kind = ScanKind.VIDEOS), progressNow())
+    }
+
+    @Test
+    fun `a Scan now that waits to start shows as starting, Scan videos adds nothing, and the photo scan runs`() {
+        val request = waiting(videos = false)
+
+        assertEquals(ScanProgress("", 0, 0, kind = ScanKind.IMAGES, waiting = true), progressNow())
+
+        Indexing.scanVideos(app)
+
+        assertEquals(0, scans.get())
+        assertEquals(listOf(request), scheduled().map { it.id })
+
+        WorkManagerTestInitHelper.getTestDriver(app)!!.setInitialDelayMet(request)
+
+        assertEquals(1, scans.get())
+        assertEquals(ScanProgress("detectors", 1, 2), progressNow())
+        assertFalse((app as CribrumApp).videoScans.ran)
+    }
+
+    @Test
+    fun `the app's stop cancels a scan that waits to start, and leaves the nightly request as it was`() {
+        Indexing.schedulePeriodic(app, now)
+        val night = nightly().id
+        val request = waiting(videos = true)
+
+        runBlocking { Indexing.stop(app) }
+
+        assertEquals(WorkInfo.State.CANCELLED, scheduled().single { it.id == request }.state)
+        assertEquals(WorkInfo.State.ENQUEUED, scheduled().single { it.id == night }.state)
+        assertNull(progressNow())
     }
 
     @Test

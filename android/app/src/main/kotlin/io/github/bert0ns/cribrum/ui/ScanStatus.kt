@@ -72,6 +72,12 @@ fun ScanStatus(
                     )
                 }
             }
+            // A request that waits to start has no phase yet, and the other tab's button would add nothing.
+            progress.waiting -> {
+                Text(stringResource(R.string.scan_joined, stringResource(Indexing.scanName(progress.kind)), stringResource(R.string.scan_starting)))
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+                StopButton(onStop)
+            }
             progress.total == 0 -> {
                 PhaseLine(progress)
                 Text(stringResource(if (progress.kind == ScanKind.VIDEOS) R.string.scan_step_scan_videos else R.string.scan_step_scan, progress.done))
