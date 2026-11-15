@@ -463,6 +463,12 @@ class ReviewViewModelTest {
         model.excludeFolder("/sdcard/Family")
         settle(model) { it.state.value.lastExclusion != null }
         assertEquals(Folder.EMPTY, model.state.value.storageMap.single())
+
+        model.undoExclusion()
+        settle(model) { it.state.value.lastExclusion == null }
+        val back = model.state.value.storageMap.single()
+        assertEquals(1, back.videoCount)
+        assertEquals(9_000L, back.videoSize)
     }
 
     @Test
