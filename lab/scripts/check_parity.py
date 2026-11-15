@@ -32,8 +32,9 @@ ANDROID_VERSION = re.compile(r"override val version = (\d+)")
 ANDROID_CONSTANT = re.compile(
     rf"\bval ([A-Z][A-Z0-9_]*)(?::\s*\w+)? = {NUMBER}f?\s*(?://.*)?$", re.M
 )
-LAB_MEDIA_TYPES = re.compile(r"^\s+media_types\b.*$", re.M)
-ANDROID_MEDIA_TYPES = re.compile(r"\boverride val mediaTypes\b.*$", re.M)
+# A declaration up to the bracket that closes its set, so one the formatter wraps is read whole.
+LAB_MEDIA_TYPES = re.compile(r"^\s+media_types\b[^=\n]*=\s*(?:frozenset\(\s*)?\{([^}]*)\}", re.M)
+ANDROID_MEDIA_TYPES = re.compile(r"\boverride val mediaTypes\b[^=]*=\s*setOf\(([^)]*)\)")
 SKIPPED = re.compile(r"^(?:val )?SKIPPED_ON_STICKERS\b.*$", re.M)
 WEIGHT = re.compile(rf"\b((?:Category|Protection)\.\w+)\s*(?::|to)\s*{NUMBER}")
 
@@ -52,7 +53,7 @@ def values(source: str, id_re, version_re, constant_re, owner=None) -> dict[str,
         found |= {f"ranker.{name}": number for name, number in WEIGHT.findall(source)}
     else:
         declared = (LAB_MEDIA_TYPES if id_re is LAB_ID else ANDROID_MEDIA_TYPES).search(source)
-        types = set(re.findall(r"MediaType\.(\w+)", declared.group())) if declared else {"IMAGE"}
+        types = set(re.findall(r"MediaType\.(\w+)", declared.group(1))) if declared else {"IMAGE"}
         found[f"{owner}.media_types"] = ",".join(sorted(t.lower() for t in types))
     return found
 
