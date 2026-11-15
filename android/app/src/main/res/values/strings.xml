@@ -10,6 +10,10 @@
     <string name="scan_phase_classification">Classifying the images</string>
     <string name="scan_phase_groups">Finding duplicates and bursts</string>
     <string name="scan_phase_number">Phase %1$d of %2$d</string>
+    <string name="scan_phase_video_scan">Looking for videos</string>
+    <string name="scan_phase_video_metadata">Reading the videos</string>
+    <string name="scan_kind_images">Photo scan</string>
+    <string name="scan_kind_videos">Video scan</string>
     <string name="scan_heat_slow">The phone is hot, so the scan is slower</string>
     <string name="scan_starting">Starting…</string>
     <string name="scan_progress">%1$d of %2$d</string>

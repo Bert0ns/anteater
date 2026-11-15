@@ -42,6 +42,10 @@
     <string name="scan_phase_classification">Classificazione delle immagini</string>
     <string name="scan_phase_groups">Ricerca di duplicati e raffiche</string>
     <string name="scan_phase_number">Fase %1$d di %2$d</string>
+    <string name="scan_phase_video_scan">Ricerca dei video</string>
+    <string name="scan_phase_video_metadata">Lettura dei video</string>
+    <string name="scan_kind_images">Scansione delle foto</string>
+    <string name="scan_kind_videos">Scansione dei video</string>
     <string name="scan_heat_slow">Il telefono è caldo, quindi la scansione è più lenta</string>
     <string name="scan_starting">Avvio…</string>
     <string name="scan_progress">%1$d di %2$d</string>
