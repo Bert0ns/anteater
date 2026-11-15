@@ -38,7 +38,8 @@ interface MediaSource {
 
     /**
      * What the last [scan] counted, for the scan-time log: folders listed, entries listed, files whose head was sniffed,
-     * MediaStore rows, and files a later source found that an earlier one already had. A source counts what it does.
+     * the ftyp and EBML files turned away by an unknown brand, in all and by brand, MediaStore rows, and files a later
+     * source found that an earlier one already had. A source counts what it does.
      */
     val counts: Map<String, Int> get() = emptyMap()
 }
@@ -96,6 +97,8 @@ class FilesystemMediaSource(
         var folderCount = 0
         var entryCount = 0
         var sniffCount = 0
+        // The ftyp and EBML files turned away by a brand the list does not know: a video format it misses shows in the scan log.
+        val unknownBrands = sortedMapOf<String, Int>()
         var listedAll = true
         // By path, so a file the index holds is yielded with the media type it was recorded with.
         val known = indexed().associateBy { it.path }
@@ -134,11 +137,12 @@ class FilesystemMediaSource(
                     val type = if (again) {
                         null
                     } else {
-                        try {
-                            mediaType(file)
+                        val head = try {
+                            head(file)
                         } catch (_: IOException) {
                             continue // the head cannot be read
                         }
+                        mediaType(head).also { if (it == null) unknownBrand(head)?.let { brand -> unknownBrands.merge(brand, 1, Int::plus) } }
                     }
                     if (type == null) {
                         metNotImages += image.path
@@ -164,7 +168,8 @@ class FilesystemMediaSource(
             if (listedAll) notImages.forgetNotImages(remembered.map { it.path }.filter { it !in metNotImages && File(it).startsWith(root) })
         }
         if (listedAll) walkedRoots = listOf(root)
-        counts = mapOf("folders" to folderCount, "entries" to entryCount, "sniffed" to sniffCount)
+        counts = mapOf("folders" to folderCount, "entries" to entryCount, "sniffed" to sniffCount, "unknownContainers" to unknownBrands.values.sum()) +
+            unknownBrands.mapKeys { (brand, _) -> "unknownBrand '$brand'" }
     }.flowOn(Dispatchers.IO)
 }
 
@@ -281,20 +286,41 @@ private val VIDEO_BRANDS = setOf(
 /** Enough for the magic bytes of every format and the brand list of a typical ftyp box. */
 private const val HEAD_SIZE = 64
 
+/** The first [HEAD_SIZE] bytes of [file], fewer for a shorter file. */
+private fun head(file: File): ByteArray = file.inputStream().use { input ->
+    val buffer = ByteArray(HEAD_SIZE)
+    var read = 0
+    while (read < HEAD_SIZE) read += input.read(buffer, read, HEAD_SIZE - read).takeIf { it > 0 } ?: break
+    buffer.copyOf(read)
+}
+
+/** Major brands of what is known not to be a video: audio, and Canon's raw photos. The walk turns them away without counting them as an unknown brand. */
+private val NOT_VIDEO_BRANDS = setOf("M4A ", "M4B ", "M4P ", "crx ")
+
 /**
- * What the head of the file says it is, or null for neither an image nor a video.
+ * For a head [mediaType] turned away, the brand of its ftyp or EBML container when it is not one known to be something
+ * other than a video: an ftyp major brand, or `ebml/` and the DocType. Null for a file that is no such container.
+ */
+internal fun unknownBrand(head: ByteArray): String? {
+    val text = String(head, Charsets.ISO_8859_1)
+    fun printable(value: String) = value.map { if (it.isISOControl() || it.code > 0x7e) '?' else it }.joinToString("")
+    if (text.startsWith("ftyp", 4) && head.size >= 12) return text.substring(8, 12).takeIf { it !in NOT_VIDEO_BRANDS }?.let(::printable)
+    if (!text.startsWith("\u001a\u0045\u00df\u00a3")) return null
+    // The DocType element: its ID 0x4282, a one-byte size, then the text.
+    val at = text.indexOf("\u0042\u0082")
+    val size = head.getOrNull(at + 2)?.toInt()?.and(0xff) ?: 0
+    val docType = if (at < 0 || size and 0x80 == 0) "?" else text.substring(at + 3, minOf(head.size, at + 3 + (size and 0x7f)))
+    return "ebml/" + printable(docType)
+}
+
+/**
+ * What the head of a file says it is, or null for neither an image nor a video.
  *
  * The walk remembers the files this refused, by size and mtime (docs/design.md §4). A change that lets
  * the head accept more, such as a new format or HEIF brand, must empty `not_images` in the same change:
  * a Room migration that runs `DELETE FROM not_images`. Otherwise those files are never sniffed again.
  */
-internal fun mediaType(file: File): MediaType? {
-    val head = file.inputStream().use { input ->
-        val buffer = ByteArray(HEAD_SIZE)
-        var read = 0
-        while (read < HEAD_SIZE) read += input.read(buffer, read, HEAD_SIZE - read).takeIf { it > 0 } ?: break
-        buffer.copyOf(read)
-    }
+internal fun mediaType(head: ByteArray): MediaType? {
     fun at(offset: Int, vararg bytes: Int) = head.size >= offset + bytes.size && bytes.indices.all { head[offset + it] == bytes[it].toByte() }
     fun text(offset: Int, value: String) = at(offset, *value.map { it.code }.toIntArray())
     val ftyp = text(4, "ftyp")
