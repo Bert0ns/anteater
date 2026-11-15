@@ -304,8 +304,9 @@ class AppTrash(
         val size = origin.getProperty("size")?.toLongOrNull() ?: return null
         val mtimeNs = origin.getProperty("mtime_ns")?.toLongOrNull() ?: return null
         val purgeAt = maxOf(trashedAt, seenAt) + retention()
-        // An item written before the trash recorded media types holds an image.
-        val mediaType = origin.getProperty("media_type")?.let(MediaType::of) ?: MediaType.IMAGE
+        // An item written before the trash recorded media types holds an image. An unknown type, from a later build, reads as one
+        // too: skipping the item would hide its file from the screen and from the retention for good.
+        val mediaType = MediaType.entries.firstOrNull { it.value == origin.getProperty("media_type") } ?: MediaType.IMAGE
         val compressedSize = origin.getProperty("compressed_size")?.toLongOrNull()
         val compressedMtimeNs = origin.getProperty("compressed_mtime_ns")?.toLongOrNull()
         TrashedImage(
