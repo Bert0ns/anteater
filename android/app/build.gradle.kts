@@ -60,6 +60,8 @@ android {
 
     // ProfileSeedTest runs the seed on the JVM. Only debug has unit tests, and no build for users has this folder.
     sourceSets.getByName("test").kotlin.directories += "src/nonMinifiedRelease/kotlin"
+    // VideoMetadataDeviceTest reads the golden videos with the phone's parsers, which Robolectric lacks.
+    sourceSets.getByName("androidTest").assets.directories += "../../fixtures/videos"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
