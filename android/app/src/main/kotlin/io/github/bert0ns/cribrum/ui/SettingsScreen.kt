@@ -66,6 +66,8 @@ fun SettingsScreen(
     onDeleteEmbeddings: () -> Unit = {},
     hapticsEnabled: Boolean = true,
     onHapticsChange: (Boolean) -> Unit = {},
+    videosAtNight: Boolean = true,
+    onVideosAtNightChange: (Boolean) -> Unit = {},
     coverage: List<Coverage>? = null,
     lastScan: ScanReport? = null,
     lastScanFailed: Boolean = false,
@@ -187,6 +189,15 @@ fun SettingsScreen(
                 supportingContent = { Text(stringResource(R.string.settings_haptics_hint)) },
                 trailingContent = { Switch(hapticsEnabled, null) },
                 modifier = Modifier.toggleable(hapticsEnabled, role = Role.Switch, onValueChange = onHapticsChange),
+            )
+        }
+        // The video part of the night pass (docs/design.md §4).
+        item {
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_videos_at_night)) },
+                supportingContent = { Text(stringResource(R.string.settings_videos_at_night_hint)) },
+                trailingContent = { Switch(videosAtNight, null) },
+                modifier = Modifier.toggleable(videosAtNight, role = Role.Switch, onValueChange = onVideosAtNightChange),
             )
         }
         // The app's language page exists from Android 13, where the system picks the language per app.

@@ -331,6 +331,8 @@
     <string name="settings_trash_retention_applies">Vale anche per le immagini già nel cestino.</string>
     <string name="settings_uninstall_warning">Disinstallando l\'app la cartella del cestino resta, quindi svuotalo prima.</string>
     <string name="settings_haptics">Feedback tattile</string>
+    <string name="settings_videos_at_night">Analizza i video di notte</string>
+    <string name="settings_videos_at_night_hint">Dopo che hai usato Scansiona i video, la scansione notturna analizza anche i nuovi video, dopo le foto.</string>
     <string name="settings_haptics_hint">Una breve vibrazione quando selezioni, salti, tieni o cestini le immagini. Segue anche l\'impostazione del feedback al tocco del telefono.</string>
     <string name="settings_language">Lingua</string>
     <string name="settings_thresholds">Soglie di rilevamento</string>
