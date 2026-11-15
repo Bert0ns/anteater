@@ -7,6 +7,7 @@ import androidx.test.core.app.ApplicationProvider
 import io.github.bert0ns.cribrum.compress.JpegInfo
 import io.github.bert0ns.cribrum.compress.JpegStatus
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
+import io.github.bert0ns.cribrum.metadata.VideoMetadata
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
 import io.github.bert0ns.cribrum.model.MediaRef
@@ -44,6 +45,8 @@ private val NOT_IMAGES_METHODS = setOf("notImages", "addNotImages", "forgetNotIm
 /** What the scan read from JPEG headers for the compress page: it never reaches the review either. */
 private val JPEG_METHODS = setOf("jpegsToRead", "setJpeg", "setJpegBeforeScan", "compressible", "jpegCounts")
 private val META = ImageMetadata(4000, 3000, "image/jpeg", "Google", "Pixel 8", LocalDateTime.of(2024, 5, 1, 10, 20))
+private val VIDEO = MediaRef("/videos/v.mp4", 900, 1, MediaType.VIDEO)
+private val VIDEO_META = VideoMetadata(1080, 1920, 12_345, 29.97, 8_000_000, true, "video/hevc", true, LocalDateTime.of(2024, 5, 1, 12, 20))
 private val BLUR = Signal("blur", 1, Category.BLURRY, 0.7f, mapOf("variance" to "12.5"))
 
 fun memoryIndex() = ImageIndex(
@@ -255,6 +258,37 @@ class ImageIndexTest {
 
             assertEquals(meta, metadata(PHOTO.path))
         }
+    }
+
+    @Test
+    fun `video metadata round trip`() = test {
+        record(VIDEO)
+        for (meta in listOf(VIDEO_META, VideoMetadata(640, 480, null, null, null, false, null, false))) {
+            setVideoMetadata(VIDEO.path, meta)
+
+            assertEquals(meta, videoMetadata(VIDEO.path))
+        }
+        assertEquals(emptyList<MediaRef>(), withoutMetadata())
+    }
+
+    @Test
+    fun `a video shares the capture time column of an image`() = test {
+        record(VIDEO)
+        setVideoMetadata(VIDEO.path, VIDEO_META)
+
+        assertEquals(VIDEO_META.capturedAt, metadata(VIDEO.path)?.capturedAt)
+    }
+
+    @Test
+    fun `a changed video drops its metadata`() = test {
+        record(VIDEO)
+        setVideoMetadata(VIDEO.path, VIDEO_META)
+        val changed = VIDEO.copy(size = 901, mtimeNs = 2)
+
+        record(changed)
+
+        assertNull(videoMetadata(VIDEO.path))
+        assertEquals(listOf(changed), withoutMetadata())
     }
 
     @Test
@@ -471,6 +505,7 @@ class ImageIndexTest {
     fun `unrecorded image throws`() {
         val calls: List<suspend ImageIndex.() -> Unit> = listOf(
             { setMetadata(PHOTO.path, META) },
+            { setVideoMetadata(PHOTO.path, VIDEO_META) },
             { setContentHash(PHOTO.path, "0123abcd") },
             { setUnreadable(PHOTO.path) },
             { setPerceptualHash(PHOTO.path, 42u) },
@@ -849,6 +884,7 @@ class ImageIndexTest {
         "forgetTrashed" to { forgetTrashed(listOf(PHOTO.path)) },
         "setUnreadable" to { setUnreadable(PHOTO.path) },
         "setMetadata" to { setMetadata(PHOTO.path, META) },
+        "setVideoMetadata" to { setVideoMetadata(PHOTO.path, VIDEO_META) },
         "setContentHash" to { setContentHash(PHOTO.path, "abc") },
         "setPerceptualHash" to { setPerceptualHash(PHOTO.path, 1uL) },
         "deleteEmbeddings" to { deleteEmbeddings() },
@@ -878,6 +914,7 @@ class ImageIndexTest {
         "withoutMetadata" to { withoutMetadata() },
         "unreadable" to { unreadable() },
         "metadata" to { metadata(PHOTO.path) },
+        "videoMetadata" to { videoMetadata(PHOTO.path) },
         "allMetadata" to { allMetadata() },
         "contentHash" to { contentHash(PHOTO.path) },
         "perceptualHash" to { perceptualHash(PHOTO.path) },

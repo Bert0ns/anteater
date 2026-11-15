@@ -13,6 +13,7 @@ import io.github.bert0ns.cribrum.compress.Losses
 import io.github.bert0ns.cribrum.compress.Marker
 import io.github.bert0ns.cribrum.folders.isExcluded
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
+import io.github.bert0ns.cribrum.metadata.VideoMetadata
 import io.github.bert0ns.cribrum.model.IndexedMedia
 import io.github.bert0ns.cribrum.model.Kind
 import io.github.bert0ns.cribrum.model.MediaRef
@@ -133,6 +134,38 @@ class ImageIndex(private val db: IndexDatabase) :
     }
 
     suspend fun metadata(path: String): ImageMetadata? = dao.metadata(path)?.let(::metadata)
+
+    suspend fun setVideoMetadata(path: String, metadata: VideoMetadata) = write {
+        require(
+            dao.setVideoMetadata(
+                path,
+                metadata.width,
+                metadata.height,
+                metadata.durationMs,
+                metadata.frameRate,
+                metadata.bitrate,
+                metadata.hasAudio,
+                metadata.videoCodec,
+                metadata.hdr,
+                metadata.capturedAt?.format(ISO_SECONDS),
+            ),
+            path,
+        )
+    }
+
+    suspend fun videoMetadata(path: String): VideoMetadata? = dao.videoMetadata(path)?.let { row ->
+        VideoMetadata(
+            row.width,
+            row.height,
+            row.durationMs,
+            row.frameRate,
+            row.bitrate,
+            row.hasAudio == true,
+            row.videoCodec,
+            row.hdr == true,
+            row.capturedAt?.let { LocalDateTime.parse(it) },
+        )
+    }
 
     /** The metadata of every image that has it, by path: one query, where a group detector would make one per image. */
     suspend fun allMetadata(): Map<String, ImageMetadata> = dao.allMetadata().associate { it.path to metadata(it.metadata) }
@@ -480,7 +513,7 @@ class ImageIndex(private val db: IndexDatabase) :
     }
 
     companion object {
-        fun open(context: Context, name: String = "index.sqlite"): ImageIndex = ImageIndex(Room.databaseBuilder(context, IndexDatabase::class.java, name).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build())
+        fun open(context: Context, name: String = "index.sqlite"): ImageIndex = ImageIndex(Room.databaseBuilder(context, IndexDatabase::class.java, name).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8).build())
     }
 }
 
