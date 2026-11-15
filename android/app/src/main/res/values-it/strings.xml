@@ -417,7 +417,7 @@
     <string name="storage_map_open">Mostra il contenuto</string>
     <string name="settings_storage_map_hint">Dove immagini e video occupano spazio, cartella per cartella. Da lì puoi escludere una cartella.</string>
     <string name="settings_details">Scansioni e archiviazione</string>
-    <string name="storage_map_empty">Finora non è stata trovata nessuna immagine o video</string>
+    <string name="storage_map_empty">Nessuna immagine e nessun video trovati finora</string>
     <string name="storage_map_no_subfolders">Nessuna sottocartella</string>
     <plurals name="storage_map_summary">
         <item quantity="one">%1$s \u2022 %2$d file</item>
