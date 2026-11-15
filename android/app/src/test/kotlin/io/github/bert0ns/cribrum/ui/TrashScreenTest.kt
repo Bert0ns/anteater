@@ -270,6 +270,13 @@ class TrashScreenTest {
     }
 
     @Test
+    fun `a video whose frame cannot be decoded shows a placeholder and a note, not an empty tile`() {
+        compose.setContent { TrashScreen(listOf(clip), emptySet(), {}, { _, _ -> }, {}, {}) }
+
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Can't be read").fetchSemanticsNodes().isNotEmpty() }
+    }
+
+    @Test
     fun `a video whose duration cannot be read still says its size`() {
         compose.setContent { TrashScreen(listOf(clip), emptySet(), {}, { _, _ -> }, {}, {}) }
 

@@ -156,6 +156,54 @@
     </plurals>
     <!-- A trashed video's length (when it could be read) and size, such as "Video, 01:42, 412 MB". -->
     <string name="video_details">Video, %1$s</string>
+    <!-- On the tile of a video whose frame cannot be shown, in the trash and in "Largest videos". -->
+    <string name="video_unreadable">Can\'t be read</string>
+    <!-- The two tabs of Clean, and "Largest videos", the first row of the Videos tab (docs/design.md §8). -->
+    <string name="tab_photos">Photos</string>
+    <string name="tab_videos">Videos</string>
+    <string name="videos_largest">Largest videos</string>
+    <plurals name="videos_count">
+        <item quantity="one">%d video</item>
+        <item quantity="other">%d videos</item>
+    </plurals>
+    <string name="videos_after_scan">Videos appear after the next scan. Tap Scan now on the Photos tab.</string>
+    <string name="videos_none_left">No more videos to review.</string>
+    <string name="videos_hint">Tap a video to select it, hold it to see it full size. Nothing is selected for you.</string>
+    <plurals name="videos_trash">
+        <item quantity="one">Trash %1$d video, %2$s</item>
+        <item quantity="other">Trash %1$d videos, %2$s</item>
+    </plurals>
+    <string name="videos_keep">Keep</string>
+    <string name="video_tile_selected">Selected</string>
+    <string name="video_tile_not_selected">Not selected</string>
+    <plurals name="videos_summary_title">
+        <item quantity="one">Move %d video to the trash?</item>
+        <item quantity="other">Move %d videos to the trash?</item>
+    </plurals>
+    <plurals name="videos_summary_body">
+        <item quantity="one">That is %1$s. You can restore the files from the trash for %2$d day.</item>
+        <item quantity="other">That is %1$s. You can restore the files from the trash for %2$d days.</item>
+    </plurals>
+    <plurals name="videos_summary_favorites">
+        <item quantity="one">%d of them is a favourite in your gallery. Move it to the trash anyway?</item>
+        <item quantity="other">%d of them are favourites in your gallery. Move them to the trash anyway?</item>
+    </plurals>
+    <!-- The heart and the tile of a favourite video: its own string, since the Italian word agrees with "video". -->
+    <string name="favorite_video">Favourite</string>
+    <string name="favorite_appeared_videos_snackbar">A video became a favourite meanwhile. Check the list.</string>
+    <!-- What the snackbar says after a page of videos, where "image" would be wrong. -->
+    <plurals name="trashed_files_snackbar">
+        <item quantity="one">%1$d file moved to the trash, %2$s</item>
+        <item quantity="other">%1$d files moved to the trash, %2$s</item>
+    </plurals>
+    <plurals name="kept_files_snackbar">
+        <item quantity="one">%d file kept</item>
+        <item quantity="other">%d files kept</item>
+    </plurals>
+    <plurals name="not_moved_files_snackbar">
+        <item quantity="one">%d file changed since the scan and stayed where it was</item>
+        <item quantity="other">%d files changed since the scan and stayed where they were</item>
+    </plurals>
     <string name="empty_trash_body">This frees %1$s and cannot be undone.</string>
     <string name="delete">Delete</string>
     <string name="delete_selected">Delete %1$d</string>

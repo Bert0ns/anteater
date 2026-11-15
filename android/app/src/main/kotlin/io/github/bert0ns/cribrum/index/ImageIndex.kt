@@ -34,6 +34,9 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.atomic.AtomicLong
 
+/** A video as "Largest videos" lists it. */
+data class IndexedVideo(val ref: MediaRef, val unreadable: Boolean, val durationMs: Long?)
+
 /** Methods taking a path throw [NoSuchElementException] for an image that was never recorded. */
 class ImageIndex(private val db: IndexDatabase) :
     AutoCloseable,
@@ -376,6 +379,15 @@ class ImageIndex(private val db: IndexDatabase) :
 
     /** Every indexed image not in the trash, with its path, size, and mtime. No video, until the storage map shows them (#386). */
     suspend fun notTrashed(): List<MediaRef> = dao.notTrashed().map(::ref)
+
+    /**
+     * Every video the user has not reviewed, largest first: not in the trash and not kept. The excluded folders are the
+     * caller's to apply. [IndexedVideo.durationMs] is null until the video steps have read the file (docs/design.md §6.5).
+     */
+    suspend fun unreviewedVideos(): List<IndexedVideo> = dao.unreviewedVideos().map { IndexedVideo(MediaRef(it.path, it.size, it.mtimeNs, MediaType.of(it.mediaType)), it.unreadable, it.durationMs) }
+
+    /** Whether the index holds a video, reviewed or not: false until a scan has found one. */
+    suspend fun hasVideos(): Boolean = dao.hasVideos()
 
     /** The EXIF capture time of each image that has one, to order the review by date. The ranker never sees it. A time that does not parse is left out. */
     suspend fun capturedAt(): Map<String, LocalDateTime> = dao.capturedAt().mapNotNull { row ->

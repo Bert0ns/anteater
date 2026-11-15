@@ -1,4 +1,4 @@
-// The images the gallery marks as favourites (docs/design.md §6.2), and putting the mark back (§9). Android only: the lab has no counterpart.
+// The images and videos the gallery marks as favourites (docs/design.md §6.2), and putting the mark back (§9). Android only: the lab has no counterpart.
 package io.github.bert0ns.cribrum.sources
 
 import android.content.ContentResolver
@@ -25,29 +25,37 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.resume
 
 private val IMAGES: Uri get() = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+private val VIDEOS: Uri get() = MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+
+/** The tables a favourite can be in: the Images table holds no video, so each is asked in turn. */
+private val TABLES: List<Uri> get() = listOf(IMAGES, VIDEOS)
 
 /**
- * The paths MediaStore flags with `IS_FAVORITE`, which Samsung Gallery and Google Photos write.
- * One query that returns the favourites only, so it is cheap to ask again whenever it must be fresh.
+ * The paths of the images and videos MediaStore flags with `IS_FAVORITE`, which Samsung Gallery and Google Photos write.
+ * One query for each table, returning the favourites only, so it is cheap to ask again whenever it must be fresh.
  * Blocks: call it off the main thread.
  */
 fun queryFavoritePaths(resolver: ContentResolver): Set<String> {
     val paths = HashSet<String>()
     @Suppress("DEPRECATION") // DATA is the only way to the path, and All files access allows reading it
-    resolver.query(IMAGES, arrayOf(MediaStore.Images.Media.DATA), "${MediaStore.MediaColumns.IS_FAVORITE} = 1", null, null)?.use { cursor ->
-        while (cursor.moveToNext()) cursor.getString(0)?.let(paths::add)
+    for (table in TABLES) {
+        resolver.query(table, arrayOf(MediaStore.MediaColumns.DATA), "${MediaStore.MediaColumns.IS_FAVORITE} = 1", null, null)?.use { cursor ->
+            while (cursor.moveToNext()) cursor.getString(0)?.let(paths::add)
+        }
     }
     return paths
 }
 
-/** Which of [paths] MediaStore flags as favourites: one query for each 500 paths, not one for the whole library. Blocks. */
+/** Which of [paths] MediaStore flags as favourites: one query for each 500 paths and table, not one for the whole library. Blocks. */
 fun queryFavoritesAmong(resolver: ContentResolver, paths: Collection<String>): Set<String> {
     val flagged = HashSet<String>()
     for (chunk in paths.chunked(500)) { // SQLite allows 999 arguments in one query
         @Suppress("DEPRECATION") // DATA, as above
-        val selection = "${MediaStore.Images.Media.DATA} IN (${chunk.joinToString { "?" }}) AND ${MediaStore.MediaColumns.IS_FAVORITE} = 1"
-        resolver.query(IMAGES, arrayOf(MediaStore.Images.Media.DATA), selection, chunk.toTypedArray(), null)?.use { cursor ->
-            while (cursor.moveToNext()) cursor.getString(0)?.let(flagged::add)
+        val selection = "${MediaStore.MediaColumns.DATA} IN (${chunk.joinToString { "?" }}) AND ${MediaStore.MediaColumns.IS_FAVORITE} = 1"
+        for (table in TABLES) {
+            resolver.query(table, arrayOf(MediaStore.MediaColumns.DATA), selection, chunk.toTypedArray(), null)?.use { cursor ->
+                while (cursor.moveToNext()) cursor.getString(0)?.let(flagged::add)
+            }
         }
     }
     return flagged
@@ -115,7 +123,7 @@ object FavoriteRequests {
      * A caller that is cancelled while the dialog waits for the screen withdraws the request.
      */
     suspend fun set(resolver: ContentResolver, path: String, favorite: Boolean): Boolean {
-        val uri = withContext(Dispatchers.IO) { imageUri(resolver, path) } ?: return false
+        val uri = withContext(Dispatchers.IO) { mediaUri(resolver, path) } ?: return false
         return suspendCancellableCoroutine { continuation ->
             val ask = Ask(listOf(uri), { lost -> if (continuation.isActive) continuation.resume(lost == 0) }, { continuation.isActive }, favorite)
             queue.trySend(ask)
@@ -161,25 +169,31 @@ object FavoriteRequests {
     }
 }
 
-/** The MediaStore row of the image at [path], or null when MediaStore does not index it. Blocks. */
-internal fun imageUri(resolver: ContentResolver, path: String): Uri? {
+/** The MediaStore row of the image or video at [path], or null when MediaStore does not index it. Blocks. */
+internal fun mediaUri(resolver: ContentResolver, path: String): Uri? {
     @Suppress("DEPRECATION") // DATA, as for the favourites
-    val selection = "${MediaStore.Images.Media.DATA} = ?"
-    return resolver.query(IMAGES, arrayOf(MediaStore.Images.Media._ID), selection, arrayOf(path), null)?.use { cursor ->
-        if (cursor.moveToFirst()) ContentUris.withAppendedId(IMAGES, cursor.getLong(0)) else null
+    val selection = "${MediaStore.MediaColumns.DATA} = ?"
+    for (table in TABLES) {
+        val uri = resolver.query(table, arrayOf(MediaStore.MediaColumns._ID), selection, arrayOf(path), null)?.use { cursor ->
+            if (cursor.moveToFirst()) ContentUris.withAppendedId(table, cursor.getLong(0)) else null
+        }
+        if (uri != null) return uri
     }
+    return null
 }
 
-/** The MediaStore rows of the images at [paths] that are not favourites. A path with no row is left out. */
+/** The MediaStore rows of the images and videos at [paths] that are not favourites. A path with no row is left out. */
 internal suspend fun unflaggedUris(resolver: ContentResolver, paths: Collection<String>): List<Uri> = withContext(Dispatchers.IO) {
     paths.chunked(500).flatMap { chunk ->
         // SQLite allows 999 arguments in one query
         val uris = mutableListOf<Uri>()
 
         @Suppress("DEPRECATION") // DATA, as for the favourites
-        val selection = "${MediaStore.Images.Media.DATA} IN (${chunk.joinToString { "?" }})"
-        resolver.query(IMAGES, arrayOf(MediaStore.Images.Media._ID, MediaStore.MediaColumns.IS_FAVORITE), selection, chunk.toTypedArray(), null)?.use { cursor ->
-            while (cursor.moveToNext()) if (cursor.getInt(1) == 0) uris += ContentUris.withAppendedId(IMAGES, cursor.getLong(0))
+        val selection = "${MediaStore.MediaColumns.DATA} IN (${chunk.joinToString { "?" }})"
+        for (table in TABLES) {
+            resolver.query(table, arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.IS_FAVORITE), selection, chunk.toTypedArray(), null)?.use { cursor ->
+                while (cursor.moveToNext()) if (cursor.getInt(1) == 0) uris += ContentUris.withAppendedId(table, cursor.getLong(0))
+            }
         }
         uris
     }

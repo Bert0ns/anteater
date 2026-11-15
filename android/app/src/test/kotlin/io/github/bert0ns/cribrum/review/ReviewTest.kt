@@ -2,6 +2,7 @@ package io.github.bert0ns.cribrum.review
 
 import io.github.bert0ns.cribrum.index.ExcludedFolderRow
 import io.github.bert0ns.cribrum.index.memoryIndex
+import io.github.bert0ns.cribrum.metadata.VideoMetadata
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
 import io.github.bert0ns.cribrum.model.MediaRef
@@ -1241,5 +1242,64 @@ class ReviewTest {
         assertEquals(1, overview.categories.single { it.category == Category.BLURRY }.count)
         assertEquals(photo.size, overview.freeableBytes)
         assertEquals(listOf(photo), review.notTrashed())
+    }
+
+    private fun video(path: String, bytes: Int): MediaRef = runBlocking {
+        val file = File(volume, path).apply {
+            parentFile!!.mkdirs()
+            writeBytes(ByteArray(bytes))
+        }
+        file.toMediaRef(MediaType.VIDEO).also { index.record(it) }
+    }
+
+    @Test
+    fun `largest videos lists every unreviewed video by size, the trashed, kept and excluded ones left out`() = test {
+        val small = video("Movies/small.mp4", 10)
+        val big = video("Movies/big.mp4", 300)
+        val middle = video("Movies/middle.mp4", 50)
+        val kept = video("Movies/kept.mp4", 400)
+        val trashed = video("Movies/trashed.mp4", 500)
+        val hidden = video("Family/hidden.mp4", 600)
+        image("DCIM/a.jpg", blurry(0.9f))
+        index.setReviewState(kept.path, ReviewState.KEPT)
+        index.setReviewState(trashed.path, ReviewState.TRASHED)
+        excludeFolder(File(hidden.path).parent!!)
+
+        assertEquals(listOf(big, middle, small), largestVideos().map { it.video })
+    }
+
+    @Test
+    fun `largest videos flags a favourite and keeps its place by size, and marks an unreadable one`() = test {
+        val big = video("Movies/big.mp4", 300)
+        val broken = video("Movies/broken.mp4", 200)
+        val small = video("Movies/small.mp4", 10)
+        index.setUnreadable(broken.path)
+        index.setVideoMetadata(small.path, VideoMetadata(1920, 1080, 61_000, 30.0, 1000, true, "video/avc", false, null, null))
+        favorites = setOf(big.path)
+
+        val items = largestVideos()
+
+        assertEquals(listOf(big, broken, small), items.map { it.video })
+        assertEquals(listOf(true, false, false), items.map { it.isFavorite })
+        assertEquals(listOf(false, true, false), items.map { it.unreadable })
+        assertEquals(listOf(null, null, 61_000L), items.map { it.durationMs })
+    }
+
+    @Test
+    fun `trashing and keeping videos works as for images, and undo puts them back in the list`() = test {
+        val big = video("Movies/big.mp4", 300)
+        val middle = video("Movies/middle.mp4", 50)
+        val small = video("Movies/small.mp4", 10)
+
+        val decision = apply(listOf(big), listOf(middle))
+
+        assertEquals(listOf(big), decision.trashed)
+        assertEquals(listOf(small), largestVideos().map { it.video })
+        assertFalse(File(big.path).exists())
+
+        undo(decision)
+
+        assertEquals(listOf(big, middle, small), largestVideos().map { it.video })
+        assertTrue(File(big.path).exists())
     }
 }

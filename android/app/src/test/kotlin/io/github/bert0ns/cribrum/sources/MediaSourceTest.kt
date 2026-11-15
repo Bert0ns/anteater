@@ -670,6 +670,60 @@ class MediaStoreSourceTest {
         assertEquals(mapOf("mediaStoreRows" to 3, "duplicates" to 2), source.counts)
     }
 
+    private class MemoryStore(var remembered: Collection<MediaRef> = emptyList()) : NotImages {
+        override suspend fun notImages(): Collection<MediaRef> = remembered
+
+        override suspend fun addNotImages(files: List<MediaRef>) {
+            remembered = remembered + files
+        }
+
+        override suspend fun forgetNotImages(paths: Collection<String>) = Unit
+    }
+
+    private fun ftyp(brand: String) = byteArrayOf(0, 0, 0, 0x18) + "ftyp$brand".toByteArray() + ByteArray(12)
+
+    private fun writeBytes(path: String, bytes: ByteArray): String = File(root, path).apply {
+        parentFile!!.mkdirs()
+        writeBytes(bytes)
+    }.path
+
+    @Test
+    fun `skips a video with an audio brand that not_images holds with the same size and mtime, and takes it again once it changes`() {
+        val audioOnly = writeBytes("Movies/audio.mp4", ftyp("M4A "))
+        val changed = writeBytes("Movies/changed.mp4", ftyp("M4B "))
+        val fresh = writeBytes("Movies/fresh.mp4", ftyp("M4A "))
+        FakeMedia.videos = listOf(audioOnly to "video/mp4", changed to "video/mp4", fresh to "video/mp4")
+        FakeMedia.paths = emptyList()
+        Robolectric.setupContentProvider(FakeMedia::class.java, MediaStore.AUTHORITY)
+        val store = MemoryStore(listOf(File(audioOnly).toMediaRef(), File(changed).toMediaRef().let { it.copy(mtimeNs = it.mtimeNs - 1) }))
+        val resolver = ApplicationProvider.getApplicationContext<Context>().contentResolver
+
+        val found = runBlocking { MediaStoreSource(resolver, listOf(root), store).scan().toList() }
+
+        assertEquals(listOf(changed, fresh), found.map { it.path })
+    }
+
+    @Test
+    fun `with the walk and MediaStore together a DNG and a video with an unknown brand come out, and an audio-only MP4 does not`() {
+        val dng = writeBytes("DCIM/Camera/IMG_0001.dng", byteArrayOf(0x49, 0x49, 0x2a, 0) + ByteArray(60))
+        val audioOnly = writeBytes("Movies/audio.mp4", ftyp("M4A "))
+        val unknown = writeBytes("Movies/clip.mp4", ftyp("zzzz"))
+        val real = writeBytes("Movies/real.mp4", ftyp("isom"))
+        FakeMedia.paths = listOf(dng)
+        FakeMedia.videos = listOf(audioOnly to "video/mp4", unknown to "video/mp4", real to "video/mp4")
+        Robolectric.setupContentProvider(FakeMedia::class.java, MediaStore.AUTHORITY)
+        val store = MemoryStore()
+        val resolver = ApplicationProvider.getApplicationContext<Context>().contentResolver
+        val merged = MergedMediaSource(listOf(FilesystemMediaSource(root, notImages = store), MediaStoreSource(resolver, listOf(root), store)))
+
+        val found = runBlocking { merged.scan().toList() }
+
+        // The walk sniffed all four into not_images, and found the real one a video.
+        assertEquals(listOf(real, dng, unknown), found.map { it.path })
+        assertEquals(listOf(MediaType.VIDEO, MediaType.IMAGE, MediaType.VIDEO), found.map { it.mediaType })
+        assertEquals(setOf(dng, audioOnly, unknown), store.remembered.map { it.path }.toSet())
+    }
+
     @Test
     fun `skips the app trash, the system trash and pending files`() {
         val trashed = write("$TRASH_FOLDER/0b1c/IMG_1.jpg")

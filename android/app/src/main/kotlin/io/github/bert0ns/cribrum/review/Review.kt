@@ -86,6 +86,12 @@ data class ReviewItem(
     val isFavorite: Boolean = false,
 )
 
+/**
+ * A video in "Largest videos" (docs/design.md §6.5). [durationMs] is null until the video steps have read the file, and an
+ * [unreadable] one stays in the list: the screen shows a placeholder and says so.
+ */
+data class VideoItem(val video: MediaRef, val durationMs: Long?, val unreadable: Boolean, val isFavorite: Boolean)
+
 data class CategorySummary(val category: Category, val count: Int, val hasDetector: Boolean = true, val bytes: Long = 0)
 
 /** The home screen: every category, and the size of all the candidates together, each image counted once. */
@@ -181,6 +187,16 @@ class Review(
             val union = byCategory.values.flatten().associate { it.image.ref.path to it.image.ref.size }
             Overview(categories, union.values.sum())
         }
+    }
+
+    /**
+     * Every video the user has not reviewed, flagged or not, largest first, outside the excluded folders (docs/design.md
+     * §6.5). A list and not a ranking: it needs no signal, and drops no video (D4). A favourite keeps its place by size.
+     */
+    suspend fun largestVideos(): List<VideoItem> = withContext(Dispatchers.Default) {
+        val excluded = index.excludedFolders()
+        val favorites = favorites()
+        index.unreviewedVideos().filterNot { isExcluded(it.ref.path, excluded) }.map { VideoItem(it.ref, it.durationMs, it.unreadable, it.ref.path in favorites) }
     }
 
     /** How many candidates each category would list at [thresholds], which are the ones in use by default. */

@@ -181,6 +181,15 @@ data class StoredSignalId(val path: String, val id: Long)
 
 data class StoredRef(val path: String, val size: Long, @ColumnInfo(name = "mtime_ns") val mtimeNs: Long, @ColumnInfo(name = "media_type") val mediaType: String)
 
+data class StoredVideo(
+    val path: String,
+    val size: Long,
+    @ColumnInfo(name = "mtime_ns") val mtimeNs: Long,
+    @ColumnInfo(name = "media_type") val mediaType: String,
+    val unreadable: Boolean,
+    @ColumnInfo(name = "duration_ms") val durationMs: Long?,
+)
+
 data class StoredMetadata(
     val width: Int,
     val height: Int,
@@ -238,6 +247,12 @@ interface IndexDao {
 
     @Query("SELECT path, size, mtime_ns, media_type FROM images WHERE review_state != 'trashed' AND media_type = 'image' ORDER BY path")
     suspend fun notTrashed(): List<StoredRef>
+
+    @Query("SELECT path, size, mtime_ns, media_type, unreadable, duration_ms FROM images WHERE media_type = 'video' AND review_state = 'unreviewed' ORDER BY size DESC, path")
+    suspend fun unreviewedVideos(): List<StoredVideo>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM images WHERE media_type = 'video')")
+    suspend fun hasVideos(): Boolean
 
     @Query("DELETE FROM images WHERE path IN (:paths)")
     suspend fun forget(paths: List<String>): Int

@@ -63,4 +63,10 @@ class AppliedMessageTest {
             stayedMessage(context, listOf(images[0], clip), listOf(clip)),
         )
     }
+
+    @Test
+    fun `a page of videos says files, not images`() {
+        assertEquals("1 file moved to the trash, 1.0\u00A0MB. 1 file changed since the scan and stayed where it was", appliedMessage(context, Decision(trashed = listOf(clip), kept = emptyList(), failed = listOf(clip.copy(path = "/sdcard/b.mp4")))))
+        assertEquals("1 file kept", appliedMessage(context, Decision(trashed = emptyList(), kept = listOf(clip), failed = emptyList())))
+    }
 }

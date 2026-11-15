@@ -938,6 +938,8 @@ class ImageIndexTest {
         "reviewState" to { reviewState(PHOTO.path) },
         "excludedFolders" to { excludedFolders() },
         "notTrashed" to { notTrashed() },
+        "unreviewedVideos" to { unreviewedVideos() },
+        "hasVideos" to { hasVideos() },
         "capturedAt" to { capturedAt() },
         "indexedMedia" to { indexedMedia() },
         "getVersion" to { version },
