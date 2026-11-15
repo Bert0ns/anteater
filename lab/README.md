@@ -66,7 +66,7 @@ uv run cribrum-lab scan data/device    # find and analyze every image under the 
 uv run cribrum-lab report              # candidates per category, top 10 paths each
 ```
 
-The first `scan` downloads MobileCLIP2-S0 (45 MB) and PP-OCRv4's text detector (5 MB) into `lab/data/models/`; `--no-embeddings` skips it. `scan` stores everything in `lab/data/index.sqlite` as it goes. Run it again after an interruption or after copying new images: it only analyzes what is new or changed, or what a newer detector version has not seen yet. Images that are gone from the folder leave the index. `--jobs` sets the number of worker processes (all cores by default). The index refuses to open if its schema version changed: delete it and scan again.
+The first `scan` downloads MobileCLIP2-S0 (45 MB) and PP-OCRv4's text detector (5 MB) into `lab/data/models/`; `--no-embeddings` skips it. `scan` stores everything in `lab/data/index.sqlite` as it goes. Run it again after an interruption or after copying new images: it only analyzes what is new or changed, or what a newer detector version has not seen yet. Images that are gone from the folder leave the index. `--jobs` sets the number of worker processes (all cores by default). `scan` finds and records videos without opening them, and `--videos` also reads their metadata (docs/design.md, section 4). The index refuses to open if its schema version changed: delete it and scan again.
 
 ## Label
 
