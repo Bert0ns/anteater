@@ -7,12 +7,16 @@ import pytest
 
 from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, Role
 from cribrum_lab.index import ImageIndex, IndexVersionError
-from cribrum_lab.metadata import ImageMetadata
+from cribrum_lab.metadata import ImageMetadata, VideoMetadata
 from cribrum_lab.model import Category, MediaRef, MediaType, Protection, ReviewState, Signal
 from cribrum_lab.ranker import Ranker
 
 PHOTO = MediaRef(Path("/photos/a.jpg"), 100, 1)
 META = ImageMetadata(4000, 3000, "image/jpeg", "Google", "Pixel 8", datetime(2024, 5, 1, 10, 20))
+VIDEO = MediaRef(Path("/videos/v.mp4"), 900, 1, MediaType.VIDEO)
+VIDEO_META = VideoMetadata(
+    1080, 1920, 12_345, 29.97, 8_000_000, True, "video/hevc", True, datetime(2024, 5, 1, 12, 20)
+)
 BLUR = Signal("blur", 1, Category.BLURRY, 0.7, {"variance": "12.5"})
 
 
@@ -86,6 +90,34 @@ def test_metadata_round_trip(index, meta):
     index.set_metadata(PHOTO.path, meta)
 
     assert index.metadata(PHOTO.path) == meta
+
+
+@pytest.mark.parametrize(
+    "meta", [VIDEO_META, VideoMetadata(640, 480, None, None, None, False, None, False)]
+)
+def test_video_metadata_round_trip(index, meta):
+    index.record(VIDEO)
+    index.set_video_metadata(VIDEO.path, meta)
+
+    assert index.video_metadata(VIDEO.path) == meta
+    assert index.without_metadata() == []
+
+
+def test_a_video_shares_the_capture_time_column_of_an_image(index):
+    index.record(VIDEO)
+    index.set_video_metadata(VIDEO.path, VIDEO_META)
+
+    assert index.metadata(VIDEO.path).captured_at == VIDEO_META.captured_at
+
+
+def test_a_changed_video_drops_its_metadata(index):
+    index.record(VIDEO)
+    index.set_video_metadata(VIDEO.path, VIDEO_META)
+
+    index.record(MediaRef(VIDEO.path, 901, 2, MediaType.VIDEO))
+
+    assert index.video_metadata(VIDEO.path) is None
+    assert index.without_metadata() == [MediaRef(VIDEO.path, 901, 2, MediaType.VIDEO)]
 
 
 def test_content_hash_round_trip(index):
@@ -186,6 +218,7 @@ def test_review_state_persists(tmp_path):
     "call",
     [
         lambda index: index.set_metadata(PHOTO.path, META),
+        lambda index: index.set_video_metadata(PHOTO.path, VIDEO_META),
         lambda index: index.set_content_hash(PHOTO.path, "0123abcd"),
         lambda index: index.set_unreadable(PHOTO.path),
         lambda index: index.set_perceptual_hash(PHOTO.path, 42),
@@ -197,6 +230,7 @@ def test_review_state_persists(tmp_path):
     ],
     ids=[
         "set_metadata",
+        "set_video_metadata",
         "set_content_hash",
         "set_unreadable",
         "set_perceptual_hash",
@@ -277,10 +311,9 @@ def test_indexed_media_lists_unanalyzed_images_too(index):
 
 
 def test_a_video_is_recorded_with_its_media_type_and_the_ranker_never_sees_it(index):
-    video = MediaRef(Path("/videos/v.mp4"), 900, 1, MediaType.VIDEO)
-    index.record_all([PHOTO, video])
+    index.record_all([PHOTO, VIDEO])
 
-    assert index.images() == [PHOTO, video]
+    assert index.images() == [PHOTO, VIDEO]
     assert [i.ref for i in index.indexed_media()] == [PHOTO]
 
 

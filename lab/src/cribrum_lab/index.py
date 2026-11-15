@@ -14,7 +14,7 @@ from typing import Self
 
 import numpy as np
 
-from cribrum_lab.metadata import ImageMetadata
+from cribrum_lab.metadata import ImageMetadata, VideoMetadata
 from cribrum_lab.model import IndexedMedia, MediaRef, MediaType, ReviewState, Signal, kind
 
 _SCHEMA = """
@@ -32,7 +32,16 @@ CREATE TABLE IF NOT EXISTS images (
     unreadable INTEGER NOT NULL DEFAULT 0,
     content_hash TEXT,
     perceptual_hash TEXT,
-    media_type TEXT NOT NULL DEFAULT 'image'
+    media_type TEXT NOT NULL DEFAULT 'image',
+    -- A video's own metadata (docs/design.md, section 7). Its capture time goes in captured_at.
+    duration_ms INTEGER,
+    frame_rate REAL,
+    bitrate INTEGER,
+    has_audio INTEGER,
+    video_codec TEXT,
+    hdr INTEGER,
+    -- The moment captured_at holds, as epoch milliseconds in UTC: a video's MP4 creation time.
+    captured_instant INTEGER
 );
 -- Which detector version last analyzed an image, even if it emitted no signal.
 CREATE TABLE IF NOT EXISTS analyses (
@@ -90,7 +99,7 @@ CREATE TABLE IF NOT EXISTS not_images (
     mtime_ns INTEGER NOT NULL
 );
 """
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 """Bump on every schema change: an index from another version is refused, not misread."""
 
 
@@ -159,8 +168,9 @@ class ImageIndex:
             self._db.execute(
                 """UPDATE images SET size = ?, mtime_ns = ?, width = NULL, height = NULL,
                    mime = NULL, camera_make = NULL, camera_model = NULL, captured_at = NULL,
-                   unreadable = 0, content_hash = NULL, perceptual_hash = NULL, media_type = ?
-                   WHERE path = ?""",
+                   unreadable = 0, content_hash = NULL, perceptual_hash = NULL, media_type = ?,
+                   duration_ms = NULL, frame_rate = NULL, bitrate = NULL, has_audio = NULL,
+                   video_codec = NULL, hdr = NULL, captured_instant = NULL WHERE path = ?""",
                 (image.size, image.mtime_ns, image.media_type.value, path),
             )
             self._db.execute("DELETE FROM analyses WHERE path = ?", (path,))
@@ -244,6 +254,49 @@ class ImageIndex:
         *fields, captured_at = row
         return ImageMetadata(
             *fields, captured_at=datetime.fromisoformat(captured_at) if captured_at else None
+        )
+
+    def set_video_metadata(self, path: Path, metadata: VideoMetadata) -> None:
+        captured_at = metadata.captured_at.isoformat() if metadata.captured_at else None
+        with self._db:
+            updated = self._db.execute(
+                """UPDATE images SET width = ?, height = ?, duration_ms = ?, frame_rate = ?,
+                   bitrate = ?, has_audio = ?, video_codec = ?, hdr = ?, captured_at = ?
+                   WHERE path = ?""",
+                (
+                    metadata.width,
+                    metadata.height,
+                    metadata.duration_ms,
+                    metadata.frame_rate,
+                    metadata.bitrate,
+                    metadata.has_audio,
+                    metadata.video_codec,
+                    metadata.hdr,
+                    captured_at,
+                    str(path),
+                ),
+            )
+        _require(updated.rowcount, path)
+
+    def video_metadata(self, path: Path) -> VideoMetadata | None:
+        row = self._db.execute(
+            """SELECT width, height, duration_ms, frame_rate, bitrate, has_audio, video_codec, hdr,
+               captured_at FROM images WHERE path = ? AND width IS NOT NULL""",
+            (str(path),),
+        ).fetchone()
+        if row is None:
+            return None
+        width, height, duration_ms, frame_rate, bitrate, has_audio, codec, hdr, captured_at = row
+        return VideoMetadata(
+            width,
+            height,
+            duration_ms,
+            frame_rate,
+            bitrate,
+            bool(has_audio),
+            codec,
+            bool(hdr),
+            datetime.fromisoformat(captured_at) if captured_at else None,
         )
 
     def set_content_hash(self, path: Path, digest: str) -> None:
