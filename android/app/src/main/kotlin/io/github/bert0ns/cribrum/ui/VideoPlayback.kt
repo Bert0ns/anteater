@@ -312,6 +312,7 @@ internal fun VideoControls(playback: VideoPlayback, file: File, section: String,
                             .clickable { playback.seekTo(file, ms) }
                             .semantics { contentDescription = label },
                         atMillis = ms,
+                        small = true,
                     )
                 }
             }

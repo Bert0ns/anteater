@@ -7,6 +7,7 @@ import android.text.format.Formatter
 import android.util.LruCache
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -44,14 +45,15 @@ private val videoFrames = Decoder.Factory { result, options, _ -> VideoFrameDeco
 
 /**
  * A frame of the video, the first one or the one at [atMillis]. A file that is [unreadable] or whose frame does not decode
- * draws [UnreadableVideo] instead of an empty tile (docs/design.md §8, decision 17 of #382).
+ * draws [UnreadableVideo] instead of an empty tile (docs/design.md §8, decision 17 of #382), or, for a [small] frame that has no
+ * room for its note, a plain block.
  */
 @Composable
-internal fun VideoFrame(file: File, section: String, modifier: Modifier, contentScale: ContentScale = ContentScale.Crop, unreadable: Boolean = false, atMillis: Long? = null) {
+internal fun VideoFrame(file: File, section: String, modifier: Modifier, contentScale: ContentScale = ContentScale.Crop, unreadable: Boolean = false, atMillis: Long? = null, small: Boolean = false) {
     val context = LocalContext.current
     var failed by remember(file) { mutableStateOf(false) }
     if (unreadable || failed) {
-        UnreadableVideo(modifier)
+        if (small) Box(modifier.background(MaterialTheme.colorScheme.surfaceVariant)) else UnreadableVideo(modifier)
     } else {
         val request = remember(file, section, context, atMillis) {
             ImageRequest.Builder(context).data(file).decoderFactory(videoFrames).apply {
