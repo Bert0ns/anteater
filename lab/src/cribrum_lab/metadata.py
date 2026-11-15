@@ -95,7 +95,7 @@ def read_video_metadata(path: Path, zone: tzinfo | None = None) -> VideoMetadata
                 width=width,
                 height=height,
                 duration_ms=duration_ms,
-                frame_rate=round(float(stream.average_rate), 2) if stream.average_rate else None,
+                frame_rate=_frame_rate(stream),
                 bitrate=round(path.stat().st_size * 8000 / duration_ms) if duration_ms else None,
                 has_audio=bool(container.streams.audio),
                 video_codec=_CODEC_MIME.get(codec.name),
@@ -104,6 +104,14 @@ def read_video_metadata(path: Path, zone: tzinfo | None = None) -> VideoMetadata
             )
     except (av.FFmpegError, OSError) as error:
         raise UnreadableVideo(path) from error
+
+
+def _frame_rate(stream: av.video.stream.VideoStream) -> float | None:
+    """Frames over the track's duration, as the phone computes it. A container that does not
+    count its frames, such as Matroska, gives the rate it declares instead."""
+    if stream.frames and stream.duration and stream.time_base:
+        return round(stream.frames / float(stream.duration * stream.time_base), 2)
+    return round(float(stream.average_rate), 2) if stream.average_rate else None
 
 
 def _local(utc: str, zone: tzinfo | None) -> datetime | None:

@@ -1,10 +1,13 @@
 import json
 from datetime import datetime
+from fractions import Fraction
 from pathlib import Path
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
 
+from cribrum_lab import metadata
 from cribrum_lab.metadata import NoVideoTrack, UnreadableVideo, read_video_metadata
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "videos"
@@ -46,3 +49,14 @@ def test_a_file_with_only_audio_has_no_video_track(name):
 def test_a_header_that_does_not_read_is_unreadable(name):
     with pytest.raises(UnreadableVideo):
         read_video_metadata(FIXTURES / name, ZONE)
+
+
+def test_the_frame_rate_is_the_frames_over_the_tracks_duration_or_the_declared_rate():
+    # A clip that declares 30 and holds 30 frames over 1.001 s, as a Galaxy's variable rate may.
+    counted = SimpleNamespace(
+        frames=30, duration=1001, time_base=Fraction(1, 1000), average_rate=30
+    )
+    uncounted = SimpleNamespace(frames=0, duration=None, time_base=None, average_rate=Fraction(25))
+
+    assert metadata._frame_rate(counted) == 29.97
+    assert metadata._frame_rate(uncounted) == 25.0
