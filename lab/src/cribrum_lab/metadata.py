@@ -1,5 +1,6 @@
 """Image and video metadata used by detectors and best-copy selection (docs/design.md, 7)."""
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, tzinfo
 from pathlib import Path
@@ -70,6 +71,7 @@ _CODEC_MIME = {
     "mpeg4": "video/mp4v-es",
     "h263": "video/3gpp",
 }
+_log = logging.getLogger(__name__)
 _HDR_TRANSFERS = {16, 18}  # AVCOL_TRC_SMPTE2084 (PQ) and AVCOL_TRC_ARIB_STD_B67 (HLG)
 
 
@@ -86,6 +88,11 @@ def read_video_metadata(path: Path, zone: tzinfo | None = None) -> VideoMetadata
                 frame = next(container.decode(stream), None)
             except av.FFmpegError:
                 frame = None  # the header read, which is all Android needs for it
+            if frame is None:
+                # The phone reads the rotation from the header: a portrait clip may differ here.
+                _log.warning(
+                    "%s: the first frame did not decode, so its rotation is not read", path
+                )
             rotated = frame is not None and frame.rotation % 180 != 0
             width, height = (codec.height, codec.width) if rotated else (codec.width, codec.height)
             duration_ms = round(container.duration / 1000) if container.duration else None

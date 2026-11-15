@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
+import av
 import pytest
 
 from cribrum_lab import metadata
@@ -60,3 +61,29 @@ def test_the_frame_rate_is_the_frames_over_the_tracks_duration_or_the_declared_r
 
     assert metadata._frame_rate(counted) == 29.97
     assert metadata._frame_rate(uncounted) == 25.0
+
+
+def test_a_clip_whose_first_frame_does_not_decode_is_logged(monkeypatch, caplog):
+    class NoFrames:
+        def __init__(self, container):
+            self._container = container
+
+        def __getattr__(self, name):
+            return getattr(self._container, name)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self._container.close()
+
+        def decode(self, *streams):
+            raise av.InvalidDataError(1094995529, "no frame")
+
+    real_open = av.open
+    monkeypatch.setattr(metadata.av, "open", lambda path: NoFrames(real_open(path)))
+
+    meta = read_video_metadata(FIXTURES / "rotated.mp4", ZONE)
+
+    assert (meta.width, meta.height) == (64, 48)  # the rotation is lost, as the warning says
+    assert "rotated.mp4: the first frame did not decode" in caplog.text
