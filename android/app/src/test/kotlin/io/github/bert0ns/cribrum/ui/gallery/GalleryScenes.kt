@@ -20,6 +20,8 @@ import io.github.bert0ns.cribrum.compress.Losses
 import io.github.bert0ns.cribrum.compress.Marker
 import io.github.bert0ns.cribrum.compress.Refusal
 import io.github.bert0ns.cribrum.model.Category
+import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.pipeline.Failure
 import io.github.bert0ns.cribrum.pipeline.Indexing
 import io.github.bert0ns.cribrum.pipeline.ScanProgress
@@ -69,6 +71,42 @@ private fun Gallery.openMap(model: ReviewViewModel, ready: (ReviewViewModel) -> 
     scrollTo(str(R.string.storage_map))
     click(str(R.string.storage_map))
     awaitModel(model, "the map", ready)
+}
+
+/** A library of videos for "Largest videos": from 1.8 GB down, one that cannot be read and one the gallery has hearted. Returns the one hearted and the unreadable one. */
+private fun Gallery.videoLibrary(): Pair<MediaRef, MediaRef> {
+    val clips = listOf(
+        Triple("VID_20261019_201512.mp4", 1_820_000_000L, 612_000L),
+        Triple("VID_20261011_182240.mp4", 1_460_000_000L, 484_000L),
+        Triple("VID_20260926_153008.mp4", 1_110_000_000L, 356_000L),
+        Triple("VID_20261024_090511.mp4", 960_000_000L, 301_000L),
+        Triple("VID_20261003_214437.mp4", 640_000_000L, 205_000L),
+        Triple("VID_20261014_121903.mp4", 410_000_000L, 131_000L),
+        Triple("VID_20260921_170826.mp4", 255_000_000L, 82_000L),
+        Triple("VID_20261030_193345.mp4", 120_000_000L, 38_000L),
+        Triple("VID_20260915_111207.mp4", 64_000_000L, 21_000L),
+        Triple("VID_20261001_080452.mp4", 38_000_000L, 12_000L),
+    )
+    val refs = clips.mapIndexed { index, (name, bytes, millis) ->
+        val folder = if (index % 3 == 1) "WhatsApp/Media/WhatsApp Video" else CAMERA
+        val ref = world.video(folder, name, bytes, taken(index))
+        // The fifth cannot be read: it has no frame and no length.
+        if (index != 4) world.show(ref.path, millis, GalleryPictures.scene(7_000 + index))
+        ref
+    }
+    world.commit()
+    runBlocking { app.index.setUnreadable(refs[4].path) }
+    world.favorites += refs[1].path
+    return refs[1] to refs[4]
+}
+
+/** Opens "Largest videos" from the Videos tab of the home. */
+private fun Gallery.openVideos(model: ReviewViewModel) {
+    awaitHome(model)
+    click(str(R.string.tab_videos))
+    click(str(R.string.videos_largest))
+    awaitModel(model, "the videos") { it.state.value.screen == Screen.Videos && it.state.value.videos.isNotEmpty() }
+    await("the tiles") { described("VID_").fetchSemanticsNodes().isNotEmpty() }
 }
 
 private fun Gallery.openTrash(model: ReviewViewModel) {
@@ -282,7 +320,7 @@ val scenes: List<Scene> = listOf(
         openCategory(model, R.string.category_blurry)
         confirmApply(model)
     },
-    Scene("review-snackbar-free-now", "Review, the snackbar after a page that trashed more than 1 GB", "Read how much went to the trash, free that space now or undo the page. The photos here are made larger than real ones: videos will reach 1 GB once their review is built.", Variant.base) {
+    Scene("review-snackbar-free-now", "Review, the snackbar after a page that trashed more than 1 GB", "Read how much went to the trash, free that space now or undo the page. The photos here are made larger than real ones. A page of videos reaches 1 GB much sooner, as videos-largest-snackbar-free-now shows.", Variant.base) {
         bigPage(world)
         val model = app()
         openCategory(model, R.string.category_blurry)
@@ -316,6 +354,95 @@ val scenes: List<Scene> = listOf(
         awaitTag("fullSize")
         click(str(R.string.exclude_folder))
         awaitText(str(R.string.undo))
+    },
+    // Videos
+    Scene("videos-tab", "Clean, the Videos tab", "See how many videos wait for a review and how much space they can free, or open the largest videos. The Photos tab is one tap away, and the tab used last opens first.", Variant.wide) {
+        world.library()
+        videoLibrary()
+        val model = app()
+        awaitHome(model)
+        click(str(R.string.tab_videos))
+        awaitText(str(R.string.videos_largest))
+    },
+    Scene("videos-tab-before-scan", "Clean, the Videos tab before a scan has found a video", "Read that videos appear after the next scan, and go to the Photos tab to scan.", Variant.base) {
+        world.library()
+        world.commit()
+        val model = app()
+        awaitHome(model)
+        click(str(R.string.tab_videos))
+        awaitText(str(R.string.videos_after_scan))
+    },
+    Scene("videos-tab-scanning", "Clean, a scan running, seen from the Videos tab", "Watch the scan's phase and count from either tab and stop it. Scan now is not offered here.", Variant.base) {
+        world.library()
+        videoLibrary()
+        val model = app()
+        awaitHome(model)
+        click(str(R.string.tab_videos))
+        RunningScanWorker.progress = ScanProgress("detectors", 4_320, 10_220, 11 * 60_000L)
+        Indexing.scanNow(app)
+        awaitText(str(R.string.scan_stop))
+    },
+    Scene("videos-largest", "Largest videos, the list with nothing selected", "Look at the videos from the largest, with their length and size, one with a heart from the gallery and one that cannot be read. Tap a video to select it, hold one to see it full size.", Variant.full) {
+        videoLibrary()
+        openVideos(app())
+    },
+    Scene("videos-largest-selected", "Largest videos, two videos selected", "Read how many videos and how many GB the main button moves to the trash, trash them, or keep them instead.", Variant.wide) {
+        videoLibrary()
+        val model = app()
+        openVideos(model)
+        described("VID_20261019")[0].performClick()
+        described("VID_20260926")[0].performClick()
+        awaitText(plural(R.plurals.videos_trash, 2, 2, Formatter.formatShortFileSize(app, 1_820_000_000L + 1_110_000_000L).replace(' ', '\u00A0')))
+    },
+    Scene("videos-largest-favorite", "Largest videos, the confirmation when a favourite is selected", "Read that one of the videos is a favourite in the gallery, then move it to the trash anyway or cancel.", Variant.base) {
+        videoLibrary()
+        val model = app()
+        openVideos(model)
+        described("VID_20261011")[0].performClick()
+        click(plural(R.plurals.videos_trash, 1, 1, Formatter.formatShortFileSize(app, 1_460_000_000L).replace(' ', '\u00A0')))
+        awaitText(plural(R.plurals.videos_summary_title, 1, 1))
+    },
+    Scene("videos-largest-full-size", "Largest videos, a video at full size", "Look at a frame of the video, with its length and size, select it with the checkbox, swipe to the next one, or close the view. The video does not play yet.", Variant.base) {
+        videoLibrary()
+        val model = app()
+        openVideos(model)
+        described("VID_20261019")[0].performTouchInput { longClick() }
+        awaitTag("fullSize")
+    },
+    Scene("videos-largest-unreadable-full-size", "Largest videos, a video that cannot be read at full size", "Read that the video cannot be read. It stays in the list so it can still be kept or trashed.", Variant.base) {
+        videoLibrary()
+        val model = app()
+        openVideos(model)
+        described("VID_20261003")[0].performTouchInput { longClick() }
+        awaitTag("fullSize")
+    },
+    Scene("videos-largest-snackbar-free-now", "Largest videos, the snackbar after trashing more than 1 GB", "Read how much went to the trash, free that space now or undo. The videos left the list.", Variant.base) {
+        videoLibrary()
+        val model = app()
+        openVideos(model)
+        described("VID_20261019")[0].performClick()
+        described("VID_20260926")[0].performClick()
+        click(plural(R.plurals.videos_trash, 2, 2, Formatter.formatShortFileSize(app, 1_820_000_000L + 1_110_000_000L).replace(' ', '\u00A0')))
+        awaitText(str(R.string.undo))
+        awaitText(freeNowLabel(model))
+    },
+    Scene("videos-largest-empty", "Largest videos, nothing left to review", "Read that no video is left to review. A scan brings new ones.", Variant.base) {
+        val kept = world.video(CAMERA, "VID_20261019_201512.mp4", 640_000_000L, taken(0))
+        world.commit()
+        runBlocking { app.index.setReviewState(kept.path, ReviewState.KEPT) }
+        val model = app()
+        awaitHome(model)
+        model.openVideos()
+        awaitText(str(R.string.videos_none_left))
+    },
+    Scene("videos-largest-favorite-appeared", "Largest videos, the list back after a selected video became a favourite", "Read why nothing went to the trash, find the new heart, then trash it again or keep it.", Variant.base) {
+        videoLibrary()
+        val model = app()
+        openVideos(model)
+        described("VID_20261019")[0].performClick()
+        world.favorites += model.state.value.videoSelected.first() // hearted in the gallery while the list was open
+        click(plural(R.plurals.videos_trash, 1, 1, Formatter.formatShortFileSize(app, 1_820_000_000L).replace(' ', '\u00A0')))
+        awaitText(str(R.string.favorite_appeared_videos_snackbar))
     },
     // Trash
     Scene("trash-empty", "Trash, empty", "Read that the trash is empty and go back.", Variant.base) {
@@ -368,6 +495,13 @@ val scenes: List<Scene> = listOf(
         scrollToVideos()
         described("VID_")[0].performTouchInput { longClick() }
         awaitTag("fullSize")
+    },
+    Scene("trash-video-unreadable", "Trash, a video that cannot be read", "Read the note on the placeholder where the frame would be. The video can still be restored or deleted for good.", Variant.base) {
+        val model = app(trashed(this, unreadable = setOf(1)))
+        openTrash(model)
+        awaitModel(model, "the items") { it.state.value.trashed.isNotEmpty() }
+        scrollToVideos()
+        awaitText(str(R.string.video_unreadable))
     },
     Scene("trash-videos", "Trash, scrolled to its videos", "Read each video's length, size and days left on its frame, select videos to bring them back or to delete them for good, or hold one to see it full size.", Variant.base) {
         val model = app(trashed(this))
@@ -569,15 +703,16 @@ private fun bigPage(world: GalleryWorld) {
 
 /**
  * Photos, videos, screenshots and stickers in the trash, trashed between one and 25 days ago, with the app on the empty
- * home. The three videos have a frame and a length from Robolectric's retriever ([GalleryWorld.showVideos]).
+ * home. The three videos have a frame and a length from Robolectric's retriever ([GalleryWorld.showVideos]), except
+ * those at the positions in [unreadable].
  */
-private fun trashed(gallery: Gallery): ReviewViewModel = with(gallery) {
+private fun trashed(gallery: Gallery, unreadable: Set<Int> = emptySet()): ReviewViewModel = with(gallery) {
     val photos = (0 until 12).map { world.picture(CAMERA, cameraName(taken(it)), GalleryPictures.scene(5_000 + it), 3_500_000L + it * 90_000L, taken(it)) }
     val videos = (0 until 3).map { world.video(CAMERA, "VID_20261020_18${it}500.mp4", 180_000_000L + it * 230_000_000L, taken(it)) }
     val shots = (0 until 3).map { world.picture(SCREENSHOTS, "Screenshot_2026102$it-1${it}2030.png", GalleryPictures.screenshot(5_100 + it), 1_800_000L, taken(it)) }
     val stickers = (0 until 4).map { world.picture(STICKERS, "${500_000 + it}-$it.webp", GalleryPictures.sticker(5_200 + it), 120_000L, taken(it)) }
     world.commit(scanned = false)
     world.trashed(photos + videos + shots + stickers) { 1L + it * 2 }
-    world.showVideos { GalleryPictures.scene(5_300 + it) }
+    world.showVideos(unreadable) { GalleryPictures.scene(5_300 + it) }
     return world.model()
 }

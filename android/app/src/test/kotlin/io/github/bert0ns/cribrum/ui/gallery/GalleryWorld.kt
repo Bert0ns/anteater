@@ -130,13 +130,20 @@ class GalleryWorld(val app: CribrumApp, val root: File, val clock: MovableClock 
 
     /**
      * Gives Robolectric's retriever a frame and a length for each video in the trash, by the file's path there: [frames]
-     * picks the frame from a video's position in the trash's list. It decodes none, and the trash screen reads both.
+     * picks the frame from a video's position in the trash's list. It decodes none, and the trash screen reads both. A
+     * video whose position is in [unreadable] gets neither, so its frame fails to decode.
      */
-    fun showVideos(frames: (Int) -> Bitmap) = runBlocking {
+    fun showVideos(unreadable: Set<Int> = emptySet(), frames: (Int) -> Bitmap) = runBlocking {
         trash.trashed().filter { it.original.mediaType == MediaType.VIDEO }.forEachIndexed { index, item ->
-            ShadowMediaMetadataRetriever.addMetadata(item.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, (42_000L + index * 377_000L).toString())
-            ShadowMediaMetadataRetriever.addFrame(item.file.path, 0, frames(index))
+            if (index in unreadable) return@forEachIndexed
+            show(item.file.path, 42_000L + index * 377_000L, frames(index))
         }
+    }
+
+    /** Gives the retriever [frame] and a length of [durationMs] for the file at [path]. */
+    fun show(path: String, durationMs: Long, frame: Bitmap) {
+        ShadowMediaMetadataRetriever.addMetadata(path, MediaMetadataRetriever.METADATA_KEY_DURATION, durationMs.toString())
+        ShadowMediaMetadataRetriever.addFrame(path, 0, frame)
     }
 
     /** A row with no file behind it. */
