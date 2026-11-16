@@ -313,7 +313,7 @@ private fun isAudioOnly(file: File): Boolean = try {
 }
 
 /** Major brands of what is known not to be a video: audio, and Canon's raw photos. The walk turns them away without counting them as an unknown brand. */
-private val NOT_VIDEO_BRANDS = setOf("M4A ", "M4B ", "M4P ", "crx ")
+private val NOT_VIDEO_BRANDS = setOf("M4A ", "M4B ", "M4P ", "F4A ", "crx ")
 
 /**
  * For a head [mediaType] turned away, the brand of its ftyp or EBML container when it is not one known to be something
