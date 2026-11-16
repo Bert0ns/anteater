@@ -494,7 +494,7 @@ internal fun FullSizeViewer(
                 image(page)
             }
             overlay(pager.currentPage)
-            // Tapping the image closes it too, but nothing showed that.
+            // A tap on an image closes the view too, but nothing showed that. A video's tap plays and pauses, so this is its only way out.
             IconButton(
                 onClose,
                 Modifier.align(Alignment.TopStart).windowInsetsPadding(WindowInsets.safeDrawing).padding(8.dp).background(Color.Black.copy(alpha = 0.55f), CircleShape),

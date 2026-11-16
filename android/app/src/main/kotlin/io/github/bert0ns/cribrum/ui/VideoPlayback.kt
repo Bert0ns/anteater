@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -226,7 +227,8 @@ internal fun rememberVideoPlayback(): VideoPlayback {
 @Composable
 internal fun VideoPage(file: File, section: String, playback: VideoPlayback, unreadable: Boolean, onClose: () -> Unit) {
     val showing = playback.loaded == file.path
-    Box(Modifier.fillMaxSize().clickable(onClick = if (unreadable) onClose else ({ playback.toggle(file) }))) {
+    val tap = stringResource(if (unreadable) R.string.close else if (showing && playback.playing) R.string.video_pause else R.string.video_play)
+    Box(Modifier.fillMaxSize().clickable(onClickLabel = tap, onClick = if (unreadable) onClose else ({ playback.toggle(file) }))) {
         VideoFrame(file, section, Modifier.fillMaxSize(), ContentScale.Fit, unreadable)
         if (showing) VideoSurface(playback)
         if (!unreadable && !(showing && playback.playing)) {
@@ -315,7 +317,7 @@ internal fun VideoControls(playback: VideoPlayback, file: File, section: String,
                         file,
                         "$section.strip",
                         Modifier.weight(1f).aspectRatio(STRIP_ASPECT).clip(MaterialTheme.shapes.extraSmall)
-                            .clickable { playback.seekTo(file, ms) }
+                            .clickable(role = Role.Button) { playback.seekTo(file, ms) }
                             .semantics { contentDescription = label },
                         atMillis = ms,
                         small = true,

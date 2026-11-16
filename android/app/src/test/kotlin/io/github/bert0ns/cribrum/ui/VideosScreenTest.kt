@@ -8,8 +8,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
@@ -189,6 +193,21 @@ class VideosScreenTest {
 
         assertEquals(30_500, players.made.single().positionMs)
         assertTrue(players.made.single().playing)
+    }
+
+    private fun tapSays(label: String) = SemanticsMatcher("a tap that says $label") { it.config.getOrNull(SemanticsActions.OnClick)?.label == label }
+
+    @Test
+    fun `the tap on the picture says what it does, and the strip's frames are buttons`() {
+        show(videos)
+        openFullSize("middle.mp4")
+
+        compose.onNode(tapSays("Play video")).assertExists()
+        compose.onAllNodesWithContentDescription("Go to", substring = true).onFirst().assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+
+        play()
+        compose.waitForIdle()
+        compose.onNode(tapSays("Pause video")).assertExists()
     }
 
     @Test
