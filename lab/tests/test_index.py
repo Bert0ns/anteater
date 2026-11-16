@@ -172,38 +172,56 @@ def test_read_videos_are_the_readable_ones_with_metadata_out_of_the_trash(index)
     index.set_unreadable(unreadable.path)
     index.set_review_state(trashed.path, ReviewState.TRASHED)
 
-    assert index.read_videos() == [(VIDEO, 12_345)]
+    assert index.read_videos(1) == [(VIDEO, 12_345)]
 
 
-def test_frame_embeddings_are_stored_per_video_time_and_model_version(index):
+def test_a_video_whose_frames_did_not_read_waits_for_a_new_frame_version_or_a_change(index):
+    index.record(VIDEO)
+    index.set_video_metadata(VIDEO.path, VIDEO_META)
+
+    index.set_frames_unreadable(VIDEO.path, 1)
+
+    assert index.read_videos(1) == []
+    assert index.read_videos(2) == [(VIDEO, 12_345)]
+    changed = MediaRef(VIDEO.path, 901, 2, MediaType.VIDEO)
+    index.record(changed)
+    index.set_video_metadata(VIDEO.path, VIDEO_META)
+    assert index.read_videos(1) == [(changed, 12_345)]
+
+
+def test_frame_embeddings_are_stored_per_video_time_model_version_and_frame_version(index):
     index.record(VIDEO)
     first, last = np.array([1, 0], np.float32), np.array([0, 1], np.float32)
 
-    index.set_frame_embeddings(VIDEO.path, "clip", 2, {300: first, 700: last})
+    index.set_frame_embeddings(VIDEO.path, "clip", 2, 1, {300: first, 700: last})
 
-    [(path, frames)] = index.frame_embeddings("clip", 2).items()
+    [(path, frames)] = index.frame_embeddings("clip", 2, 1).items()
     assert path == VIDEO.path
     assert list(frames) == [300, 700]
     np.testing.assert_array_equal(frames[700], last)
-    assert index.frame_embeddings("clip", 1) == {}
+    assert index.sampled_times("clip", 2, 1) == {VIDEO.path: [300, 700]}
+    assert index.frame_embeddings("clip", 1, 1) == {}
+    assert index.frame_embeddings("clip", 2, 2) == {}
+    assert index.sampled_times("clip", 2, 2) == {}
 
 
 def test_storing_a_video_s_frames_again_replaces_them_all(index):
     index.record(VIDEO)
-    index.set_frame_embeddings(VIDEO.path, "clip", 1, {300: np.ones(2, np.float32)})
+    index.set_frame_embeddings(VIDEO.path, "clip", 1, 1, {300: np.ones(2, np.float32)})
 
-    index.set_frame_embeddings(VIDEO.path, "clip", 1, {500: np.zeros(2, np.float32)})
+    index.set_frame_embeddings(VIDEO.path, "clip", 1, 2, {500: np.zeros(2, np.float32)})
 
-    assert list(index.frame_embeddings("clip", 1)[VIDEO.path]) == [500]
+    assert index.sampled_times("clip", 1, 2) == {VIDEO.path: [500]}
+    assert index.sampled_times("clip", 1, 1) == {}
 
 
 def test_a_changed_video_drops_its_frames(index):
     index.record(VIDEO)
-    index.set_frame_embeddings(VIDEO.path, "clip", 1, {300: np.ones(2, np.float32)})
+    index.set_frame_embeddings(VIDEO.path, "clip", 1, 1, {300: np.ones(2, np.float32)})
 
     index.record(MediaRef(VIDEO.path, 901, 2, MediaType.VIDEO))
 
-    assert index.frame_embeddings("clip", 1) == {}
+    assert index.frame_embeddings("clip", 1, 1) == {}
 
 
 def test_deleting_the_embeddings_leaves_the_rest_of_the_index_as_it_was(index):
@@ -213,6 +231,8 @@ def test_deleting_the_embeddings_leaves_the_rest_of_the_index_as_it_was(index):
     index.set_embeddings(
         "clip", 1, {PHOTO.path: np.ones(2, np.float32), other.path: np.ones(2, np.float32)}
     )
+    index.record(VIDEO)
+    index.set_frame_embeddings(VIDEO.path, "clip", 1, 1, {300: np.ones(2, np.float32)})
     index.set_signals(PHOTO.path, "blur", 1, [BLUR])
     index.set_review_state(PHOTO.path, ReviewState.KEPT)
     index.exclude_folder(Path("/photos/memes"))
@@ -220,7 +240,8 @@ def test_deleting_the_embeddings_leaves_the_rest_of_the_index_as_it_was(index):
     index.delete_embeddings()
 
     assert index.embeddings("clip", 1) == {}
-    assert index.images() == [PHOTO, other]
+    assert index.frame_embeddings("clip", 1, 1) == {}  # a video's frames are analysis data too
+    assert index.images() == [PHOTO, other, VIDEO]
     assert index.signals(PHOTO.path) == [BLUR]
     assert index.is_analyzed(PHOTO.path, "blur", 1)
     assert index.review_state(PHOTO.path) == ReviewState.KEPT

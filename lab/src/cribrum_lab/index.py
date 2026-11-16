@@ -41,7 +41,10 @@ CREATE TABLE IF NOT EXISTS images (
     video_codec TEXT,
     hdr INTEGER,
     -- The moment captured_at holds, as epoch milliseconds in UTC: a video's MP4 creation time.
-    captured_instant INTEGER
+    captured_instant INTEGER,
+    -- The frame version at which a video's frames did not read: not tried again until the file or
+    -- the version changes (docs/design.md, section 4).
+    frames_unreadable INTEGER
 );
 -- Which detector version last analyzed an image, even if it emitted no signal.
 CREATE TABLE IF NOT EXISTS analyses (
@@ -86,6 +89,7 @@ CREATE TABLE IF NOT EXISTS frame_embeddings (
     path TEXT NOT NULL REFERENCES images ON DELETE CASCADE,
     model TEXT NOT NULL,
     model_version INTEGER NOT NULL,
+    frames_version INTEGER NOT NULL,
     time_ms INTEGER NOT NULL,
     vector BLOB NOT NULL,  -- float32, little-endian
     PRIMARY KEY (path, model, time_ms)
@@ -179,7 +183,8 @@ class ImageIndex:
                    mime = NULL, camera_make = NULL, camera_model = NULL, captured_at = NULL,
                    unreadable = 0, content_hash = NULL, perceptual_hash = NULL, media_type = ?,
                    duration_ms = NULL, frame_rate = NULL, bitrate = NULL, has_audio = NULL,
-                   video_codec = NULL, hdr = NULL, captured_instant = NULL WHERE path = ?""",
+                   video_codec = NULL, hdr = NULL, captured_instant = NULL, frames_unreadable = NULL
+                   WHERE path = ?""",
                 (image.size, image.mtime_ns, image.media_type.value, path),
             )
             self._db.execute("DELETE FROM analyses WHERE path = ?", (path,))
@@ -322,15 +327,27 @@ class ImageIndex:
             instant,
         )
 
-    def read_videos(self) -> list[tuple[MediaRef, int | None]]:
+    def read_videos(self, frames_version: int) -> list[tuple[MediaRef, int | None]]:
         """The videos whose metadata was read, readable and out of the trash, with their
-        duration: the ones the frames step samples."""
+        duration, leaving out those whose frames did not read at `frames_version`: the ones the
+        frames step samples."""
         rows = self._db.execute(
             """SELECT path, size, mtime_ns, media_type, duration_ms FROM images
                WHERE media_type = 'video' AND width IS NOT NULL AND NOT unreadable
-               AND review_state != 'trashed' ORDER BY path"""
+               AND review_state != 'trashed' AND frames_unreadable IS NOT ?
+               ORDER BY path""",
+            (frames_version,),
         )
         return [(_ref(*row), duration_ms) for *row, duration_ms in rows]
+
+    def set_frames_unreadable(self, path: Path, frames_version: int) -> None:
+        """Marks a video whose frames do not read, so it is not decoded again at this version."""
+        with self._db:
+            updated = self._db.execute(
+                "UPDATE images SET frames_unreadable = ? WHERE path = ?",
+                (frames_version, str(path)),
+            )
+        _require(updated.rowcount, path)
 
     def set_content_hash(self, path: Path, digest: str) -> None:
         with self._db:
@@ -380,7 +397,12 @@ class ImageIndex:
                 )
 
     def set_frame_embeddings(
-        self, path: Path, model: str, model_version: int, vectors: Mapping[int, np.ndarray]
+        self,
+        path: Path,
+        model: str,
+        model_version: int,
+        frames_version: int,
+        vectors: Mapping[int, np.ndarray],
     ) -> None:
         """Replaces the video's frames of this model, by their time in milliseconds."""
         with self._db:
@@ -390,29 +412,56 @@ class ImageIndex:
                 "DELETE FROM frame_embeddings WHERE path = ? AND model = ?", (str(path), model)
             )
             self._db.executemany(
-                "INSERT INTO frame_embeddings VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO frame_embeddings VALUES (?, ?, ?, ?, ?, ?)",
                 [
-                    (str(path), model, model_version, time_ms, vector.astype("<f4").tobytes())
+                    (
+                        str(path),
+                        model,
+                        model_version,
+                        frames_version,
+                        time_ms,
+                        vector.astype("<f4").tobytes(),
+                    )
                     for time_ms, vector in vectors.items()
                 ],
             )
 
-    def frame_embeddings(self, model: str, model_version: int) -> dict[Path, dict[int, np.ndarray]]:
-        """Every video's frames of this model version, by time, in the order of their times."""
+    def frame_embeddings(
+        self, model: str, model_version: int, frames_version: int
+    ) -> dict[Path, dict[int, np.ndarray]]:
+        """Every video's frames of these versions, by time, in the order of their times."""
         rows = self._db.execute(
             """SELECT path, time_ms, vector FROM frame_embeddings
-               WHERE model = ? AND model_version = ? ORDER BY path, time_ms""",
-            (model, model_version),
+               WHERE model = ? AND model_version = ? AND frames_version = ?
+               ORDER BY path, time_ms""",
+            (model, model_version, frames_version),
         )
         frames: dict[Path, dict[int, np.ndarray]] = defaultdict(dict)
         for path, time_ms, vector in rows:
             frames[Path(path)][time_ms] = np.frombuffer(vector, dtype="<f4")
         return dict(frames)
 
+    def sampled_times(
+        self, model: str, model_version: int, frames_version: int
+    ) -> dict[Path, list[int]]:
+        """`frame_embeddings` without the vectors: what the frames step compares with the rule."""
+        rows = self._db.execute(
+            """SELECT path, time_ms FROM frame_embeddings
+               WHERE model = ? AND model_version = ? AND frames_version = ?
+               ORDER BY path, time_ms""",
+            (model, model_version, frames_version),
+        )
+        times: dict[Path, list[int]] = defaultdict(list)
+        for path, time_ms in rows:
+            times[Path(path)].append(time_ms)
+        return dict(times)
+
     def delete_embeddings(self) -> None:
-        """Deletes every stored embedding and nothing else: the next run computes them again."""
+        """Deletes every stored embedding, a video's frames included, and nothing else: the next
+        run computes them again."""
         with self._db:
             self._db.execute("DELETE FROM embeddings")
+            self._db.execute("DELETE FROM frame_embeddings")
 
     def forget_analyses(self, paths: Iterable[Path], detector_ids: Iterable[str]) -> None:
         """Drops what these detectors stored for these images, signals included."""

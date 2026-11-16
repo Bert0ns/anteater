@@ -16,6 +16,7 @@ from datetime import tzinfo
 from pathlib import Path
 from typing import Protocol
 
+import av
 import numpy as np
 import xxhash
 
@@ -33,7 +34,7 @@ from cribrum_lab.detectors.near_duplicate import NearDuplicateDetector
 from cribrum_lab.detectors.screenshot import ScreenshotDetector
 from cribrum_lab.detectors.sticker import StickerDetector
 from cribrum_lab.folders import is_sticker_folder
-from cribrum_lab.frames import frame_times, read_frames
+from cribrum_lab.frames import FRAMES_VERSION, frame_times, read_frames
 from cribrum_lab.imaging import Pixels
 from cribrum_lab.index import ImageIndex
 from cribrum_lab.metadata import (
@@ -119,6 +120,8 @@ class Stats:
     no_video_track: int = 0
     """Files the video step found to have no video track, which left the index. They are still on
     disk, so they are not among the `forgotten`."""
+    unreadable_frames: int = 0
+    """Videos the frames step marked because their frames do not read."""
     unknown_brands: dict[str, int] = field(default_factory=dict)
     """The ftyp and EBML files the walk sniffed and turned away, by the brand it did not know."""
 
@@ -379,33 +382,47 @@ def _embed_frames(
     embedder: Embedder, index: ImageIndex, jobs: int, stats: Stats, progress: Progress
 ) -> None:
     """Embeds the frames of each readable video whose frames are not stored at the times
-    `frame_times` gives now, so a new rule samples every video again. A video whose frames fail
-    is a failure, and the next run tries it again, as an image whose embedding fails."""
-    stored = index.frame_embeddings(embedder.id, embedder.version)
+    `frame_times` gives now and at FRAMES_VERSION, so a new rule samples every video again.
+
+    A video whose frames do not read is marked, as an unreadable image is, and not decoded again
+    until the file or FRAMES_VERSION changes. Any other error is a failure, and the next run tries
+    it again, as an image whose embedding fails."""
+    stored = index.sampled_times(embedder.id, embedder.version, FRAMES_VERSION)
     todo = [
         (video, times)
-        for video, duration_ms in index.read_videos()
-        if list(stored.get(video.path, {})) != (times := frame_times(duration_ms))
+        for video, duration_ms in index.read_videos(FRAMES_VERSION)
+        if stored.get(video.path) != (times := frame_times(duration_ms))
     ]
     for done, ((video, times), pixels) in enumerate(
         zip(todo, _map(_frame_pixels, todo, jobs), strict=True), 1
     ):
-        if isinstance(pixels, str):
+        if pixels is None:
+            index.set_frames_unreadable(video.path, FRAMES_VERSION)
+            stats.unreadable_frames += 1
+        elif isinstance(pixels, str):
             stats.failures.append(f"{video.path}: video_frames: {pixels}")
         else:
             vectors = embedder.embed_pixels(np.stack(pixels))
             index.set_frame_embeddings(
-                video.path, embedder.id, embedder.version, dict(zip(times, vectors, strict=True))
+                video.path,
+                embedder.id,
+                embedder.version,
+                FRAMES_VERSION,
+                dict(zip(times, vectors, strict=True)),
             )
             stats.detector_runs += len(times)
         progress("video_frames", done, len(todo))
 
 
-def _frame_pixels(task: tuple[MediaRef, list[int]]) -> list[np.ndarray] | str:
-    """Runs in a worker process: a video's frames, each preprocessed as an image is."""
+def _frame_pixels(task: tuple[MediaRef, list[int]]) -> list[np.ndarray] | str | None:
+    """Runs in a worker process: a video's frames, each preprocessed as an image is, None when
+    the file is there and its frames do not read, or the error as text."""
     video, times = task
     try:
         return [mobileclip.model_input(frame) for frame in read_frames(video.path, times)]
+    except (UnreadableVideo, av.FFmpegError) as error:
+        # A file moved since the walk, such as one the user trashed, is not the video's fault.
+        return None if video.path.is_file() else _describe(error)
     except Exception as error:
         return _describe(error)
 

@@ -88,3 +88,35 @@ def test_an_hdr_frame_is_tone_mapped_with_its_reference_white_at_sdr_white(
     (frame,) = read_frames(video, [0])
 
     assert np.asarray(frame).min() >= 250  # read as SDR, the signal would be a gray of 190 or 147
+
+
+def flat_yuv(path, size, y, u, v):
+    """One frame of a flat YUV color, lossless and untagged, as many re-encodes leave it."""
+    width, height = size
+    with av.open(str(path), "w") as container:
+        stream = container.add_stream("ffv1", rate=10)
+        stream.width, stream.height, stream.pix_fmt = width, height, "yuv420p"
+        planes = np.concatenate(
+            [
+                np.full((height, width), y, np.uint8),
+                np.full((height // 4, width), u, np.uint8),
+                np.full((height // 4, width), v, np.uint8),
+            ]
+        )
+        container.mux(stream.encode(av.VideoFrame.from_ndarray(planes, "yuv420p")))
+        container.mux(stream.encode())
+    return path
+
+
+@pytest.mark.parametrize(
+    "size, rgb",
+    [((1280, 720), (191, 76, 39)), ((640, 480), (181, 67, 41))],
+    ids=["hd-bt709", "sd-bt601"],
+)
+def test_an_untagged_frame_takes_the_matrix_android_takes_for_its_size(tmp_path, size, rgb):
+    # Y 100, U 100, V 180 in limited range, by the BT.709 and BT.601 equations.
+    video = flat_yuv(tmp_path / "flat.mkv", size, 100, 100, 180)
+
+    (frame,) = read_frames(video, [0])
+
+    assert np.abs(np.asarray(frame).reshape(-1, 3).mean(axis=0) - rgb).max() <= 2
