@@ -90,7 +90,10 @@ internal fun rememberLengthMillis(file: File, key: String = file.path): Long? = 
 /** What reading the video's length gave: null until it is read, [NO_LENGTH] when it cannot be, else the length in ms. */
 @Composable
 internal fun rememberLengthRead(file: File, key: String = file.path): Long? = produceState(lengths[key], file, key) {
-    if (lengths[key] != null) return@produceState
+    // The initial value counts only once, and a caller that stays in place, such as the full size view's bar, keeps the
+    // state from page to page. So the cached length, or null while it is read, replaces the last video's.
+    value = lengths[key]
+    if (value != null) return@produceState
     val millis = withContext(Dispatchers.IO) {
         runCatching {
             MediaMetadataRetriever().use {
