@@ -3,6 +3,7 @@ package io.github.bert0ns.cribrum.frames
 import android.content.Context
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
+import android.os.Build
 import android.util.Base64
 import android.util.Log
 import androidx.test.core.app.ApplicationProvider
@@ -15,33 +16,45 @@ import io.github.bert0ns.cribrum.mobileclip.MobileClip
 import io.github.bert0ns.cribrum.mobileclip.VISION_MODEL_ASSET
 import io.github.bert0ns.cribrum.mobileclip.modelInput
 import io.github.bert0ns.cribrum.runtime.OnnxRuntime
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
+import org.junit.Before
 import org.junit.Test
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.Locale
+import kotlin.math.abs
 import kotlin.system.measureNanoTime
 
 /**
- * The frames of the golden videos of fixtures/videos/, embedded on the phone and compared with the lab's in frames.json, and
- * what one video of the phone's own costs (docs/design.md §5). Robolectric decodes no video, so only a phone can run this.
+ * The frames of the golden videos of fixtures/videos/, taken on the phone and compared with the lab's in frames.json, and what
+ * one video of the phone's own costs (docs/design.md §5). Robolectric decodes no video, so only a phone can run this.
  * Everything goes to logcat under the tag "cribrum-frames".
  *
- * The app under test has the same id as an installed Cribrum, so build it under another id, as HeicRotationDeviceTest
- * says, and let it read shared storage for the timing:
+ * An SDR frame must match the lab's embedding within the cosine floor and its mean colour within a few levels, which a wrong
+ * frame or a wrong color matrix misses. An HDR frame is only reported, with its brightness and clipped share on both sides:
+ * how HDR is tone mapped waits for those numbers (#394).
+ *
+ * It refuses to run in the app Cribrum is installed as, so build it under another id and let that one read shared storage:
  *
  *     ./gradlew -PapplicationIdSuffix=.framecheck assembleDebug assembleDebugAndroidTest
  *     adb install -t app/build/outputs/apk/debug/app-debug.apk
  *     adb install -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
  *     adb shell appops set io.github.bert0ns.cribrum.framecheck MANAGE_EXTERNAL_STORAGE allow
+ *     adb logcat -c
  *     adb shell am instrument -w -e class io.github.bert0ns.cribrum.frames.VideoFramesDeviceTest \
- *         -e video /sdcard/DCIM/Camera/<a 4K 60 fps HDR clip>.mp4 \
+ *         -e video /sdcard/DCIM/Camera/<a 4K 60 fps HLG clip>.mp4 \
  *         io.github.bert0ns.cribrum.framecheck.test/androidx.test.runner.AndroidJUnitRunner
- *     adb logcat -d -s cribrum-frames:I
+ *     adb logcat -d -s cribrum-frames:I > ../lab/data/frames-log.txt
+ *     adb pull /sdcard/DCIM/Camera/<the same clip>.mp4 ../lab/data/
  *     adb uninstall io.github.bert0ns.cribrum.framecheck.test
  *     adb uninstall io.github.bert0ns.cribrum.framecheck
+ *
+ * Then, from lab/, `uv run python scripts/compare_frames.py data/<the clip>.mp4 data/frames-log.txt` compares the clip's
+ * frames with the lab's. Do not use connectedDebugAndroidTest: it uninstalls the app when it ends.
  *
  * A debug build runs the Kotlin preprocessing about three times slower than a release one (§5), so the log keeps the
  * decode, which is native, apart from the preprocessing.
@@ -51,35 +64,51 @@ class VideoFramesDeviceTest {
     private val assets = InstrumentationRegistry.getInstrumentation().context.assets
     private val model by lazy { MobileClip { OnnxRuntime(context.assets.open(VISION_MODEL_ASSET).use { it.readBytes() }) } }
 
+    @Before
+    fun refuseTheInstalledApp() {
+        check(context.packageName != INSTALLED_APP) { "build with -PapplicationIdSuffix=.framecheck: this test must not replace or uninstall Cribrum" }
+        Log.i(TAG, "Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}")
+    }
+
     private fun copy(name: String): File = File(context.cacheDir, name).apply { assets.open(name).use { input -> outputStream().use(input::copyTo) } }
 
     private fun vector(base64: String): FloatArray = ByteBuffer.wrap(Base64.decode(base64, Base64.DEFAULT)).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().let { FloatArray(it.remaining()).also(it::get) }
 
+    private fun JSONArray.doubles() = List(length()) { getDouble(it) }
+
     @Test
-    fun embedsTheFramesOfTheGoldenVideosAsTheLabDoes() {
+    fun takesTheFramesOfTheGoldenVideosAsTheLabDoes() {
         val frames = JSONObject(assets.open("frames.json").bufferedReader().readText())
         val mayNotRead = JSONObject(assets.open("expected.json").bufferedReader().readText()).getJSONArray("phone_may_not_read").let { List(it.length(), it::getString) }
         val tolerance = frames.getJSONObject("tolerance")
+        val floor = tolerance.getDouble("embedding_cosine")
+        val meanTolerance = tolerance.getDouble("mean_rgb")
+        val off = mutableListOf<String>()
         val videos = frames.getJSONObject("videos")
-        val low = mutableListOf<String>()
         for (name in videos.keys()) {
             val video = videos.getJSONObject(name)
+            val hdr = video.getBoolean("hdr")
             val times = video.getJSONArray("times_ms").let { List(it.length()) { i -> it.getLong(i) } }
-            val wanted = video.getJSONArray("embeddings").let { List(it.length()) { i -> vector(it.getString(i)) } }
-            val pixels = try {
-                readFrames(copy(name), times) { modelInput(it) }
+            val taken = try {
+                readFrames(copy(name), times) { Brightness.of(it) to modelInput(it) }
             } catch (error: UnreadableVideo) {
                 if (name in mayNotRead) continue else throw error
             }
-            val cosines = model.embedPixels(pixels).zip(wanted) { got, want -> got.indices.sumOf { got[it].toDouble() * want[it] } }
-            val floor = tolerance.getDouble(if (video.getBoolean("hdr")) "hdr_embedding_cosine" else "embedding_cosine")
-            Log.i(TAG, "$name: cosine with the lab ${cosines.joinToString { "%.5f".format(it) }} (floor $floor)")
-            if (cosines.any { it < floor }) low += name
+            val embeddings = model.embedPixels(taken.map { it.second })
+            for ((i, time) in times.withIndex()) {
+                val want = vector(video.getJSONArray("embeddings").getString(i))
+                val cosine = embeddings[i].indices.sumOf { embeddings[i][it].toDouble() * want[it] }
+                val labMean = video.getJSONArray("mean_rgb").getJSONArray(i).doubles()
+                val labClipped = video.getJSONArray("clipped").getDouble(i)
+                val phone = taken[i].first
+                Log.i(TAG, "$name $time ms${if (hdr) " (HDR)" else ""}: cosine ${cosine.fixed(5)}, mean RGB ${phone.meanText()} against ${labMean.joinToString(" ") { it.fixed(1) }}, clipped ${phone.clipped.fixed(4)} against ${labClipped.fixed(4)}")
+                if (!hdr && (cosine < floor || phone.mean.zip(labMean).any { (a, b) -> abs(a - b) > meanTolerance })) off += "$name $time ms"
+            }
         }
-        assertTrue("under the floor: $low", low.isEmpty())
+        assertTrue("SDR frames off the lab's: $off", off.isEmpty())
     }
 
-    /** The seconds one video costs, from an instrumentation argument: `-e video <path>`. Skipped without one. */
+    /** The seconds one video costs, and its frames for compare_frames.py, from an instrumentation argument: `-e video <path>`. */
     @Test
     fun reportsWhatOneVideoCosts() {
         val path = InstrumentationRegistry.getArguments().getString("video")
@@ -89,14 +118,19 @@ class VideoFramesDeviceTest {
         val times = frameTimes(meta.durationMs)
         Log.i(TAG, "${file.name}: ${meta.width}x${meta.height}, ${meta.frameRate} fps, ${meta.videoCodec}, hdr ${meta.hdr}, ${meta.durationMs} ms, ${file.length() / 1_000_000} MB, frames at $times")
         model.load()
+        lateinit var taken: List<Pair<Brightness, FloatArray>>
         repeat(2) { round ->
             // The first round warms the decoder, the runtime and the model up.
-            var pixels = emptyList<FloatArray>()
             val total = measureNanoTime {
-                pixels = readFrames(file, times) { modelInput(it) }
-                model.embedPixels(pixels)
+                taken = readFrames(file, times) { Brightness.of(it) to modelInput(it) }
+                model.embedPixels(taken.map { it.second })
             }
             Log.i(TAG, "round ${round + 1}: ${millis(total, 1)} ms for the video (${millis(total, times.size)} ms a frame), as the scan does it")
+        }
+        for ((time, frame) in times.zip(model.embedPixels(taken.map { it.second }).zip(taken.map { it.first }))) {
+            val (embedding, brightness) = frame
+            val bytes = ByteBuffer.allocate(4 * embedding.size).order(ByteOrder.LITTLE_ENDIAN).also { it.asFloatBuffer().put(embedding) }.array()
+            Log.i(TAG, "frame $time mean ${brightness.meanText()} clipped ${brightness.clipped.fixed(4)} embedding ${Base64.encodeToString(bytes, Base64.NO_WRAP)}")
         }
         for ((label, option) in listOf("exact" to MediaMetadataRetriever.OPTION_CLOSEST, "sync" to MediaMetadataRetriever.OPTION_PREVIOUS_SYNC)) {
             val retriever = MediaMetadataRetriever()
@@ -112,7 +146,7 @@ class VideoFramesDeviceTest {
                     Log.i(
                         TAG,
                         "$label $time ms: decode ${millis(decode, 1)} ms, pixels ${millis(copy, 1)} ms, preprocess ${millis(preprocess, 1)} ms, " +
-                            "${frame.width}x${frame.height} ${frame.config} ${frame.colorSpace?.name}, mean green ${"%.1f".format(argb!!.pixels.average { it shr 8 and 0xff })}",
+                            "${frame.width}x${frame.height} ${frame.config} ${frame.colorSpace?.name}, mean RGB ${Brightness.of(argb!!).meanText()}",
                     )
                     frame.recycle()
                 }
@@ -124,9 +158,33 @@ class VideoFramesDeviceTest {
         Log.i(TAG, "model: ${millis(embed, times.size)} ms a frame, batch of ${times.size}")
     }
 
-    private fun IntArray.average(channel: (Int) -> Int): Double = sumOf { channel(it).toLong() }.toDouble() / size
+    /** As brightness() in the lab's frames.py: the mean red, green and blue, and the share of pixels with a luma of 250 or more. */
+    private class Brightness(val mean: List<Double>, val clipped: Double) {
+        fun meanText() = mean.joinToString(" ") { it.fixed(1) }
+
+        companion object {
+            fun of(frame: Argb): Brightness {
+                val sums = LongArray(3)
+                var clipped = 0
+                for (pixel in frame.pixels) {
+                    val r = pixel shr 16 and 0xff
+                    val g = pixel shr 8 and 0xff
+                    val b = pixel and 0xff
+                    sums[0] += r.toLong()
+                    sums[1] += g.toLong()
+                    sums[2] += b.toLong()
+                    if (0.299 * r + 0.587 * g + 0.114 * b >= 250) clipped++
+                }
+                return Brightness(sums.map { it.toDouble() / frame.pixels.size }, clipped.toDouble() / frame.pixels.size)
+            }
+        }
+    }
 
     private companion object {
+        /** With a dot whatever the phone's language, so compare_frames.py reads the log. */
+        fun Double.fixed(digits: Int): String = String.format(Locale.ROOT, "%.${digits}f", this)
+
         const val TAG = "cribrum-frames"
+        const val INSTALLED_APP = "io.github.bert0ns.cribrum"
     }
 }
