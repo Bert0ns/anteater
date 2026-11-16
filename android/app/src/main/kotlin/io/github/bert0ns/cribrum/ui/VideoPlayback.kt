@@ -227,7 +227,15 @@ internal fun rememberVideoPlayback(): VideoPlayback {
 @Composable
 internal fun VideoPage(file: File, section: String, playback: VideoPlayback, unreadable: Boolean, onClose: () -> Unit) {
     val showing = playback.loaded == file.path
-    val tap = stringResource(if (unreadable) R.string.close else if (showing && playback.playing) R.string.video_pause else R.string.video_play)
+    val tap = stringResource(
+        if (unreadable) {
+            R.string.close
+        } else if (showing && playback.playing) {
+            R.string.video_pause
+        } else {
+            R.string.video_play
+        },
+    )
     Box(Modifier.fillMaxSize().clickable(onClickLabel = tap, onClick = if (unreadable) onClose else ({ playback.toggle(file) }))) {
         VideoFrame(file, section, Modifier.fillMaxSize(), ContentScale.Fit, unreadable)
         if (showing) VideoSurface(playback)
