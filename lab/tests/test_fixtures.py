@@ -1,5 +1,6 @@
 import json
 
+import av
 import pytest
 
 from cribrum_lab import fixtures, mobileclip
@@ -76,3 +77,25 @@ def test_lab_still_embeds_the_frames_of_the_fixture_videos_as_they_record():
     for name, entry in FRAMES["videos"].items():
         for got, want in zip(actual[name]["embeddings"], entry["embeddings"], strict=True):
             assert fixtures.decode_vector(got) @ fixtures.decode_vector(want) > 0.99999, name
+        assert actual[name]["mean_rgb"] == entry["mean_rgb"], name
+        assert actual[name]["clipped"] == entry["clipped"], name
+
+
+def test_the_ramp_s_frames_are_the_ones_its_times_point_to():
+    # Frame i of ramp.mp4 is at 100 * i ms with a luma of 16 + 5 * i, which BT.601 in limited range
+    # reads as a gray of 1.164 * 5 * i. A keyframe instead would be frame 0, 10, 20, 20 or 30.
+    ramp = FRAMES["videos"]["ramp.mp4"]
+
+    for time_ms, mean_rgb in zip(ramp["times_ms"], ramp["mean_rgb"], strict=True):
+        gray = 1.164 * 5 * round(time_ms / 100)
+        assert max(abs(channel - gray) for channel in mean_rgb) <= 1.5, time_ms
+
+
+def test_a_missing_tone_map_moves_the_mean_of_an_hlg_frame_past_the_tolerance():
+    # What a phone that hands over the HLG signal as it is would show.
+    hlg = FRAMES["videos"]["hlg.mp4"]
+    with av.open(str(fixtures.VIDEOS / "hlg.mp4")) as container:
+        raw = next(container.decode(video=0)).to_ndarray(format="rgb24").reshape(-1, 3).mean(axis=0)
+
+    gap = max(abs(a - b) for a, b in zip(raw, hlg["mean_rgb"][0], strict=True))
+    assert gap > 3 * FRAMES["tolerance"]["mean_rgb"]

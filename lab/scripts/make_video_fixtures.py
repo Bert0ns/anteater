@@ -51,6 +51,13 @@ def main() -> None:
         ffmpeg(*fill(PATTERN, rate=30), "-t", "1", "-vf", tags, "-c:v", "libx265",
                "-x265-params", "log-level=error", "-pix_fmt", "yuv420p10le", "-tag:v", "hvc1",
                out(name))  # fmt: skip
+    # Frame i is a flat gray of luma 16 + 5 * i, so a frame tells which one it is (frames.json), and
+    # 4 s with a keyframe a second, so the margin applies and a frame needs a seek past a keyframe.
+    ffmpeg("-f", "lavfi", "-i", "nullsrc=size=64x48:rate=10,geq=lum='16+5*N':cb=128:cr=128",
+           "-t", "4", *H264, "-g", "10", out("ramp.mp4"))  # fmt: skip
+    # HD with no color tags, as many re-encodes are: each side picks the matrix for its size.
+    ffmpeg("-f", "lavfi", "-i", "testsrc=size=1280x720:rate=10", "-t", "1", *H264, "-crf", "40",
+           out("hd.mp4"))  # fmt: skip
     ffmpeg(*fill(PATTERN, rate=30), *fill(TONE, rate=48000), "-t", "1", "-c:v", "libvpx-vp9",
            "-b:v", "50k", "-c:a", "libopus", "-b:a", "6k", out("clip.webm"))  # fmt: skip
     ffmpeg(*fill(TONE, rate=48000), "-t", "1", *AAC, out("audio.mp4"))
@@ -113,6 +120,10 @@ def main() -> None:
             "prores.mov": video("prores.mov", 64, 48, 1000, 30.0, False, None, False, None, None),
             "hdr.mp4": video("hdr.mp4", 64, 48, 1000, 30.0, False, "video/hevc", True, None, None),
             "hlg.mp4": video("hlg.mp4", 64, 48, 1000, 30.0, False, "video/hevc", True, None, None),
+            "ramp.mp4": video(
+                "ramp.mp4", 64, 48, 4000, 10.0, False, "video/avc", False, None, None
+            ),
+            "hd.mp4": video("hd.mp4", 1280, 720, 1000, 10.0, False, "video/avc", False, None, None),
             # Opus adds its 8 ms of pre-skip. A Matroska date is not read (docs/design.md, 7).
             "clip.webm": video(
                 "clip.webm", 64, 48, 1008, 30.0, True, "video/x-vnd.on2.vp9", False, None, None

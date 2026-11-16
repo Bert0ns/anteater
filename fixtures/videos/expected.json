@@ -73,6 +73,30 @@
       "captured_at": null,
       "captured_instant": null
     },
+    "ramp.mp4": {
+      "width": 64,
+      "height": 48,
+      "duration_ms": 4000,
+      "frame_rate": 10.0,
+      "bitrate": 5462,
+      "has_audio": false,
+      "video_codec": "video/avc",
+      "hdr": false,
+      "captured_at": null,
+      "captured_instant": null
+    },
+    "hd.mp4": {
+      "width": 1280,
+      "height": 720,
+      "duration_ms": 1000,
+      "frame_rate": 10.0,
+      "bitrate": 66584,
+      "has_audio": false,
+      "video_codec": "video/avc",
+      "hdr": false,
+      "captured_at": null,
+      "captured_instant": null
+    },
     "clip.webm": {
       "width": 64,
       "height": 48,
