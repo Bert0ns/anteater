@@ -230,7 +230,8 @@ private fun Tile(item: ReviewItem, marked: Boolean, onTap: () -> Unit, onHold: (
     // A video's tile shows its size, so the description says it as well, beside the file's name.
     val described = stringResource(R.string.tile_description, if (video) stringResource(R.string.tile_description, File(item.image.path).name, size) else why, state)
     // The tile's own description hides the heart's from a screen reader, so it says it too.
-    val description = if (item.isFavorite) stringResource(R.string.tile_description, described, stringResource(R.string.favorite)) else described
+    val favorite = stringResource(if (video) R.string.favorite_video else R.string.favorite)
+    val description = if (item.isFavorite) stringResource(R.string.tile_description, described, favorite) else described
     val toggle = stringResource(if (marked) R.string.action_keep else R.string.action_trash)
     val open = stringResource(R.string.action_open_full_size)
     Box(
@@ -252,7 +253,7 @@ private fun Tile(item: ReviewItem, marked: Boolean, onTap: () -> Unit, onHold: (
             },
     ) {
         if (video) {
-            VideoFrame(File(item.image.path), "Review.tile", Modifier.fillMaxSize())
+            VideoFrame(File(item.image.path), "Review.tile", Modifier.fillMaxSize(), unreadable = item.unreadable)
             Text(size, Modifier.align(Alignment.BottomStart).background(Color.Black.copy(alpha = 0.6f)).padding(4.dp).clearAndSetSemantics {}, color = Color.White, style = MaterialTheme.typography.labelSmall)
         } else {
             TracedAsyncImage(File(item.image.path), "Review.tile", null, Modifier.fillMaxSize(), tile = true)
@@ -262,10 +263,10 @@ private fun Tile(item: ReviewItem, marked: Boolean, onTap: () -> Unit, onHold: (
         if (marked) {
             Row(Modifier.align(Alignment.TopEnd).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Icon(Icons.Default.Delete, contentDescription = null, tint = Color.White, modifier = Modifier.background(markColor, MaterialTheme.shapes.small))
-                if (item.isFavorite) FavoriteHeart()
+                if (item.isFavorite) FavoriteHeart(description = favorite)
             }
         } else if (item.isFavorite) {
-            FavoriteHeart(Modifier.align(Alignment.BottomEnd).padding(4.dp))
+            FavoriteHeart(Modifier.align(Alignment.BottomEnd).padding(4.dp), favorite)
         }
         if (item.isBest) {
             Text(
@@ -418,11 +419,11 @@ fun CategoryScreen(
         AlertDialog(
             onDismissRequest = { askFavorites = false },
             icon = { Icon(Icons.Filled.Favorite, contentDescription = null) },
-            title = { Text(pluralStringResource(R.plurals.summary_title, toTrash.size, toTrash.size)) },
+            title = { Text(pluralStringResource(if (videos) R.plurals.videos_summary_title else R.plurals.summary_title, toTrash.size, toTrash.size)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(pluralStringResource(R.plurals.summary_body, retentionDays, size, retentionDays))
-                    Text(pluralStringResource(R.plurals.summary_favorites, favorites, favorites), fontWeight = FontWeight.Bold)
+                    Text(pluralStringResource(if (videos) R.plurals.videos_summary_body else R.plurals.summary_body, retentionDays, size, retentionDays))
+                    Text(pluralStringResource(if (videos) R.plurals.videos_summary_favorites else R.plurals.summary_favorites, favorites, favorites), fontWeight = FontWeight.Bold)
                 }
             },
             confirmButton = {
@@ -470,7 +471,7 @@ private fun FullSize(
     val paths = items.map { it.image.path }
     LaunchedEffect(paths) { if (playback.loaded != null && playback.loaded !in paths) playback.stop() }
     val page: @Composable (Int) -> Unit = { page ->
-        items.getOrNull(page)?.let { VideoPage(File(it.image.path), "Review.fullSize", playback, false, onClose) }
+        items.getOrNull(page)?.let { VideoPage(File(it.image.path), "Review.fullSize", playback, it.unreadable, onClose) }
     }
     FullSizeViewer(
         paths,
@@ -503,8 +504,11 @@ private fun FullSize(
         FullSizeBar(current.image.path, current.isFavorite, heart = heart) {
             if (video) {
                 val file = File(current.image.path)
-                VideoControls(playback, file, "Review.fullSize", rememberLengthMillis(file, "${current.image.path}|${current.image.size}|${current.image.mtimeNs}"), false)
-                Text(videoDetails(current.image.size, rememberDuration(file, "${current.image.path}|${current.image.size}|${current.image.mtimeNs}")), color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                val key = "${current.image.path}|${current.image.size}|${current.image.mtimeNs}"
+                // The index's length when it has one, as in "Largest videos"; else the retriever's, unless the file cannot be read.
+                val length = current.durationMs ?: if (current.unreadable) null else rememberLengthMillis(file, key)
+                VideoControls(playback, file, "Review.fullSize", length, current.unreadable)
+                Text(videoDetails(current.image.size, length?.let(::formatLength)), color = Color.White, style = MaterialTheme.typography.bodyMedium)
             }
             for (reason in current.reasons.mapNotNull(::reasonOf)) {
                 Text(reason.text(), color = Color.White, style = MaterialTheme.typography.bodyMedium)

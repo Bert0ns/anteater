@@ -411,6 +411,8 @@ class ImageIndex(private val db: IndexDatabase) :
                     ReviewState.of(row.reviewState),
                     signals[row.path].orEmpty(),
                     seen[row.path].orEmpty().toSet(),
+                    row.unreadable,
+                    row.durationMs,
                 )
             }
         }

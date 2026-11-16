@@ -114,4 +114,8 @@ data class IndexedMedia(
     val signals: List<Signal> = emptyList(),
     /** Identities of the signals the image had when the user kept it. */
     val seenWhenKept: Set<SignalIdentity> = emptySet(),
+    /** The header did not read. For a video the review draws the placeholder of docs/design.md decision 17. */
+    val unreadable: Boolean = false,
+    /** A video's length from the index, null until the video steps have read it. */
+    val durationMs: Long? = null,
 )

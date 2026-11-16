@@ -371,7 +371,7 @@ class PipelineTest {
 
         assertEquals(listOf("exact_duplicate"), again.skippedGroupDetectors)
         assertEquals(emptyList<String>(), again.ranGroupDetectors)
-        assertEquals(listOf("exact_duplicate"), againVideos.skippedGroupDetectors)
+        assertEquals("the log tells the video run from the image run", listOf("exact_duplicate:video"), againVideos.skippedGroupDetectors)
         assertEquals(emptyList<String>(), againVideos.ranGroupDetectors)
     }
 

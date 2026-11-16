@@ -224,6 +224,8 @@ data class StoredState(
     @ColumnInfo(name = "mtime_ns") val mtimeNs: Long,
     @ColumnInfo(name = "review_state") val reviewState: String,
     @ColumnInfo(name = "media_type") val mediaType: String,
+    val unreadable: Boolean,
+    @ColumnInfo(name = "duration_ms") val durationMs: Long?,
 )
 
 @Dao
@@ -462,11 +464,11 @@ interface IndexDao {
     @Query("SELECT path, captured_at FROM images WHERE captured_at IS NOT NULL")
     suspend fun capturedAt(): List<StoredCapture>
 
-    @Query("SELECT path, size, mtime_ns, review_state, media_type FROM images ORDER BY path")
+    @Query("SELECT path, size, mtime_ns, review_state, media_type, unreadable, duration_ms FROM images ORDER BY path")
     suspend fun states(): List<StoredState>
 
     /** [states], blocking, as [allSignals]. */
-    @Query("SELECT path, size, mtime_ns, review_state, media_type FROM images ORDER BY path")
+    @Query("SELECT path, size, mtime_ns, review_state, media_type, unreadable, duration_ms FROM images ORDER BY path")
     fun statesNow(): List<StoredState>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)

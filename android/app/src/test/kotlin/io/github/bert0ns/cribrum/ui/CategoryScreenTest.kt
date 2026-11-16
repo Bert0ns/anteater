@@ -19,7 +19,10 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -116,6 +119,39 @@ class CategoryScreenTest {
         compose.onNodeWithText("Trash 1, keep 0").performClick()
 
         assertEquals(setOf(clips[1].path) to setOf(clips[0].path), confirmed)
+    }
+
+    @Test
+    fun `an unreadable video of a group has the placeholder in its tile and its full size view, with no player`() {
+        val players = Players()
+        val broken = ReviewGroup("g", listOf(ReviewItem(clips[0], suggestTrash = false, isBest = true), ReviewItem(clips[1], suggestTrash = true, unreadable = true)))
+        compose.setContent {
+            CompositionLocalProvider(LocalPlayerFactory provides players.factory) {
+                CategoryScreen(listOf(broken), 1, setOf(clips[1].path), grouped = true, onToggle = {}, onApply = { _, _ -> }, onSkip = {}, mediaType = MediaType.VIDEO)
+            }
+        }
+
+        compose.onNodeWithContentDescription("Marked for the trash", substring = true).performTouchInput { longClick() }
+
+        compose.onNodeWithTag("fullSize").assertExists()
+        compose.onAllNodes(hasText("Can't be read") and hasAnyAncestor(hasTestTag("fullSize"))).assertCountEquals(1)
+        compose.onAllNodesWithContentDescription("Play video").assertCountEquals(0)
+        assertTrue(players.made.isEmpty())
+    }
+
+    @Test
+    fun `the favourite dialog of a page of videos says videos`() {
+        val favourite = ReviewGroup("g", listOf(ReviewItem(clips[0], suggestTrash = false, isBest = true), ReviewItem(clips[1], suggestTrash = true, isFavorite = true)))
+        compose.setContent {
+            CompositionLocalProvider(LocalPlayerFactory provides Players().factory) {
+                CategoryScreen(listOf(favourite), 1, setOf(clips[1].path), grouped = true, onToggle = {}, onApply = { _, _ -> }, onSkip = {}, mediaType = MediaType.VIDEO)
+            }
+        }
+
+        compose.onNodeWithText("Trash 1, keep 0").performClick()
+
+        compose.onNodeWithText("Move 1 video to the trash?").assertExists()
+        compose.onNodeWithText("image", substring = true).assertDoesNotExist()
     }
 
     @Test

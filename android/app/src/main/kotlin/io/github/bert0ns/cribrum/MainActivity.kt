@@ -282,7 +282,7 @@ private fun AppContent(model: ReviewViewModel) {
         model.dismissChangeFailed()
     }
     val favoriteAppeared = state.favoriteAppeared
-    val favoriteAppearedMessage = stringResource(if (state.screen == Screen.Videos) R.string.favorite_appeared_videos_snackbar else R.string.favorite_appeared_snackbar)
+    val favoriteAppearedMessage = stringResource(if (state.screen == Screen.Videos || (state.screen as? Screen.Category)?.mediaType == MediaType.VIDEO) R.string.favorite_appeared_videos_snackbar else R.string.favorite_appeared_snackbar)
     LaunchedEffect(favoriteAppeared) {
         if (!favoriteAppeared) return@LaunchedEffect
         snackbar.showSnackbar(favoriteAppearedMessage, withDismissAction = true, duration = SnackbarDuration.Long)

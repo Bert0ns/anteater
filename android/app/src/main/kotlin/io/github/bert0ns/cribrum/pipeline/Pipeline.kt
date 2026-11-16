@@ -156,7 +156,7 @@ data class Stats(
     var skipped: Int = 0,
     /** Analyses that threw. They are not stored, so the next run retries them. */
     val failures: MutableList<Failure> = mutableListOf(),
-    /** Ids of the group detectors that ran, a failed run included, and of those whose fingerprint let them skip. */
+    /** Ids of the group runs, a failed one included, and of those whose fingerprint let them skip: the detector id, and `<id>:video` for the videos' run. */
     val ranGroupDetectors: MutableList<String> = mutableListOf(),
     val skippedGroupDetectors: MutableList<String> = mutableListOf(),
     /** Milliseconds each phase took, in the order they ran. */
@@ -366,10 +366,10 @@ class Pipeline(
                 val step = if (video) VIDEO_GROUPS_STEP else detector.id
                 val fingerprint = fingerprint(inputs, "$model:${inputs.count { it.path in hashed }}:$blurInput")
                 if (upToDate(detector, runId, fingerprint, inputs)) {
-                    stats.skippedGroupDetectors += detector.id
+                    stats.skippedGroupDetectors += runId
                     continue
                 }
-                stats.ranGroupDetectors += detector.id
+                stats.ranGroupDetectors += runId
                 progress(step, 0, 1)
                 hashFailed.clear()
                 try {
