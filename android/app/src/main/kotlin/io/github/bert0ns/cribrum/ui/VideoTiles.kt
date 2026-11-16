@@ -17,9 +17,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -89,22 +89,25 @@ internal fun rememberLengthMillis(file: File, key: String = file.path): Long? = 
 
 /** What reading the video's length gave: null until it is read, [NO_LENGTH] when it cannot be, else the length in ms. */
 @Composable
-internal fun rememberLengthRead(file: File, key: String = file.path): Long? = produceState(lengths[key], file, key) {
-    // The initial value counts only once, and a caller that stays in place, such as the full size view's bar, keeps the
-    // state from page to page. So the cached length, or null while it is read, replaces the last video's.
-    value = lengths[key]
-    if (value != null) return@produceState
-    val millis = withContext(Dispatchers.IO) {
-        runCatching {
-            MediaMetadataRetriever().use {
-                it.setDataSource(file.path)
-                it.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
-            }
-        }.getOrNull()
-    } ?: NO_LENGTH
-    lengths.put(key, millis)
-    value = millis
-}.value
+internal fun rememberLengthRead(file: File, key: String = file.path): Long? {
+    // Keyed on the video, so a caller that stays in place while the video changes, such as the full size view's bar, never
+    // shows the last video's length, not even for a frame.
+    val read = remember(file, key) { mutableStateOf(lengths[key]) }
+    LaunchedEffect(file, key) {
+        if (read.value != null) return@LaunchedEffect
+        val millis = withContext(Dispatchers.IO) {
+            runCatching {
+                MediaMetadataRetriever().use {
+                    it.setDataSource(file.path)
+                    it.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+                }
+            }.getOrNull()
+        } ?: NO_LENGTH
+        lengths.put(key, millis)
+        read.value = millis
+    }
+    return read.value
+}
 
 /** A length in ms as a player shows it ("01:42"). */
 internal fun formatLength(millis: Long): String = DateUtils.formatElapsedTime(millis / 1000)

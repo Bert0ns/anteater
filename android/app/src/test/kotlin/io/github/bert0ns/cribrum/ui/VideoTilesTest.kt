@@ -7,7 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithText
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,16 +30,18 @@ class VideoTilesTest {
         ShadowMediaMetadataRetriever.addMetadata(long.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "122000")
         ShadowMediaMetadataRetriever.addMetadata(short.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "35000")
         var file by mutableStateOf(long)
+        val shown = mutableListOf<String?>()
         // The full size view's bar stays in place while the pages under it change, as this does.
-        compose.setContent { Text(rememberDuration(file) ?: "none") }
+        compose.setContent { Text(rememberDuration(file).also(shown::add) ?: "none") }
         compose.waitUntil(5_000) { compose.onAllNodesWithText("02:02").fetchSemanticsNodes().isNotEmpty() }
 
         file = short
         compose.waitUntil(5_000) { compose.onAllNodesWithText("00:35").fetchSemanticsNodes().isNotEmpty() }
 
-        // Back to a video whose length is already read: its own, not the one shown last.
+        // Back to a video whose length is already read: its own from the first frame, never the one shown last.
+        val before = shown.size
         file = long
         compose.waitForIdle()
-        compose.onNodeWithText("02:02").assertExists()
+        assertEquals(listOf("02:02"), shown.drop(before).distinct())
     }
 }
