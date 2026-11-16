@@ -384,42 +384,76 @@ class ImageIndexTest {
         setUnreadable(unreadable.path)
         setReviewState(trashed.path, ReviewState.TRASHED)
 
-        assertEquals(listOf(VIDEO to 12_345L), readVideos().map { it.ref to it.durationMs })
+        assertEquals(listOf(VIDEO to 12_345L), readVideos(1).map { it.ref to it.durationMs })
     }
 
     @Test
-    fun `frame embeddings are stored per video time and model version`() = test {
+    fun `a video whose frames did not read waits for a new frame version or a change`() = test {
+        record(VIDEO)
+        setVideoMetadata(VIDEO.path, VIDEO_META)
+
+        setFramesUnreadable(VIDEO.path, 1)
+
+        assertEquals(emptyList<IndexedVideo>(), readVideos(1))
+        assertEquals(listOf(VIDEO), readVideos(2).map { it.ref })
+        val changed = VIDEO.copy(size = 901, mtimeNs = 2)
+        record(changed)
+        setVideoMetadata(VIDEO.path, VIDEO_META)
+        assertEquals(listOf(changed), readVideos(1).map { it.ref })
+    }
+
+    @Test
+    fun `frame embeddings are stored per video time, model version and frame version`() = test {
         record(VIDEO)
         val first = floatArrayOf(1f, 0f)
         val last = floatArrayOf(0f, 1f)
 
-        setFrameEmbeddings(VIDEO.path, "clip", 2, mapOf(300L to first, 700L to last))
+        setFrameEmbeddings(VIDEO.path, "clip", 2, 1, mapOf(300L to first, 700L to last))
 
-        val stored = frameEmbeddings("clip", 2)
+        val stored = frameEmbeddings("clip", 2, 1)
         assertEquals(setOf(VIDEO.path), stored.keys)
         assertEquals(listOf(300L, 700L), stored.getValue(VIDEO.path).keys.toList())
         assertArrayEquals(last, stored.getValue(VIDEO.path).getValue(700L), 0f)
-        assertEquals(emptyMap<String, Map<Long, FloatArray>>(), frameEmbeddings("clip", 1))
+        assertEquals(mapOf(VIDEO.path to listOf(300L, 700L)), sampledTimes("clip", 2, 1))
+        assertEquals(emptyMap<String, Map<Long, FloatArray>>(), frameEmbeddings("clip", 1, 1))
+        assertEquals(emptyMap<String, Map<Long, FloatArray>>(), frameEmbeddings("clip", 2, 2))
+        assertEquals(emptyMap<String, List<Long>>(), sampledTimes("clip", 2, 2))
     }
 
     @Test
     fun `storing a video's frames again replaces them all`() = test {
         record(VIDEO)
-        setFrameEmbeddings(VIDEO.path, "clip", 1, mapOf(300L to floatArrayOf(1f)))
+        setFrameEmbeddings(VIDEO.path, "clip", 1, 1, mapOf(300L to floatArrayOf(1f)))
 
-        setFrameEmbeddings(VIDEO.path, "clip", 1, mapOf(500L to floatArrayOf(0f)))
+        setFrameEmbeddings(VIDEO.path, "clip", 1, 2, mapOf(500L to floatArrayOf(0f)))
 
-        assertEquals(listOf(500L), frameEmbeddings("clip", 1).getValue(VIDEO.path).keys.toList())
+        assertEquals(mapOf(VIDEO.path to listOf(500L)), sampledTimes("clip", 1, 2))
+        assertEquals(emptyMap<String, List<Long>>(), sampledTimes("clip", 1, 1))
     }
 
     @Test
     fun `a changed video drops its frames`() = test {
         record(VIDEO)
-        setFrameEmbeddings(VIDEO.path, "clip", 1, mapOf(300L to floatArrayOf(1f)))
+        setFrameEmbeddings(VIDEO.path, "clip", 1, 1, mapOf(300L to floatArrayOf(1f)))
 
         record(VIDEO.copy(size = 901, mtimeNs = 2))
 
-        assertEquals(emptyMap<String, Map<Long, FloatArray>>(), frameEmbeddings("clip", 1))
+        assertEquals(emptyMap<String, Map<Long, FloatArray>>(), frameEmbeddings("clip", 1, 1))
+    }
+
+    @Test
+    fun `the analysis data counts the videos with frames and deletes their frames`() = test {
+        record(PHOTO)
+        record(VIDEO)
+        setEmbeddings("clip", 1, mapOf(PHOTO.path to floatArrayOf(1f)))
+        setFrameEmbeddings(VIDEO.path, "clip", 1, 1, mapOf(300L to floatArrayOf(1f), 700L to floatArrayOf(0f)))
+
+        assertEquals(2, embeddingCount()) // the photo and the video, not each frame
+        deleteEmbeddings()
+
+        assertEquals(0, embeddingCount())
+        assertEquals(emptyMap<String, Map<Long, FloatArray>>(), frameEmbeddings("clip", 1, 1))
+        assertEquals(listOf(PHOTO, VIDEO), images())
     }
 
     @Test
@@ -970,7 +1004,8 @@ class ImageIndexTest {
         "deleteEmbeddings" to { deleteEmbeddings() },
         "forgetAnalyses" to { forgetAnalyses(listOf(PHOTO.path), listOf("blur")) },
         "setEmbeddings" to { setEmbeddings("clip", 1, mapOf(PHOTO.path to floatArrayOf(1f))) },
-        "setFrameEmbeddings" to { setFrameEmbeddings(PHOTO.path, "clip", 1, mapOf(300L to floatArrayOf(1f))) },
+        "setFrameEmbeddings" to { setFrameEmbeddings(PHOTO.path, "clip", 1, 1, mapOf(300L to floatArrayOf(1f))) },
+        "setFramesUnreadable" to { setFramesUnreadable(PHOTO.path, 1) },
         "setSignals" to { setSignals(PHOTO.path, "blur", 1, emptyList()) },
         "setSignalsOfMany" to { setSignalsOfMany("blur", 1, mapOf(PHOTO.path to emptyList())) },
         "setGroupSignals" to { setGroupSignals("blur", 1, mapOf(PHOTO.path to emptyList())) },
@@ -1007,8 +1042,9 @@ class ImageIndexTest {
         "embeddingBytes" to { embeddingBytes() },
         "fileBytes" to { fileBytes() },
         "embeddings" to { embeddings("clip", 1) },
-        "frameEmbeddings" to { frameEmbeddings("clip", 1) },
-        "readVideos" to { readVideos() },
+        "frameEmbeddings" to { frameEmbeddings("clip", 1, 1) },
+        "sampledTimes" to { sampledTimes("clip", 1, 1) },
+        "readVideos" to { readVideos(1) },
         "analyzedPaths" to { analyzedPaths("blur", 1) },
         "embeddedPaths" to { embeddedPaths("clip", 1) },
         "readableNotTrashed" to { readableNotTrashed() },

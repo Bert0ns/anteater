@@ -9,6 +9,9 @@ import java.io.File
 
 const val FRAMES = 5
 
+/** Bump it when the frames a video gives change, such as their times or their decoding: the frames stored at another version are taken again. */
+const val FRAMES_VERSION = 1
+
 /** Kept off each end, where a clip fades in, starts black or catches the hand on the button. */
 const val MARGIN_MS = 500
 

@@ -43,6 +43,8 @@ data class ImageRow(
     val hdr: Boolean? = null,
     /** The moment [capturedAt] holds, as epoch milliseconds in UTC: a video's MP4 creation time. */
     @ColumnInfo(name = "captured_instant") val capturedInstant: Long? = null,
+    /** The frame version at which a video's frames did not read: not tried again until the file or the version changes (docs/design.md §4). */
+    @ColumnInfo(name = "frames_unreadable") val framesUnreadable: Int? = null,
 )
 
 /** Which detector version last analyzed an image, even if it emitted no signal. */
@@ -128,6 +130,8 @@ class FrameEmbeddingRow(
     val path: String,
     val model: String,
     @ColumnInfo(name = "model_version") val modelVersion: Int,
+    /** FRAMES_VERSION when the frames were taken: frames of another version are taken again. */
+    @ColumnInfo(name = "frames_version") val framesVersion: Int,
     @ColumnInfo(name = "time_ms") val timeMs: Long,
     /** float32, little-endian. */
     val vector: ByteArray,
@@ -196,6 +200,8 @@ data class StoredSignalId(val path: String, val id: Long)
 
 data class StoredRef(val path: String, val size: Long, @ColumnInfo(name = "mtime_ns") val mtimeNs: Long, @ColumnInfo(name = "media_type") val mediaType: String)
 
+data class StoredFrameTime(val path: String, @ColumnInfo(name = "time_ms") val timeMs: Long)
+
 data class StoredVideo(
     val path: String,
     val size: Long,
@@ -256,7 +262,7 @@ interface IndexDao {
            mime = NULL, camera_make = NULL, camera_model = NULL, captured_at = NULL,
            unreadable = 0, content_hash = NULL, perceptual_hash = NULL, media_type = :mediaType,
            duration_ms = NULL, frame_rate = NULL, bitrate = NULL, has_audio = NULL, video_codec = NULL, hdr = NULL,
-           captured_instant = NULL, review_state = CASE WHEN review_state = 'trashed' THEN 'unreviewed' ELSE review_state END WHERE path = :path""",
+           captured_instant = NULL, frames_unreadable = NULL, review_state = CASE WHEN review_state = 'trashed' THEN 'unreviewed' ELSE review_state END WHERE path = :path""",
     )
     suspend fun resetImage(path: String, size: Long, mtimeNs: Long, mediaType: String)
 
@@ -378,16 +384,38 @@ interface IndexDao {
     suspend fun deleteFrameEmbeddings(path: String, model: String)
 
     @Query("DELETE FROM frame_embeddings WHERE path = :path")
-    suspend fun deleteAllFrameEmbeddings(path: String)
+    suspend fun deleteFramesOf(path: String)
 
-    @Query("SELECT * FROM frame_embeddings WHERE model = :model AND model_version = :modelVersion ORDER BY path, time_ms")
-    suspend fun frameEmbeddings(model: String, modelVersion: Int): List<FrameEmbeddingRow>
+    @Query("DELETE FROM frame_embeddings")
+    suspend fun deleteAllFrameEmbeddings()
+
+    @Query("SELECT count(*) FROM frame_embeddings")
+    suspend fun frameEmbeddingCount(): Int
+
+    @Query("SELECT count(DISTINCT path) FROM frame_embeddings")
+    suspend fun framedVideoCount(): Int
+
+    @Query(
+        """SELECT * FROM frame_embeddings WHERE model = :model AND model_version = :modelVersion AND frames_version = :framesVersion
+           ORDER BY path, time_ms""",
+    )
+    suspend fun frameEmbeddings(model: String, modelVersion: Int, framesVersion: Int): List<FrameEmbeddingRow>
+
+    @Query(
+        """SELECT path, time_ms FROM frame_embeddings WHERE model = :model AND model_version = :modelVersion AND frames_version = :framesVersion
+           ORDER BY path, time_ms""",
+    )
+    suspend fun sampledTimes(model: String, modelVersion: Int, framesVersion: Int): List<StoredFrameTime>
 
     @Query(
         """SELECT path, size, mtime_ns, media_type, unreadable, duration_ms FROM images
-           WHERE media_type = 'video' AND width IS NOT NULL AND NOT unreadable AND review_state != 'trashed' ORDER BY path""",
+           WHERE media_type = 'video' AND width IS NOT NULL AND NOT unreadable AND review_state != 'trashed'
+           AND frames_unreadable IS NOT :framesVersion ORDER BY path""",
     )
-    suspend fun readVideos(): List<StoredVideo>
+    suspend fun readVideos(framesVersion: Int): List<StoredVideo>
+
+    @Query("UPDATE images SET frames_unreadable = :framesVersion WHERE path = :path")
+    suspend fun setFramesUnreadable(path: String, framesVersion: Int): Int
 
     @Query("SELECT count(*) FROM images WHERE media_type = 'image'")
     suspend fun imageCount(): Int
@@ -651,9 +679,10 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
 /** Version 8 had no frames of a video: the first video scan with the model samples every video (docs/design.md §7). */
 val MIGRATION_8_9 = object : Migration(8, 9) {
     override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `images` ADD COLUMN `frames_unreadable` INTEGER")
         db.execSQL(
             "CREATE TABLE IF NOT EXISTS `frame_embeddings` (`path` TEXT NOT NULL, `model` TEXT NOT NULL, `model_version` INTEGER NOT NULL, " +
-                "`time_ms` INTEGER NOT NULL, `vector` BLOB NOT NULL, PRIMARY KEY(`path`, `model`, `time_ms`), " +
+                "`frames_version` INTEGER NOT NULL, `time_ms` INTEGER NOT NULL, `vector` BLOB NOT NULL, PRIMARY KEY(`path`, `model`, `time_ms`), " +
                 "FOREIGN KEY(`path`) REFERENCES `images`(`path`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         )
     }

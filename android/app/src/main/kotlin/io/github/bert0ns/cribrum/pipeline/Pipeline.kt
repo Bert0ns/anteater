@@ -24,6 +24,7 @@ import io.github.bert0ns.cribrum.detectors.NearDuplicateDetector
 import io.github.bert0ns.cribrum.detectors.ScreenshotDetector
 import io.github.bert0ns.cribrum.detectors.StickerDetector
 import io.github.bert0ns.cribrum.folders.isStickerFolder
+import io.github.bert0ns.cribrum.frames.FRAMES_VERSION
 import io.github.bert0ns.cribrum.frames.frameTimes
 import io.github.bert0ns.cribrum.frames.readFrames
 import io.github.bert0ns.cribrum.hashing.PHASH_DECODE_SIDE
@@ -408,14 +409,16 @@ class Pipeline(
     }
 
     /**
-     * Embeds the frames of each readable video whose frames are not stored at the times [frameTimes] gives now, so a new
-     * rule samples every video again (docs/design.md §4). One video at a time: its frames decode one after the other, the
-     * model takes them as one batch and they are stored together, so a stop loses at most the video it was on. A video
-     * whose frames fail is a failure, and the next scan tries it again, as an image whose embedding fails.
+     * Embeds the frames of each readable video whose frames are not stored at the times [frameTimes] gives now and at
+     * [FRAMES_VERSION], so a new rule samples every video again (docs/design.md §4). One video at a time: its frames
+     * decode one after the other, the model takes them as one batch and they are stored together, so a stop loses at most
+     * the video it was on. A video whose frames do not read is marked, as an unreadable image is, and not decoded again
+     * until the file or [FRAMES_VERSION] changes. Any other error is a failure, and the next scan tries it again, as an
+     * image whose embedding fails.
      */
     private suspend fun embedFrames(embedder: Embedder, stats: Stats, progress: Progress) {
-        val stored = index.frameEmbeddings(embedder.id, embedder.version)
-        val todo = index.readVideos().mapNotNull { video -> frameTimes(video.durationMs).takeIf { it != stored[video.ref.path]?.keys?.toList() }?.let { video.ref to it } }
+        val stored = index.sampledTimes(embedder.id, embedder.version, FRAMES_VERSION)
+        val todo = index.readVideos(FRAMES_VERSION).mapNotNull { video -> frameTimes(video.durationMs).takeIf { it != stored[video.ref.path] }?.let { video.ref to it } }
         stats.counts["$VIDEO_FRAMES_STEP tasks"] = todo.size
         progress(VIDEO_FRAMES_STEP, 0, todo.size)
         if (todo.isEmpty()) return
@@ -424,20 +427,32 @@ class Pipeline(
             return
         }
         var frames = 0
+        var unreadable = 0
         for ((done, task) in todo.withIndex()) {
             val (video, times) = task
             attempt { embedder.embedPixels(frameReader(File(video.path), times)) }.fold(
                 onSuccess = { vectors ->
-                    // A video trashed or gone since the walk keeps nothing.
-                    index.batch(listOf(video.path)) { recorded -> if (video.path in recorded) index.setFrameEmbeddings(video.path, embedder.id, embedder.version, times.zip(vectors).toMap()) }
+                    // A video gone from the index since the walk keeps nothing.
+                    index.batch(listOf(video.path)) { recorded ->
+                        if (video.path in recorded) index.setFrameEmbeddings(video.path, embedder.id, embedder.version, FRAMES_VERSION, times.zip(vectors).toMap())
+                    }
                     frames += times.size
                     stats.detectorRuns += times.size
                 },
-                onFailure = { stats.failures += Failure(video.path, VIDEO_FRAMES_STEP, failureMessage(it)) },
+                onFailure = { error ->
+                    // A file moved since the walk, such as one the user trashed, is not the video's fault.
+                    if (error is UnreadableVideo && File(video.path).isFile) {
+                        index.batch(listOf(video.path)) { recorded -> if (video.path in recorded) index.setFramesUnreadable(video.path, FRAMES_VERSION) }
+                        unreadable++
+                    } else {
+                        stats.failures += Failure(video.path, VIDEO_FRAMES_STEP, failureMessage(error))
+                    }
+                },
             )
             progress(VIDEO_FRAMES_STEP, done + 1, todo.size)
         }
         stats.counts["$VIDEO_FRAMES_STEP frames"] = frames
+        stats.counts["$VIDEO_FRAMES_STEP unreadable"] = unreadable
     }
 
     /** The real images first: a sticker only delays them, since the home screen lists candidates as they are stored. */

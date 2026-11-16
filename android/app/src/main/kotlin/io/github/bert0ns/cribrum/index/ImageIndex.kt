@@ -90,7 +90,7 @@ class ImageIndex(private val db: IndexDatabase) :
                 dao.resetImage(image.path, image.size, image.mtimeNs, image.mediaType.value)
                 dao.deleteAnalyses(image.path)
                 dao.deleteEmbeddings(image.path)
-                dao.deleteAllFrameEmbeddings(image.path)
+                dao.deleteFramesOf(image.path)
                 dao.deleteJpeg(image.path)
             }
         }
@@ -207,10 +207,12 @@ class ImageIndex(private val db: IndexDatabase) :
      */
     suspend fun deleteEmbeddings() = write {
         dao.deleteAllEmbeddings()
+        dao.deleteAllFrameEmbeddings()
         withContext(Dispatchers.IO) { db.openHelper.writableDatabase.execSQL("VACUUM") }
     }
 
-    suspend fun embeddingCount(): Int = dao.embeddingCount()
+    /** The images with an embedding and the videos with frames: what "Analysis data" counts in Settings. */
+    suspend fun embeddingCount(): Int = dao.embeddingCount() + dao.framedVideoCount()
 
     /** The images the index holds, videos left out: the home shows the empty index while this is 0. */
     suspend fun imageCount(): Int = dao.imageCount()
@@ -221,7 +223,7 @@ class ImageIndex(private val db: IndexDatabase) :
      * shortcut: wrong for vectors much smaller or larger than a page, when the model changes. (`dbstat` is not in
      * Android's SQLite, so the real figure is not available.)
      */
-    suspend fun embeddingBytes(): Long = dao.embeddingCount() * withContext(Dispatchers.IO) { db.openHelper.readableDatabase.pageSize }
+    suspend fun embeddingBytes(): Long = (dao.embeddingCount() + dao.frameEmbeddingCount()) * withContext(Dispatchers.IO) { db.openHelper.readableDatabase.pageSize }
 
     /** What the database takes on disk, its write-ahead log included. */
     suspend fun fileBytes(): Long = withContext(Dispatchers.IO) {
@@ -244,20 +246,29 @@ class ImageIndex(private val db: IndexDatabase) :
     /** Every stored embedding of this model version, loaded at once for group detectors. */
     suspend fun embeddings(model: String, modelVersion: Int): Map<String, FloatArray> = dao.embeddings(model, modelVersion).associate { row -> row.path to floats(row.vector) }
 
-    /** Replaces the video's frames of this model, by their time in milliseconds. */
-    suspend fun setFrameEmbeddings(path: String, model: String, modelVersion: Int, vectors: Map<Long, FloatArray>) = writeTransaction {
+    /** Replaces the video's frames of this model, by their time in milliseconds, taken at [framesVersion]. */
+    suspend fun setFrameEmbeddings(path: String, model: String, modelVersion: Int, framesVersion: Int, vectors: Map<Long, FloatArray>) = writeTransaction {
         requireRecorded(path)
         dao.deleteFrameEmbeddings(path, model)
-        dao.putFrameEmbeddings(vectors.map { (timeMs, vector) -> FrameEmbeddingRow(path, model, modelVersion, timeMs, bytes(vector)) })
+        dao.putFrameEmbeddings(vectors.map { (timeMs, vector) -> FrameEmbeddingRow(path, model, modelVersion, framesVersion, timeMs, bytes(vector)) })
     }
 
-    /** Every video's frames of this model version, by time, in the order of their times. */
-    suspend fun frameEmbeddings(model: String, modelVersion: Int): Map<String, Map<Long, FloatArray>> = dao.frameEmbeddings(model, modelVersion)
+    /** Every video's frames of these versions, by time, in the order of their times. */
+    suspend fun frameEmbeddings(model: String, modelVersion: Int, framesVersion: Int): Map<String, Map<Long, FloatArray>> = dao.frameEmbeddings(model, modelVersion, framesVersion)
         .groupBy { it.path }
         .mapValues { (_, rows) -> rows.associate { it.timeMs to floats(it.vector) } }
 
-    /** The videos whose metadata was read, readable and out of the trash, with their duration: the ones the frames step samples. */
-    suspend fun readVideos(): List<IndexedVideo> = dao.readVideos().map { IndexedVideo(MediaRef(it.path, it.size, it.mtimeNs, MediaType.of(it.mediaType)), it.unreadable, it.durationMs) }
+    /** [frameEmbeddings] without the vectors: what the frames step compares with the rule. */
+    suspend fun sampledTimes(model: String, modelVersion: Int, framesVersion: Int): Map<String, List<Long>> = dao.sampledTimes(model, modelVersion, framesVersion).groupBy({ it.path }, { it.timeMs })
+
+    /**
+     * The videos whose metadata was read, readable and out of the trash, with their duration, leaving out those whose frames did
+     * not read at [framesVersion]: the ones the frames step samples.
+     */
+    suspend fun readVideos(framesVersion: Int): List<IndexedVideo> = dao.readVideos(framesVersion).map { IndexedVideo(MediaRef(it.path, it.size, it.mtimeNs, MediaType.of(it.mediaType)), it.unreadable, it.durationMs) }
+
+    /** Marks a video whose frames do not read, so it is not decoded again at this version. */
+    suspend fun setFramesUnreadable(path: String, framesVersion: Int) = write { require(dao.setFramesUnreadable(path, framesVersion), path) }
 
     suspend fun analyzedPaths(detectorId: String, detectorVersion: Int): Set<String> = dao.analyzedPaths(detectorId, detectorVersion).toSet()
 

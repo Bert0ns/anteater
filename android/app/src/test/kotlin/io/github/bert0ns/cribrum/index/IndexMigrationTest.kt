@@ -178,8 +178,8 @@ class IndexMigrationTest {
         }
 
         ImageIndex.open(context, NAME).use {
-            assertEquals(emptyMap<String, Map<Long, FloatArray>>(), runBlocking { it.frameEmbeddings("mobileclip2_s0", 1) })
-            assertEquals(listOf("/videos/clip.mp4"), runBlocking { it.readVideos() }.map { video -> video.ref.path })
+            assertEquals(emptyMap<String, List<Long>>(), runBlocking { it.sampledTimes("mobileclip2_s0", 1, 1) })
+            assertEquals(listOf("/videos/clip.mp4"), runBlocking { it.readVideos(1) }.map { video -> video.ref.path })
         }
     }
 }

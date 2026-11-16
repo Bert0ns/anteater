@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 9,
-    "identityHash": "2fae4fd90194f61ffda8a2607c5711b8",
+    "identityHash": "a4b885920b41b55646d9b980c7cff306",
     "entities": [
       {
         "tableName": "images",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`path` TEXT NOT NULL, `size` INTEGER NOT NULL, `mtime_ns` INTEGER NOT NULL, `review_state` TEXT NOT NULL DEFAULT 'unreviewed', `width` INTEGER, `height` INTEGER, `mime` TEXT, `camera_make` TEXT, `camera_model` TEXT, `captured_at` TEXT, `unreadable` INTEGER NOT NULL DEFAULT 0, `content_hash` TEXT, `perceptual_hash` TEXT, `media_type` TEXT NOT NULL DEFAULT 'image', `duration_ms` INTEGER, `frame_rate` REAL, `bitrate` INTEGER, `has_audio` INTEGER, `video_codec` TEXT, `hdr` INTEGER, `captured_instant` INTEGER, PRIMARY KEY(`path`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`path` TEXT NOT NULL, `size` INTEGER NOT NULL, `mtime_ns` INTEGER NOT NULL, `review_state` TEXT NOT NULL DEFAULT 'unreviewed', `width` INTEGER, `height` INTEGER, `mime` TEXT, `camera_make` TEXT, `camera_model` TEXT, `captured_at` TEXT, `unreadable` INTEGER NOT NULL DEFAULT 0, `content_hash` TEXT, `perceptual_hash` TEXT, `media_type` TEXT NOT NULL DEFAULT 'image', `duration_ms` INTEGER, `frame_rate` REAL, `bitrate` INTEGER, `has_audio` INTEGER, `video_codec` TEXT, `hdr` INTEGER, `captured_instant` INTEGER, `frames_unreadable` INTEGER, PRIMARY KEY(`path`))",
         "fields": [
           {
             "fieldPath": "path",
@@ -120,6 +120,11 @@
           {
             "fieldPath": "capturedInstant",
             "columnName": "captured_instant",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "framesUnreadable",
+            "columnName": "frames_unreadable",
             "affinity": "INTEGER"
           }
         ],
@@ -397,7 +402,7 @@
       },
       {
         "tableName": "frame_embeddings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`path` TEXT NOT NULL, `model` TEXT NOT NULL, `model_version` INTEGER NOT NULL, `time_ms` INTEGER NOT NULL, `vector` BLOB NOT NULL, PRIMARY KEY(`path`, `model`, `time_ms`), FOREIGN KEY(`path`) REFERENCES `images`(`path`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`path` TEXT NOT NULL, `model` TEXT NOT NULL, `model_version` INTEGER NOT NULL, `frames_version` INTEGER NOT NULL, `time_ms` INTEGER NOT NULL, `vector` BLOB NOT NULL, PRIMARY KEY(`path`, `model`, `time_ms`), FOREIGN KEY(`path`) REFERENCES `images`(`path`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "path",
@@ -414,6 +419,12 @@
           {
             "fieldPath": "modelVersion",
             "columnName": "model_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "framesVersion",
+            "columnName": "frames_version",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -642,7 +653,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2fae4fd90194f61ffda8a2607c5711b8')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a4b885920b41b55646d9b980c7cff306')"
     ]
   }
 }
