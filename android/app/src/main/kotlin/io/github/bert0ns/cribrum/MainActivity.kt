@@ -383,7 +383,16 @@ private fun AppContent(model: ReviewViewModel) {
                             if (photos) {
                                 CategoryList(state.categories, state.freeableBytes, model::open)
                             } else {
-                                VideosTab(state.videos, state.videosIndexed, model::openVideos, waiting = state.videosWaiting, noVideos = state.lastScan?.videosFound == 0)
+                                VideosTab(
+                                    state.videos,
+                                    state.videosIndexed,
+                                    model::openVideos,
+                                    waiting = state.videosWaiting,
+                                    noVideos = state.lastScan?.videosFound == 0,
+                                    categories = state.videoCategories,
+                                    onOpenCategory = { model.open(it, MediaType.VIDEO) },
+                                    scanRan = state.videoScanRan,
+                                )
                             }
                         }
                         Screen.Videos -> VideosScreen(
@@ -409,6 +418,7 @@ private fun AppContent(model: ReviewViewModel) {
                             reviewOrder = state.reviewOrder,
                             retentionDays = state.retentionDays,
                             loading = state.loading,
+                            mediaType = screen.mediaType,
                         )
                         is Screen.Trash -> TrashScreen(
                             state.trashed,

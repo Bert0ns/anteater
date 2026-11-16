@@ -10,6 +10,7 @@ import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
 import io.github.bert0ns.cribrum.model.IndexedMedia
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.Protection
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.ReviewState
@@ -17,6 +18,7 @@ import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.model.SignalIdentity
 import io.github.bert0ns.cribrum.pipeline.DETECTOR_CATEGORIES
+import io.github.bert0ns.cribrum.pipeline.VIDEO_DETECTOR_CATEGORIES
 import io.github.bert0ns.cribrum.ranker.Candidate
 import io.github.bert0ns.cribrum.ranker.GROUP_CATEGORIES
 import io.github.bert0ns.cribrum.ranker.Ranker
@@ -153,6 +155,7 @@ class Review(
     /** Read on every call, so a threshold the user changes applies to the next list without a scan. */
     private val thresholds: () -> Map<Category, Float> = { THRESHOLDS },
     private val detectorCategories: Set<Category> = DETECTOR_CATEGORIES,
+    private val videoDetectorCategories: Set<Category> = VIDEO_DETECTOR_CATEGORIES,
     private val zone: () -> ZoneId = ZoneId::systemDefault,
     private val firstDayOfWeek: () -> DayOfWeek = { WeekFields.of(Locale.getDefault()).firstDayOfWeek },
     /** The paths the gallery marks as favourites, asked on every ranking and again before an apply: it changes without a scan. */
@@ -175,18 +178,31 @@ class Review(
     /**
      * Every category in fixed order, with its candidate count and size, and whether it has a detector,
      * and the union of all the candidates by path. The figures of two categories overlap, so they are
-     * not added. One ranking serves both, so the home screen reads the index once.
+     * not added. One ranking serves both, so the home screen reads the index once. The figures are those of one
+     * [mediaType], and the figures of one never count the other's files. The videos' list holds only the categories
+     * that have a video detector.
      */
-    suspend fun overview(): Overview = withContext(Dispatchers.Default) {
+    suspend fun overview(mediaType: MediaType = MediaType.IMAGE): Overview = withContext(Dispatchers.Default) {
+        traceSuspend("Review.overview") { summarize(ranking(thresholds()).byCategory, mediaType) }
+    }
+
+    /** The overview of each media type from one ranking: the home reads both tabs at once. */
+    suspend fun overviews(): Map<MediaType, Overview> = withContext(Dispatchers.Default) {
         traceSuspend("Review.overview") {
             val byCategory = ranking(thresholds()).byCategory
-            val categories = Category.entries.map { category ->
-                val candidates = byCategory[category].orEmpty()
-                CategorySummary(category, candidates.size, category in detectorCategories, candidates.sumOf { it.image.ref.size })
-            }
-            val union = byCategory.values.flatten().associate { it.image.ref.path to it.image.ref.size }
-            Overview(categories, union.values.sum())
+            MediaType.entries.associateWith { summarize(byCategory, it) }
         }
+    }
+
+    private fun summarize(all: Map<Category, List<Candidate>>, mediaType: MediaType): Overview {
+        val byCategory = all.mapValues { (_, candidates) -> candidates.of(mediaType) }
+        val listed = if (mediaType == MediaType.IMAGE) Category.entries else Category.entries.filter { it in videoDetectorCategories }
+        val categories = listed.map { category ->
+            val candidates = byCategory[category].orEmpty()
+            CategorySummary(category, candidates.size, mediaType == MediaType.VIDEO || category in detectorCategories, candidates.sumOf { it.image.ref.size })
+        }
+        val union = byCategory.values.flatten().associate { it.image.ref.path to it.image.ref.size }
+        return Overview(categories, union.values.sum())
     }
 
     /**
@@ -203,7 +219,7 @@ class Review(
     suspend fun counts(thresholds: Map<Category, Float> = this.thresholds()): Map<Category, Int> = withContext(Dispatchers.Default) {
         traceSuspend("Review.counts") {
             val byCategory = ranking(thresholds).byCategory
-            Category.entries.associateWith { byCategory[it]?.size ?: 0 }
+            Category.entries.associateWith { byCategory[it].orEmpty().of(MediaType.IMAGE).size }
         }
     }
 
@@ -234,6 +250,8 @@ class Review(
         return Ranking(version, images, excluded, key, byCategory, ranked, groups, favorites).also(::store)
     }
 
+    private fun List<Candidate>.of(mediaType: MediaType) = filter { it.image.ref.mediaType == mediaType }
+
     /** Whether every group the candidate is in under [category] is hidden. One in no group at all is never hidden. */
     private fun Candidate.hiddenIn(category: Category, members: GroupMembers): Boolean {
         val groups = reasons.filter { it.kind == category }.mapNotNull { it.evidence[GROUP_KEY] }
@@ -251,10 +269,10 @@ class Review(
      * With a date [grouping], the newest date comes first and the ranker's order holds inside each date.
      * With [ReviewOrder.SIZE], the group with the most bytes to trash comes first and the ranker's order breaks a tie.
      */
-    suspend fun page(category: Category, skipped: Set<String> = emptySet(), grouping: ReviewOrder = ReviewOrder.OFF): Page = withContext(Dispatchers.Default) {
+    suspend fun page(category: Category, skipped: Set<String> = emptySet(), grouping: ReviewOrder = ReviewOrder.OFF, mediaType: MediaType = MediaType.IMAGE): Page = withContext(Dispatchers.Default) {
         traceSuspend("Review.page") {
             val ranking = ranking(thresholds())
-            val candidates = ranking.byCategory[category].orEmpty()
+            val candidates = ranking.byCategory[category].orEmpty().of(mediaType)
             val (hidden, groups) = (
                 if (category in GROUP_CATEGORIES) {
                     val otherCandidates = ranking.ranked.filterKeys { it != category }.values.flatten().map { it.image.ref.path }.toSet()

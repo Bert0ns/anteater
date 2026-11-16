@@ -103,6 +103,7 @@ import androidx.compose.ui.window.DialogProperties
 import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.review.CategorySummary
 import io.github.bert0ns.cribrum.review.ReviewGroup
 import io.github.bert0ns.cribrum.review.ReviewItem
@@ -224,7 +225,10 @@ private fun Tile(item: ReviewItem, marked: Boolean, onTap: () -> Unit, onHold: (
         },
     )
     val why = item.reasons.firstNotNullOfOrNull(::reasonOf)?.text() ?: File(item.image.path).name
-    val described = stringResource(R.string.tile_description, why, state)
+    val video = item.image.mediaType == MediaType.VIDEO
+    val size = Formatter.formatShortFileSize(LocalContext.current, item.image.size)
+    // A video's tile shows its size, so the description says it as well, beside the file's name.
+    val described = stringResource(R.string.tile_description, if (video) stringResource(R.string.tile_description, File(item.image.path).name, size) else why, state)
     // The tile's own description hides the heart's from a screen reader, so it says it too.
     val description = if (item.isFavorite) stringResource(R.string.tile_description, described, stringResource(R.string.favorite)) else described
     val toggle = stringResource(if (marked) R.string.action_keep else R.string.action_trash)
@@ -247,7 +251,12 @@ private fun Tile(item: ReviewItem, marked: Boolean, onTap: () -> Unit, onHold: (
                 )
             },
     ) {
-        TracedAsyncImage(File(item.image.path), "Review.tile", null, Modifier.fillMaxSize(), tile = true)
+        if (video) {
+            VideoFrame(File(item.image.path), "Review.tile", Modifier.fillMaxSize())
+            Text(size, Modifier.align(Alignment.BottomStart).background(Color.Black.copy(alpha = 0.6f)).padding(4.dp).clearAndSetSemantics {}, color = Color.White, style = MaterialTheme.typography.labelSmall)
+        } else {
+            TracedAsyncImage(File(item.image.path), "Review.tile", null, Modifier.fillMaxSize(), tile = true)
+        }
         // A kept tile is a plain photo, so a check means "selected" everywhere in the app. A favourite's heart takes
         // the top right corner when the image is marked, so the trash badge moves left of it.
         if (marked) {
@@ -264,7 +273,8 @@ private fun Tile(item: ReviewItem, marked: Boolean, onTap: () -> Unit, onHold: (
                 color = Color.White,
                 style = MaterialTheme.typography.labelSmall,
                 // The description already says it is the best copy.
-                modifier = Modifier.align(Alignment.BottomStart).background(Color.Black.copy(alpha = 0.6f)).padding(4.dp).clearAndSetSemantics {},
+                // A video's size takes the bottom left corner.
+                modifier = Modifier.align(if (video) Alignment.TopStart else Alignment.BottomStart).background(Color.Black.copy(alpha = 0.6f)).padding(4.dp).clearAndSetSemantics {},
             )
         }
     }
@@ -308,7 +318,10 @@ fun CategoryScreen(
     retentionDays: Int = TrashRetention.DEFAULT_DAYS,
     /** A change is running: the page on screen is about to be replaced, so confirming it is off. */
     loading: Boolean = false,
+    /** What the page holds: the texts say "images" or "videos". */
+    mediaType: MediaType = MediaType.IMAGE,
 ) {
+    val videos = mediaType == MediaType.VIDEO
     val locale = LocalConfiguration.current.locales[0]
     val haptics = LocalHapticFeedback.current
     var askFavorites by remember { mutableStateOf(false) }
@@ -329,13 +342,19 @@ fun CategoryScreen(
             if (images.isNotEmpty()) {
                 // Candidates only: a group shows its best copy too, for comparison.
                 val shown = images.count { it.suggestTrash }
-                val position = if (remaining > shown) R.plurals.page_more else R.plurals.page_last
+                val position = if (remaining > shown) {
+                    (if (videos) R.plurals.page_more_videos else R.plurals.page_more)
+                } else if (videos) {
+                    R.plurals.page_last_videos
+                } else {
+                    R.plurals.page_last
+                }
                 Text(pluralStringResource(position, remaining, shown, remaining), style = MaterialTheme.typography.titleSmall)
             }
             if (images.isEmpty()) {
-                Text(stringResource(R.string.review_done), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(if (videos) R.string.review_done_videos else R.string.review_done), style = MaterialTheme.typography.bodySmall)
             } else {
-                Text(stringResource(R.string.review_hint) + " " + stringResource(R.string.review_hint_gestures), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(if (videos) R.string.review_hint_videos else R.string.review_hint) + " " + stringResource(R.string.review_hint_gestures), style = MaterialTheme.typography.bodySmall)
             }
         }
         // A new grouping reorders the page: start at its top instead of in the middle of it.
@@ -445,19 +464,48 @@ private fun FullSize(
     onClose: () -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
-    FullSizeViewer(items.map { it.image.path }, start.path, onClose) { page ->
+    // A page holds one media type. The player is made when the first video plays, so an image page never makes one.
+    val video = start.mediaType == MediaType.VIDEO
+    val playback = rememberVideoPlayback()
+    val paths = items.map { it.image.path }
+    LaunchedEffect(paths) { if (playback.loaded != null && playback.loaded !in paths) playback.stop() }
+    val page: @Composable (Int) -> Unit = { page ->
+        items.getOrNull(page)?.let { VideoPage(File(it.image.path), "Review.fullSize", playback, false, onClose) }
+    }
+    FullSizeViewer(
+        paths,
+        start.path,
+        onClose,
+        image = if (video) {
+            page
+        } else {
+            { ZoomableImage(paths[it], onClose) }
+        },
+        onPage = { playback.stop() },
+    ) { page ->
         val current = items.getOrNull(page) ?: return@FullSizeViewer // the page emptied under the dialog; CategoryScreen closes it next
         FullSizeToggle(current.image.path in marked, stringResource(R.string.selected_for_trash), markColor, Color.White) {
             haptics.performHapticFeedback(Haptic.TICK.type)
             onToggle(current.image)
         }
         val marked = current.image.path in marked
-        FullSizeBar(current.image.path, current.isFavorite, heart = {
-            FavoriteToggle(current.isFavorite, enabled = !marked) {
-                haptics.performHapticFeedback(Haptic.TICK.type)
-                onFavorite(current.image, it)
+        // The gallery's favourite mark is not offered on a video: only the heart of one that already is.
+        val heart: @Composable () -> Unit = if (video) {
+            { if (current.isFavorite) FavoriteHeart(description = stringResource(R.string.favorite_video)) }
+        } else {
+            {
+                FavoriteToggle(current.isFavorite, enabled = !marked) {
+                    haptics.performHapticFeedback(Haptic.TICK.type)
+                    onFavorite(current.image, it)
+                }
             }
-        }) {
+        }
+        FullSizeBar(current.image.path, current.isFavorite, heart = heart) {
+            if (video) {
+                val file = File(current.image.path)
+                VideoControls(playback, file, "Review.fullSize", rememberLengthMillis(file, "${current.image.path}|${current.image.size}|${current.image.mtimeNs}"), false)
+                Text(videoDetails(current.image.size, rememberDuration(file, "${current.image.path}|${current.image.size}|${current.image.mtimeNs}")), color = Color.White, style = MaterialTheme.typography.bodyMedium)
+            }
             for (reason in current.reasons.mapNotNull(::reasonOf)) {
                 Text(reason.text(), color = Color.White, style = MaterialTheme.typography.bodyMedium)
             }

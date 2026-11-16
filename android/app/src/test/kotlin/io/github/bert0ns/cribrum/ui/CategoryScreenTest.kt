@@ -35,6 +35,7 @@ import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
@@ -77,6 +78,44 @@ class CategoryScreenTest {
         compose.onNodeWithText("3 images · 3.0 MB").assertExists()
         compose.onNodeWithText("Blurry").assertIsEnabled().performClick()
         assertEquals(Category.BLURRY, opened)
+    }
+
+    private val clips = listOf("/sdcard/DCIM/Camera/clip.mp4", "/sdcard/Download/clip.mp4").map { MediaRef(it, 800_000_000, 0, MediaType.VIDEO) }
+    private val clipGroup = ReviewGroup(
+        "g",
+        listOf(ReviewItem(clips[0], suggestTrash = false, isBest = true), ReviewItem(clips[1], suggestTrash = true, reasons = listOf(Signal("exact_duplicate", 1, Category.EXACT_DUPLICATE, 1f, mapOf(ROLE_KEY to Role.INFERIOR.value))))),
+    )
+
+    @Test
+    fun `a group of duplicate videos shows each copy as a frame with its size, and says videos`() {
+        compose.setContent {
+            CompositionLocalProvider(LocalPlayerFactory provides Players().factory) {
+                CategoryScreen(listOf(clipGroup), 1, setOf(clips[1].path), grouped = true, onToggle = {}, onApply = { _, _ -> }, onSkip = {}, mediaType = MediaType.VIDEO)
+            }
+        }
+
+        compose.onNodeWithText("The last video").assertExists()
+        compose.onNodeWithText("Marked videos go to the trash.", substring = true).assertExists()
+        compose.onNodeWithContentDescription("clip.mp4. 800 MB. Best copy, kept", substring = true).assertExists()
+        compose.onNodeWithContentDescription("800 MB. Marked for the trash", substring = true).assertExists()
+    }
+
+    @Test
+    fun `holding a video of a group opens it full size with its folder, and trashing the copy applies as for images`() {
+        var confirmed: Pair<Set<String>, Set<String>>? = null
+        compose.setContent {
+            CompositionLocalProvider(LocalPlayerFactory provides Players().factory) {
+                CategoryScreen(listOf(clipGroup), 1, setOf(clips[1].path), grouped = true, onToggle = {}, onApply = { trash, keep -> confirmed = trash to keep }, onSkip = {}, mediaType = MediaType.VIDEO)
+            }
+        }
+
+        compose.onNodeWithContentDescription("Marked for the trash", substring = true).performTouchInput { longClick() }
+        compose.onNodeWithTag("fullSize").assertExists()
+        compose.onNodeWithText("Download").assertExists() // the folder of the copy
+        compose.onNodeWithContentDescription("Close").performClick()
+        compose.onNodeWithText("Trash 1, keep 0").performClick()
+
+        assertEquals(setOf(clips[1].path) to setOf(clips[0].path), confirmed)
     }
 
     @Test

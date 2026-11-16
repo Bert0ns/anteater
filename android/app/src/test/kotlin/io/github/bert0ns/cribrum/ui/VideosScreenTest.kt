@@ -34,8 +34,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
+import io.github.bert0ns.cribrum.review.CategorySummary
 import io.github.bert0ns.cribrum.review.VideoItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -450,6 +452,35 @@ class VideosScreenTest {
         compose.onNodeWithText("0 videos").assertExists()
         compose.onNodeWithText("Largest videos").performClick()
         assertEquals(false, opened)
+    }
+
+    @Test
+    fun `a category with a video detector is a row of the Videos tab with its count and size, and opens`() {
+        var opened: Category? = null
+        val duplicates = CategorySummary(Category.EXACT_DUPLICATE, 2, bytes = 1_500_000_000)
+        compose.setContent { VideosTab(videos, indexed = true, onOpen = {}, categories = listOf(duplicates), onOpenCategory = { opened = it }) }
+
+        compose.onNodeWithText("Exact copies").assertExists()
+        compose.onNodeWithText("2 videos · 1.5 GB").assertExists()
+        compose.onNodeWithText("Exact copies").performClick()
+        assertEquals(Category.EXACT_DUPLICATE, opened)
+    }
+
+    @Test
+    fun `an empty video category opens nothing, and says it needs Scan videos until that scan has run`() {
+        var opened: Category? = null
+        var ran by mutableStateOf(false)
+        val empty = CategorySummary(Category.EXACT_DUPLICATE, 0)
+        compose.setContent { VideosTab(videos, indexed = true, onOpen = {}, categories = listOf(empty), onOpenCategory = { opened = it }, scanRan = ran) }
+
+        compose.onNodeWithText("Needs Scan videos").assertExists()
+        compose.onNodeWithText("Exact copies").performClick()
+        assertNull(opened)
+
+        ran = true
+
+        compose.onNodeWithText("Needs Scan videos").assertDoesNotExist()
+        compose.onNodeWithText("0 videos", substring = true).assertExists()
     }
 
     @Test
