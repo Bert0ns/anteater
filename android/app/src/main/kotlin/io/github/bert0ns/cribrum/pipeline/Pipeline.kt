@@ -409,9 +409,9 @@ class Pipeline(
     }
 
     /**
-     * Embeds the frames of each readable video whose frames are not stored at the times [frameTimes] gives now and at
-     * [FRAMES_VERSION], so a new rule samples every video again (docs/design.md §4). An HDR video stores one frame a keyframe,
-     * so some of those times may be missing, never another one. One video at a time: its frames
+     * Embeds the frames of each readable video with no frames at [FRAMES_VERSION], or with one at a time [frameTimes] does not
+     * give now (docs/design.md §4). An HDR video stores one frame a keyframe, so some of the times may be missing. A rule
+     * that adds times must bump [FRAMES_VERSION], or the videos sampled before it keep their frames. One video at a time: its frames
      * decode one after the other, the model takes them as one batch and they are stored together, so a stop loses at most
      * the video it was on. A video whose frames do not read is marked, as an unreadable image is, and not decoded again
      * until the file or [FRAMES_VERSION] changes. Any other error is a failure, and the next scan tries it again, as an

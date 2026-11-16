@@ -381,9 +381,10 @@ def _video_steps(
 def _embed_frames(
     embedder: Embedder, index: ImageIndex, jobs: int, stats: Stats, progress: Progress
 ) -> None:
-    """Embeds the frames of each readable video whose frames are not stored at the times
-    `frame_times` gives now and at FRAMES_VERSION, so a new rule samples every video again. An HDR
-    video stores one frame a keyframe, so some of those times may be missing, never another one.
+    """Embeds the frames of each readable video with no frames at FRAMES_VERSION, or with one at a
+    time `frame_times` does not give now. An HDR video stores one frame a keyframe, so some of the
+    times may be missing. A rule that adds times must bump FRAMES_VERSION, or the videos sampled
+    before it keep their frames.
 
     A video whose frames do not read is marked, as an unreadable image is, and not decoded again
     until the file or FRAMES_VERSION changes. Any other error is a failure, and the next run tries
