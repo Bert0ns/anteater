@@ -5,17 +5,18 @@ The app samples the same times with MediaMetadataRetriever (frames/Frames.kt).
 
 from collections.abc import Iterator, Sequence
 from fractions import Fraction
+from functools import cache
 from pathlib import Path
 
 import av
 import numpy as np
-from av.video.reformatter import ColorPrimaries, Colorspace, ColorTrc, Interpolation
+from av.video.reformatter import Colorspace, ColorTrc, Interpolation
 from PIL import Image
 
 from cribrum_lab.metadata import HDR_TRANSFERS, UnreadableVideo
 
 FRAMES = 5
-FRAMES_VERSION = 1
+FRAMES_VERSION = 2
 """Bump it when the frames a video gives change, such as their times or their decoding: the frames
 stored at another version are sampled again."""
 MARGIN_MS = 500
@@ -32,13 +33,26 @@ def frame_times(duration_ms: int | None) -> list[int]:
     return sorted({margin + span * (2 * i + 1) // (2 * FRAMES) for i in range(FRAMES)})
 
 
-def read_frames(path: Path, times_ms: Sequence[int]) -> Iterator[Image.Image]:
+def read_frames(path: Path, times_ms: Sequence[int]) -> Iterator[tuple[int, Image.Image]]:
     """The frame closest to each time, as OPTION_CLOSEST gives it on the phone, and the last frame
-    for a time past the end. Each comes as displayed: upright, and an HDR frame tone mapped."""
+    for a time past the end, each with its time. An HDR video takes the keyframe closest to each
+    time instead, as OPTION_CLOSEST_SYNC does, since the phone gives no exact HDR frame: times that
+    land on one keyframe give it once, under the first of them. Each frame comes as displayed:
+    upright, and an HDR frame tone mapped."""
     with av.open(str(path)) as container:
         stream = container.streams.video[0]
-        for time_ms in times_ms:
-            target = Fraction(time_ms, 1000)
+        targets = {t: Fraction(t, 1000) for t in times_ms}
+        if stream.codec_context.color_trc in HDR_TRANSFERS:
+            keyframes = _keyframes(container, stream, max(targets.values(), default=0))
+            if not keyframes:
+                raise UnreadableVideo(path)
+            # A tie goes to the earlier keyframe.
+            targets = {t: min(keyframes, key=lambda k: abs(k - x)) for t, x in targets.items()}
+        taken = set()
+        for time_ms, target in targets.items():
+            if target in taken:
+                continue
+            taken.add(target)
             # To the keyframe at or before the time, then decode up to it.
             container.seek(int(target / stream.time_base), stream=stream)
             best = None
@@ -53,7 +67,19 @@ def read_frames(path: Path, times_ms: Sequence[int]) -> Iterator[Image.Image]:
                     break
             if best is None:
                 raise UnreadableVideo(path)
-            yield _displayed(best)
+            yield time_ms, _displayed(best)
+
+
+def _keyframes(container, stream, last: Fraction) -> list[Fraction]:
+    """The times of the stream's keyframes, read from the demuxer without decoding, up to the
+    first one at or past `last`."""
+    found = []
+    for packet in container.demux(stream):
+        if packet.is_keyframe and packet.pts is not None:
+            found.append(packet.pts * stream.time_base)
+            if found[-1] >= last:
+                break
+    return found
 
 
 def brightness(image: Image.Image) -> tuple[list[float], float]:
@@ -75,15 +101,51 @@ def _displayed(frame: av.VideoFrame) -> Image.Image:
         sd = (width <= 720 and height <= 576) or (height <= 720 and width <= 576)
         options["src_colorspace"] = Colorspace.ITU601 if sd else Colorspace.ITU709
     if frame.color_trc in HDR_TRANSFERS:
-        # FFmpeg's own tone mapping, which maps HDR reference white (BT.2408, 203 cd/m2) to SDR
-        # white and clips above it. An SDR frame keeps its values, as the phone's bitmap does.
-        options |= {
-            "dst_color_trc": ColorTrc.IEC61966_2_1,
-            "dst_color_primaries": ColorPrimaries.BT709,
-        }
+        # The signal as R'G'B', with no transfer or gamut change, which the tone mapping does.
+        rgb = _tone_mapped(frame.to_ndarray(format="rgb48le", **options), frame.color_trc)
     else:
-        # Exact on SDR, but with HDR it bypasses most of the tone mapping, so SDR only.
+        # Exact on SDR. With a 16-bit output it garbles the chroma, so SDR only.
         options["interpolation"] |= Interpolation.FULL_CHR_H_INT
-    rgb = frame.to_ndarray(format="rgb24", **options)
+        rgb = frame.to_ndarray(format="rgb24", **options)
     # The display matrix turns counterclockwise, as np.rot90 does.
     return Image.fromarray(np.ascontiguousarray(np.rot90(rgb, frame.rotation // 90)))
+
+
+HDR_GAIN = 0.9
+"""The share of SDR white that HDR's peak becomes: HLG's signal at 1, and 1000 cd/m2 of PQ."""
+BT2020_TO_BT709 = np.array(
+    [[1.6605, -0.5876, -0.0728], [-0.1246, 1.1329, -0.0083], [-0.0182, -0.1006, 1.1187]]
+)
+"""Linear BT.2020 RGB to linear BT.709 RGB (ITU-R BT.2087)."""
+
+
+def _tone_mapped(signal: np.ndarray, transfer: int) -> np.ndarray:
+    """HDR R'G'B' (16 bits, BT.2020) as sRGB in 8 bits, as the phone's decoder tone maps its own 4K
+    HLG clips (docs/design.md, section 5): light from the transfer's equations of BT.2100, with no
+    OOTF, times HDR_GAIN, to BT.709 primaries, clipped and sRGB encoded."""
+    linear = _light(transfer)[signal] @ (HDR_GAIN * BT2020_TO_BT709.T).astype(np.float32)
+    # Linear light in 16 bits is finer than a level of sRGB down to black.
+    return _srgb()[np.round(np.clip(linear, 0, 1) * 65535).astype(np.uint16)]
+
+
+@cache
+def _light(transfer: int) -> np.ndarray:
+    """Light for each 16-bit signal value: HLG's scene light from 0 to 1 (its inverse OETF), or
+    PQ's cd/m2 over HLG's nominal peak of 1000 cd/m2 (its EOTF)."""
+    e = np.arange(65536) / 65535
+    if transfer == ColorTrc.ARIB_STD_B67:
+        a, b, c = 0.17883277, 0.28466892, 0.55991073
+        light = np.where(e <= 0.5, e * e / 3, (np.exp((np.maximum(e, 0.5) - c) / a) + b) / 12)
+    else:
+        m1, m2, c1, c2, c3 = 0.1593017578125, 78.84375, 0.8359375, 18.8515625, 18.6875
+        p = e ** (1 / m2)
+        light = 10 * (np.maximum(p - c1, 0) / (c2 - c3 * p)) ** (1 / m1)
+    return light.astype(np.float32)
+
+
+@cache
+def _srgb() -> np.ndarray:
+    """The 8-bit sRGB value of each 16-bit linear value."""
+    linear = np.arange(65536) / 65535
+    srgb = np.where(linear <= 0.0031308, 12.92 * linear, 1.055 * linear ** (1 / 2.4) - 0.055)
+    return np.round(srgb * 255).astype(np.uint8)

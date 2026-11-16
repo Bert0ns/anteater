@@ -302,9 +302,9 @@ class PipelineTest {
     }
 
     /** Frames as the model takes them, a flat gray each, since Robolectric decodes no video. */
-    private fun grayFrames(file: File, times: List<Long>): List<FloatArray> = times.map { FloatArray(3 * 256 * 256) { 0.5f } }
+    private fun grayFrames(file: File, times: List<Long>): Map<Long, FloatArray> = times.associateWith { FloatArray(3 * 256 * 256) { 0.5f } }
 
-    private fun videoScan(frameReader: (File, List<Long>) -> List<FloatArray> = ::grayFrames, embedder: Embedder? = MeanColorEmbedder()) = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), embedder = embedder, videoMetadataReader = ::readVideo, frameReader = frameReader)
+    private fun videoScan(frameReader: (File, List<Long>) -> Map<Long, FloatArray> = ::grayFrames, embedder: Embedder? = MeanColorEmbedder()) = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), embedder = embedder, videoMetadataReader = ::readVideo, frameReader = frameReader)
 
     private fun frameTimesStored(embedder: Embedder = MeanColorEmbedder(), framesVersion: Int = FRAMES_VERSION) = runBlocking { index.sampledTimes(embedder.id, embedder.version, framesVersion) }
 
@@ -334,6 +334,17 @@ class PipelineTest {
 
         assertEquals(emptyList<Failure>(), again.failures)
         assertEquals(listOf(300L, 400, 500, 600, 700), frameTimesStored()[clip.path])
+    }
+
+    @Test
+    fun `an HDR video that keeps one frame a keyframe is not read again`() {
+        val clip = videos().getValue("clip")
+        runBlocking { videoScan(frameReader = { file, times -> grayFrames(file, times.take(1)) }).run(source, images = false, videos = true) }
+
+        val again = runBlocking { videoScan(frameReader = { file, _ -> throw AssertionError("read ${file.name} again") }).run(source, images = false, videos = true) }
+
+        assertEquals(emptyList<Failure>(), again.failures)
+        assertEquals(listOf(300L), frameTimesStored()[clip.path])
     }
 
     @Test

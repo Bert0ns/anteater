@@ -382,18 +382,19 @@ def _embed_frames(
     embedder: Embedder, index: ImageIndex, jobs: int, stats: Stats, progress: Progress
 ) -> None:
     """Embeds the frames of each readable video whose frames are not stored at the times
-    `frame_times` gives now and at FRAMES_VERSION, so a new rule samples every video again.
+    `frame_times` gives now and at FRAMES_VERSION, so a new rule samples every video again. An HDR
+    video stores one frame a keyframe, so some of those times may be missing, never another one.
 
     A video whose frames do not read is marked, as an unreadable image is, and not decoded again
     until the file or FRAMES_VERSION changes. Any other error is a failure, and the next run tries
     it again, as an image whose embedding fails."""
     stored = index.sampled_times(embedder.id, embedder.version, FRAMES_VERSION)
-    todo = [
-        (video, times)
-        for video, duration_ms in index.read_videos(FRAMES_VERSION)
-        if stored.get(video.path) != (times := frame_times(duration_ms))
-    ]
-    for done, ((video, times), pixels) in enumerate(
+    todo = []
+    for video, duration_ms in index.read_videos(FRAMES_VERSION):
+        times = frame_times(duration_ms)
+        if not (video.path in stored and set(stored[video.path]) <= set(times)):
+            todo.append((video, times))
+    for done, ((video, _), pixels) in enumerate(
         zip(todo, _map(_frame_pixels, todo, jobs), strict=True), 1
     ):
         if pixels is None:
@@ -402,24 +403,24 @@ def _embed_frames(
         elif isinstance(pixels, str):
             stats.failures.append(f"{video.path}: video_frames: {pixels}")
         else:
-            vectors = embedder.embed_pixels(np.stack(pixels))
+            vectors = embedder.embed_pixels(np.stack(list(pixels.values())))
             index.set_frame_embeddings(
                 video.path,
                 embedder.id,
                 embedder.version,
                 FRAMES_VERSION,
-                dict(zip(times, vectors, strict=True)),
+                dict(zip(pixels, vectors, strict=True)),
             )
-            stats.detector_runs += len(times)
+            stats.detector_runs += len(pixels)
         progress("video_frames", done, len(todo))
 
 
-def _frame_pixels(task: tuple[MediaRef, list[int]]) -> list[np.ndarray] | str | None:
-    """Runs in a worker process: a video's frames, each preprocessed as an image is, None when
-    the file is there and its frames do not read, or the error as text."""
+def _frame_pixels(task: tuple[MediaRef, list[int]]) -> dict[int, np.ndarray] | str | None:
+    """Runs in a worker process: a video's frames by time, each preprocessed as an image is, None
+    when the file is there and its frames do not read, or the error as text."""
     video, times = task
     try:
-        return [mobileclip.model_input(frame) for frame in read_frames(video.path, times)]
+        return {t: mobileclip.model_input(frame) for t, frame in read_frames(video.path, times)}
     except (UnreadableVideo, av.FFmpegError) as error:
         # A file moved since the walk, such as one the user trashed, is not the video's fault.
         return None if video.path.is_file() else _describe(error)

@@ -2,6 +2,8 @@ package io.github.bert0ns.cribrum.frames
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.media.MediaFormat
+import android.media.MediaMetadataRetriever
 import io.github.bert0ns.cribrum.metadata.UnreadableVideo
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -46,8 +48,9 @@ class FramesTest {
         assertEquals(listOf(0L), frameTimes(null))
     }
 
-    private fun video(frames: Map<Long, Int>) = folder.newFile("clip.mp4").also { file ->
+    private fun video(frames: Map<Long, Int>, transfer: Int? = null) = folder.newFile("clip.mp4").also { file ->
         val source = DataSource.toDataSource(file.path)
+        transfer?.let { ShadowMediaMetadataRetriever.addMetadata(source, MediaMetadataRetriever.METADATA_KEY_COLOR_TRANSFER, "$it") }
         for ((timeUs, color) in frames) {
             ShadowMediaMetadataRetriever.addFrame(source, timeUs, Bitmap.createBitmap(4, 3, Bitmap.Config.ARGB_8888).apply { eraseColor(color) })
         }
@@ -59,7 +62,24 @@ class FramesTest {
 
         val frames = readFrames(file, listOf(300, 700)) { Triple(it.width, it.height, it.pixels.distinct()) }
 
-        assertEquals(listOf(Triple(4, 3, listOf(Color.RED)), Triple(4, 3, listOf(Color.BLUE))), frames)
+        assertEquals(mapOf(300L to Triple(4, 3, listOf(Color.RED)), 700L to Triple(4, 3, listOf(Color.BLUE))), frames)
+    }
+
+    @Test
+    fun `an SDR video keeps a frame for each time, even one like the frame before`() {
+        val file = video(mapOf(300_000L to Color.RED, 400_000L to Color.RED))
+
+        assertEquals(listOf(300L, 400L), readFrames(file, listOf(300, 400)) { it }.keys.toList())
+    }
+
+    @Test
+    fun `an HDR video gives a keyframe once, under the first time that took it`() {
+        // The shadow serves a frame by its time whatever the option, so the keyframe of 300 and 400 ms is a frame at each.
+        val file = video(mapOf(300_000L to Color.RED, 400_000L to Color.RED, 700_000L to Color.BLUE), transfer = MediaFormat.COLOR_TRANSFER_HLG)
+
+        val frames = readFrames(file, listOf(300, 400, 700)) { it.pixels.distinct() }
+
+        assertEquals(mapOf(300L to listOf(Color.RED), 700L to listOf(Color.BLUE)), frames)
     }
 
     @Test
@@ -67,5 +87,24 @@ class FramesTest {
         val file = video(mapOf(300_000L to Color.RED))
 
         assertThrows(UnreadableVideo::class.java) { readFrames(file, listOf(300, 700)) { it } }
+    }
+
+    @Test
+    fun `a frame a decoder handed over empty fails the video`() {
+        // YUV of zeros, as BT.601 turns it into RGB, and a buffer of zeros.
+        for (blank in listOf(Color.rgb(0, 135, 0), Color.TRANSPARENT)) {
+            val file = video(mapOf(300_000L to blank))
+
+            assertThrows(UnreadableVideo::class.java) { readFrames(file, listOf(300)) { it } }
+            file.delete()
+            ShadowMediaMetadataRetriever.reset()
+        }
+    }
+
+    @Test
+    fun `a black frame is a frame`() {
+        val file = video(mapOf(300_000L to Color.BLACK))
+
+        assertEquals(listOf(300L), readFrames(file, listOf(300)) { it }.keys.toList())
     }
 }

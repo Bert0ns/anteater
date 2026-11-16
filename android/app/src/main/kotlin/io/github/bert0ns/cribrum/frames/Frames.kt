@@ -2,15 +2,17 @@
 // lab/src/cribrum_lab/frames.py, which decodes the same times with FFmpeg.
 package io.github.bert0ns.cribrum.frames
 
+import android.graphics.Color
 import android.media.MediaMetadataRetriever
 import io.github.bert0ns.cribrum.imaging.Argb
+import io.github.bert0ns.cribrum.metadata.HDR_TRANSFERS
 import io.github.bert0ns.cribrum.metadata.UnreadableVideo
 import java.io.File
 
 const val FRAMES = 5
 
 /** Bump it when the frames a video gives change, such as their times or their decoding: the frames stored at another version are taken again. */
-const val FRAMES_VERSION = 1
+const val FRAMES_VERSION = 2
 
 /** Kept off each end, where a clip fades in, starts black or catches the hand on the button. */
 const val MARGIN_MS = 500
@@ -28,11 +30,13 @@ fun frameTimes(durationMs: Long?): List<Long> {
 }
 
 /**
- * The frame closest to each time ([MediaMetadataRetriever.OPTION_CLOSEST]), upright, an HDR frame tone mapped by the
- * platform. Each frame's pixels go to [block] and are dropped after it, so memory holds one frame: a 4K one is 33 MB
- * as a bitmap, dropped once its pixels are copied. A time with no frame fails the video, which the next scan tries again.
+ * The frame closest to each time ([MediaMetadataRetriever.OPTION_CLOSEST]) by its time, upright, an HDR frame tone mapped by
+ * the platform. An HDR video takes the keyframe closest to each time instead ([MediaMetadataRetriever.OPTION_CLOSEST_SYNC]),
+ * since the phone gives no exact HDR frame: times that land on one keyframe give it once, under the first of them. Each
+ * frame's pixels go to [block] and are dropped after it, so memory holds one frame: a 4K one is 33 MB as a bitmap, dropped
+ * once its pixels are copied. A time with no frame, or a blank one, fails the video, which the next scan tries again.
  */
-internal fun <T> readFrames(file: File, timesMs: List<Long>, block: (Argb) -> T): List<T> {
+internal fun <T> readFrames(file: File, timesMs: List<Long>, block: (Argb) -> T): Map<Long, T> {
     val retriever = MediaMetadataRetriever()
     try {
         try {
@@ -40,17 +44,37 @@ internal fun <T> readFrames(file: File, timesMs: List<Long>, block: (Argb) -> T)
         } catch (error: IllegalArgumentException) {
             throw UnreadableVideo(file, error)
         }
-        return timesMs.map { time ->
-            val bitmap = retriever.getFrameAtTime(time * 1000, MediaMetadataRetriever.OPTION_CLOSEST) ?: throw UnreadableVideo(file)
+        val hdr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_COLOR_TRANSFER)?.toIntOrNull() in HDR_TRANSFERS
+        val option = if (hdr) MediaMetadataRetriever.OPTION_CLOSEST_SYNC else MediaMetadataRetriever.OPTION_CLOSEST
+        val taken = LinkedHashMap<Long, T>()
+        // The retriever does not say which keyframe it took, so a keyframe taken again shows as the same pixels.
+        var previous: Int? = null
+        for (time in timesMs) {
+            val bitmap = retriever.getFrameAtTime(time * 1000, option) ?: throw UnreadableVideo(file)
             val pixels = try {
                 // getPixels gives sRGB whatever the bitmap's config and color space.
                 Argb(bitmap.width, bitmap.height, IntArray(bitmap.width * bitmap.height).also { bitmap.getPixels(it, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height) })
             } finally {
                 bitmap.recycle()
             }
-            block(pixels)
+            if (pixels.isBlank()) throw UnreadableVideo(file)
+            val hash = pixels.pixels.contentHashCode()
+            if (hdr && hash == previous) continue
+            previous = hash
+            taken[time] = block(pixels)
         }
+        return taken
     } finally {
         retriever.release()
     }
+}
+
+/**
+ * What a decoder that output nothing hands over: one flat color that is transparent, a buffer of zeros, or green with no red
+ * or blue, YUV of zeros through any matrix (0/135/0 through BT.601). The phone gives the green for clip.webm's keyframe.
+ */
+private fun Argb.isBlank(): Boolean {
+    val first = pixels.firstOrNull() ?: return true
+    if (pixels.any { it != first }) return false
+    return Color.alpha(first) == 0 || (Color.red(first) == 0 && Color.blue(first) == 0 && Color.green(first) > 0)
 }

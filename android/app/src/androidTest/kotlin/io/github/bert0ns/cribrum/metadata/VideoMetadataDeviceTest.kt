@@ -44,8 +44,9 @@ class VideoMetadataDeviceTest {
                 if (want.isNull("captured_instant")) null else want.getLong("captured_instant"),
             )
             if (name in mayNotRead) {
-                // A codec the phone's extractor may not know: it reads the file or marks it unreadable, never drops it.
-                // When it reads it, the size and length must match; the lab names no codec for it, so the rest may differ.
+                // A file the phone may not read, such as a codec its extractor does not know or a WebM it gives no frames of:
+                // it reads the file or marks it unreadable, never drops it. When it reads it, the size and length must match;
+                // the lab names no codec for ProRes, so the rest may differ.
                 val read = try {
                     readVideoMetadata(copy(name), zone)
                 } catch (_: UnreadableVideo) {

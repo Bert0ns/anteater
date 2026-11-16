@@ -193,8 +193,8 @@ class Pipeline(
     private val metadataReader: (File) -> ImageMetadata = ::readMetadata,
     private val jpegReader: (File) -> JpegInfo = ::readJpeg,
     private val videoMetadataReader: (File) -> VideoMetadata = { readVideoMetadata(it) },
-    /** A video's frames at these times in milliseconds, each preprocessed as [preprocessing] does an image. */
-    private val frameReader: (File, List<Long>) -> List<FloatArray> = { file, times -> readFrames(file, times) { modelInput(it) } },
+    /** A video's frames at these times in milliseconds, by time, each preprocessed as [preprocessing] does an image. */
+    private val frameReader: (File, List<Long>) -> Map<Long, FloatArray> = { file, times -> readFrames(file, times) { modelInput(it) } },
     /** Hashes an image from its task's [Pixels], so it reads the grayscale exposure already computed. */
     private val perceptualHasher: (MediaRef, Pixels) -> ULong = { _, pixels -> perceptualHash(pixels.gray(PHASH_DECODE_SIDE)) },
     private val contentHasher: (MediaRef) -> String = ::contentHash,
@@ -410,7 +410,8 @@ class Pipeline(
 
     /**
      * Embeds the frames of each readable video whose frames are not stored at the times [frameTimes] gives now and at
-     * [FRAMES_VERSION], so a new rule samples every video again (docs/design.md §4). One video at a time: its frames
+     * [FRAMES_VERSION], so a new rule samples every video again (docs/design.md §4). An HDR video stores one frame a keyframe,
+     * so some of those times may be missing, never another one. One video at a time: its frames
      * decode one after the other, the model takes them as one batch and they are stored together, so a stop loses at most
      * the video it was on. A video whose frames do not read is marked, as an unreadable image is, and not decoded again
      * until the file or [FRAMES_VERSION] changes. Any other error is a failure, and the next scan tries it again, as an
@@ -418,7 +419,9 @@ class Pipeline(
      */
     private suspend fun embedFrames(embedder: Embedder, stats: Stats, progress: Progress) {
         val stored = index.sampledTimes(embedder.id, embedder.version, FRAMES_VERSION)
-        val todo = index.readVideos(FRAMES_VERSION).mapNotNull { video -> frameTimes(video.durationMs).takeIf { it != stored[video.ref.path] }?.let { video.ref to it } }
+        val todo = index.readVideos(FRAMES_VERSION).mapNotNull { video ->
+            frameTimes(video.durationMs).takeUnless { times -> stored[video.ref.path]?.let { times.containsAll(it) } == true }?.let { video.ref to it }
+        }
         stats.counts["$VIDEO_FRAMES_STEP tasks"] = todo.size
         progress(VIDEO_FRAMES_STEP, 0, todo.size)
         if (todo.isEmpty()) return
@@ -430,14 +433,14 @@ class Pipeline(
         var unreadable = 0
         for ((done, task) in todo.withIndex()) {
             val (video, times) = task
-            attempt { embedder.embedPixels(frameReader(File(video.path), times)) }.fold(
+            attempt { frameReader(File(video.path), times).let { taken -> taken.keys.zip(embedder.embedPixels(taken.values.toList())).toMap() } }.fold(
                 onSuccess = { vectors ->
                     // A video gone from the index since the walk keeps nothing.
                     index.batch(listOf(video.path)) { recorded ->
-                        if (video.path in recorded) index.setFrameEmbeddings(video.path, embedder.id, embedder.version, FRAMES_VERSION, times.zip(vectors).toMap())
+                        if (video.path in recorded) index.setFrameEmbeddings(video.path, embedder.id, embedder.version, FRAMES_VERSION, vectors)
                     }
-                    frames += times.size
-                    stats.detectorRuns += times.size
+                    frames += vectors.size
+                    stats.detectorRuns += vectors.size
                 },
                 onFailure = { error ->
                     // A file moved since the walk, such as one the user trashed, is not the video's fault.
