@@ -176,8 +176,7 @@ def run(
     if images:
         _image_steps(found, index, detectors, group_detectors, embedder, jobs, stats, progress)
     if videos:
-        _video_steps(index, stats, progress, zone)
-        _group_steps(MediaType.VIDEO, found, index, group_detectors, (), None, {}, stats, progress)
+        _video_steps(found, index, group_detectors, stats, progress, zone)
     media = [i for i in index.images() if i.path in found]
     stats.images = sum(i.media_type is MediaType.IMAGE for i in media)
     stats.videos = len(media) - stats.images
@@ -345,8 +344,16 @@ def _group_steps(
         progress(step, 1, 1)
 
 
-def _video_steps(index: ImageIndex, stats: Stats, progress: Progress, zone: tzinfo | None) -> None:
-    """The video steps, which only a run asked for videos takes: the metadata today."""
+def _video_steps(
+    found: set[Path],
+    index: ImageIndex,
+    group_detectors: Sequence[GroupDetector],
+    stats: Stats,
+    progress: Progress,
+    zone: tzinfo | None,
+) -> None:
+    """The video steps, which only a run asked for videos takes: the metadata, then the group
+    detectors that accept videos."""
     pending = [i for i in index.without_metadata() if i.media_type is MediaType.VIDEO]
     for done, video in enumerate(pending, 1):
         try:
@@ -359,6 +366,7 @@ def _video_steps(index: ImageIndex, stats: Stats, progress: Progress, zone: tzin
         except UnreadableVideo:
             index.set_unreadable(video.path)
         progress("video_metadata", done, len(pending))
+    _group_steps(MediaType.VIDEO, found, index, group_detectors, (), None, {}, stats, progress)
 
 
 def _stickers_last(images: list[MediaRef]) -> list[MediaRef]:

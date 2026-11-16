@@ -319,11 +319,13 @@ def test_indexed_media_lists_unanalyzed_images_too(index):
     assert [(i.ref, i.signals) for i in index.indexed_media()] == [(PHOTO, ()), (other, (BLUR,))]
 
 
-def test_a_video_is_recorded_with_its_media_type_and_the_ranker_never_sees_it(index):
+def test_a_video_is_recorded_with_its_media_type_and_indexed_media_gives_it_with_that_type(index):
     index.record_all([PHOTO, VIDEO])
 
     assert index.images() == [PHOTO, VIDEO]
-    assert [i.ref for i in index.indexed_media()] == [PHOTO]
+    assert [i.ref for i in index.indexed_media()] == [PHOTO, VIDEO]
+    assert [i.ref for i in index.indexed_media(MediaType.IMAGE)] == [PHOTO]
+    assert [i.ref for i in index.indexed_media(MediaType.VIDEO)] == [VIDEO]
 
 
 def test_videos_are_listed_apart_for_labeling_and_evaluation(index):
