@@ -1062,7 +1062,8 @@ def test_the_image_run_and_the_video_run_of_a_group_detector_do_not_rerun_each_o
             **kwargs,
         )
 
-    assert "exact_duplicate" not in steps  # nothing changed, so neither run has work
+    # Nothing changed, so neither run has work: both of their steps stay silent.
+    assert {"exact_duplicate", "video_groups"}.isdisjoint(steps)
 
 
 def test_a_new_copy_of_a_video_groups_it_at_the_next_video_run_only(videos, index):

@@ -40,7 +40,7 @@ from cribrum_lab.folders import is_sticker_folder
 from cribrum_lab.index import ImageIndex
 from cribrum_lab.labels import Decision, Label, LabelStore
 from cribrum_lab.mobileclip import MobileClip
-from cribrum_lab.model import Category, IndexedMedia, Protection, Signal
+from cribrum_lab.model import Category, IndexedMedia, MediaType, Protection, Signal
 from cribrum_lab.ranker import THRESHOLDS, Ranker
 from cribrum_lab.runtime import OnnxRuntime
 
@@ -161,7 +161,7 @@ def _coverages(path: Path) -> tuple[str, dict[str, float] | None]:
 
 def compute_coverage(index_path: Path, out: Path, jobs: int) -> None:
     with ImageIndex(index_path) as index:
-        images = index.indexed_media()
+        images = index.indexed_media(MediaType.IMAGE)
     paths = [i.ref.path for i in images if any(s.detector_id == "document" for s in i.signals)]
     result, failed = {}, 0
     context = multiprocessing.get_context("forkserver")
@@ -333,7 +333,7 @@ def _auc(positions: np.ndarray, deletes: np.ndarray) -> float:
 
 def report(index_path: Path, labels_path: Path, coverage_file: Path, speed_file: Path) -> str:
     with ImageIndex(index_path) as index:
-        images = index.indexed_media()
+        images = index.indexed_media(MediaType.IMAGE)
         embeddings = index.embeddings(MobileClip.id, MobileClip.version)
     with LabelStore(labels_path) as store:
         labels = store.all()

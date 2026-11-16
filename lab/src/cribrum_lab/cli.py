@@ -133,7 +133,7 @@ def _progress(step: str, done: int, total: int) -> None:
 
 
 def _report(index: ImageIndex, top: int) -> None:
-    images = index.indexed_media()
+    images = index.indexed_media(MediaType.IMAGE)
     ranked = Ranker().rank(images)
     candidates = [c for c in ranked if c.is_candidate]
     print(f"{len(images)} images, {len(ranked)} to review, {len(candidates)} candidates")
@@ -182,7 +182,10 @@ def _evaluate(index: ImageIndex, labels: Path, out: Path | None) -> None:
     with LabelStore(labels) as store:
         every = store.all()
     text = format_report(
-        evaluate(index.indexed_media(), [x for x in every if x.media_type is MediaType.IMAGE])
+        evaluate(
+            index.indexed_media(MediaType.IMAGE),
+            [x for x in every if x.media_type is MediaType.IMAGE],
+        )
     )
     if videos := [x for x in every if x.media_type is MediaType.VIDEO]:
         text += "\n\nvideos\n" + format_report(

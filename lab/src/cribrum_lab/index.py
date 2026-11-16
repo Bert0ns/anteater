@@ -536,10 +536,10 @@ class ImageIndex:
         rows = self._db.execute("SELECT path FROM excluded_folders ORDER BY path")
         return [Path(path) for (path,) in rows]
 
-    def indexed_media(self, media_type: MediaType = MediaType.IMAGE) -> list[IndexedMedia]:
-        """Every image, or every video, with its review state and signals, as the ranker takes
-        them. Images by default: nothing reviews a video yet (docs/design.md, section 6.5), and
-        the lab labels and evaluates them apart (section 10)."""
+    def indexed_media(self, media_type: MediaType | None = None) -> list[IndexedMedia]:
+        """Every image and video with its review state and signals, as the ranker takes them and
+        as the app's `indexedMedia` gives them, or only those of `media_type`. The lab's report,
+        labeling and evaluation are about images, and ask for those."""
         signals = defaultdict(list)
         for path, *fields, evidence in self._db.execute(
             """SELECT path, detector_id, detector_version, category, score, evidence
@@ -553,18 +553,18 @@ class ImageIndex:
         for path, category, group, role in self._db.execute("SELECT * FROM kept_signals"):
             seen[path].add((kind(category), group, role))
         rows = self._db.execute(
-            """SELECT path, size, mtime_ns, review_state FROM images
-               WHERE media_type = ? ORDER BY path""",
-            (media_type.value,),
+            """SELECT path, size, mtime_ns, review_state, media_type FROM images
+               WHERE :type IS NULL OR media_type = :type ORDER BY path""",
+            {"type": media_type.value if media_type else None},
         )
         return [
             IndexedMedia(
-                MediaRef(Path(path), size, mtime_ns, media_type),
+                _ref(path, size, mtime_ns, type_),
                 ReviewState(state),
                 tuple(signals[path]),
                 frozenset(seen[path]),
             )
-            for path, size, mtime_ns, state in rows
+            for path, size, mtime_ns, state, type_ in rows
         ]
 
 
