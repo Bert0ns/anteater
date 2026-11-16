@@ -1300,6 +1300,20 @@ class ReviewTest {
     }
 
     @Test
+    fun `a video of a group carries what the index read of it, so the page can draw the placeholder of one that cannot be read`() = test {
+        val best = duplicateVideo("DCIM/Camera/clip.mov", 300, "v", Role.BEST)
+        val copy = duplicateVideo("Download/clip.mov", 300, "v", Role.INFERIOR)
+        index.setUnreadable(copy.path)
+        index.setVideoMetadata(best.path, VideoMetadata(1920, 1080, 61_000, 30.0, 1000, true, "video/avc", false, null, null))
+
+        val items = page(Category.EXACT_DUPLICATE, mediaType = MediaType.VIDEO).groups.single().images
+
+        assertEquals(listOf(best, copy), items.map { it.image })
+        assertEquals(listOf(false, true), items.map { it.unreadable })
+        assertEquals(listOf(61_000L, null), items.map { it.durationMs })
+    }
+
+    @Test
     fun `trashing the copy of a video group empties the category, and undo brings it back`() = test {
         duplicateVideo("DCIM/Camera/clip.mp4", 300, "v", Role.BEST)
         val copy = duplicateVideo("Download/clip.mp4", 300, "v", Role.INFERIOR)

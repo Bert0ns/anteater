@@ -86,6 +86,10 @@ data class ReviewItem(
     val keepable: Boolean = true,
     /** The gallery marks the image as a favourite: the screen shows a heart, and trashing it asks first. */
     val isFavorite: Boolean = false,
+    /** A video the index could not read: its tile and full size view draw the placeholder and never play it. */
+    val unreadable: Boolean = false,
+    /** A video's length from the index, so its full size view needs no retriever for it. */
+    val durationMs: Long? = null,
 )
 
 /**
@@ -405,7 +409,7 @@ class Review(
 
     private suspend fun singles(category: Category, candidates: List<Candidate>, grouping: ReviewOrder, favorites: Set<String>): List<ReviewGroup> {
         val groups = candidates.map {
-            ReviewGroup(it.image.ref.path, listOf(ReviewItem(it.image.ref, suggestTrash = true, score = score(it, category), reasons = it.reasons, isFavorite = it.image.ref.path in favorites)))
+            ReviewGroup(it.image.ref.path, listOf(ReviewItem(it.image.ref, suggestTrash = true, score = score(it, category), reasons = it.reasons, isFavorite = it.image.ref.path in favorites, unreadable = it.image.unreadable, durationMs = it.image.durationMs)))
         }
         if (!grouping.byDate) return groups
         val capturedAt = index.capturedAt()
@@ -482,6 +486,8 @@ class Review(
                     reasons = candidateReasons[image.ref.path] ?: image.signals.filter { it.kind == category },
                     keepable = image.ref.path !in otherCandidates,
                     isFavorite = image.ref.path in favorites,
+                    unreadable = image.unreadable,
+                    durationMs = image.durationMs,
                 )
             }
             ReviewGroup(
