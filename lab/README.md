@@ -38,6 +38,18 @@ lab/scripts/pull-device-images.sh "DCIM/Screenshots" Pictures
 
 Never commit anything under `lab/data/`.
 
+### Videos
+
+The image script leaves videos on the device. `pull_device_videos.py` copies them into the same `lab/data/device/`, with the same layout and modification times, and only reads the device:
+
+```bash
+cd lab
+uv run python scripts/pull_device_videos.py --dry-run                # what it would copy, and its size
+uv run python scripts/pull_device_videos.py --sample 20 DCIM/Camera  # 20 camera videos
+```
+
+Camera videos can take more space than the computer has, so `--sample N` takes N videos from each folder given, the same ones on every run: a larger N adds videos and keeps those already copied. A video already copied with the same size is skipped. Without folders it reads the folders of the image script. From WSL, `--adb adb.exe` uses the Windows adb.
+
 ### From WSL
 
 WSL2 does not see USB devices, so the Linux `adb` cannot reach a phone plugged into Windows. Forward the phone to WSL with [usbipd-win](https://github.com/dorssel/usbipd-win):
@@ -76,6 +88,8 @@ uv run cribrum-lab label               # then open http://127.0.0.1:8765/
 
 The page shows one image at a time from a sample of 500 (`--size`). Half of the sample are candidates, spread over every category, and half are images no detector flagged, so that recall can also be measured on what the detectors missed. Keys: `k` keep, `d` delete, `u` undo, `s` skip. A label says only whether you would keep the image: the detectors work out why. To check whether an image is really blurry, click it or press `z`: the original opens at full size, where 100% is one image pixel per screen pixel. The mouse wheel zooms, dragging moves the image, and `z` or `Esc` closes it. In a grid, `z` zooms on the image under the mouse. Labels go to `lab/data/labels.sqlite` and are keyed by content hash, so they survive copying the images again. A new run of `label` skips images that are already labeled; `--seed` draws a different sample.
 
+`--videos` labels the videos in the index instead, one at a time: the page plays each one, and `space` plays or pauses it. The labels go to the same file.
+
 With `--clusters`, similar images in the sample (by MobileCLIP embedding) come first, as grids of up to 48: click an image to leave it out, then one key labels the rest. The images left out and those alike to no other are shown one by one afterwards, or in a later session.
 
 ## Evaluate
@@ -84,7 +98,7 @@ With `--clusters`, similar images in the sample (by MobileCLIP embedding) come f
 uv run cribrum-lab evaluate            # --out data/report.txt to keep a copy
 ```
 
-Prints the recall on the labeled images with the current thresholds, and the number of candidates it costs over the whole index. Per category, it counts the images labeled delete and keep that the category flags. A sticker runs neither blur nor exposure, so the `blurry` and `bad_exposure` rows count no sticker (`docs/design.md` §5). Then it suggests a threshold for every category, chosen together so that all categories at once reach 80% recall with as few candidates as it can find: copy them into `THRESHOLDS` in `cribrum_lab/ranker.py`. It ends with the images labeled delete that no detector flagged. The report lists paths of personal images, so keep it under `lab/data/`.
+Prints the recall on the labeled images with the current thresholds, and the number of candidates it costs over the whole index. Per category, it counts the images labeled delete and keep that the category flags. A sticker runs neither blur nor exposure, so the `blurry` and `bad_exposure` rows count no sticker (`docs/design.md` §5). Then it suggests a threshold for every category, chosen together so that all categories at once reach 80% recall with as few candidates as it can find: copy them into `THRESHOLDS` in `cribrum_lab/ranker.py`. It ends with the images labeled delete that no detector flagged. When videos have labels, the same report follows for them alone, after a `videos` line. The report lists paths of personal images, so keep it under `lab/data/`.
 
 ## Layout
 
