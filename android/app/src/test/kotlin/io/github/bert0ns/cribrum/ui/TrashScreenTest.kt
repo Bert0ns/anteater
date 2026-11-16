@@ -1,6 +1,7 @@
 package io.github.bert0ns.cribrum.ui
 
 import android.media.MediaMetadataRetriever
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -9,6 +10,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
@@ -19,16 +21,19 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.trash.TrashedImage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -292,6 +297,59 @@ class TrashScreenTest {
         compose.onNodeWithTag("fullSize").assertExists()
         compose.onNodeWithText("Video, 412 MB").assertExists()
         compose.onNodeWithText("27 days left").assertExists()
+    }
+
+    @Test
+    fun `a video in the trash plays at full size, and closing the view releases the player`() {
+        val players = Players()
+        // A path of its own: a video's length is cached by path for the whole run, and another test cached this clip's as unreadable.
+        val clip = clip.copy(file = File("/sdcard/.cribrum-trash/p/clip.mp4"))
+        ShadowMediaMetadataRetriever.addMetadata(clip.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "102000")
+        compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { TrashScreen(listOf(clip), emptySet(), {}, { _, _ -> }, {}, {}) } }
+        compose.onNodeWithContentDescription("clip.mp4", substring = true).performTouchInput { longClick() }
+
+        compose.onAllNodesWithContentDescription("Play video").onFirst().performClick()
+        compose.waitForIdle()
+
+        assertEquals(listOf(clip.file.path), players.made.single().paths)
+        assertTrue(players.made.single().playing)
+        compose.onNodeWithContentDescription("Close").performClick()
+        compose.waitForIdle()
+        assertTrue(players.made.single().released)
+    }
+
+    @Test
+    fun `a trashed video whose length cannot be read has the placeholder, no play button and no controls`() {
+        val players = Players()
+        val broken = clip.copy(MediaRef("/sdcard/DCIM/broken.mp4", 412_000_000, 0, MediaType.VIDEO), file = File("/sdcard/.cribrum-trash/b/broken.mp4")) // no metadata, so the retriever fails
+        compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { TrashScreen(listOf(broken), emptySet(), {}, { _, _ -> }, {}, {}) } }
+        compose.onNodeWithContentDescription("broken.mp4", substring = true).performTouchInput { longClick() }
+
+        compose.onNodeWithTag("fullSize").assertExists()
+        compose.onAllNodesWithContentDescription("Play video").assertCountEquals(0)
+        compose.onAllNodesWithContentDescription("Go to", substring = true).assertCountEquals(0)
+        assertTrue(players.made.isEmpty())
+    }
+
+    @Test
+    fun `a video that leaves the trash while it plays is stopped`() {
+        val players = Players()
+        val first = clip.copy(MediaRef("/sdcard/DCIM/first.mp4", 412_000_000, 0, MediaType.VIDEO), file = File("/sdcard/.cribrum-trash/1/first.mp4"))
+        val second = clip.copy(MediaRef("/sdcard/DCIM/second.mp4", 412_000_000, 0, MediaType.VIDEO), file = File("/sdcard/.cribrum-trash/2/second.mp4"))
+        for (item in listOf(first, second)) ShadowMediaMetadataRetriever.addMetadata(item.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "102000")
+        var items by mutableStateOf(listOf(first, second))
+        compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { TrashScreen(items, emptySet(), {}, { _, _ -> }, {}, {}) } }
+        compose.onNodeWithContentDescription("first.mp4", substring = true).performTouchInput { longClick() }
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onAllNodesWithContentDescription("Play video").onFirst().performClick()
+        compose.waitForIdle()
+        assertEquals(listOf(second.file.path), players.made.single().paths)
+
+        items = listOf(first)
+        compose.waitForIdle()
+
+        assertEquals(emptyList<String>(), players.made.single().paths)
     }
 
     @Test

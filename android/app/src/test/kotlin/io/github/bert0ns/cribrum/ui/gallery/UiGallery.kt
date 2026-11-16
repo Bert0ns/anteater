@@ -47,7 +47,9 @@ import io.github.bert0ns.cribrum.compress.CompressibleImage
 import io.github.bert0ns.cribrum.ui.CompressBatches
 import io.github.bert0ns.cribrum.ui.CompressViewModel
 import io.github.bert0ns.cribrum.ui.CribrumTheme
+import io.github.bert0ns.cribrum.ui.LocalPlayerFactory
 import io.github.bert0ns.cribrum.ui.MAX_COMPARED
+import io.github.bert0ns.cribrum.ui.Players
 import io.github.bert0ns.cribrum.ui.ReviewViewModel
 import org.junit.AfterClass
 import org.junit.Assume.assumeTrue
@@ -180,6 +182,9 @@ class UiGallery(private val shot: Shot) {
 class Gallery(val compose: ComposeTestRule, val app: CribrumApp, val world: GalleryWorld) {
     private var scenario: ActivityScenario<*>? = null
 
+    /** The players the scene's videos play with. Robolectric cannot decode a video, so these only hold what they were asked. */
+    internal val players = Players(lengthMs = 612_000)
+
     fun str(id: Int, vararg args: Any): String = app.getString(id, *args)
 
     fun plural(id: Int, quantity: Int, vararg args: Any): String = app.resources.getQuantityString(id, quantity, *args)
@@ -200,7 +205,9 @@ class Gallery(val compose: ComposeTestRule, val app: CribrumApp, val world: Gall
                 activity.enableEdgeToEdge()
                 activity.setContent {
                     CribrumTheme {
-                        if (owner == null) content() else CompositionLocalProvider(LocalViewModelStoreOwner provides owner, content = content)
+                        CompositionLocalProvider(LocalPlayerFactory provides players.factory) {
+                            if (owner == null) content() else CompositionLocalProvider(LocalViewModelStoreOwner provides owner, content = content)
+                        }
                     }
                 }
             }

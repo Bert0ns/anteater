@@ -30,6 +30,7 @@ import io.github.bert0ns.cribrum.review.Review
 import io.github.bert0ns.cribrum.trash.AppTrash
 import io.github.bert0ns.cribrum.trash.Trash
 import io.github.bert0ns.cribrum.ui.ReviewViewModel
+import io.github.bert0ns.cribrum.ui.stripTimes
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
 import org.robolectric.shadows.ShadowMediaMetadataRetriever
@@ -140,10 +141,10 @@ class GalleryWorld(val app: CribrumApp, val root: File, val clock: MovableClock 
         }
     }
 
-    /** Gives the retriever [frame] and a length of [durationMs] for the file at [path]. */
+    /** Gives the retriever [frame] and a length of [durationMs] for the file at [path], at the start and at the times of the full size strip. */
     fun show(path: String, durationMs: Long, frame: Bitmap) {
         ShadowMediaMetadataRetriever.addMetadata(path, MediaMetadataRetriever.METADATA_KEY_DURATION, durationMs.toString())
-        ShadowMediaMetadataRetriever.addFrame(path, 0, frame)
+        for (ms in listOf(0L) + stripTimes(durationMs)) ShadowMediaMetadataRetriever.addFrame(path, ms * 1000, frame)
     }
 
     /** A row with no file behind it. */

@@ -67,7 +67,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -106,6 +108,7 @@ import io.github.bert0ns.cribrum.review.ReviewGroup
 import io.github.bert0ns.cribrum.review.ReviewItem
 import io.github.bert0ns.cribrum.review.ReviewOrder
 import io.github.bert0ns.cribrum.trash.TrashRetention
+import kotlinx.coroutines.flow.drop
 import java.io.File
 
 @Composable
@@ -469,7 +472,8 @@ private fun FullSize(
 /**
  * The full size view both the review and the Compress page open: a black dialog that pages through
  * [paths] from [start], with [image] in each page, the review's zoomable image unless the screen
- * has its own. [overlay] draws over it what is specific to the screen, for the page the pager is on.
+ * has its own. [overlay] draws over it what is specific to the screen, for the page the pager is on. [onPage] hears each page
+ * the pager moves to, so a video that plays can stop.
  */
 @Composable
 internal fun FullSizeViewer(
@@ -477,17 +481,20 @@ internal fun FullSizeViewer(
     start: String,
     onClose: () -> Unit,
     image: @Composable (page: Int) -> Unit = { ZoomableImage(paths[it], onClose) },
+    onPage: (Int) -> Unit = {},
     overlay: @Composable BoxScope.(page: Int) -> Unit,
 ) {
     val pager = rememberPagerState(paths.indexOf(start).coerceAtLeast(0)) { paths.size }
     ClearFullSizeImagesOnExit()
+    val pageChanged by rememberUpdatedState(onPage)
+    LaunchedEffect(pager) { snapshotFlow { pager.currentPage }.drop(1).collect { pageChanged(it) } }
     Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             HorizontalPager(pager, Modifier.fillMaxSize().testTag("fullSize"), key = { paths[it] }) { page ->
                 image(page)
             }
             overlay(pager.currentPage)
-            // Tapping the image closes it too, but nothing showed that.
+            // A tap on an image closes the view too, but nothing showed that. A video's tap plays and pauses, so this is its only way out.
             IconButton(
                 onClose,
                 Modifier.align(Alignment.TopStart).windowInsetsPadding(WindowInsets.safeDrawing).padding(8.dp).background(Color.Black.copy(alpha = 0.55f), CircleShape),

@@ -5,7 +5,6 @@ import android.text.format.Formatter
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,7 +38,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -147,17 +145,26 @@ fun TrashScreen(
     }
     fullSize?.let { start ->
         val close = { fullSize = null }
-        // A video shows its frame until #388 plays it.
+        val playback = rememberVideoPlayback()
+        // A video that leaves the trash while it plays leaves the pager's page where it was, so no swipe stops it.
+        val paths = trashed.map { it.file.path }
+        LaunchedEffect(paths) { if (playback.loaded != null && playback.loaded !in paths) playback.stop() }
         val image: @Composable (Int) -> Unit = { page ->
             trashed.getOrNull(page)?.let { item ->
-                if (item.isVideo) VideoFrame(item.file, "Trash.fullSize", Modifier.fillMaxSize().clickable(onClick = close), ContentScale.Fit) else ZoomableImage(item.file.path, close)
+                if (item.isVideo) VideoPage(item.file, "Trash.fullSize", playback, rememberLengthRead(item.file) == NO_LENGTH, close) else ZoomableImage(item.file.path, close)
             }
         }
-        FullSizeViewer(trashed.map { it.file.path }, start.file.path, onClose = close, image = image) { page ->
+        FullSizeViewer(paths, start.file.path, onClose = close, image = image, onPage = { playback.stop() }) { page ->
             val item = trashed.getOrNull(page) ?: return@FullSizeViewer
             FullSizeToggle(item.file.path in selected, stringResource(R.string.tile_selected), MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary) { onSelect(item) }
             FullSizeBar(item.original.path, item.favorite) {
-                if (item.isVideo) Text(videoDetails(item.original.size, rememberDuration(item.file)), color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                if (item.isVideo) {
+                    // A video whose length cannot be read is the placeholder with no controls, as in "Largest videos".
+                    val read = rememberLengthRead(item.file)
+                    val length = read?.takeIf { it != NO_LENGTH }
+                    VideoControls(playback, item.file, "Trash.fullSize", length, unreadable = read == NO_LENGTH)
+                    Text(videoDetails(item.original.size, length?.let(::formatLength)), color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                }
                 Text(pluralStringResource(R.plurals.trash_tile_days_left, daysLeft(item).toInt(), daysLeft(item)), color = Color.White, style = MaterialTheme.typography.bodyMedium)
             }
         }
