@@ -302,6 +302,8 @@ class TrashScreenTest {
     @Test
     fun `a video in the trash plays at full size, and closing the view releases the player`() {
         val players = Players()
+        // A path of its own: a video's length is cached by path for the whole run, and another test cached this clip's as unreadable.
+        val clip = clip.copy(file = File("/sdcard/.cribrum-trash/p/clip.mp4"))
         ShadowMediaMetadataRetriever.addMetadata(clip.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "102000")
         compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { TrashScreen(listOf(clip), emptySet(), {}, { _, _ -> }, {}, {}) } }
         compose.onNodeWithContentDescription("clip.mp4", substring = true).performTouchInput { longClick() }
@@ -319,7 +321,7 @@ class TrashScreenTest {
     @Test
     fun `a trashed video whose length cannot be read has the placeholder, no play button and no controls`() {
         val players = Players()
-        val broken = clip.copy(file = File("/sdcard/.cribrum-trash/b/broken.mp4")) // no metadata, so the retriever fails
+        val broken = clip.copy(MediaRef("/sdcard/DCIM/broken.mp4", 412_000_000, 0, MediaType.VIDEO), file = File("/sdcard/.cribrum-trash/b/broken.mp4")) // no metadata, so the retriever fails
         compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { TrashScreen(listOf(broken), emptySet(), {}, { _, _ -> }, {}, {}) } }
         compose.onNodeWithContentDescription("broken.mp4", substring = true).performTouchInput { longClick() }
 
@@ -332,8 +334,8 @@ class TrashScreenTest {
     @Test
     fun `a video that leaves the trash while it plays is stopped`() {
         val players = Players()
-        val first = clip.copy(file = File("/sdcard/.cribrum-trash/1/first.mp4"))
-        val second = clip.copy(file = File("/sdcard/.cribrum-trash/2/second.mp4"))
+        val first = clip.copy(MediaRef("/sdcard/DCIM/first.mp4", 412_000_000, 0, MediaType.VIDEO), file = File("/sdcard/.cribrum-trash/1/first.mp4"))
+        val second = clip.copy(MediaRef("/sdcard/DCIM/second.mp4", 412_000_000, 0, MediaType.VIDEO), file = File("/sdcard/.cribrum-trash/2/second.mp4"))
         for (item in listOf(first, second)) ShadowMediaMetadataRetriever.addMetadata(item.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "102000")
         var items by mutableStateOf(listOf(first, second))
         compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { TrashScreen(items, emptySet(), {}, { _, _ -> }, {}, {}) } }
