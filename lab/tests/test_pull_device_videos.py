@@ -30,6 +30,12 @@ def test_the_listing_names_the_folders_the_phone_does_not_have():
     )
 
 
+def test_a_video_listed_twice_by_overlapping_folders_is_kept_once():
+    text = "5 DCIM/Camera/a.mp4\n5 DCIM/Camera/a.mp4\nok\n"
+
+    assert pull.parse_listing(text) == ([(5, "DCIM/Camera/a.mp4")], [])
+
+
 def test_a_listing_cut_short_on_the_phone_is_an_error_not_an_empty_one():
     # adb exec-out does not pass the phone's exit code back: only the last line tells.
     with pytest.raises(SystemExit):

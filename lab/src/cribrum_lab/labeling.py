@@ -210,7 +210,10 @@ class _Handler(BaseHTTPRequestHandler):
             start = int(asked[1])
             end = min(int(asked[2]), size - 1) if asked[2] else size - 1
             if start > end:
-                self.send_error(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
                 return
         self.send_response(HTTPStatus.PARTIAL_CONTENT if asked else HTTPStatus.OK)
         self.send_header("Content-Type", mimetypes.guess_type(path)[0] or "video/mp4")

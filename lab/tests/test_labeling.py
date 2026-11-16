@@ -261,6 +261,18 @@ def test_a_video_is_sent_by_range_so_the_browser_can_seek(video_server, header, 
     assert response.read() == data[start : last + 1]
 
 
+def test_a_range_past_the_end_says_how_large_the_video_is(video_server):
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{video_server.server_port}/video/0",
+        headers={"Range": "bytes=999999999-"},
+    )
+    with pytest.raises(urllib.error.HTTPError) as error:
+        urllib.request.urlopen(request)
+
+    assert error.value.code == 416
+    assert error.value.headers["Content-Range"] == f"bytes */{FIXTURE_VIDEO.stat().st_size}"
+
+
 def test_an_image_is_not_served_as_a_video(server):
     with pytest.raises(urllib.error.HTTPError) as error:
         get(server, "/video/0")

@@ -57,7 +57,8 @@ def listing_command(folders: list[str]) -> str:
 
 
 def parse_listing(text: str) -> tuple[list[tuple[int, str]], list[str]]:
-    """The videos with their sizes, and the folders the device lacks."""
+    """The videos with their sizes, once each even when overlapping folders list them twice,
+    and the folders the device lacks."""
     lines = [line for line in text.splitlines() if line.strip()]
     if lines[-1:] != ["ok"]:
         sys.exit(f"the listing on the device did not finish: {lines[-1:] or 'no output'}")
@@ -70,7 +71,7 @@ def parse_listing(text: str) -> tuple[list[tuple[int, str]], list[str]]:
             files.append((int(first), rest))
         else:
             sys.exit(f"unexpected line in the listing: {line}")
-    return files, missing
+    return list(dict.fromkeys(files)), missing
 
 
 def pick(
