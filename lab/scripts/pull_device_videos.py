@@ -2,11 +2,13 @@
 
 The twin of pull-device-images.sh: it keeps the device's folder layout and modification times,
 and only reads the device (find, stat and tar). Camera videos may not fit the dev machine, so
-`--sample N` copies N videos from each folder given, the same ones on every run: a larger N
-keeps the videos of a smaller one. A video already copied with the same size is skipped.
+a run must say how many it takes: `--sample N` copies N videos from each folder given, the same
+ones on every run, so a larger N keeps the videos of a smaller one. `--all` copies every video.
+A video already copied with the same size is skipped.
 
 Usage, from lab/:
-  uv run python scripts/pull_device_videos.py [--sample N] [--dry-run] [--adb ADB] [FOLDER...]
+  uv run python scripts/pull_device_videos.py (--sample N | --all) [--dry-run] [--adb ADB]
+      [FOLDER...]
 FOLDER is relative to /sdcard; without any, the folders of pull-device-images.sh are used.
 From WSL, `--adb adb.exe` uses the Windows adb, which holds the phone.
 """
@@ -39,24 +41,36 @@ BATCH = 20
 
 
 def listing_command(folders: list[str]) -> str:
-    """Size and path of every video under the folders. Like the walk, it leaves out files in the
+    """Size and path of every video under the folders, a `missing` line for each folder the
+    device lacks, and `ok` once it ran to the end. Like the walk, it leaves out files in the
     system trash or still being written, and gallery thumbnail caches."""
     names = " -o ".join(f"-iname '*.{extension}'" for extension in EXTENSIONS)
     quoted = " ".join(shlex.quote(folder) for folder in folders)
+    # exec-out mixes stderr into the stream and does not pass the exit code back, so the device
+    # side stays silent and the last line says whether it ran.
     return (
-        f"cd /sdcard && find {quoted} -type d -name .thumbnails -prune -o -type f "
+        f'cd /sdcard 2>/dev/null && {{ for f in {quoted}; do [ -d "$f" ] || echo "missing $f"; '
+        f"done; find {quoted} -type d -name .thumbnails -prune -o -type f "
         f"\\( {names} \\) ! -name '.trashed-*' ! -name '.pending-*' "
-        "-exec stat -c '%s %n' {} + 2>/dev/null; true"  # a missing folder is not an error
+        "-exec stat -c '%s %n' {} + 2>/dev/null; echo ok; }"
     )
 
 
-def parse_listing(text: str) -> list[tuple[int, str]]:
-    files = []
-    for line in text.splitlines():
-        if line.strip():
-            size, path = line.split(" ", 1)
-            files.append((int(size), path))
-    return files
+def parse_listing(text: str) -> tuple[list[tuple[int, str]], list[str]]:
+    """The videos with their sizes, and the folders the device lacks."""
+    lines = [line for line in text.splitlines() if line.strip()]
+    if lines[-1:] != ["ok"]:
+        sys.exit(f"the listing on the device did not finish: {lines[-1:] or 'no output'}")
+    files, missing = [], []
+    for line in lines[:-1]:
+        first, rest = line.split(" ", 1)
+        if first == "missing":
+            missing.append(rest)
+        elif first.isdigit():
+            files.append((int(first), rest))
+        else:
+            sys.exit(f"unexpected line in the listing: {line}")
+    return files, missing
 
 
 def pick(
@@ -66,7 +80,7 @@ def pick(
     same videos come first on every run, whatever the order of the listing."""
     picked = []
     for folder in folders:
-        inside = [f for f in files if f[1].startswith(folder.rstrip("/") + "/")]
+        inside = [f for f in files if f[1].startswith(folder.rstrip("/") + "/") and f not in picked]
         inside.sort(key=lambda f: hashlib.sha1(f[1].encode()).hexdigest())
         picked += inside if sample is None else inside[:sample]
     return picked
@@ -84,7 +98,9 @@ def copy_command(paths: list[str]) -> str:
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("folders", nargs="*", default=FOLDERS, metavar="FOLDER")
-    parser.add_argument("--sample", type=int, help="videos taken from each folder")
+    count = parser.add_mutually_exclusive_group(required=True)
+    count.add_argument("--sample", type=_positive, help="videos taken from each folder")
+    count.add_argument("--all", action="store_true", help="every video in the folders")
     parser.add_argument("--dry-run", action="store_true", help="say what would be copied")
     parser.add_argument("--adb", default="adb")
     args = parser.parse_args(argv)
@@ -95,7 +111,9 @@ def main(argv: list[str] | None = None) -> None:
         check=True,
         text=True,
     ).stdout
-    files = parse_listing(listing)
+    files, absent = parse_listing(listing)
+    for folder in absent:
+        print(f"skip: /sdcard/{folder} not found")
     picked = pick(files, args.folders, args.sample)
     for folder in args.folders:
         found = [f for f in files if f[1].startswith(folder.rstrip("/") + "/")]
@@ -114,6 +132,12 @@ def main(argv: list[str] | None = None) -> None:
         if adb.wait():
             sys.exit(f"adb failed on the batch starting with {batch[0]}")
         print(f"copied {min(start + BATCH, len(missing))}/{len(missing)}", flush=True)
+
+
+def _positive(text: str) -> int:
+    if not text.isdigit() or int(text) < 1:
+        raise argparse.ArgumentTypeError(f"not a positive number: {text}")
+    return int(text)
 
 
 def _size(path: Path) -> int | None:

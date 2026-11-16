@@ -1,6 +1,9 @@
 import importlib.util
 import shlex
+import subprocess
 from pathlib import Path
+
+import pytest
 
 _SCRIPT = Path(__file__).parents[1] / "scripts" / "pull_device_videos.py"
 _spec = importlib.util.spec_from_file_location("pull_device_videos", _SCRIPT)
@@ -12,12 +15,47 @@ WHATSAPP = "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video"
 
 
 def test_the_listing_gives_each_video_its_size_even_with_spaces_in_the_path():
-    text = f"123 {WHATSAPP}/Sent/VID-1.mp4\n4567 {CAMERA}/20261101_101010.mp4\n\n"
+    text = f"123 {WHATSAPP}/Sent/VID-1.mp4\n4567 {CAMERA}/20261101_101010.mp4\n\nok\n"
 
-    assert pull.parse_listing(text) == [
-        (123, f"{WHATSAPP}/Sent/VID-1.mp4"),
-        (4567, f"{CAMERA}/20261101_101010.mp4"),
-    ]
+    assert pull.parse_listing(text) == (
+        [(123, f"{WHATSAPP}/Sent/VID-1.mp4"), (4567, f"{CAMERA}/20261101_101010.mp4")],
+        [],
+    )
+
+
+def test_the_listing_names_the_folders_the_phone_does_not_have():
+    assert pull.parse_listing("missing Telegram\n5 DCIM/a.mp4\nok\n") == (
+        [(5, "DCIM/a.mp4")],
+        ["Telegram"],
+    )
+
+
+def test_a_listing_cut_short_on_the_phone_is_an_error_not_an_empty_one():
+    # adb exec-out does not pass the phone's exit code back: only the last line tells.
+    with pytest.raises(SystemExit):
+        pull.parse_listing("5 DCIM/a.mp4\n")
+
+
+def test_the_listing_command_ends_with_the_marker_only_when_it_ran(tmp_path):
+    (tmp_path / "DCIM/Camera").mkdir(parents=True)
+    (tmp_path / "DCIM/Camera/a.mp4").write_bytes(b"12345")
+    command = pull.listing_command(["DCIM", "Telegram"]).replace("/sdcard", str(tmp_path))
+
+    out = subprocess.run(["sh", "-c", command], capture_output=True, text=True).stdout
+
+    assert pull.parse_listing(out) == ([(5, "DCIM/Camera/a.mp4")], ["Telegram"])
+    gone = command.replace(str(tmp_path), str(tmp_path / "nothing"))
+    assert subprocess.run(["sh", "-c", gone], capture_output=True, text=True).stdout == ""
+
+
+@pytest.mark.parametrize(
+    "argv", [[], [CAMERA], ["--dry-run"], ["--sample", "0"], ["--sample", "-1"]]
+)
+def test_a_run_must_say_how_many_videos_it_takes(monkeypatch, argv):
+    monkeypatch.setattr(pull.subprocess, "run", lambda *a, **k: pytest.fail("adb was called"))
+
+    with pytest.raises(SystemExit):
+        pull.main(argv)
 
 
 def test_the_sample_takes_as_many_videos_from_each_folder():
@@ -38,6 +76,12 @@ def test_a_larger_sample_keeps_the_videos_of_a_smaller_one():
 
     assert len(large) == 12
     assert set(small) <= set(large)
+
+
+def test_a_video_under_two_folders_given_is_picked_once():
+    files = [(1, "DCIM/Camera/a.mp4"), (1, "DCIM/b.mp4")]
+
+    assert sorted(pull.pick(files, ["DCIM", "DCIM/Camera"], sample=None)) == sorted(files)
 
 
 def test_without_a_sample_every_video_is_picked():
