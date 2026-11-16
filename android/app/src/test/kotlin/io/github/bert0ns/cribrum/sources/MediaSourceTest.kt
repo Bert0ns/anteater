@@ -462,6 +462,7 @@ class MediaSourceTest {
         // Known brands of what is not a video, and files with no container, are not counted.
         write("e.m4a", ftyp("M4A ", "M4A ", "mp42", "isom"))
         write("f.cr3", ftyp("crx ", "crx ", "isom"))
+        write("i.f4a", ftyp("F4A ", "F4A ", "mp42", "isom"))
         write("g.mp4", MP4)
         write("h.txt", ascii("not media"))
         val source = FilesystemMediaSource(root, notImages = MemoryNotImages())

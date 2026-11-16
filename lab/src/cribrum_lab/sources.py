@@ -20,7 +20,7 @@ _VIDEO_BRANDS = {
     b"isom", b"iso2", b"iso3", b"iso4", b"iso5", b"iso6", b"mp41", b"mp42", b"avc1", b"mmp4",
     b"XAVC", b"qt  ", b"3gp4", b"3gp5", b"3gp6", b"3gp7", b"3g2a", b"M4V ", b"M4VH", b"M4VP",
 }  # fmt: skip
-_NOT_VIDEO_BRANDS = {b"M4A ", b"M4B ", b"M4P ", b"crx "}
+_NOT_VIDEO_BRANDS = {b"M4A ", b"M4B ", b"M4P ", b"F4A ", b"crx "}
 """Major brands of what is known not to be a video: audio, and Canon's raw photos. The walk turns
 them away without counting them as an unknown brand."""
 _EBML = b"\x1a\x45\xdf\xa3"

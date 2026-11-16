@@ -427,6 +427,7 @@ def test_counts_the_containers_it_turns_away_by_an_unknown_brand(tmp_path):
     # Known brands of what is not a video, and files with no container, are not counted.
     write(tmp_path / "e.m4a", ftyp(b"M4A ", b"M4A ", b"mp42", b"isom"))
     write(tmp_path / "f.cr3", ftyp(b"crx ", b"crx ", b"isom"))
+    write(tmp_path / "i.f4a", ftyp(b"F4A ", b"F4A ", b"mp42", b"isom"))
     write(tmp_path / "g.mp4", MP4)
     write(tmp_path / "h.txt", b"not media")
     store = MemoryNotImages()
