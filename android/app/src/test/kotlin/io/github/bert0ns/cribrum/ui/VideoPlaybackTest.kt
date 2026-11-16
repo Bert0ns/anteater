@@ -77,6 +77,22 @@ class VideoPlaybackTest {
     }
 
     @Test
+    fun `a video that has ended plays again from its start`() {
+        playback.play(one, 30_000)
+
+        players.single().ended()
+        idle()
+        assertFalse(playback.playing)
+        assertEquals(61_000, playback.positionMs)
+
+        playback.toggle(one)
+
+        assertEquals(0, players.single().positionMs)
+        assertTrue(playback.playing)
+        assertEquals(1, players.size)
+    }
+
+    @Test
     fun `stop lets go of the video and keeps the player for the next one`() {
         playback.play(one)
 
