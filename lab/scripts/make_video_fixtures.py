@@ -44,9 +44,13 @@ def main() -> None:
     ffmpeg("-display_rotation", "90", "-i", str(upright), "-c", "copy",
            "-metadata", "creation_time=2024-05-01T10:20:35Z", out("rotated.mp4"))  # fmt: skip
     upright.unlink()
-    ffmpeg(*fill(PATTERN, rate=30), "-t", "1", "-c:v", "libx265", "-x265-params", "log-level=error",
-           "-pix_fmt", "yuv420p10le", "-color_trc", "smpte2084", "-color_primaries", "bt2020",
-           "-colorspace", "bt2020nc", "-tag:v", "hvc1", out("hdr.mp4"))  # fmt: skip
+    # PQ, and HLG as the camera of the maintainer's phone records HDR (#172). The tags go through
+    # setparams: FFmpeg 9 no longer writes them from -color_trc and its siblings.
+    for name, transfer in (("hdr.mp4", "smpte2084"), ("hlg.mp4", "arib-std-b67")):
+        tags = f"setparams=color_trc={transfer}:color_primaries=bt2020:colorspace=bt2020nc"
+        ffmpeg(*fill(PATTERN, rate=30), "-t", "1", "-vf", tags, "-c:v", "libx265",
+               "-x265-params", "log-level=error", "-pix_fmt", "yuv420p10le", "-tag:v", "hvc1",
+               out(name))  # fmt: skip
     ffmpeg(*fill(PATTERN, rate=30), *fill(TONE, rate=48000), "-t", "1", "-c:v", "libvpx-vp9",
            "-b:v", "50k", "-c:a", "libopus", "-b:a", "6k", out("clip.webm"))  # fmt: skip
     ffmpeg(*fill(TONE, rate=48000), "-t", "1", *AAC, out("audio.mp4"))
@@ -108,6 +112,7 @@ def main() -> None:
             ),
             "prores.mov": video("prores.mov", 64, 48, 1000, 30.0, False, None, False, None, None),
             "hdr.mp4": video("hdr.mp4", 64, 48, 1000, 30.0, False, "video/hevc", True, None, None),
+            "hlg.mp4": video("hlg.mp4", 64, 48, 1000, 30.0, False, "video/hevc", True, None, None),
             # Opus adds its 8 ms of pre-skip. A Matroska date is not read (docs/design.md, 7).
             "clip.webm": video(
                 "clip.webm", 64, 48, 1008, 30.0, True, "video/x-vnd.on2.vp9", False, None, None
