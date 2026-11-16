@@ -25,6 +25,7 @@ import io.github.bert0ns.cribrum.metadata.VideoMetadata
 import io.github.bert0ns.cribrum.metadata.readMetadata
 import io.github.bert0ns.cribrum.mobileclip.preprocess
 import io.github.bert0ns.cribrum.model.Category
+import io.github.bert0ns.cribrum.model.GROUP_KEY
 import io.github.bert0ns.cribrum.model.Kind
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
@@ -312,7 +313,81 @@ class PipelineTest {
         assertEquals(clipMeta, runBlocking { index.videoMetadata(clip.path) })
         assertEquals(3 to 3, stats.images to stats.videos)
         assertEquals("the images wait for a normal scan", 3, runBlocking { index.withoutMetadata() }.size)
-        assertEquals(listOf("walk", "videoMetadata"), stats.phaseMs.keys.toList())
+        assertEquals(listOf("walk", "videoMetadata", "videoGroups"), stats.phaseMs.keys.toList())
+    }
+
+    /** Two videos with the same bytes, and a third of their size with other bytes. */
+    private fun twinVideos(): Pair<File, File> {
+        photos()
+        val head = byteArrayOf(0, 0, 0, 0x18) + "ftypisom".toByteArray() + ByteArray(12)
+        File(root, "DCIM/Camera/other.mp4").apply { parentFile!!.mkdirs() }.writeBytes(head.copyOf().also { it[it.size - 1] = 1 })
+        val clip = File(root, "DCIM/Camera/clip.mp4").apply { writeBytes(head) }
+        return clip to File(root, "WhatsApp/Media/WhatsApp Video/Sent/clip-copy.mp4").apply { parentFile!!.mkdirs() }.also { clip.copyTo(it) }
+    }
+
+    private fun exactGroups(): List<Set<String>> = runBlocking {
+        index.images().flatMap { image -> index.signals(image.path).filter { it.kind == Category.EXACT_DUPLICATE }.map { it.evidence.getValue(GROUP_KEY) to image.path } }
+            .groupBy({ it.first }, { it.second }).values.map { it.toSet() }
+    }
+
+    @Test
+    fun `a run for videos alone groups identical videos after their metadata and leaves the images alone`() {
+        val (clip, copy) = twinVideos()
+        val steps = mutableListOf<String>()
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(ExactDuplicateDetector()), videoMetadataReader = ::readVideo)
+
+        val stats = runBlocking { pipeline.run(source, images = false, videos = true) { step, _, _ -> steps += step } }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(listOf(setOf(clip.path, copy.path)), exactGroups())
+        assertTrue(steps.indexOf(VIDEO_GROUPS_STEP) > steps.indexOf(VIDEO_METADATA_STEP))
+        assertEquals(listOf("walk", "videoMetadata", "videoGroups"), stats.phaseMs.keys.toList())
+    }
+
+    @Test
+    fun `a normal run hashes no video, and a video run hashes no image`() {
+        twinVideos()
+        val hashed = ConcurrentLinkedQueue<MediaType>()
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(ExactDuplicateDetector()), videoMetadataReader = ::readVideo, contentHasher = { contentHash(it).also { _ -> hashed += it.mediaType } })
+
+        run(pipeline)
+        assertEquals(setOf(MediaType.IMAGE), hashed.toSet())
+        hashed.clear()
+        runBlocking { pipeline.run(source, images = false, videos = true) }
+
+        assertEquals(setOf(MediaType.VIDEO), hashed.toSet())
+        assertEquals("the images' group and the videos' are both there", 2, exactGroups().size)
+    }
+
+    @Test
+    fun `the image run and the video run of a group detector do not run each other again`() {
+        twinVideos()
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(ExactDuplicateDetector()), videoMetadataReader = ::readVideo)
+        run(pipeline)
+        runBlocking { pipeline.run(source, images = false, videos = true) }
+
+        val again = run(pipeline)
+        val againVideos = runBlocking { pipeline.run(source, images = false, videos = true) }
+
+        assertEquals(listOf("exact_duplicate"), again.skippedGroupDetectors)
+        assertEquals(emptyList<String>(), again.ranGroupDetectors)
+        assertEquals(listOf("exact_duplicate"), againVideos.skippedGroupDetectors)
+        assertEquals(emptyList<String>(), againVideos.ranGroupDetectors)
+    }
+
+    @Test
+    fun `a new copy of a video is grouped at the next video run and not by a normal one`() {
+        val (clip, twin) = twinVideos()
+        twin.delete()
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(ExactDuplicateDetector()), videoMetadataReader = ::readVideo)
+        runBlocking { pipeline.run(source, images = false, videos = true) }
+        val copy = clip.copyTo(File(root, "Movies/copy.mp4").apply { parentFile!!.mkdirs() })
+
+        run(pipeline)
+        assertFalse(exactGroups().any { copy.path in it })
+        runBlocking { pipeline.run(source, images = false, videos = true) }
+
+        assertTrue(exactGroups().any { copy.path in it && clip.path in it })
     }
 
     @Test

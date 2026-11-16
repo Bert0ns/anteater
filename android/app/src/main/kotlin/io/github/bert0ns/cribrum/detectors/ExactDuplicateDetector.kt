@@ -7,21 +7,26 @@ import io.github.bert0ns.cribrum.folders.isMessagingFolder
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
 import java.io.File
 import java.io.IOException
 
-/** Groups files by size first, and hashes only the ones that share a size. */
+/**
+ * Groups files by type and size first, and hashes only the ones that share both, so a video with no twin is never read and
+ * a group never mixes images and videos.
+ */
 class ExactDuplicateDetector : GroupDetector {
     override val id = "exact_duplicate"
     override val version = 1
     override val category = Category.EXACT_DUPLICATE
+    override val mediaTypes = setOf(MediaType.IMAGE, MediaType.VIDEO)
 
     override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
         val byHash = LinkedHashMap<String, MutableList<MediaRef>>()
-        for (sameSize in images.groupBy { it.size }.values) {
+        for (sameSize in images.groupBy { it.mediaType to it.size }.values) {
             if (sameSize.size < 2) continue
             for (image in sameSize) {
                 val digest = try {

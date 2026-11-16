@@ -173,13 +173,16 @@ object Indexing {
     internal const val PHASES = 5
 
     /** How many phases the video scan has, numbered on their own (docs/design.md §4). #393 adds the frames. */
-    internal const val VIDEO_PHASES = 2
+    internal const val VIDEO_PHASES = 3
 
     /**
      * Every step of the video part after the walk, with its number and title in the video scan's list. A night pass that does
      * both tells its video steps from the image steps by these names, so a new video step goes here (a test checks it).
      */
-    private val VIDEO_STEP_PHASES = mapOf(VIDEO_METADATA_STEP to (2 to R.string.scan_phase_video_metadata))
+    private val VIDEO_STEP_PHASES = mapOf(
+        VIDEO_METADATA_STEP to (2 to R.string.scan_phase_video_metadata),
+        VIDEO_GROUPS_STEP to (3 to R.string.scan_phase_video_groups),
+    )
 
     internal val VIDEO_STEPS: Set<String> = VIDEO_STEP_PHASES.keys
 

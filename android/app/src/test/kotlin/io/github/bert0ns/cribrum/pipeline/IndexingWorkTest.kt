@@ -629,10 +629,11 @@ class IndexingWorkTest {
 
     @Test
     fun `the video scan numbers its own phases from 1`() {
-        assertEquals(listOf(1, 1, 2), listOf("", "scan", VIDEO_METADATA_STEP).map { Indexing.phaseNumber(it, ScanKind.VIDEOS) })
-        assertEquals(2, Indexing.phases(ScanKind.VIDEOS))
+        assertEquals(listOf(1, 1, 2, 3), listOf("", "scan", VIDEO_METADATA_STEP, VIDEO_GROUPS_STEP).map { Indexing.phaseNumber(it, ScanKind.VIDEOS) })
+        assertEquals(3, Indexing.phases(ScanKind.VIDEOS))
         assertEquals(R.string.scan_phase_video_scan, Indexing.phaseTitle("scan", ScanKind.VIDEOS))
         assertEquals(R.string.scan_phase_video_metadata, Indexing.phaseTitle(VIDEO_METADATA_STEP, ScanKind.VIDEOS))
+        assertEquals(R.string.scan_phase_video_groups, Indexing.phaseTitle(VIDEO_GROUPS_STEP, ScanKind.VIDEOS))
     }
 
     @Test
@@ -641,7 +642,7 @@ class IndexingWorkTest {
         Indexing.scanVideos(app)
         runBlocking { withTimeout(10_000) { Indexing.progress(app).filterNotNull().first() } }
 
-        assertEquals("Phase 1 of 2 · Looking for videos", notificationTitle())
+        assertEquals("Phase 1 of 3 · Looking for videos", notificationTitle())
         assertEquals("Video scan", notificationSubText())
     }
 
@@ -652,7 +653,18 @@ class IndexingWorkTest {
         Indexing.scanNow(app)
         runBlocking { withTimeout(10_000) { Indexing.progress(app).filterNotNull().first() } }
 
-        assertEquals("Phase 2 of 2 · Reading the videos", notificationTitle())
+        assertEquals("Phase 2 of 3 · Reading the videos", notificationTitle())
+        assertEquals("Video scan", notificationSubText())
+    }
+
+    @Test
+    fun `the video groups are the third phase of the video scan, even in a pass that does both`() {
+        steps += Triple("near_duplicate", 1, 1)
+        steps += Triple(VIDEO_GROUPS_STEP, 0, 1)
+        Indexing.scanNow(app)
+        runBlocking { withTimeout(10_000) { Indexing.progress(app).filterNotNull().first() } }
+
+        assertEquals("Phase 3 of 3 · Finding duplicate videos", notificationTitle())
         assertEquals("Video scan", notificationSubText())
     }
 
