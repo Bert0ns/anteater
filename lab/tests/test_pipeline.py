@@ -1191,3 +1191,22 @@ def test_a_video_run_without_an_embedder_embeds_no_frame(videos, index, monkeypa
     monkeypatch.setattr(pipeline, "read_frames", lambda *_: pytest.fail("read a frame"))
 
     pipeline.run(videos.parent.parent, index, detectors=[], group_detectors=[], videos=True)
+
+
+def test_the_frames_come_before_the_video_group_detectors(videos, index):
+    duplicate_clip(videos)
+    steps = []
+
+    pipeline.run(
+        videos.parent.parent,
+        index,
+        detectors=[],
+        group_detectors=[pipeline.ExactDuplicateDetector()],
+        embedder=MeanColorEmbedder(),
+        images=False,
+        videos=True,
+        progress=lambda step, done, total: steps.append(step),
+    )
+
+    # A video group detector may read the frames (#396).
+    assert steps.index("video_metadata") < steps.index("video_frames") < steps.index("video_groups")

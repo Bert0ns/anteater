@@ -398,6 +398,19 @@ class PipelineTest {
     }
 
     @Test
+    fun `the frames come before the video group detectors`() {
+        videos()
+        val steps = mutableListOf<String>()
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(ExactDuplicateDetector()), embedder = MeanColorEmbedder(), videoMetadataReader = ::readVideo, frameReader = ::grayFrames)
+
+        runBlocking { pipeline.run(source, images = false, videos = true) { step, _, _ -> steps += step } }
+
+        // A video group detector may read the frames (#396).
+        assertTrue(steps.indexOf(VIDEO_METADATA_STEP) < steps.indexOf(VIDEO_FRAMES_STEP))
+        assertTrue(steps.indexOf(VIDEO_FRAMES_STEP) < steps.indexOf(VIDEO_GROUPS_STEP))
+    }
+
+    @Test
     fun `a video run without the model reads no frame`() {
         videos()
 
