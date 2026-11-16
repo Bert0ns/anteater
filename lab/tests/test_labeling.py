@@ -12,7 +12,7 @@ from PIL import Image
 from cribrum_lab.hashing import content_hash
 from cribrum_lab.labeling import LabelingServer, clusters, sample, strata
 from cribrum_lab.labels import Decision, LabelStore, Stratum
-from cribrum_lab.model import Category, IndexedMedia, MediaRef, Signal
+from cribrum_lab.model import Category, IndexedMedia, MediaRef, MediaType, Signal
 from cribrum_lab.ranker import Candidate
 
 
@@ -211,3 +211,66 @@ def test_a_label_records_the_stratum_its_image_was_sampled_from(server):
         Stratum.CANDIDATE,
         Stratum.UNFLAGGED,
     ]
+
+
+FIXTURE_VIDEO = Path(__file__).parents[2] / "fixtures/videos/clip.mp4"
+
+
+@pytest.fixture
+def video_server():
+    store = LabelStore(":memory:")
+    ref = MediaRef(FIXTURE_VIDEO, FIXTURE_VIDEO.stat().st_size, 0, MediaType.VIDEO)
+    server = LabelingServer([[ref]], store, strata={FIXTURE_VIDEO: Stratum.UNFLAGGED})
+    threading.Thread(target=server.serve_forever, args=(0.05,), daemon=True).start()
+    yield server
+    server.shutdown()
+    server.server_close()
+    store.close()
+
+
+def test_the_queue_says_which_items_are_videos(server, video_server):
+    assert [item["video"] for item in json.loads(get(server, "/api/queue"))["items"]] == [
+        False,
+        False,
+        False,
+    ]
+    assert json.loads(get(video_server, "/api/queue"))["items"][0]["video"] is True
+
+
+def test_a_video_is_sent_whole_for_the_browser_to_play(video_server):
+    response = urllib.request.urlopen(f"http://127.0.0.1:{video_server.server_port}/video/0")
+
+    assert response.headers["Content-Type"] == "video/mp4"
+    assert response.headers["Accept-Ranges"] == "bytes"
+    assert response.read() == FIXTURE_VIDEO.read_bytes()
+
+
+@pytest.mark.parametrize(
+    ("header", "start", "end"), [("bytes=10-19", 10, 19), ("bytes=100-", 100, None)]
+)
+def test_a_video_is_sent_by_range_so_the_browser_can_seek(video_server, header, start, end):
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{video_server.server_port}/video/0", headers={"Range": header}
+    )
+    response = urllib.request.urlopen(request)
+    data = FIXTURE_VIDEO.read_bytes()
+    last = len(data) - 1 if end is None else end
+
+    assert response.status == 206
+    assert response.headers["Content-Range"] == f"bytes {start}-{last}/{len(data)}"
+    assert response.read() == data[start : last + 1]
+
+
+def test_an_image_is_not_served_as_a_video(server):
+    with pytest.raises(urllib.error.HTTPError) as error:
+        get(server, "/video/0")
+
+    assert error.value.code == 404
+
+
+def test_a_video_label_records_its_hash_and_stratum(video_server):
+    post(video_server, "/api/label", {"items": [0], "decision": "delete"})
+
+    [label] = video_server.store.all()
+    assert label.content_hash == content_hash(video_server.queue[0])
+    assert label.stratum is Stratum.UNFLAGGED

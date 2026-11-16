@@ -536,9 +536,10 @@ class ImageIndex:
         rows = self._db.execute("SELECT path FROM excluded_folders ORDER BY path")
         return [Path(path) for (path,) in rows]
 
-    def indexed_media(self) -> list[IndexedMedia]:
-        """Every image with its review state and signals, as the ranker takes them. No video:
-        nothing reviews one yet (docs/design.md, section 6.5)."""
+    def indexed_media(self, media_type: MediaType = MediaType.IMAGE) -> list[IndexedMedia]:
+        """Every image, or every video, with its review state and signals, as the ranker takes
+        them. Images by default: nothing reviews a video yet (docs/design.md, section 6.5), and
+        the lab labels and evaluates them apart (section 10)."""
         signals = defaultdict(list)
         for path, *fields, evidence in self._db.execute(
             """SELECT path, detector_id, detector_version, category, score, evidence
@@ -553,11 +554,12 @@ class ImageIndex:
             seen[path].add((kind(category), group, role))
         rows = self._db.execute(
             """SELECT path, size, mtime_ns, review_state FROM images
-               WHERE media_type = 'image' ORDER BY path"""
+               WHERE media_type = ? ORDER BY path""",
+            (media_type.value,),
         )
         return [
             IndexedMedia(
-                MediaRef(Path(path), size, mtime_ns),
+                MediaRef(Path(path), size, mtime_ns, media_type),
                 ReviewState(state),
                 tuple(signals[path]),
                 frozenset(seen[path]),

@@ -8,6 +8,8 @@ from cribrum_lab.cli import main
 from cribrum_lab.index import ImageIndex
 from cribrum_lab.labels import Decision, Label, LabelStore
 
+VIDEOS = Path(__file__).resolve().parents[2] / "fixtures/videos"
+
 
 def test_scan_then_report_lists_candidates_per_category(tmp_path, capsys):
     folder = tmp_path / "device/Pictures/Screenshots"
@@ -38,6 +40,26 @@ def test_evaluate_prints_recall(tmp_path, capsys):
 
     assert "recall: 100% (1/1)" in capsys.readouterr().out
     assert "recall: 100%" in (tmp_path / "r.txt").read_text()
+
+
+def test_evaluate_reports_the_videos_apart_from_the_images(tmp_path, capsys):
+    folder = tmp_path / "device"
+    folder.mkdir()
+    Image.new("RGB", (1080, 2400), "white").save(folder / "Screenshot_1.png")
+    shutil.copy(VIDEOS / "clip.mp4", folder / "clip.mp4")
+    index, labels = str(tmp_path / "index.sqlite"), tmp_path / "labels.sqlite"
+    main(["--index", index, "scan", str(folder), "--jobs", "1", "--no-embeddings"])
+    with LabelStore(labels) as store:
+        store.set(Label("h1", (folder / "Screenshot_1.png").resolve(), Decision.DELETE))
+        store.set(Label("h2", (folder / "clip.mp4").resolve(), Decision.DELETE))
+
+    main(["--index", index, "evaluate", "--labels", str(labels)])
+
+    images, videos = capsys.readouterr().out.split("\nvideos\n")
+    assert "1 labels (0 no longer in the index), 1 labeled delete" in images
+    assert "recall: 100% (1/1)" in images
+    assert "1 labels (0 no longer in the index), 1 labeled delete" in videos
+    assert "recall: 0% (0/1)" in videos  # no video detector yet
 
 
 def test_scan_prints_the_brands_the_walk_did_not_know(tmp_path, capsys):
