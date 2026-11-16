@@ -214,7 +214,7 @@ document.addEventListener("keydown", event => {
   else if (key === "s" && position < groups.length) { position++; setStatus("skipped"); show(); }
   if (action) {
     busy = true;
-    if (key === "k" || key === "d") setStatus("saving...");
+    if ((key === "k" || key === "d") && position < groups.length) setStatus("saving...");
     action.catch(error => setStatus(`error: ${error.message}`, "delete"))
       .finally(() => busy = false);
   }
