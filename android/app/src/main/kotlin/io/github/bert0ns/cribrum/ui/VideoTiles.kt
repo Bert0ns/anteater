@@ -56,10 +56,7 @@ internal fun VideoFrame(file: File, section: String, modifier: Modifier, content
         if (small) Box(modifier.background(MaterialTheme.colorScheme.surfaceVariant)) else UnreadableVideo(modifier)
     } else {
         val request = remember(file, section, context, atMillis) {
-            ImageRequest.Builder(context).data(file).decoderFactory(videoFrames).apply {
-                // Coil keeps the time out of the memory key, so the frames of one video would all be the first.
-                if (atMillis != null) videoFrameMillis(atMillis).memoryCacheKeyExtra("videoFrameMillis", atMillis.toString())
-            }.traced(section).build()
+            ImageRequest.Builder(context).data(file).decoderFactory(videoFrames).apply { if (atMillis != null) videoFrameMillis(atMillis) }.traced(section).build()
         }
         AsyncImage(request, null, modifier, contentScale = contentScale, onError = { failed = true })
     }
