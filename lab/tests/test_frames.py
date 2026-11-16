@@ -82,6 +82,21 @@ def test_an_hdr_video_takes_the_keyframe_nearest_each_time_once(tmp_path):
     assert signal == sorted(signal) and len(set(signal)) == 3
 
 
+def test_an_hdr_video_snaps_to_a_frame_then_to_its_keyframe_and_a_tie_goes_later(tmp_path):
+    # As AOSP's MP4 extractor does for SEEK_CLOSEST_SYNC: the frame nearest the time, a tie to
+    # the later one, then the keyframe nearest that frame, a tie to the later one again.
+    video = hlg_ramp(tmp_path / "hlg.mp4")  # keyframes at frames 0, 10 and 20
+    keyframe = {k: np.asarray(f) for k in (0, 1000, 2000) for _, f in read_frames(video, [k])}
+
+    frames = list(read_frames(video, [500, 1495, 2900]))
+
+    # 500 is a tie between 0 and 1000. 1495 snaps to the frame at 1500, a tie between 1000 and
+    # 2000. 2900, past the last keyframe, takes it, and it is already taken.
+    assert [t for t, _ in frames] == [500, 1495]
+    np.testing.assert_array_equal(np.asarray(frames[0][1]), keyframe[1000])
+    np.testing.assert_array_equal(np.asarray(frames[1][1]), keyframe[2000])
+
+
 def test_a_portrait_clip_comes_upright():
     # Coded 64 x 48, turned by its display matrix. Turned counterclockwise, as FFmpeg's own
     # autorotate shows it: checked by hand against `ffmpeg -i rotated.mp4`.

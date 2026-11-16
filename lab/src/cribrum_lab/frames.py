@@ -43,11 +43,15 @@ def read_frames(path: Path, times_ms: Sequence[int]) -> Iterator[tuple[int, Imag
         stream = container.streams.video[0]
         targets = {t: Fraction(t, 1000) for t in times_ms}
         if stream.codec_context.color_trc in HDR_TRANSFERS:
-            keyframes = _keyframes(container, stream, max(targets.values(), default=0))
+            frames, keyframes = _frame_times(container, stream, max(targets.values(), default=0))
             if not keyframes:
                 raise UnreadableVideo(path)
-            # A tie goes to the earlier keyframe.
-            targets = {t: min(keyframes, key=lambda k: abs(k - x)) for t, x in targets.items()}
+            # As AOSP's MP4 extractor seeks for OPTION_CLOSEST_SYNC: to the frame nearest the time,
+            # then to the keyframe nearest that frame, a tie going to the later one each time.
+            targets = {t: _nearest(keyframes, _nearest(frames, x)) for t, x in targets.items()}
+            # Only keyframes leave the decoder, so a seek that lands a keyframe early, as FFmpeg's
+            # MP4 seek by decode time can, decodes one frame before the one wanted, not a GOP.
+            stream.codec_context.skip_frame = "NONKEY"
         taken = set()
         for time_ms, target in targets.items():
             if target in taken:
@@ -70,16 +74,25 @@ def read_frames(path: Path, times_ms: Sequence[int]) -> Iterator[tuple[int, Imag
             yield time_ms, _displayed(best)
 
 
-def _keyframes(container, stream, last: Fraction) -> list[Fraction]:
-    """The times of the stream's keyframes, read from the demuxer without decoding, up to the
-    first one at or past `last`."""
-    found = []
+def _frame_times(container, stream, last: Fraction) -> tuple[list[Fraction], list[Fraction]]:
+    """The times of the stream's frames and of its keyframes, read from the demuxer without
+    decoding, up to the second keyframe at or past `last`, so the frames around it are all in."""
+    frames, keyframes = [], []
     for packet in container.demux(stream):
-        if packet.is_keyframe and packet.pts is not None:
-            found.append(packet.pts * stream.time_base)
-            if found[-1] >= last:
+        if packet.pts is None:
+            continue
+        time = packet.pts * stream.time_base
+        if packet.is_keyframe:
+            if keyframes and keyframes[-1] >= last:
                 break
-    return found
+            keyframes.append(time)
+        frames.append(time)
+    return sorted(frames), sorted(keyframes)
+
+
+def _nearest(times: list[Fraction], time: Fraction) -> Fraction:
+    """The time nearest `time`, a tie going to the later one."""
+    return min(times, key=lambda t: (abs(t - time), -t))
 
 
 def brightness(image: Image.Image) -> tuple[list[float], float]:
