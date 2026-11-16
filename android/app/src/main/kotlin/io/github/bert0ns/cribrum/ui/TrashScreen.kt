@@ -151,7 +151,7 @@ fun TrashScreen(
         LaunchedEffect(paths) { if (playback.loaded != null && playback.loaded !in paths) playback.stop() }
         val image: @Composable (Int) -> Unit = { page ->
             trashed.getOrNull(page)?.let { item ->
-                if (item.isVideo) VideoPage(item.file, "Trash.fullSize", playback, unreadable = false, close) else ZoomableImage(item.file.path, close)
+                if (item.isVideo) VideoPage(item.file, "Trash.fullSize", playback, rememberLengthRead(item.file) == NO_LENGTH, close) else ZoomableImage(item.file.path, close)
             }
         }
         FullSizeViewer(paths, start.file.path, onClose = close, image = image, onPage = { playback.stop() }) { page ->
@@ -159,8 +159,10 @@ fun TrashScreen(
             FullSizeToggle(item.file.path in selected, stringResource(R.string.tile_selected), MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary) { onSelect(item) }
             FullSizeBar(item.original.path, item.favorite) {
                 if (item.isVideo) {
-                    val length = rememberLengthMillis(item.file)
-                    VideoControls(playback, item.file, "Trash.fullSize", length, unreadable = false)
+                    // A video whose length cannot be read is the placeholder with no controls, as in "Largest videos".
+                    val read = rememberLengthRead(item.file)
+                    val length = read?.takeIf { it != NO_LENGTH }
+                    VideoControls(playback, item.file, "Trash.fullSize", length, unreadable = read == NO_LENGTH)
                     Text(videoDetails(item.original.size, length?.let(::formatLength)), color = Color.White, style = MaterialTheme.typography.bodyMedium)
                 }
                 Text(pluralStringResource(R.plurals.trash_tile_days_left, daysLeft(item).toInt(), daysLeft(item)), color = Color.White, style = MaterialTheme.typography.bodyMedium)

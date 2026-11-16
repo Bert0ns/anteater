@@ -77,7 +77,7 @@ internal fun UnreadableVideo(modifier: Modifier = Modifier) {
  */
 private val lengths = LruCache<String, Long>(500)
 
-private const val NO_LENGTH = -1L
+internal const val NO_LENGTH = -1L
 
 /** The video's length as a player shows it ("01:42"), or null until it is read or when it cannot be. */
 @Composable
@@ -85,7 +85,11 @@ internal fun rememberDuration(file: File, key: String = file.path): String? = re
 
 /** The video's length in ms, or null until it is read or when it cannot be. */
 @Composable
-internal fun rememberLengthMillis(file: File, key: String = file.path): Long? = produceState(lengths[key], file, key) {
+internal fun rememberLengthMillis(file: File, key: String = file.path): Long? = rememberLengthRead(file, key)?.takeIf { it != NO_LENGTH }
+
+/** What reading the video's length gave: null until it is read, [NO_LENGTH] when it cannot be, else the length in ms. */
+@Composable
+internal fun rememberLengthRead(file: File, key: String = file.path): Long? = produceState(lengths[key], file, key) {
     if (lengths[key] != null) return@produceState
     val millis = withContext(Dispatchers.IO) {
         runCatching {
@@ -97,7 +101,7 @@ internal fun rememberLengthMillis(file: File, key: String = file.path): Long? = 
     } ?: NO_LENGTH
     lengths.put(key, millis)
     value = millis
-}.value?.takeIf { it != NO_LENGTH }
+}.value
 
 /** A length in ms as a player shows it ("01:42"). */
 internal fun formatLength(millis: Long): String = DateUtils.formatElapsedTime(millis / 1000)
