@@ -74,7 +74,7 @@ _CODEC_MIME = {
     "h263": "video/3gpp",
 }
 _log = logging.getLogger(__name__)
-_HDR_TRANSFERS = {16, 18}  # AVCOL_TRC_SMPTE2084 (PQ) and AVCOL_TRC_ARIB_STD_B67 (HLG)
+HDR_TRANSFERS = {16, 18}  # AVCOL_TRC_SMPTE2084 (PQ) and AVCOL_TRC_ARIB_STD_B67 (HLG)
 
 
 def read_video_metadata(path: Path, zone: tzinfo | None = None) -> VideoMetadata:
@@ -109,7 +109,7 @@ def read_video_metadata(path: Path, zone: tzinfo | None = None) -> VideoMetadata
                 bitrate=round(path.stat().st_size * 8000 / duration_ms) if duration_ms else None,
                 has_audio=bool(container.streams.audio),
                 video_codec=_CODEC_MIME.get(codec.name),
-                hdr=codec.color_trc in _HDR_TRANSFERS,
+                hdr=codec.color_trc in HDR_TRANSFERS,
                 captured_at=moment.astimezone(zone).replace(tzinfo=None) if moment else None,
                 captured_instant=round(moment.timestamp() * 1000) if moment else None,
             )

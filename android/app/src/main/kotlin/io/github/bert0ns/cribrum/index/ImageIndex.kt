@@ -90,6 +90,7 @@ class ImageIndex(private val db: IndexDatabase) :
                 dao.resetImage(image.path, image.size, image.mtimeNs, image.mediaType.value)
                 dao.deleteAnalyses(image.path)
                 dao.deleteEmbeddings(image.path)
+                dao.deleteFramesOf(image.path)
                 dao.deleteJpeg(image.path)
             }
         }
@@ -206,10 +207,12 @@ class ImageIndex(private val db: IndexDatabase) :
      */
     suspend fun deleteEmbeddings() = write {
         dao.deleteAllEmbeddings()
+        dao.deleteAllFrameEmbeddings()
         withContext(Dispatchers.IO) { db.openHelper.writableDatabase.execSQL("VACUUM") }
     }
 
-    suspend fun embeddingCount(): Int = dao.embeddingCount()
+    /** The images with an embedding and the videos with frames: what "Analysis data" counts in Settings. */
+    suspend fun embeddingCount(): Int = dao.embeddingCount() + dao.framedVideoCount()
 
     /** The images the index holds, videos left out: the home shows the empty index while this is 0. */
     suspend fun imageCount(): Int = dao.imageCount()
@@ -220,7 +223,7 @@ class ImageIndex(private val db: IndexDatabase) :
      * shortcut: wrong for vectors much smaller or larger than a page, when the model changes. (`dbstat` is not in
      * Android's SQLite, so the real figure is not available.)
      */
-    suspend fun embeddingBytes(): Long = dao.embeddingCount() * withContext(Dispatchers.IO) { db.openHelper.readableDatabase.pageSize }
+    suspend fun embeddingBytes(): Long = (dao.embeddingCount() + dao.frameEmbeddingCount()) * withContext(Dispatchers.IO) { db.openHelper.readableDatabase.pageSize }
 
     /** What the database takes on disk, its write-ahead log included. */
     suspend fun fileBytes(): Long = withContext(Dispatchers.IO) {
@@ -236,17 +239,36 @@ class ImageIndex(private val db: IndexDatabase) :
     suspend fun setEmbeddings(model: String, modelVersion: Int, vectors: Map<String, FloatArray>) = writeTransaction {
         for ((path, vector) in vectors) {
             requireRecorded(path)
-            val bytes = ByteBuffer.allocate(4 * vector.size).order(ByteOrder.LITTLE_ENDIAN)
-            bytes.asFloatBuffer().put(vector)
-            dao.putEmbedding(EmbeddingRow(path, model, modelVersion, bytes.array()))
+            dao.putEmbedding(EmbeddingRow(path, model, modelVersion, bytes(vector)))
         }
     }
 
     /** Every stored embedding of this model version, loaded at once for group detectors. */
-    suspend fun embeddings(model: String, modelVersion: Int): Map<String, FloatArray> = dao.embeddings(model, modelVersion).associate { row ->
-        val floats = ByteBuffer.wrap(row.vector).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
-        row.path to FloatArray(floats.remaining()).also { floats.get(it) }
+    suspend fun embeddings(model: String, modelVersion: Int): Map<String, FloatArray> = dao.embeddings(model, modelVersion).associate { row -> row.path to floats(row.vector) }
+
+    /** Replaces the video's frames of this model, by their time in milliseconds, taken at [framesVersion]. */
+    suspend fun setFrameEmbeddings(path: String, model: String, modelVersion: Int, framesVersion: Int, vectors: Map<Long, FloatArray>) = writeTransaction {
+        requireRecorded(path)
+        dao.deleteFrameEmbeddings(path, model)
+        dao.putFrameEmbeddings(vectors.map { (timeMs, vector) -> FrameEmbeddingRow(path, model, modelVersion, framesVersion, timeMs, bytes(vector)) })
     }
+
+    /** Every video's frames of these versions, by time, in the order of their times. */
+    suspend fun frameEmbeddings(model: String, modelVersion: Int, framesVersion: Int): Map<String, Map<Long, FloatArray>> = dao.frameEmbeddings(model, modelVersion, framesVersion)
+        .groupBy { it.path }
+        .mapValues { (_, rows) -> rows.associate { it.timeMs to floats(it.vector) } }
+
+    /** [frameEmbeddings] without the vectors: what the frames step compares with the rule. */
+    suspend fun sampledTimes(model: String, modelVersion: Int, framesVersion: Int): Map<String, List<Long>> = dao.sampledTimes(model, modelVersion, framesVersion).groupBy({ it.path }, { it.timeMs })
+
+    /**
+     * The videos whose metadata was read, readable and out of the trash, with their duration, leaving out those whose frames did
+     * not read at [framesVersion]: the ones the frames step samples.
+     */
+    suspend fun readVideos(framesVersion: Int): List<IndexedVideo> = dao.readVideos(framesVersion).map { IndexedVideo(MediaRef(it.path, it.size, it.mtimeNs, MediaType.of(it.mediaType)), it.unreadable, it.durationMs) }
+
+    /** Marks a video whose frames do not read, so it is not decoded again at this version. */
+    suspend fun setFramesUnreadable(path: String, framesVersion: Int) = write { require(dao.setFramesUnreadable(path, framesVersion), path) }
 
     suspend fun analyzedPaths(detectorId: String, detectorVersion: Int): Set<String> = dao.analyzedPaths(detectorId, detectorVersion).toSet()
 
@@ -535,7 +557,7 @@ class ImageIndex(private val db: IndexDatabase) :
     }
 
     companion object {
-        fun open(context: Context, name: String = "index.sqlite"): ImageIndex = ImageIndex(Room.databaseBuilder(context, IndexDatabase::class.java, name).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8).build())
+        fun open(context: Context, name: String = "index.sqlite"): ImageIndex = ImageIndex(Room.databaseBuilder(context, IndexDatabase::class.java, name).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build())
     }
 }
 
@@ -588,3 +610,8 @@ private class LazyEvidence(private val json: String) : AbstractMap<String, Strin
 
     override fun containsKey(key: String): Boolean = parsed.containsKey(key)
 }
+
+/** float32, little-endian, as the lab stores a vector. */
+private fun bytes(vector: FloatArray): ByteArray = ByteBuffer.allocate(4 * vector.size).order(ByteOrder.LITTLE_ENDIAN).also { it.asFloatBuffer().put(vector) }.array()
+
+private fun floats(bytes: ByteArray): FloatArray = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().let { FloatArray(it.remaining()).also(it::get) }

@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import io.github.bert0ns.cribrum.pipeline.ScanKind
 import io.github.bert0ns.cribrum.pipeline.ScanProgress
+import io.github.bert0ns.cribrum.pipeline.VIDEO_FRAMES_STEP
 import io.github.bert0ns.cribrum.pipeline.VIDEO_METADATA_STEP
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -68,14 +69,19 @@ class ScanStatusTest {
         compose.setContent { ScanStatus(progress, onScan = {}) }
 
         compose.onNodeWithText("Scan now").assertDoesNotExist()
-        compose.onNodeWithText("Video scan · Phase 1 of 3").assertExists()
+        compose.onNodeWithText("Video scan · Phase 1 of 4").assertExists()
         compose.onNodeWithText("Photos and videos found: 300 so far").assertExists()
 
         progress = ScanProgress(VIDEO_METADATA_STEP, 40, 1_400, kind = ScanKind.VIDEOS)
 
-        compose.onNodeWithText("Video scan · Phase 2 of 3").assertExists()
+        compose.onNodeWithText("Video scan · Phase 2 of 4").assertExists()
         compose.onNodeWithText("Reading the videos: 40 of 1400").assertExists()
         compose.onNodeWithText("Stop scanning").assertExists()
+
+        progress = ScanProgress(VIDEO_FRAMES_STEP, 3, 1_400, kind = ScanKind.VIDEOS)
+
+        compose.onNodeWithText("Video scan · Phase 3 of 4").assertExists()
+        compose.onNodeWithText("Looking at the frames: 3 of 1400").assertExists()
     }
 
     @Test
@@ -84,7 +90,7 @@ class ScanStatusTest {
 
         compose.onNodeWithText("Scan now").assertDoesNotExist()
         compose.onNodeWithText("Video scan · Starting…").assertExists()
-        compose.onNodeWithText("Video scan · Phase 1 of 3").assertDoesNotExist()
+        compose.onNodeWithText("Video scan · Phase 1 of 4").assertDoesNotExist()
         compose.onNodeWithText("Stop scanning").assertExists()
     }
 

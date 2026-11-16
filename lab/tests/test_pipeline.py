@@ -2,6 +2,7 @@ import os
 import shutil
 from pathlib import Path
 
+import av
 import numpy as np
 import pytest
 from PIL import Image
@@ -9,6 +10,7 @@ from PIL import Image
 from cribrum_lab import pipeline
 from cribrum_lab.detectors import blur
 from cribrum_lab.detectors.burst import BurstDetector
+from cribrum_lab.frames import FRAMES_VERSION
 from cribrum_lab.imaging import load_grayscale
 from cribrum_lab.index import ImageIndex
 from cribrum_lab.model import Category, MediaRef, MediaType, Protection, ReviewState, Signal
@@ -1078,3 +1080,133 @@ def test_a_new_copy_of_a_video_groups_it_at_the_next_video_run_only(videos, inde
     pipeline.run(root, index, detectors=[], group_detectors=exact, images=False, videos=True)
 
     assert [g for g in exact_groups(index) if copy in g] == [{videos / "clip.mp4", copy}]
+
+
+def video_scan(videos, index, embedder=None):
+    """A run of the video steps alone with an embedder, as "Scan videos" does."""
+    return pipeline.run(
+        videos.parent.parent, index, detectors=[], group_detectors=[],
+        embedder=embedder or MeanColorEmbedder(), images=False, videos=True,
+    )  # fmt: skip
+
+
+def sampled(index, embedder=None):
+    embedder = embedder or MeanColorEmbedder()
+    times = index.sampled_times(embedder.id, embedder.version, FRAMES_VERSION)
+    return {path.name: listed for path, listed in times.items()}
+
+
+def test_a_video_run_embeds_the_frames_of_each_readable_video_after_its_metadata(videos, index):
+    steps = []
+    embedder = MeanColorEmbedder()
+
+    stats = pipeline.run(
+        videos.parent.parent,
+        index,
+        detectors=[],
+        group_detectors=[],
+        embedder=embedder,
+        images=False,
+        videos=True,
+        progress=lambda step, done, total: steps.append(step),
+    )
+
+    # The broken video is unreadable: nothing to sample.
+    assert sampled(index) == {"clip.mp4": [300, 400, 500, 600, 700]}
+    frames = index.frame_embeddings(embedder.id, embedder.version, FRAMES_VERSION)
+    assert len(frames[videos / "clip.mp4"][300]) == 512
+    assert steps.index("video_frames") > steps.index("video_metadata")
+    assert stats.failures == []
+
+
+def test_frames_already_embedded_at_the_times_wanted_are_not_read_again(videos, index, monkeypatch):
+    video_scan(videos, index)
+    monkeypatch.setattr(pipeline, "read_frames", lambda *_: pytest.fail("read the frames again"))
+
+    video_scan(videos, index)
+
+
+def test_frames_stored_at_other_times_are_sampled_again(videos, index):
+    embedder = MeanColorEmbedder()
+    pipeline.run(videos.parent.parent, index, detectors=[], group_detectors=[], videos=True)
+    clip = videos / "clip.mp4"
+    index.set_frame_embeddings(
+        clip, embedder.id, embedder.version, FRAMES_VERSION, {0: np.ones(512)}
+    )
+
+    video_scan(videos, index, embedder)
+
+    assert sampled(index, embedder) == {"clip.mp4": [300, 400, 500, 600, 700]}
+
+
+def test_frames_stored_at_another_frame_version_are_sampled_again(videos, index, monkeypatch):
+    video_scan(videos, index)
+    monkeypatch.setattr(pipeline, "FRAMES_VERSION", FRAMES_VERSION + 1)
+
+    video_scan(videos, index)
+
+    embedder = MeanColorEmbedder()
+    assert index.sampled_times(embedder.id, embedder.version, FRAMES_VERSION) == {}
+    assert list(index.sampled_times(embedder.id, embedder.version, FRAMES_VERSION + 1)) == [
+        videos / "clip.mp4"
+    ]
+
+
+def test_a_video_whose_frames_fail_is_a_failure_and_is_tried_again(videos, index, monkeypatch):
+    def fail(*_):
+        raise MemoryError("the decode ran out of memory")
+
+    monkeypatch.setattr(pipeline, "read_frames", fail)
+    stats = video_scan(videos, index)
+    monkeypatch.undo()
+    video_scan(videos, index)
+
+    assert [f.split(": ")[1] for f in stats.failures] == ["video_frames"]
+    assert list(sampled(index)) == ["clip.mp4"]
+
+
+def test_a_video_whose_frames_do_not_read_is_not_decoded_again_until_it_changes(
+    videos, index, monkeypatch
+):
+    def unreadable(path, _):
+        raise av.error.InvalidDataError(0, "no frame", str(path))
+
+    monkeypatch.setattr(pipeline, "read_frames", unreadable)
+    stats = video_scan(videos, index)
+    monkeypatch.setattr(pipeline, "read_frames", lambda *_: pytest.fail("decoded it again"))
+    again = video_scan(videos, index)
+    monkeypatch.undo()
+    clip = videos / "clip.mp4"
+    clip.write_bytes(clip.read_bytes())  # a new mtime
+    os.utime(clip, ns=(0, clip.stat().st_mtime_ns + 1_000_000_000))
+    video_scan(videos, index)
+
+    # Like an unreadable image, it is counted and not a failure, since the next scan cannot help.
+    assert (stats.failures, stats.unreadable_frames) == ([], 1)
+    assert (again.failures, again.unreadable_frames) == ([], 0)
+    assert list(sampled(index)) == ["clip.mp4"]
+
+
+def test_a_video_run_without_an_embedder_embeds_no_frame(videos, index, monkeypatch):
+    monkeypatch.setattr(pipeline, "read_frames", lambda *_: pytest.fail("read a frame"))
+
+    pipeline.run(videos.parent.parent, index, detectors=[], group_detectors=[], videos=True)
+
+
+def test_the_frames_come_before_the_video_group_detectors(videos, index):
+    duplicate_clip(videos)
+    steps = []
+
+    pipeline.run(
+        videos.parent.parent,
+        index,
+        detectors=[],
+        group_detectors=[pipeline.ExactDuplicateDetector()],
+        embedder=MeanColorEmbedder(),
+        images=False,
+        videos=True,
+        progress=lambda step, done, total: steps.append(step),
+    )
+
+    # A video group detector may read the frames (#396).
+    assert steps.index("video_metadata") < steps.index("video_frames") < steps.index("video_groups")

@@ -31,7 +31,9 @@ def main(argv: list[str] | None = None) -> None:
     scan.add_argument("folder", type=Path)
     scan.add_argument("--jobs", type=int, default=os.cpu_count(), help="worker processes")
     scan.add_argument(
-        "--no-embeddings", action="store_true", help="skip MobileCLIP (no model download)"
+        "--no-embeddings",
+        action="store_true",
+        help="skip MobileCLIP, so no embeddings and no video frames (no model download)",
     )
     scan.add_argument(
         "--videos", action="store_true", help="also run the video steps, after the image steps"
@@ -69,7 +71,7 @@ def main(argv: list[str] | None = None) -> None:
     args.index.parent.mkdir(parents=True, exist_ok=True)
     with ImageIndex(args.index) as index:
         if args.command == "scan":
-            embedder = None if args.no_embeddings or args.only_videos else MobileClip()
+            embedder = None if args.no_embeddings else MobileClip()
             _scan(index, args.folder, args.jobs, embedder, args.videos, args.only_videos, args.zone)
         elif args.command == "report":
             _report(index, args.top)

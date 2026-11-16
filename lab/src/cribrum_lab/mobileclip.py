@@ -50,16 +50,20 @@ def preprocess(path: Path) -> np.ndarray:
     """RGB in [0, 1], CHW: shortest side resized to 256 (bilinear), then center-cropped."""
     with Image.open(path) as image:
         image.draft("RGB", (INPUT_SIDE, INPUT_SIDE))
-        image = ImageOps.exif_transpose(image).convert("RGB")
-        scale = INPUT_SIDE / min(image.size)
-        size = (
-            max(INPUT_SIDE, round(image.width * scale)),
-            max(INPUT_SIDE, round(image.height * scale)),
-        )
-        image = image.resize(size, Image.Resampling.BILINEAR)
-        left, top = (image.width - INPUT_SIDE) // 2, (image.height - INPUT_SIDE) // 2
-        image = image.crop((left, top, left + INPUT_SIDE, top + INPUT_SIDE))
-        return (np.asarray(image, dtype=np.float32) / 255.0).transpose(2, 0, 1)
+        return model_input(ImageOps.exif_transpose(image).convert("RGB"))
+
+
+def model_input(image: Image.Image) -> np.ndarray:
+    """`preprocess` for an RGB image already decoded and upright, such as a video frame."""
+    scale = INPUT_SIDE / min(image.size)
+    size = (
+        max(INPUT_SIDE, round(image.width * scale)),
+        max(INPUT_SIDE, round(image.height * scale)),
+    )
+    image = image.resize(size, Image.Resampling.BILINEAR)
+    left, top = (image.width - INPUT_SIDE) // 2, (image.height - INPUT_SIDE) // 2
+    image = image.crop((left, top, left + INPUT_SIDE, top + INPUT_SIDE))
+    return (np.asarray(image, dtype=np.float32) / 255.0).transpose(2, 0, 1)
 
 
 class MobileClip:

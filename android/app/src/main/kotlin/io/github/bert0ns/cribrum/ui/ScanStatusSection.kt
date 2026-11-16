@@ -24,6 +24,7 @@ import io.github.bert0ns.cribrum.pipeline.DETECTORS
 import io.github.bert0ns.cribrum.pipeline.EMBEDDING_STEP
 import io.github.bert0ns.cribrum.pipeline.GROUP_DETECTORS
 import io.github.bert0ns.cribrum.pipeline.ScanReport
+import io.github.bert0ns.cribrum.pipeline.VIDEO_FRAMES_STEP
 
 /**
  * The scan's part of the settings' "Scans and storage" (docs/design.md §8): the last finished scan and its failures,
@@ -139,6 +140,7 @@ private fun stepName(id: String): String? {
         id == EMBEDDING_STEP -> stringResource(R.string.settings_scan_status_embedding)
         id == "faces" -> stringResource(R.string.settings_scan_status_faces)
         id == "metadata" -> stringResource(R.string.settings_scan_status_metadata)
+        id == VIDEO_FRAMES_STEP -> stringResource(R.string.settings_scan_status_frames)
         id == "trash" -> stringResource(R.string.settings_scan_status_trash)
         else -> null
     }

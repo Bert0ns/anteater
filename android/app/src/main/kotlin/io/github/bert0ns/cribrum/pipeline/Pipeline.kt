@@ -1,6 +1,6 @@
 // Analysis pipeline: scan → metadata → detectors that read no embedding → embeddings, with the detectors
-// that read one beside them → group detectors, then the video steps when a run asks for them. Mirrors lab/src/cribrum_lab/pipeline.py, which runs the
-// embeddings and those detectors one after the other.
+// that read one beside them → group detectors, then the video steps when a run asks for them: the video metadata, then the frames.
+// Mirrors lab/src/cribrum_lab/pipeline.py, which runs the embeddings and those detectors one after the other.
 package io.github.bert0ns.cribrum.pipeline
 
 import android.os.SystemClock
@@ -24,6 +24,9 @@ import io.github.bert0ns.cribrum.detectors.NearDuplicateDetector
 import io.github.bert0ns.cribrum.detectors.ScreenshotDetector
 import io.github.bert0ns.cribrum.detectors.StickerDetector
 import io.github.bert0ns.cribrum.folders.isStickerFolder
+import io.github.bert0ns.cribrum.frames.FRAMES_VERSION
+import io.github.bert0ns.cribrum.frames.frameTimes
+import io.github.bert0ns.cribrum.frames.readFrames
 import io.github.bert0ns.cribrum.hashing.PHASH_DECODE_SIDE
 import io.github.bert0ns.cribrum.hashing.contentHash
 import io.github.bert0ns.cribrum.hashing.perceptualHash
@@ -36,6 +39,7 @@ import io.github.bert0ns.cribrum.metadata.UnreadableVideo
 import io.github.bert0ns.cribrum.metadata.VideoMetadata
 import io.github.bert0ns.cribrum.metadata.readMetadata
 import io.github.bert0ns.cribrum.metadata.readVideoMetadata
+import io.github.bert0ns.cribrum.mobileclip.modelInput
 import io.github.bert0ns.cribrum.mobileclip.preprocess
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
@@ -102,6 +106,9 @@ const val VIDEO_METADATA_STEP = "video_metadata"
 
 /** The progress step of the group detectors on videos: one for them all, since the video scan numbers its phases and not its detectors. */
 const val VIDEO_GROUPS_STEP = "video_groups"
+
+/** The progress step of a video's frames, sampled and embedded after the video metadata, and the [Failure.step] of a video whose frames fail. */
+const val VIDEO_FRAMES_STEP = "video_frames"
 
 /** The progress step of the embeddings and the detectors that read them, which run at once (docs/design.md §4). */
 const val CLASSIFY_STEP = "embedded_detectors"
@@ -186,6 +193,8 @@ class Pipeline(
     private val metadataReader: (File) -> ImageMetadata = ::readMetadata,
     private val jpegReader: (File) -> JpegInfo = ::readJpeg,
     private val videoMetadataReader: (File) -> VideoMetadata = { readVideoMetadata(it) },
+    /** A video's frames at these times in milliseconds, each preprocessed as [preprocessing] does an image. */
+    private val frameReader: (File, List<Long>) -> List<FloatArray> = { file, times -> readFrames(file, times) { modelInput(it) } },
     /** Hashes an image from its task's [Pixels], so it reads the grayscale exposure already computed. */
     private val perceptualHasher: (MediaRef, Pixels) -> ULong = { _, pixels -> perceptualHash(pixels.gray(PHASH_DECODE_SIDE)) },
     private val contentHasher: (MediaRef) -> String = ::contentHash,
@@ -389,13 +398,61 @@ class Pipeline(
         }
     }
 
-    /** The video steps, which only a run asked for videos takes: the metadata, then the group detectors that accept videos. */
+    /** The video steps, which only a run asked for videos takes: the metadata, the frames, then the group detectors that accept videos, which may read the frames. */
     private suspend fun videoSteps(found: Set<String>, stats: Stats, progress: Progress) {
         val pending = index.withoutMetadata().filter { it.mediaType == MediaType.VIDEO }
         phase("videoMetadata", stats) {
             readAndStore(pending, VIDEO_METADATA_STEP, progress, read = { attempt { videoMetadataReader(it) } }) { batch -> storeVideoMetadata(batch, stats) }
         }
+        if (embedder != null) phase("videoFrames", stats) { embedFrames(embedder, stats, progress) }
         groupSteps(MediaType.VIDEO, found, emptyMap(), "", null, stats, progress)
+    }
+
+    /**
+     * Embeds the frames of each readable video whose frames are not stored at the times [frameTimes] gives now and at
+     * [FRAMES_VERSION], so a new rule samples every video again (docs/design.md §4). One video at a time: its frames
+     * decode one after the other, the model takes them as one batch and they are stored together, so a stop loses at most
+     * the video it was on. A video whose frames do not read is marked, as an unreadable image is, and not decoded again
+     * until the file or [FRAMES_VERSION] changes. Any other error is a failure, and the next scan tries it again, as an
+     * image whose embedding fails.
+     */
+    private suspend fun embedFrames(embedder: Embedder, stats: Stats, progress: Progress) {
+        val stored = index.sampledTimes(embedder.id, embedder.version, FRAMES_VERSION)
+        val todo = index.readVideos(FRAMES_VERSION).mapNotNull { video -> frameTimes(video.durationMs).takeIf { it != stored[video.ref.path] }?.let { video.ref to it } }
+        stats.counts["$VIDEO_FRAMES_STEP tasks"] = todo.size
+        progress(VIDEO_FRAMES_STEP, 0, todo.size)
+        if (todo.isEmpty()) return
+        withContext(Dispatchers.Default) { attempt { embedder.load() } }.exceptionOrNull()?.let { error ->
+            stats.failures += Failure("", EMBEDDING_STEP, failureMessage(error))
+            return
+        }
+        var frames = 0
+        var unreadable = 0
+        for ((done, task) in todo.withIndex()) {
+            val (video, times) = task
+            attempt { embedder.embedPixels(frameReader(File(video.path), times)) }.fold(
+                onSuccess = { vectors ->
+                    // A video gone from the index since the walk keeps nothing.
+                    index.batch(listOf(video.path)) { recorded ->
+                        if (video.path in recorded) index.setFrameEmbeddings(video.path, embedder.id, embedder.version, FRAMES_VERSION, times.zip(vectors).toMap())
+                    }
+                    frames += times.size
+                    stats.detectorRuns += times.size
+                },
+                onFailure = { error ->
+                    // A file moved since the walk, such as one the user trashed, is not the video's fault.
+                    if (error is UnreadableVideo && File(video.path).isFile) {
+                        index.batch(listOf(video.path)) { recorded -> if (video.path in recorded) index.setFramesUnreadable(video.path, FRAMES_VERSION) }
+                        unreadable++
+                    } else {
+                        stats.failures += Failure(video.path, VIDEO_FRAMES_STEP, failureMessage(error))
+                    }
+                },
+            )
+            progress(VIDEO_FRAMES_STEP, done + 1, todo.size)
+        }
+        stats.counts["$VIDEO_FRAMES_STEP frames"] = frames
+        stats.counts["$VIDEO_FRAMES_STEP unreadable"] = unreadable
     }
 
     /** The real images first: a sticker only delays them, since the home screen lists candidates as they are stored. */

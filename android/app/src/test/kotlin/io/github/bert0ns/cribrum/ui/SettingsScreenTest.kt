@@ -240,11 +240,11 @@ class SettingsScreenTest {
         compose.setContent { SettingsScreen(embeddingCount = 120, onDeleteEmbeddings = { deleted++ }) }
 
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Delete the analysis data"))
-        compose.onNodeWithText("Analysis data for 120 images. Deleting it frees space, and the images stay.").assertIsDisplayed()
+        compose.onNodeWithText("Analysis data for 120 images and videos. Deleting it frees space, and the files stay.").assertIsDisplayed()
         compose.onNodeWithText("Delete the analysis data").performClick()
 
         compose.onNodeWithText("Delete the analysis data?").assertIsDisplayed()
-        compose.onNodeWithText("Cribrum keeps analysis data for each image to find copies, documents and forwarded images. The next scan computes it again, which takes about 15 to 20 minutes for 10,000 images. Your images, the trash and your decisions stay as they are.").assertIsDisplayed()
+        compose.onNodeWithText("Cribrum keeps analysis data for each image and video to find copies, documents and forwarded images. The next scans compute it again, which takes about 15 to 20 minutes for 10,000 images, and longer for videos. Your images, videos, the trash and your decisions stay as they are.").assertIsDisplayed()
         compose.onNodeWithText("Cancel").performClick()
         assertEquals(0, deleted)
 
@@ -280,7 +280,7 @@ class SettingsScreenTest {
             compose.onNodeWithText(Formatter.formatShortFileSize(context, bytes), substring = true).assertExists()
         }
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Delete the analysis data"))
-        compose.onNodeWithText("Analysis data for 3 images. Deleting it frees space, and the images stay.").assertExists()
+        compose.onNodeWithText("Analysis data for 3 images and videos. Deleting it frees space, and the files stay.").assertExists()
         compose.onNodeWithText(Formatter.formatShortFileSize(context, 5_000_000), substring = true).assertExists()
     }
 

@@ -11,6 +11,7 @@ import io.github.bert0ns.cribrum.detectors.ExactDuplicateDetector
 import io.github.bert0ns.cribrum.detectors.GroupDetector
 import io.github.bert0ns.cribrum.detectors.MissingEmbedding
 import io.github.bert0ns.cribrum.folders.isStickerFolder
+import io.github.bert0ns.cribrum.frames.FRAMES_VERSION
 import io.github.bert0ns.cribrum.hashing.PHASH_DECODE_SIDE
 import io.github.bert0ns.cribrum.hashing.contentHash
 import io.github.bert0ns.cribrum.hashing.perceptualHash
@@ -275,7 +276,14 @@ class PipelineTest {
             val steps = mutableListOf<String>()
             val fresh = memoryIndex()
             try {
-                val pipeline = Pipeline(fresh, detectors = emptyList(), groupDetectors = listOf(ExactDuplicateDetector()), videoMetadataReader = ::readVideo)
+                val pipeline = Pipeline(
+                    fresh,
+                    detectors = emptyList(),
+                    groupDetectors = listOf(ExactDuplicateDetector()),
+                    embedder = MeanColorEmbedder(),
+                    videoMetadataReader = ::readVideo,
+                    frameReader = ::grayFrames,
+                )
                 runBlocking { pipeline.run(source, images = images, videos = true) { step, _, _ -> steps += step } }
             } finally {
                 fresh.close()
@@ -291,6 +299,125 @@ class PipelineTest {
         val videoPart = both.drop(both.indexOfFirst { it in Indexing.VIDEO_STEPS })
         assertTrue(videoPart.isNotEmpty())
         assertEquals(emptyList<String>(), videoPart.filter { it !in Indexing.VIDEO_STEPS })
+    }
+
+    /** Frames as the model takes them, a flat gray each, since Robolectric decodes no video. */
+    private fun grayFrames(file: File, times: List<Long>): List<FloatArray> = times.map { FloatArray(3 * 256 * 256) { 0.5f } }
+
+    private fun videoScan(frameReader: (File, List<Long>) -> List<FloatArray> = ::grayFrames, embedder: Embedder? = MeanColorEmbedder()) = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), embedder = embedder, videoMetadataReader = ::readVideo, frameReader = frameReader)
+
+    private fun frameTimesStored(embedder: Embedder = MeanColorEmbedder(), framesVersion: Int = FRAMES_VERSION) = runBlocking { index.sampledTimes(embedder.id, embedder.version, framesVersion) }
+
+    @Test
+    fun `a video run with the model embeds the frames of each readable video after its metadata`() {
+        val clip = videos().getValue("clip")
+        val steps = mutableListOf<String>()
+
+        val stats = runBlocking { videoScan().run(source, images = false, videos = true) { step, _, _ -> steps += step } }
+
+        // The others are unreadable: nothing to sample.
+        assertEquals(mapOf(clip.path to listOf(300L, 400, 500, 600, 700)), frameTimesStored())
+        assertTrue(steps.indexOf(VIDEO_FRAMES_STEP) > steps.lastIndexOf(VIDEO_METADATA_STEP))
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(5, stats.counts["$VIDEO_FRAMES_STEP frames"])
+        assertTrue("videoFrames" in stats.phaseMs)
+    }
+
+    @Test
+    fun `frames stored at the times wanted are not read again, and frames at other times are`() {
+        val clip = videos().getValue("clip")
+        runBlocking { videoScan().run(source, images = false, videos = true) }
+
+        val again = runBlocking { videoScan(frameReader = { file, _ -> throw AssertionError("read ${file.name} again") }).run(source, images = false, videos = true) }
+        runBlocking { index.setFrameEmbeddings(clip.path, "mean_color", 1, FRAMES_VERSION, mapOf(0L to FloatArray(512))) }
+        runBlocking { videoScan().run(source, images = false, videos = true) }
+
+        assertEquals(emptyList<Failure>(), again.failures)
+        assertEquals(listOf(300L, 400, 500, 600, 700), frameTimesStored()[clip.path])
+    }
+
+    @Test
+    fun `frames stored at another frame version are taken again`() {
+        val clip = videos().getValue("clip")
+        runBlocking { videoScan().run(source, images = false, videos = true) }
+        runBlocking { index.setFrameEmbeddings(clip.path, "mean_color", 1, FRAMES_VERSION - 1, mapOf(300L to FloatArray(512))) }
+
+        runBlocking { videoScan().run(source, images = false, videos = true) }
+
+        assertEquals(mapOf(clip.path to listOf(300L, 400, 500, 600, 700)), frameTimesStored())
+        assertEquals(emptyMap<String, List<Long>>(), frameTimesStored(framesVersion = FRAMES_VERSION - 1))
+    }
+
+    @Test
+    fun `a video whose frames fail is a failure, and the next scan tries it again`() {
+        val clip = videos().getValue("clip")
+
+        val failed = runBlocking { videoScan(frameReader = { _, _ -> throw OutOfMemoryError("4K frame") }).run(source, images = false, videos = true) }
+        runBlocking { videoScan().run(source, images = false, videos = true) }
+
+        assertEquals(listOf(clip.path to VIDEO_FRAMES_STEP), failed.failures.map { it.path to it.step })
+        assertEquals(setOf(clip.path), frameTimesStored().keys)
+    }
+
+    @Test
+    fun `a video whose frames do not read is not decoded again until it changes`() {
+        val clip = videos().getValue("clip")
+
+        val first = runBlocking { videoScan(frameReader = { file, _ -> throw UnreadableVideo(file) }).run(source, images = false, videos = true) }
+        val again = runBlocking { videoScan(frameReader = { file, _ -> throw AssertionError("decoded ${file.name} again") }).run(source, images = false, videos = true) }
+        clip.setLastModified(clip.lastModified() + 60_000)
+        runBlocking { videoScan().run(source, images = false, videos = true) }
+
+        // Like an unreadable image, it is counted and not a failure, since the next scan cannot help.
+        assertEquals(emptyList<Failure>() to 1, first.failures to first.counts["$VIDEO_FRAMES_STEP unreadable"])
+        assertEquals(emptyList<Failure>() to 0, again.failures to again.counts["$VIDEO_FRAMES_STEP tasks"])
+        assertEquals(setOf(clip.path), frameTimesStored().keys)
+    }
+
+    @Test
+    fun `a stop loses at most the video it was on`() {
+        val videos = videos()
+        val (clip, prores) = videos.getValue("clip") to videos.getValue("prores")
+        lateinit var scan: Job
+        val pipeline = Pipeline(
+            index,
+            detectors = emptyList(),
+            groupDetectors = emptyList(),
+            embedder = MeanColorEmbedder(),
+            videoMetadataReader = { if (it.nameWithoutExtension == "broken") throw UnreadableVideo(it) else clipMeta },
+            frameReader = { file, times -> grayFrames(file, times).also { if (file == prores) scan.cancel() } },
+        )
+
+        runBlocking {
+            scan = launch { pipeline.run(source, images = false, videos = true) }
+            scan.join()
+        }
+
+        assertTrue(scan.isCancelled)
+        assertEquals(setOf(clip.path), frameTimesStored().keys)
+    }
+
+    @Test
+    fun `the frames come before the video group detectors`() {
+        videos()
+        val steps = mutableListOf<String>()
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(ExactDuplicateDetector()), embedder = MeanColorEmbedder(), videoMetadataReader = ::readVideo, frameReader = ::grayFrames)
+
+        runBlocking { pipeline.run(source, images = false, videos = true) { step, _, _ -> steps += step } }
+
+        // A video group detector may read the frames (#396).
+        assertTrue(steps.indexOf(VIDEO_METADATA_STEP) < steps.indexOf(VIDEO_FRAMES_STEP))
+        assertTrue(steps.indexOf(VIDEO_FRAMES_STEP) < steps.indexOf(VIDEO_GROUPS_STEP))
+    }
+
+    @Test
+    fun `a video run without the model reads no frame`() {
+        videos()
+
+        val stats = runBlocking { videoScan(frameReader = { file, _ -> throw AssertionError("read ${file.name}") }, embedder = null).run(source, images = false, videos = true) }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertFalse("videoFrames" in stats.phaseMs)
     }
 
     @Test
