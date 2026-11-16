@@ -377,6 +377,52 @@ class ImageIndexTest {
     }
 
     @Test
+    fun `the read videos are the readable ones with metadata out of the trash`() = test {
+        val (waiting, unreadable, trashed) = listOf("waiting", "unreadable", "trashed").map { MediaRef("/videos/$it.mp4", 5, 5, MediaType.VIDEO) }
+        recordAll(listOf(VIDEO, waiting, unreadable, trashed, PHOTO))
+        for (video in listOf(VIDEO, trashed)) setVideoMetadata(video.path, VIDEO_META)
+        setUnreadable(unreadable.path)
+        setReviewState(trashed.path, ReviewState.TRASHED)
+
+        assertEquals(listOf(VIDEO to 12_345L), readVideos().map { it.ref to it.durationMs })
+    }
+
+    @Test
+    fun `frame embeddings are stored per video time and model version`() = test {
+        record(VIDEO)
+        val first = floatArrayOf(1f, 0f)
+        val last = floatArrayOf(0f, 1f)
+
+        setFrameEmbeddings(VIDEO.path, "clip", 2, mapOf(300L to first, 700L to last))
+
+        val stored = frameEmbeddings("clip", 2)
+        assertEquals(setOf(VIDEO.path), stored.keys)
+        assertEquals(listOf(300L, 700L), stored.getValue(VIDEO.path).keys.toList())
+        assertArrayEquals(last, stored.getValue(VIDEO.path).getValue(700L), 0f)
+        assertEquals(emptyMap<String, Map<Long, FloatArray>>(), frameEmbeddings("clip", 1))
+    }
+
+    @Test
+    fun `storing a video's frames again replaces them all`() = test {
+        record(VIDEO)
+        setFrameEmbeddings(VIDEO.path, "clip", 1, mapOf(300L to floatArrayOf(1f)))
+
+        setFrameEmbeddings(VIDEO.path, "clip", 1, mapOf(500L to floatArrayOf(0f)))
+
+        assertEquals(listOf(500L), frameEmbeddings("clip", 1).getValue(VIDEO.path).keys.toList())
+    }
+
+    @Test
+    fun `a changed video drops its frames`() = test {
+        record(VIDEO)
+        setFrameEmbeddings(VIDEO.path, "clip", 1, mapOf(300L to floatArrayOf(1f)))
+
+        record(VIDEO.copy(size = 901, mtimeNs = 2))
+
+        assertEquals(emptyMap<String, Map<Long, FloatArray>>(), frameEmbeddings("clip", 1))
+    }
+
+    @Test
     fun `deleting the embeddings leaves the rest of the index as it was`() = test {
         record(PHOTO)
         record(OTHER)
@@ -924,6 +970,7 @@ class ImageIndexTest {
         "deleteEmbeddings" to { deleteEmbeddings() },
         "forgetAnalyses" to { forgetAnalyses(listOf(PHOTO.path), listOf("blur")) },
         "setEmbeddings" to { setEmbeddings("clip", 1, mapOf(PHOTO.path to floatArrayOf(1f))) },
+        "setFrameEmbeddings" to { setFrameEmbeddings(PHOTO.path, "clip", 1, mapOf(300L to floatArrayOf(1f))) },
         "setSignals" to { setSignals(PHOTO.path, "blur", 1, emptyList()) },
         "setSignalsOfMany" to { setSignalsOfMany("blur", 1, mapOf(PHOTO.path to emptyList())) },
         "setGroupSignals" to { setGroupSignals("blur", 1, mapOf(PHOTO.path to emptyList())) },
@@ -960,6 +1007,8 @@ class ImageIndexTest {
         "embeddingBytes" to { embeddingBytes() },
         "fileBytes" to { fileBytes() },
         "embeddings" to { embeddings("clip", 1) },
+        "frameEmbeddings" to { frameEmbeddings("clip", 1) },
+        "readVideos" to { readVideos() },
         "analyzedPaths" to { analyzedPaths("blur", 1) },
         "embeddedPaths" to { embeddedPaths("clip", 1) },
         "readableNotTrashed" to { readableNotTrashed() },

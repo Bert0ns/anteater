@@ -275,7 +275,14 @@ class PipelineTest {
             val steps = mutableListOf<String>()
             val fresh = memoryIndex()
             try {
-                val pipeline = Pipeline(fresh, detectors = emptyList(), groupDetectors = listOf(ExactDuplicateDetector()), videoMetadataReader = ::readVideo)
+                val pipeline = Pipeline(
+                    fresh,
+                    detectors = emptyList(),
+                    groupDetectors = listOf(ExactDuplicateDetector()),
+                    embedder = MeanColorEmbedder(),
+                    videoMetadataReader = ::readVideo,
+                    frameReader = ::grayFrames,
+                )
                 runBlocking { pipeline.run(source, images = images, videos = true) { step, _, _ -> steps += step } }
             } finally {
                 fresh.close()
@@ -291,6 +298,62 @@ class PipelineTest {
         val videoPart = both.drop(both.indexOfFirst { it in Indexing.VIDEO_STEPS })
         assertTrue(videoPart.isNotEmpty())
         assertEquals(emptyList<String>(), videoPart.filter { it !in Indexing.VIDEO_STEPS })
+    }
+
+    /** Frames as the model takes them, a flat gray each, since Robolectric decodes no video. */
+    private fun grayFrames(file: File, times: List<Long>): List<FloatArray> = times.map { FloatArray(3 * 256 * 256) { 0.5f } }
+
+    private fun videoScan(frameReader: (File, List<Long>) -> List<FloatArray> = ::grayFrames, embedder: Embedder? = MeanColorEmbedder()) = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), embedder = embedder, videoMetadataReader = ::readVideo, frameReader = frameReader)
+
+    private fun frameTimesStored(embedder: Embedder = MeanColorEmbedder()) = runBlocking { index.frameEmbeddings(embedder.id, embedder.version) }.mapValues { it.value.keys.toList() }
+
+    @Test
+    fun `a video run with the model embeds the frames of each readable video after its metadata`() {
+        val clip = videos().getValue("clip")
+        val steps = mutableListOf<String>()
+
+        val stats = runBlocking { videoScan().run(source, images = false, videos = true) { step, _, _ -> steps += step } }
+
+        // The others are unreadable: nothing to sample.
+        assertEquals(mapOf(clip.path to listOf(300L, 400, 500, 600, 700)), frameTimesStored())
+        assertTrue(steps.indexOf(VIDEO_FRAMES_STEP) > steps.lastIndexOf(VIDEO_METADATA_STEP))
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(5, stats.counts["$VIDEO_FRAMES_STEP frames"])
+        assertTrue("videoFrames" in stats.phaseMs)
+    }
+
+    @Test
+    fun `frames stored at the times wanted are not read again, and frames at other times are`() {
+        val clip = videos().getValue("clip")
+        runBlocking { videoScan().run(source, images = false, videos = true) }
+
+        val again = runBlocking { videoScan(frameReader = { file, _ -> throw AssertionError("read ${file.name} again") }).run(source, images = false, videos = true) }
+        runBlocking { index.setFrameEmbeddings(clip.path, "mean_color", 1, mapOf(0L to FloatArray(512))) }
+        runBlocking { videoScan().run(source, images = false, videos = true) }
+
+        assertEquals(emptyList<Failure>(), again.failures)
+        assertEquals(listOf(300L, 400, 500, 600, 700), frameTimesStored()[clip.path])
+    }
+
+    @Test
+    fun `a video whose frames fail is a failure, and the next scan tries it again`() {
+        val clip = videos().getValue("clip")
+
+        val failed = runBlocking { videoScan(frameReader = { file, _ -> throw UnreadableVideo(file) }).run(source, images = false, videos = true) }
+        runBlocking { videoScan().run(source, images = false, videos = true) }
+
+        assertEquals(listOf(clip.path to VIDEO_FRAMES_STEP), failed.failures.map { it.path to it.step })
+        assertEquals(setOf(clip.path), frameTimesStored().keys)
+    }
+
+    @Test
+    fun `a video run without the model reads no frame`() {
+        videos()
+
+        val stats = runBlocking { videoScan(frameReader = { file, _ -> throw AssertionError("read ${file.name}") }, embedder = null).run(source, images = false, videos = true) }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertFalse("videoFrames" in stats.phaseMs)
     }
 
     @Test

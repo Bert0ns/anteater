@@ -170,4 +170,16 @@ class IndexMigrationTest {
             assertNull(runBlocking { it.videoMetadata("/photos/a.jpg") }?.capturedInstant)
         }
     }
+
+    @Test
+    fun `version 8 opens with no frame embedded yet, so a video scan samples every video`() {
+        createDatabase(context, 8).use {
+            it.execSQL("INSERT INTO images (path, size, mtime_ns, media_type, width, height, duration_ms) VALUES ('/videos/clip.mp4', 900, 2, 'video', 64, 48, 1000)")
+        }
+
+        ImageIndex.open(context, NAME).use {
+            assertEquals(emptyMap<String, Map<Long, FloatArray>>(), runBlocking { it.frameEmbeddings("mobileclip2_s0", 1) })
+            assertEquals(listOf("/videos/clip.mp4"), runBlocking { it.readVideos() }.map { video -> video.ref.path })
+        }
+    }
 }

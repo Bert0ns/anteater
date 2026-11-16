@@ -118,6 +118,21 @@ class EmbeddingRow(
     val vector: ByteArray,
 )
 
+/** A video's frames, embedded at the times frameTimes gives (docs/design.md §7). */
+@Entity(
+    tableName = "frame_embeddings",
+    primaryKeys = ["path", "model", "time_ms"],
+    foreignKeys = [ForeignKey(ImageRow::class, ["path"], ["path"], onDelete = ForeignKey.CASCADE)],
+)
+class FrameEmbeddingRow(
+    val path: String,
+    val model: String,
+    @ColumnInfo(name = "model_version") val modelVersion: Int,
+    @ColumnInfo(name = "time_ms") val timeMs: Long,
+    /** float32, little-endian. */
+    val vector: ByteArray,
+)
+
 /** The image set a group detector version last ran on, so unchanged sets are skipped, with the paths whose content hash failed in that run. */
 @Entity(tableName = "group_runs")
 data class GroupRunRow(
@@ -356,6 +371,24 @@ interface IndexDao {
     @Query("DELETE FROM embeddings")
     suspend fun deleteAllEmbeddings()
 
+    @Insert
+    suspend fun putFrameEmbeddings(frames: List<FrameEmbeddingRow>)
+
+    @Query("DELETE FROM frame_embeddings WHERE path = :path AND model = :model")
+    suspend fun deleteFrameEmbeddings(path: String, model: String)
+
+    @Query("DELETE FROM frame_embeddings WHERE path = :path")
+    suspend fun deleteAllFrameEmbeddings(path: String)
+
+    @Query("SELECT * FROM frame_embeddings WHERE model = :model AND model_version = :modelVersion ORDER BY path, time_ms")
+    suspend fun frameEmbeddings(model: String, modelVersion: Int): List<FrameEmbeddingRow>
+
+    @Query(
+        """SELECT path, size, mtime_ns, media_type, unreadable, duration_ms FROM images
+           WHERE media_type = 'video' AND width IS NOT NULL AND NOT unreadable AND review_state != 'trashed' ORDER BY path""",
+    )
+    suspend fun readVideos(): List<StoredVideo>
+
     @Query("SELECT count(*) FROM images WHERE media_type = 'image'")
     suspend fun imageCount(): Int
 
@@ -526,9 +559,9 @@ interface IndexDao {
 @Database(
     entities = [
         ImageRow::class, AnalysisRow::class, SignalRow::class, KeptSignalRow::class, KeptDetectorRow::class, EmbeddingRow::class,
-        GroupRunRow::class, ExcludedFolderRow::class, NotImageRow::class, JpegRow::class,
+        FrameEmbeddingRow::class, GroupRunRow::class, ExcludedFolderRow::class, NotImageRow::class, JpegRow::class,
     ],
-    version = 8,
+    version = 9,
 )
 abstract class IndexDatabase : RoomDatabase() {
     abstract fun dao(): IndexDao
@@ -612,5 +645,16 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
         db.execSQL("ALTER TABLE `images` ADD COLUMN `video_codec` TEXT")
         db.execSQL("ALTER TABLE `images` ADD COLUMN `hdr` INTEGER")
         db.execSQL("ALTER TABLE `images` ADD COLUMN `captured_instant` INTEGER")
+    }
+}
+
+/** Version 8 had no frames of a video: the first video scan with the model samples every video (docs/design.md §7). */
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `frame_embeddings` (`path` TEXT NOT NULL, `model` TEXT NOT NULL, `model_version` INTEGER NOT NULL, " +
+                "`time_ms` INTEGER NOT NULL, `vector` BLOB NOT NULL, PRIMARY KEY(`path`, `model`, `time_ms`), " +
+                "FOREIGN KEY(`path`) REFERENCES `images`(`path`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
     }
 }

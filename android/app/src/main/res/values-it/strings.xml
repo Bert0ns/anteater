@@ -44,6 +44,7 @@
     <string name="scan_phase_number">Fase %1$d di %2$d</string>
     <string name="scan_phase_video_scan">Ricerca dei video</string>
     <string name="scan_phase_video_metadata">Lettura dei video</string>
+    <string name="scan_phase_video_frames">Analisi dei fotogrammi</string>
     <string name="scan_phase_video_groups">Ricerca dei video duplicati</string>
     <string name="scan_kind_images">Scansione delle foto</string>
     <string name="scan_kind_videos">Scansione dei video</string>
@@ -417,6 +418,7 @@
     <string name="settings_scan_status_embedding">Dati dell\'analisi</string>
     <string name="settings_scan_status_faces">Volti</string>
     <string name="settings_scan_status_metadata">Metadati</string>
+    <string name="settings_scan_status_frames">Fotogrammi dei video</string>
     <string name="settings_scan_status_unreadable_step">Illeggibile</string>
     <string name="settings_scan_status_unreadable_hint">Tocca per mostrare o nascondere i nomi dei file.</string>
     <plurals name="settings_scan_status_more">

@@ -12,6 +12,7 @@
     <string name="scan_phase_number">Phase %1$d of %2$d</string>
     <string name="scan_phase_video_scan">Looking for videos</string>
     <string name="scan_phase_video_metadata">Reading the videos</string>
+    <string name="scan_phase_video_frames">Looking at the frames</string>
     <string name="scan_phase_video_groups">Finding duplicate videos</string>
     <string name="scan_kind_images">Photo scan</string>
     <string name="scan_kind_videos">Video scan</string>
@@ -361,6 +362,7 @@
     <string name="settings_scan_status_embedding">Analysis data</string>
     <string name="settings_scan_status_faces">Faces</string>
     <string name="settings_scan_status_metadata">Metadata</string>
+    <string name="settings_scan_status_frames">Video frames</string>
     <string name="settings_scan_status_unreadable_step">Unreadable</string>
     <string name="settings_scan_status_unreadable_hint">Tap to show or hide their file names.</string>
     <string name="settings_scan_status_file" translatable="false">%1$s: %2$s</string>

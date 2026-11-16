@@ -90,6 +90,7 @@ class ImageIndex(private val db: IndexDatabase) :
                 dao.resetImage(image.path, image.size, image.mtimeNs, image.mediaType.value)
                 dao.deleteAnalyses(image.path)
                 dao.deleteEmbeddings(image.path)
+                dao.deleteAllFrameEmbeddings(image.path)
                 dao.deleteJpeg(image.path)
             }
         }
@@ -236,17 +237,27 @@ class ImageIndex(private val db: IndexDatabase) :
     suspend fun setEmbeddings(model: String, modelVersion: Int, vectors: Map<String, FloatArray>) = writeTransaction {
         for ((path, vector) in vectors) {
             requireRecorded(path)
-            val bytes = ByteBuffer.allocate(4 * vector.size).order(ByteOrder.LITTLE_ENDIAN)
-            bytes.asFloatBuffer().put(vector)
-            dao.putEmbedding(EmbeddingRow(path, model, modelVersion, bytes.array()))
+            dao.putEmbedding(EmbeddingRow(path, model, modelVersion, bytes(vector)))
         }
     }
 
     /** Every stored embedding of this model version, loaded at once for group detectors. */
-    suspend fun embeddings(model: String, modelVersion: Int): Map<String, FloatArray> = dao.embeddings(model, modelVersion).associate { row ->
-        val floats = ByteBuffer.wrap(row.vector).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
-        row.path to FloatArray(floats.remaining()).also { floats.get(it) }
+    suspend fun embeddings(model: String, modelVersion: Int): Map<String, FloatArray> = dao.embeddings(model, modelVersion).associate { row -> row.path to floats(row.vector) }
+
+    /** Replaces the video's frames of this model, by their time in milliseconds. */
+    suspend fun setFrameEmbeddings(path: String, model: String, modelVersion: Int, vectors: Map<Long, FloatArray>) = writeTransaction {
+        requireRecorded(path)
+        dao.deleteFrameEmbeddings(path, model)
+        dao.putFrameEmbeddings(vectors.map { (timeMs, vector) -> FrameEmbeddingRow(path, model, modelVersion, timeMs, bytes(vector)) })
     }
+
+    /** Every video's frames of this model version, by time, in the order of their times. */
+    suspend fun frameEmbeddings(model: String, modelVersion: Int): Map<String, Map<Long, FloatArray>> = dao.frameEmbeddings(model, modelVersion)
+        .groupBy { it.path }
+        .mapValues { (_, rows) -> rows.associate { it.timeMs to floats(it.vector) } }
+
+    /** The videos whose metadata was read, readable and out of the trash, with their duration: the ones the frames step samples. */
+    suspend fun readVideos(): List<IndexedVideo> = dao.readVideos().map { IndexedVideo(MediaRef(it.path, it.size, it.mtimeNs, MediaType.of(it.mediaType)), it.unreadable, it.durationMs) }
 
     suspend fun analyzedPaths(detectorId: String, detectorVersion: Int): Set<String> = dao.analyzedPaths(detectorId, detectorVersion).toSet()
 
@@ -535,7 +546,7 @@ class ImageIndex(private val db: IndexDatabase) :
     }
 
     companion object {
-        fun open(context: Context, name: String = "index.sqlite"): ImageIndex = ImageIndex(Room.databaseBuilder(context, IndexDatabase::class.java, name).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8).build())
+        fun open(context: Context, name: String = "index.sqlite"): ImageIndex = ImageIndex(Room.databaseBuilder(context, IndexDatabase::class.java, name).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build())
     }
 }
 
@@ -588,3 +599,8 @@ private class LazyEvidence(private val json: String) : AbstractMap<String, Strin
 
     override fun containsKey(key: String): Boolean = parsed.containsKey(key)
 }
+
+/** float32, little-endian, as the lab stores a vector. */
+private fun bytes(vector: FloatArray): ByteArray = ByteBuffer.allocate(4 * vector.size).order(ByteOrder.LITTLE_ENDIAN).also { it.asFloatBuffer().put(vector) }.array()
+
+private fun floats(bytes: ByteArray): FloatArray = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().let { FloatArray(it.remaining()).also(it::get) }

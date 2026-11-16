@@ -3,6 +3,7 @@
 package io.github.bert0ns.cribrum.mobileclip
 
 import androidx.tracing.trace
+import io.github.bert0ns.cribrum.imaging.Argb
 import io.github.bert0ns.cribrum.imaging.decode
 import io.github.bert0ns.cribrum.imaging.orientation
 import io.github.bert0ns.cribrum.imaging.resampleChannels
@@ -48,9 +49,10 @@ fun zeroShot(imageEmbedding: FloatArray, promptEmbeddings: List<FloatArray>): Fl
  * RGB in [0, 1], CHW: shortest side resized to 256 (Pillow's bilinear), then center-cropped.
  * Each channel goes through Pillow's steps on its own, which gives the same numbers.
  */
-fun preprocess(file: File): FloatArray = trace("MobileClip.preprocess") {
-    val decoded = decode(file, INPUT_SIDE)
-    val orientation = orientation(file)
+fun preprocess(file: File): FloatArray = trace("MobileClip.preprocess") { modelInput(decode(file, INPUT_SIDE), orientation(file)) }
+
+/** [preprocess] for pixels already decoded, turned by the EXIF [orientation], such as a video frame, which comes upright. */
+internal fun modelInput(decoded: Argb, orientation: Int = 1): FloatArray {
     val (turnedWidth, turnedHeight) = turnedSize(decoded, orientation)
     val scale = INPUT_SIDE.toDouble() / min(turnedWidth, turnedHeight)
     // Math.rint rounds halves to even, as Python's round does.
@@ -66,7 +68,7 @@ fun preprocess(file: File): FloatArray = trace("MobileClip.preprocess") {
             }
         }
     }
-    out
+    return out
 }
 
 /** Embeddings are L2-normalized, so a dot product is the cosine similarity. */
