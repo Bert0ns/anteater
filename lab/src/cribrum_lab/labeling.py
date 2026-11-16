@@ -7,6 +7,7 @@ A video is sent as it is, for the browser to play.
 import io
 import json
 import mimetypes
+import os
 import random
 import re
 import threading
@@ -15,6 +16,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from itertools import pairwise
 from pathlib import Path
+from typing import BinaryIO
 
 import numpy as np
 from PIL import Image, ImageOps
@@ -147,7 +149,8 @@ class LabelingServer(ThreadingHTTPServer):
                 image = self.queue[item]
                 digest = self.hashes.get(item) or hashing.content_hash(image)
                 self.hashes[item] = digest
-                self.store.set(Label(digest, image.path, decision, self.strata.get(image.path)))
+                stratum = self.strata.get(image.path)
+                self.store.set(Label(digest, image.path, decision, stratum, image.media_type))
 
     def unlabel(self, items: Sequence[int]) -> None:
         with self.lock:
@@ -191,7 +194,16 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _send_video(self, path: Path) -> None:
         """The whole file, or the byte range the browser asks for to seek."""
-        size = path.stat().st_size
+        try:
+            file = path.open("rb")
+        except OSError:  # gone or unreadable since the queue was drawn
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        with file:
+            self._send_range(file, path)
+
+    def _send_range(self, file: BinaryIO, path: Path) -> None:
+        size = os.fstat(file.fileno()).st_size
         start, end = 0, size - 1
         asked = re.fullmatch(r"bytes=(\d+)-(\d*)", self.headers.get("Range", ""))
         if asked:
@@ -203,19 +215,19 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.PARTIAL_CONTENT if asked else HTTPStatus.OK)
         self.send_header("Content-Type", mimetypes.guess_type(path)[0] or "video/mp4")
         self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(end - start + 1))
         if asked:
             self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
         self.end_headers()
-        with path.open("rb") as file:
-            file.seek(start)
-            left = end - start + 1
-            try:
-                while left and (chunk := file.read(min(left, 1 << 20))):
-                    self.wfile.write(chunk)
-                    left -= len(chunk)
-            except ConnectionError:
-                pass  # the browser drops a stream when it seeks elsewhere
+        file.seek(start)
+        left = end - start + 1
+        try:
+            while left and (chunk := file.read(min(left, 1 << 20))):
+                self.wfile.write(chunk)
+                left -= len(chunk)
+        except ConnectionError:
+            pass  # the browser drops a stream when it seeks elsewhere
 
     def do_POST(self) -> None:
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or "{}")

@@ -34,6 +34,9 @@
 <script>
 let items = [], groups = [], position = 0, history = [], labeled = 0;
 let excluded = new Set(), hovered = null, zoom = null;
+// A label hashes the whole file on the server, seconds for a large video: keys wait for it, or
+// a second press would label the same item again and skip the next one.
+let busy = false;
 
 async function post(url, body) {
   const response = await fetch(url, {method: "POST", body: JSON.stringify(body)});
@@ -203,12 +206,18 @@ document.addEventListener("keydown", event => {
     else if (hovered !== null) openZoom(hovered);
     return;
   }
+  if (busy) return;
   let action = null;
   if (key === "k") action = label("keep");
   else if (key === "d") action = label("delete");
   else if (key === "u" || key === "backspace") action = undo();
   else if (key === "s" && position < groups.length) { position++; setStatus("skipped"); show(); }
-  if (action) action.catch(error => setStatus(`error: ${error.message}`, "delete"));
+  if (action) {
+    busy = true;
+    if (key === "k" || key === "d") setStatus("saving...");
+    action.catch(error => setStatus(`error: ${error.message}`, "delete"))
+      .finally(() => busy = false);
+  }
 });
 
 fetch("/api/queue").then(r => r.json()).then(queue => {

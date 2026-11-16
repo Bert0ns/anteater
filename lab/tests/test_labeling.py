@@ -268,9 +268,31 @@ def test_an_image_is_not_served_as_a_video(server):
     assert error.value.code == 404
 
 
-def test_a_video_label_records_its_hash_and_stratum(video_server):
+def test_a_video_label_records_its_hash_stratum_and_media_type(video_server):
     post(video_server, "/api/label", {"items": [0], "decision": "delete"})
 
     [label] = video_server.store.all()
     assert label.content_hash == content_hash(video_server.queue[0])
     assert label.stratum is Stratum.UNFLAGGED
+    assert label.media_type is MediaType.VIDEO
+
+
+def test_a_video_is_never_cached_since_another_session_reuses_its_number(video_server):
+    response = urllib.request.urlopen(f"http://127.0.0.1:{video_server.server_port}/video/0")
+
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_a_video_gone_from_the_disk_is_an_error_not_a_crash(tmp_path):
+    gone = MediaRef(tmp_path / "gone.mp4", 1, 0, MediaType.VIDEO)
+    with LabelStore(":memory:") as store:
+        server = LabelingServer([[gone]], store)
+        threading.Thread(target=server.serve_forever, args=(0.05,), daemon=True).start()
+        try:
+            with pytest.raises(urllib.error.HTTPError) as error:
+                get(server, "/video/0")
+            assert error.value.code == 404
+            assert json.loads(get(server, "/api/queue"))  # still serving
+        finally:
+            server.shutdown()
+            server.server_close()
