@@ -44,6 +44,7 @@
     <string name="scan_phase_number">Fase %1$d di %2$d</string>
     <string name="scan_phase_video_scan">Ricerca dei video</string>
     <string name="scan_phase_video_metadata">Lettura dei video</string>
+    <string name="scan_phase_video_groups">Ricerca dei video duplicati</string>
     <string name="scan_kind_images">Scansione delle foto</string>
     <string name="scan_kind_videos">Scansione dei video</string>
     <string name="scan_kind_both">Scansione di foto e video</string>
@@ -231,6 +232,20 @@
         <item quantity="many">%d di video non ancora analizzati</item>
     </plurals>
     <string name="videos_none_left">Non ci sono altri video da rivedere.</string>
+    <!-- A category of the Videos tab, and its review page (docs/design.md §8). -->
+    <string name="videos_category_needs_scan">Richiede Scansiona i video</string>
+    <plurals name="page_more_videos">
+        <item quantity="one">%1$d di %2$d video</item>
+        <item quantity="other">%1$d di %2$d video</item>
+        <item quantity="many">%1$d di %2$d di video</item>
+    </plurals>
+    <plurals name="page_last_videos">
+        <item quantity="one">L\'ultimo video</item>
+        <item quantity="other">Gli ultimi %2$d video</item>
+        <item quantity="many">Gli ultimi %2$d di video</item>
+    </plurals>
+    <string name="review_hint_videos">I video segnati vanno nel cestino.</string>
+    <string name="review_done_videos">Non ci sono altri video da controllare. Quelli saltati tornano quando riapri questa categoria.</string>
     <string name="videos_hint">Tocca un video per selezionarlo, tienilo premuto per vederlo a schermo intero. Nessun video è selezionato in anticipo.</string>
     <plurals name="videos_trash">
         <item quantity="one">Cestina %1$d video, %2$s</item>

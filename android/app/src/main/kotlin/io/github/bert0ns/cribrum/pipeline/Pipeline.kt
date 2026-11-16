@@ -84,6 +84,10 @@ val GROUP_DETECTOR_IDS: Set<String> = GROUP_DETECTORS.map { it.id }.toSet()
 val DETECTOR_CATEGORIES: Set<Category> =
     (DETECTORS.mapNotNull { it.category } + GROUP_DETECTORS.mapNotNull { it.category }).toSet()
 
+/** The categories that have a detector for videos: the ones the Videos tab lists (docs/design.md §8). */
+val VIDEO_DETECTOR_CATEGORIES: Set<Category> =
+    (DETECTORS.filter { MediaType.VIDEO in it.mediaTypes }.mapNotNull { it.category } + GROUP_DETECTORS.filter { MediaType.VIDEO in it.mediaTypes }.mapNotNull { it.category }).toSet()
+
 /** Images embedded at once: bounds the memory held by decoded pixels. */
 const val EMBEDDING_BATCH = 16
 
@@ -95,6 +99,9 @@ const val JPEG_TAG = "jpeg-status"
 
 /** The progress step of the video metadata, which runs only when the scan is asked to analyse videos. */
 const val VIDEO_METADATA_STEP = "video_metadata"
+
+/** The progress step of the group detectors on videos: one for them all, since the video scan numbers its phases and not its detectors. */
+const val VIDEO_GROUPS_STEP = "video_groups"
 
 /** The progress step of the embeddings and the detectors that read them, which run at once (docs/design.md §4). */
 const val CLASSIFY_STEP = "embedded_detectors"
@@ -267,7 +274,7 @@ class Pipeline(
 
         if (images) imageSteps(found, stats, progress)
         if (images && videos) imagesDone(counted(found, stats))
-        if (videos) videoSteps(stats, progress)
+        if (videos) videoSteps(found, stats, progress)
         counted(found, stats)
     }
 
@@ -313,12 +320,23 @@ class Pipeline(
         index.forgetAnalyses(stickers.map { it.path }, detectors.filterNot(::runsOnStickers).map { it.id })
         val embeddings = embedAndClassify(embeddable, stats, progress)
 
+        // Embeddings change what group detectors can see: a run with them is a different run.
+        val model = embedder?.let { "${it.id}:${it.version}:${embeddings.size}" }.orEmpty()
+        groupSteps(MediaType.IMAGE, found, embeddings, model, detectors.firstOrNull { it.category == Category.BLURRY }, stats, progress)
+    }
+
+    /**
+     * Runs the group detectors that accept [mediaType] on the files of that type, so a group never mixes images and videos.
+     * The image run and the video run each keep a fingerprint of their own, so neither runs the other's detectors again.
+     */
+    private suspend fun groupSteps(mediaType: MediaType, found: Set<String>, embeddings: Map<String, FloatArray>, model: String, blur: Detector?, stats: Stats, progress: Progress) {
+        val media = index.images().filter { it.path in found && it.mediaType == mediaType }
+        val video = mediaType == MediaType.VIDEO
         // The exact detector skips an image whose content hash fails: the run stores those paths with its fingerprint.
         val hashFailed = mutableSetOf<String>()
         // Read once: a query per image took seconds on a 10,000-image library.
         val perceptualHashes = index.perceptualHashes()
         val metadata = index.allMetadata()
-        val blur = detectors.firstOrNull { it.category == Category.BLURRY }
         val context = AnalysisContext(
             contentHash = {
                 try {
@@ -334,33 +352,35 @@ class Pipeline(
             // Burst ranks its shots by the measure blur stored, and decodes a shot again only when blur left none.
             sharpness = { storedSharpness(blur, it) ?: BlurDetector.peakVariance(it) },
         )
-        // Embeddings change what group detectors can see: a run with them is a different run.
-        val model = embedder?.let { "${it.id}:${it.version}:${embeddings.size}" }.orEmpty()
         // A hash that failed on an earlier run is a result a group detector lacked. An image whose metadata failed has none either (it gets no per-image
         // analysis), so when the next scan reads the metadata and the hash appears, this changes the fingerprint and is what puts the image back in its burst.
         val hashed = index.hashedPaths()
         // Burst reads blur's stored measure: a new blur version is new input, though no file changed.
         val blurInput = blur?.let { "${it.id}:${it.version}" }.orEmpty()
-        phase("groupDetectors", stats) {
+        phase(if (video) "videoGroups" else "groupDetectors", stats) {
             for (detector in groupDetectors) {
-                val inputs = media.filter { it.mediaType in detector.mediaTypes }
+                if (mediaType !in detector.mediaTypes) continue
+                val inputs = media
+                // The images keep the run they had, which a video run must not overwrite.
+                val runId = if (video) "${detector.id}:${mediaType.value}" else detector.id
+                val step = if (video) VIDEO_GROUPS_STEP else detector.id
                 val fingerprint = fingerprint(inputs, "$model:${inputs.count { it.path in hashed }}:$blurInput")
-                if (upToDate(detector, fingerprint, inputs)) {
+                if (upToDate(detector, runId, fingerprint, inputs)) {
                     stats.skippedGroupDetectors += detector.id
                     continue
                 }
                 stats.ranGroupDetectors += detector.id
-                progress(detector.id, 0, 1)
+                progress(step, 0, 1)
                 hashFailed.clear()
                 try {
                     val signals = traceSuspend("Group.${detector.id}.analyze") { detector.analyze(inputs, context) }
                     traceSuspend("Group.${detector.id}.store") {
                         // An image in two groups is rewritten by each of their detectors at every run, to keep its signals' order.
-                        stats.counts["${detector.id} rewritten"] = index.setGroupSignals(detector.id, detector.version, inputs.associate { it.path to signals[it].orEmpty() })
-                        index.setGroupFingerprint(detector.id, detector.version, fingerprint, hashFailed.sorted())
+                        stats.counts["$runId rewritten"] = index.setGroupSignals(detector.id, detector.version, inputs.associate { it.path to signals[it].orEmpty() })
+                        index.setGroupFingerprint(runId, detector.version, fingerprint, hashFailed.sorted())
                     }
                     stats.detectorRuns++
-                    progress(detector.id, 1, 1)
+                    progress(step, 1, 1)
                 } catch (error: Exception) {
                     if (error is CancellationException || error is MissingEmbedding) throw error
                     stats.failures += Failure("", detector.id, failureMessage(error))
@@ -369,12 +389,13 @@ class Pipeline(
         }
     }
 
-    /** The video steps, which only a run asked for videos takes: the metadata today. */
-    private suspend fun videoSteps(stats: Stats, progress: Progress) {
+    /** The video steps, which only a run asked for videos takes: the metadata, then the group detectors that accept videos. */
+    private suspend fun videoSteps(found: Set<String>, stats: Stats, progress: Progress) {
         val pending = index.withoutMetadata().filter { it.mediaType == MediaType.VIDEO }
         phase("videoMetadata", stats) {
             readAndStore(pending, VIDEO_METADATA_STEP, progress, read = { attempt { videoMetadataReader(it) } }) { batch -> storeVideoMetadata(batch, stats) }
         }
+        groupSteps(MediaType.VIDEO, found, emptyMap(), "", null, stats, progress)
     }
 
     /** The real images first: a sticker only delays them, since the home screen lists candidates as they are stored. */
@@ -717,9 +738,9 @@ class Pipeline(
      * The detector last ran on [images] as they are, and every content hash that failed in that run fails again.
      * Hashing only those again is what groups a file that has become readable, without a run on every scan.
      */
-    private suspend fun upToDate(detector: GroupDetector, fingerprint: String, images: List<MediaRef>): Boolean {
-        if (index.groupFingerprint(detector.id, detector.version) != fingerprint) return false
-        val failed = index.groupHashFailed(detector.id, detector.version).toSet()
+    private suspend fun upToDate(detector: GroupDetector, runId: String, fingerprint: String, images: List<MediaRef>): Boolean {
+        if (index.groupFingerprint(runId, detector.version) != fingerprint) return false
+        val failed = index.groupHashFailed(runId, detector.version).toSet()
         return images.filter { it.path in failed }.none { image ->
             try {
                 cachedContentHash(image)

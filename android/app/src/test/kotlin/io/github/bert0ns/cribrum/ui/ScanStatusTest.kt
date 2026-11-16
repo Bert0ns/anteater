@@ -68,12 +68,12 @@ class ScanStatusTest {
         compose.setContent { ScanStatus(progress, onScan = {}) }
 
         compose.onNodeWithText("Scan now").assertDoesNotExist()
-        compose.onNodeWithText("Video scan · Phase 1 of 2").assertExists()
+        compose.onNodeWithText("Video scan · Phase 1 of 3").assertExists()
         compose.onNodeWithText("Photos and videos found: 300 so far").assertExists()
 
         progress = ScanProgress(VIDEO_METADATA_STEP, 40, 1_400, kind = ScanKind.VIDEOS)
 
-        compose.onNodeWithText("Video scan · Phase 2 of 2").assertExists()
+        compose.onNodeWithText("Video scan · Phase 2 of 3").assertExists()
         compose.onNodeWithText("Reading the videos: 40 of 1400").assertExists()
         compose.onNodeWithText("Stop scanning").assertExists()
     }
@@ -84,7 +84,7 @@ class ScanStatusTest {
 
         compose.onNodeWithText("Scan now").assertDoesNotExist()
         compose.onNodeWithText("Video scan · Starting…").assertExists()
-        compose.onNodeWithText("Video scan · Phase 1 of 2").assertDoesNotExist()
+        compose.onNodeWithText("Video scan · Phase 1 of 3").assertDoesNotExist()
         compose.onNodeWithText("Stop scanning").assertExists()
     }
 
