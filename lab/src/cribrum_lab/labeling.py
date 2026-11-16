@@ -1,11 +1,14 @@
 """Keyboard-driven labeling tool: a local web page (docs/design.md, section 10, step 3).
 
-The server listens on 127.0.0.1 only and serves nothing but the images of its queue.
+The server listens on 127.0.0.1 only and serves nothing but the images and videos of its queue.
+A video is sent as it is, for the browser to play.
 """
 
 import io
 import json
+import mimetypes
 import random
+import re
 import threading
 from collections.abc import Mapping, Sequence
 from http import HTTPStatus
@@ -18,7 +21,7 @@ from PIL import Image, ImageOps
 
 from cribrum_lab import hashing
 from cribrum_lab.labels import Decision, Label, LabelStore, Stratum
-from cribrum_lab.model import Category, MediaRef
+from cribrum_lab.model import Category, MediaRef, MediaType
 from cribrum_lab.ranker import Candidate
 
 PREVIEW_SIDE = 1600
@@ -160,7 +163,10 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path == "/":
             self._send(_PAGE.read_bytes(), "text/html; charset=utf-8")
         elif self.path == "/api/queue":
-            items = [{"path": str(image.path)} for image in self.server.queue]
+            items = [
+                {"path": str(item.path), "video": item.media_type is MediaType.VIDEO}
+                for item in self.server.queue
+            ]
             self._json({"items": items, "groups": self.server.groups})
         elif self.path.startswith(("/image/", "/thumbnail/", "/original/")):
             kind, _, number = self.path[1:].partition("/")
@@ -172,8 +178,44 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send(preview(self.server.queue[item].path, side), "image/jpeg")
             except Exception as error:  # an undecodable file must not stop the session
                 self.send_error(HTTPStatus.UNPROCESSABLE_ENTITY, str(error))
+        elif self.path.startswith("/video/"):
+            item = self._item(self.path.removeprefix("/video/"))
+            if item is None:
+                return
+            if self.server.queue[item].media_type is not MediaType.VIDEO:
+                self.send_error(HTTPStatus.NOT_FOUND)
+                return
+            self._send_video(self.server.queue[item].path)
         else:
             self.send_error(HTTPStatus.NOT_FOUND)
+
+    def _send_video(self, path: Path) -> None:
+        """The whole file, or the byte range the browser asks for to seek."""
+        size = path.stat().st_size
+        start, end = 0, size - 1
+        asked = re.fullmatch(r"bytes=(\d+)-(\d*)", self.headers.get("Range", ""))
+        if asked:
+            start = int(asked[1])
+            end = min(int(asked[2]), size - 1) if asked[2] else size - 1
+            if start > end:
+                self.send_error(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                return
+        self.send_response(HTTPStatus.PARTIAL_CONTENT if asked else HTTPStatus.OK)
+        self.send_header("Content-Type", mimetypes.guess_type(path)[0] or "video/mp4")
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(end - start + 1))
+        if asked:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        self.end_headers()
+        with path.open("rb") as file:
+            file.seek(start)
+            left = end - start + 1
+            try:
+                while left and (chunk := file.read(min(left, 1 << 20))):
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
+            except ConnectionError:
+                pass  # the browser drops a stream when it seeks elsewhere
 
     def do_POST(self) -> None:
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or "{}")

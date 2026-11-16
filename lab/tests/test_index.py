@@ -326,6 +326,16 @@ def test_a_video_is_recorded_with_its_media_type_and_the_ranker_never_sees_it(in
     assert [i.ref for i in index.indexed_media()] == [PHOTO]
 
 
+def test_videos_are_listed_apart_for_labeling_and_evaluation(index):
+    index.record_all([PHOTO, VIDEO])
+    index.set_review_state(VIDEO.path, ReviewState.KEPT)
+
+    [video] = index.indexed_media(MediaType.VIDEO)
+
+    assert video.ref == VIDEO
+    assert video.review_state is ReviewState.KEPT
+
+
 def test_a_file_whose_media_type_changed_with_its_size_is_recorded_with_the_new_one(index):
     index.record(PHOTO)
     video = MediaRef(PHOTO.path, 900, 1, MediaType.VIDEO)

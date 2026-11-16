@@ -14,6 +14,7 @@ from cribrum_lab.index import ImageIndex
 from cribrum_lab.labeling import LabelingServer, clusters, sample, strata
 from cribrum_lab.labels import LabelStore
 from cribrum_lab.mobileclip import MobileClip
+from cribrum_lab.model import MediaType
 from cribrum_lab.ranker import Ranker
 
 DATA = Path(__file__).resolve().parents[2] / "data"
@@ -55,6 +56,7 @@ def main(argv: list[str] | None = None) -> None:
     label.add_argument(
         "--clusters", action="store_true", help="show similar images as grids labeled at once"
     )
+    label.add_argument("--videos", action="store_true", help="label videos instead of images")
     evaluate = commands.add_parser(
         "evaluate", help="recall on the labels, the sweep and the recall curve"
     )
@@ -72,7 +74,8 @@ def main(argv: list[str] | None = None) -> None:
         elif args.command == "report":
             _report(index, args.top)
         elif args.command == "label":
-            _label(index, args.labels, args.size, args.seed, args.port, args.clusters)
+            media_type = MediaType.VIDEO if args.videos else MediaType.IMAGE
+            _label(index, args.labels, args.size, args.seed, args.port, args.clusters, media_type)
         else:
             _evaluate(index, args.labels, args.out)
 
@@ -142,11 +145,19 @@ def _report(index: ImageIndex, top: int) -> None:
             print(f"  {score:.2f}  {candidate.image.ref.path}")
 
 
-def _label(index: ImageIndex, labels: Path, size: int, seed: int, port: int, grouped: bool) -> None:
+def _label(
+    index: ImageIndex,
+    labels: Path,
+    size: int,
+    seed: int,
+    port: int,
+    grouped: bool,
+    media_type: MediaType,
+) -> None:
     with LabelStore(labels) as store:
         done = {label.path for label in store.all()}
         exclude = done | set(index.unreadable())
-        ranked = Ranker().rank(index.indexed_media())
+        ranked = Ranker().rank(index.indexed_media(media_type))
         queue = sample(ranked, size, exclude, seed)
         groups = []
         if grouped:
@@ -154,7 +165,9 @@ def _label(index: ImageIndex, labels: Path, size: int, seed: int, port: int, gro
         in_groups = {image for group in groups for image in group}
         groups += [[image] for image in queue if image not in in_groups]
         server = LabelingServer(groups, store, port, strata(ranked))
-        print(f"{len(queue)} images to label at http://127.0.0.1:{server.server_port}/")
+        print(
+            f"{len(queue)} {media_type.value}s to label at http://127.0.0.1:{server.server_port}/"
+        )
         print(f"{len(done)} labeled so far, stored in {labels}. Ctrl-C to stop.")
         try:
             server.serve_forever()
@@ -165,8 +178,16 @@ def _label(index: ImageIndex, labels: Path, size: int, seed: int, port: int, gro
 
 
 def _evaluate(index: ImageIndex, labels: Path, out: Path | None) -> None:
+    """Images and videos apart: a video's recall must not hide in the images' (section 10)."""
     with LabelStore(labels) as store:
-        text = format_report(evaluate(index.indexed_media(), store.all()))
+        every = store.all()
+    videos = index.indexed_media(MediaType.VIDEO)
+    on_video = {video.ref.path for video in videos}
+    text = format_report(
+        evaluate(index.indexed_media(), [x for x in every if x.path not in on_video])
+    )
+    if video_labels := [x for x in every if x.path in on_video]:
+        text += "\n\nvideos\n" + format_report(evaluate(videos, video_labels))
     print(text)
     if out:
         out.write_text(text + "\n")
