@@ -44,7 +44,7 @@ from cribrum_lab.metadata import (
     read_metadata,
     read_video_metadata,
 )
-from cribrum_lab.model import Category, MediaRef, MediaType, ReviewState, Signal
+from cribrum_lab.model import Category, MediaRef, MediaType, Signal
 from cribrum_lab.sources import FilesystemMediaSource
 
 DETECTORS: list[Detector] = [
@@ -382,23 +382,16 @@ def _embed_frames(
     `frame_times` gives now, so a new rule samples every video again. A video whose frames fail
     is a failure, and the next run tries it again, as an image whose embedding fails."""
     stored = index.frame_embeddings(embedder.id, embedder.version)
-    unreadable = set(index.unreadable())
-    todo = []
-    for video in index.images():
-        if video.media_type is not MediaType.VIDEO or video.path in unreadable:
-            continue
-        meta = index.video_metadata(video.path)
-        # No metadata yet means its read failed: the next run reads it first.
-        if meta is None or index.review_state(video.path) is ReviewState.TRASHED:
-            continue
-        times = frame_times(meta.duration_ms)
-        if list(stored.get(video.path, {})) != times:
-            todo.append((video, times))
+    todo = [
+        (video, times)
+        for video, duration_ms in index.read_videos()
+        if list(stored.get(video.path, {})) != (times := frame_times(duration_ms))
+    ]
     for done, ((video, times), pixels) in enumerate(
         zip(todo, _map(_frame_pixels, todo, jobs), strict=True), 1
     ):
         if isinstance(pixels, str):
-            stats.failures.append(f"{video.path}: frames: {pixels}")
+            stats.failures.append(f"{video.path}: video_frames: {pixels}")
         else:
             vectors = embedder.embed_pixels(np.stack(pixels))
             index.set_frame_embeddings(

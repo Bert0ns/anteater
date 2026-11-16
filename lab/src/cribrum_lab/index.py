@@ -322,6 +322,16 @@ class ImageIndex:
             instant,
         )
 
+    def read_videos(self) -> list[tuple[MediaRef, int | None]]:
+        """The videos whose metadata was read, readable and out of the trash, with their
+        duration: the ones the frames step samples."""
+        rows = self._db.execute(
+            """SELECT path, size, mtime_ns, media_type, duration_ms FROM images
+               WHERE media_type = 'video' AND width IS NOT NULL AND NOT unreadable
+               AND review_state != 'trashed' ORDER BY path"""
+        )
+        return [(_ref(*row), duration_ms) for *row, duration_ms in rows]
+
     def set_content_hash(self, path: Path, digest: str) -> None:
         with self._db:
             updated = self._db.execute(

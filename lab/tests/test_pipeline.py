@@ -1146,7 +1146,7 @@ def test_a_video_whose_frames_fail_is_a_failure_and_is_tried_again(videos, index
     monkeypatch.undo()
     run()
 
-    assert [f.split(": ")[1] for f in stats.failures] == ["frames"]
+    assert [f.split(": ")[1] for f in stats.failures] == ["video_frames"]
     assert videos / "clip.mp4" in index.frame_embeddings(embedder.id, embedder.version)
 
 

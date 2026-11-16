@@ -160,6 +160,21 @@ def test_embeddings_are_stored_per_model_version(index):
     assert index.embeddings("clip", 1) == {}
 
 
+def test_read_videos_are_the_readable_ones_with_metadata_out_of_the_trash(index):
+    waiting, unreadable, trashed = (
+        MediaRef(Path(f"/videos/{name}.mp4"), 5, 5, MediaType.VIDEO)
+        for name in ("waiting", "unreadable", "trashed")
+    )
+    for video in (VIDEO, waiting, unreadable, trashed, PHOTO):
+        index.record(video)
+    for video in (VIDEO, trashed):
+        index.set_video_metadata(video.path, VIDEO_META)
+    index.set_unreadable(unreadable.path)
+    index.set_review_state(trashed.path, ReviewState.TRASHED)
+
+    assert index.read_videos() == [(VIDEO, 12_345)]
+
+
 def test_frame_embeddings_are_stored_per_video_time_and_model_version(index):
     index.record(VIDEO)
     first, last = np.array([1, 0], np.float32), np.array([0, 1], np.float32)
