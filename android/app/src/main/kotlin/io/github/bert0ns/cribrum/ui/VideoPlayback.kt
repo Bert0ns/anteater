@@ -260,13 +260,16 @@ private fun VideoSurface(playback: VideoPlayback) {
 /**
  * What drives the video of the full size view's bar: play or pause, a seek bar with the position and the length, the sound,
  * and a strip of [STRIP_FRAMES] frames across the length that a tap jumps to. [durationMs] is the length the index or the
- * file gave, used until the player has read it. A video that is [unreadable] has none of it.
+ * file gave. The strip uses it whenever it is known and takes the player's only when it is not, since a time is part of a
+ * frame's request, and a few ms between two parsers would otherwise redecode all five frames as the video starts. The seek
+ * bar uses the player's length once it has read it. A video that is [unreadable] has none of it.
  */
 @Composable
 internal fun VideoControls(playback: VideoPlayback, file: File, section: String, durationMs: Long?, unreadable: Boolean) {
     if (unreadable) return
     val here = playback.loaded == file.path
     val total = (if (here && playback.durationMs > 0) playback.durationMs else durationMs) ?: 0
+    val stripLength = durationMs?.takeIf { it > 0 } ?: total
     val position = if (here) playback.positionMs.coerceAtMost(total) else 0
     LaunchedEffect(playback.playing, here) {
         while (here && playback.playing) {
@@ -304,9 +307,9 @@ internal fun VideoControls(playback: VideoPlayback, file: File, section: String,
                 Icon(if (playback.muted) SoundOff else SoundOn, stringResource(if (playback.muted) R.string.video_unmute else R.string.video_mute), tint = Color.White)
             }
         }
-        if (total > 0) {
+        if (stripLength > 0) {
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                for (ms in stripTimes(total)) {
+                for (ms in stripTimes(stripLength)) {
                     val label = stringResource(R.string.video_go_to, formatLength(ms))
                     VideoFrame(
                         file,

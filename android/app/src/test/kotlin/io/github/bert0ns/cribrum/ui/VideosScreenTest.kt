@@ -8,6 +8,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
@@ -50,7 +52,7 @@ class VideosScreenTest {
     /** The screen with a selection of its own, and what it was asked to apply. */
     private class Applied(var paths: Set<String>? = null, var trash: Boolean? = null)
 
-    private val players = Players()
+    private var players = Players()
 
     private fun show(items: List<VideoItem>, applied: Applied = Applied()) {
         compose.setContent {
@@ -187,6 +189,22 @@ class VideosScreenTest {
 
         assertEquals(30_500, players.made.single().positionMs)
         assertTrue(players.made.single().playing)
+    }
+
+    @Test
+    fun `the strip keeps its frames when the player reads another length than the index did`() {
+        players = Players(lengthMs = 59_000) // the index says 61,000
+        show(videos)
+        openFullSize("middle.mp4")
+        fun labels() = compose.onAllNodesWithContentDescription("Go to", substring = true).fetchSemanticsNodes().map { it.config.getOrNull(SemanticsProperties.ContentDescription)?.single() }
+        val before = labels()
+
+        play()
+        compose.waitForIdle()
+
+        assertEquals(listOf("Go to 00:06", "Go to 00:18", "Go to 00:30", "Go to 00:42", "Go to 00:54"), before)
+        assertEquals(before, labels())
+        compose.onNodeWithText("00:00 / 00:59").assertExists() // the seek bar has the player's length
     }
 
     @Test
