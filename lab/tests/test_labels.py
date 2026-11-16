@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from cribrum_lab.labels import Decision, Label, LabelStore, Stratum
+from cribrum_lab.model import MediaType
 
 
 @pytest.fixture
@@ -91,3 +92,21 @@ def test_labels_from_before_strata_get_the_column_and_no_stratum(tmp_path):
     assert new.stratum is Stratum.CANDIDATE
     with LabelStore(database) as again:  # opening a migrated file again is fine
         assert len(again.all()) == 2
+
+
+def test_a_label_keeps_its_media_type_and_older_labels_are_images(tmp_path):
+    database = tmp_path / "labels.sqlite"
+    with sqlite3.connect(database) as db:
+        db.execute(
+            "CREATE TABLE labels (content_hash TEXT PRIMARY KEY, path TEXT NOT NULL, "
+            "decision TEXT NOT NULL, labeled_at TEXT NOT NULL, stratum TEXT)"
+        )
+        db.execute("INSERT INTO labels VALUES ('aa', '/a.jpg', 'keep', '2026-10-19', NULL)")
+    db.close()
+
+    with LabelStore(database) as store:
+        store.set(Label("bb", Path("/v.mp4"), Decision.DELETE, media_type=MediaType.VIDEO))
+        old, new = store.all()
+
+    assert old.media_type is MediaType.IMAGE
+    assert new.media_type is MediaType.VIDEO

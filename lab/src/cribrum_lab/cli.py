@@ -160,7 +160,7 @@ def _label(
         ranked = Ranker().rank(index.indexed_media(media_type))
         queue = sample(ranked, size, exclude, seed)
         groups = []
-        if grouped:
+        if grouped and media_type is MediaType.IMAGE:  # no grid shows a video
             groups = clusters(queue, index.embeddings(MobileClip.id, MobileClip.version))
         in_groups = {image for group in groups for image in group}
         groups += [[image] for image in queue if image not in in_groups]
@@ -181,13 +181,13 @@ def _evaluate(index: ImageIndex, labels: Path, out: Path | None) -> None:
     """Images and videos apart: a video's recall must not hide in the images' (section 10)."""
     with LabelStore(labels) as store:
         every = store.all()
-    videos = index.indexed_media(MediaType.VIDEO)
-    on_video = {video.ref.path for video in videos}
     text = format_report(
-        evaluate(index.indexed_media(), [x for x in every if x.path not in on_video])
+        evaluate(index.indexed_media(), [x for x in every if x.media_type is MediaType.IMAGE])
     )
-    if video_labels := [x for x in every if x.path in on_video]:
-        text += "\n\nvideos\n" + format_report(evaluate(videos, video_labels))
+    if videos := [x for x in every if x.media_type is MediaType.VIDEO]:
+        text += "\n\nvideos\n" + format_report(
+            evaluate(index.indexed_media(MediaType.VIDEO), videos)
+        )
     print(text)
     if out:
         out.write_text(text + "\n")
