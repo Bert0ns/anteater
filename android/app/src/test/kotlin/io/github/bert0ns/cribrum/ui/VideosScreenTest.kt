@@ -17,6 +17,7 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -142,17 +143,35 @@ class VideosScreenTest {
     }
 
     @Test
-    fun `a tap on the video pauses it, and the play button comes back`() {
+    fun `a tap on the picture pauses the video and plays it again, and does not close the view`() {
         show(videos)
         openFullSize("middle.mp4")
         play()
         compose.waitForIdle()
 
-        compose.onNodeWithContentDescription("Pause video").performClick()
+        compose.onNodeWithTag("fullSize").performTouchInput { click() }
         compose.waitForIdle()
 
         assertFalse(players.made.single().playing)
+        compose.onNodeWithTag("fullSize").assertExists()
         compose.onAllNodesWithContentDescription("Play video").assertCountEquals(2) // the page's and the bar's
+
+        compose.onNodeWithTag("fullSize").performTouchInput { click() }
+        compose.waitForIdle()
+
+        assertTrue(players.made.single().playing)
+    }
+
+    @Test
+    fun `a tap on the placeholder of a video that cannot be read closes the view`() {
+        show(listOf(clip("broken.mp4", 700_000_000, durationMs = null, unreadable = true)))
+        openFullSize("broken.mp4")
+
+        compose.onNode(tapSays("Close")).assertExists()
+        compose.onNodeWithTag("fullSize").performTouchInput { click() }
+        compose.waitForIdle()
+
+        compose.onNodeWithTag("fullSize").assertDoesNotExist()
     }
 
     /** The surface the video draws on, which lives in the full size dialog's window. */
