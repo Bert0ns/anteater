@@ -9,6 +9,7 @@ Most of the code in this repository is written by AI coding agents. Read this fi
 - Never commit image data or anything derived from personal images (embeddings, thumbnails, label files). Keep it under `lab/data/`, which is ignored by git.
 - Never write code that deletes files without going through the trash abstraction.
 - Every new user-facing string in `android/` needs its Italian translation in `values-it/strings.xml` in the same change, or `lintDebug` fails. Code, docs, commits and issues stay in English.
+- Prefer `adb.exe` over `adb` when connecting to the phone, where available, since it is faster.
 
 ## Architecture rules
 
