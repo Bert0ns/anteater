@@ -987,3 +987,93 @@ def test_a_file_with_no_video_track_leaves_the_index_and_is_not_sniffed_again(vi
     assert audio in {f.path for f in index.not_images()}
     assert (stats.no_video_track, stats.forgotten) == (1, 0)  # still on disk, so not gone
     assert again.new_or_changed == 0
+
+
+def duplicate_clip(videos):
+    copy = videos / "copy.mp4"
+    shutil.copy(videos / "clip.mp4", copy)
+    return copy
+
+
+def exact_groups(index):
+    """The paths of each group the exact duplicate detector stored, by the group's id."""
+    groups = {}
+    for image in index.images():
+        for signal in index.signals(image.path):
+            if signal.category is Category.EXACT_DUPLICATE:
+                groups.setdefault(signal.evidence["group"], set()).add(image.path)
+    return list(groups.values())
+
+
+def test_a_run_for_videos_alone_groups_identical_videos_and_leaves_the_images(videos, index):
+    copy = duplicate_clip(videos)
+    steps = []
+
+    stats = pipeline.run(
+        videos.parent.parent,
+        index,
+        group_detectors=[pipeline.ExactDuplicateDetector()],
+        detectors=[],
+        images=False,
+        videos=True,
+        progress=lambda step, done, total: steps.append(step),
+    )
+
+    assert exact_groups(index) == [{videos / "clip.mp4", copy}]
+    assert steps.index("video_groups") > steps.index("video_metadata")
+    assert stats.failures == []
+
+
+def test_a_normal_run_hashes_no_video_and_a_video_run_hashes_no_image(videos, index, monkeypatch):
+    duplicate_clip(videos)
+    hashed = []
+    content_hash = pipeline.hashing.content_hash
+    monkeypatch.setattr(
+        pipeline.hashing, "content_hash", lambda image: hashed.append(image) or content_hash(image)
+    )
+    exact = [pipeline.ExactDuplicateDetector()]
+    root = videos.parent.parent
+
+    pipeline.run(root, index, detectors=[], group_detectors=exact)
+    assert {i.media_type for i in hashed} == {MediaType.IMAGE}
+    assert exact_groups(index) == [{root / "DCIM/Camera/a.png", root / "WhatsApp/Media/a-copy.png"}]
+
+    hashed.clear()
+    pipeline.run(root, index, detectors=[], group_detectors=exact, images=False, videos=True)
+    assert {i.media_type for i in hashed} == {MediaType.VIDEO}
+    assert len(exact_groups(index)) == 2  # the images' group is still there
+
+
+def test_the_image_run_and_the_video_run_of_a_group_detector_do_not_rerun_each_other(videos, index):
+    duplicate_clip(videos)
+    exact = [pipeline.ExactDuplicateDetector()]
+    root = videos.parent.parent
+    pipeline.run(root, index, detectors=[], group_detectors=exact)
+    pipeline.run(root, index, detectors=[], group_detectors=exact, images=False, videos=True)
+    steps = []
+
+    for kwargs in ({}, {"images": False, "videos": True}):
+        pipeline.run(
+            root,
+            index,
+            detectors=[],
+            group_detectors=exact,
+            progress=lambda step, done, total: steps.append(step),
+            **kwargs,
+        )
+
+    assert "exact_duplicate" not in steps  # nothing changed, so neither run has work
+
+
+def test_a_new_copy_of_a_video_groups_it_at_the_next_video_run_only(videos, index):
+    exact = [pipeline.ExactDuplicateDetector()]
+    root = videos.parent.parent
+    pipeline.run(root, index, detectors=[], group_detectors=exact, images=False, videos=True)
+    assert exact_groups(index) == []
+
+    copy = duplicate_clip(videos)
+    pipeline.run(root, index, detectors=[], group_detectors=exact)
+    assert [g for g in exact_groups(index) if copy in g] == []
+    pipeline.run(root, index, detectors=[], group_detectors=exact, images=False, videos=True)
+
+    assert [g for g in exact_groups(index) if copy in g] == [{videos / "clip.mp4", copy}]

@@ -77,6 +77,9 @@ def runs_on_stickers(detector: Detector) -> bool:
 Progress = Callable[[str, int, int], None]
 """Called with a step name, the items done and the items in total."""
 
+VIDEO_GROUPS_STEP = "video_groups"
+"""The step of the group detectors on videos, one for them all as in the app."""
+
 EMBEDDING_CHUNK = 256
 """Images decoded per round before the model runs: bounds the memory held by decoded pixels."""
 EMBEDDING_BATCH = 32
@@ -174,6 +177,7 @@ def run(
         _image_steps(found, index, detectors, group_detectors, embedder, jobs, stats, progress)
     if videos:
         _video_steps(index, stats, progress, zone)
+        _group_steps(MediaType.VIDEO, found, index, group_detectors, (), None, {}, stats, progress)
     media = [i for i in index.images() if i.path in found]
     stats.images = sum(i.media_type is MediaType.IMAGE for i in media)
     stats.videos = len(media) - stats.images
@@ -250,6 +254,34 @@ def _image_steps(
         before_embeddings=False,
     )
 
+    _group_steps(
+        MediaType.IMAGE,
+        found,
+        index,
+        group_detectors,
+        detectors,
+        embedder,
+        embeddings,
+        stats,
+        progress,
+    )
+
+
+def _group_steps(
+    media_type: MediaType,
+    found: set[Path],
+    index: ImageIndex,
+    group_detectors: Sequence[GroupDetector],
+    detectors: Sequence[Detector],
+    embedder: Embedder | None,
+    embeddings: dict[Path, np.ndarray],
+    stats: Stats,
+    progress: Progress,
+) -> None:
+    """Runs the group detectors that accept `media_type` on the files of that type, so a group
+    never mixes images and videos, and an image run and a video run each keep their own
+    fingerprint: neither runs the other's detectors again."""
+    inputs = [i for i in index.images() if i.path in found and i.media_type is media_type]
     # The exact detector skips an image whose content hash fails: the run stores those paths
     # with its fingerprint.
     hash_failed: set[str] = set()
@@ -286,26 +318,31 @@ def _image_steps(
     # Burst reads blur's stored measure: a new blur version is new input, though no file changed.
     blur_input = f"{blur_detector.id}:{blur_detector.version}" if blur_detector else ""
     for detector in group_detectors:
-        inputs = [i for i in media if i.media_type in accepted_media_types(detector)]
+        if media_type not in accepted_media_types(detector):
+            continue
+        # The images keep the run they had, which a video run must not overwrite.
+        images = media_type is MediaType.IMAGE
+        run_id = detector.id if images else f"{detector.id}:{media_type.value}"
+        step = detector.id if images else VIDEO_GROUPS_STEP
         fingerprint = _fingerprint(
             inputs, f"{model}:{sum(i.path in hashed for i in inputs)}:{blur_input}"
         )
         # Hashing again only what failed in the last run groups a file that has become
         # readable, without a run on every scan.
-        failed = set(index.group_hash_failed(detector.id, detector.version))
-        if index.group_fingerprint(detector.id, detector.version) == fingerprint and not any(
+        failed = set(index.group_hash_failed(run_id, detector.version))
+        if index.group_fingerprint(run_id, detector.version) == fingerprint and not any(
             hashes(i) for i in inputs if str(i.path) in failed
         ):
             continue
-        progress(detector.id, 0, 1)
+        progress(step, 0, 1)
         hash_failed.clear()
         signals = detector.analyze(inputs, context)
         index.set_signals_of_many(
             detector.id, detector.version, {i.path: signals.get(i, []) for i in inputs}
         )
-        index.set_group_fingerprint(detector.id, detector.version, fingerprint, sorted(hash_failed))
+        index.set_group_fingerprint(run_id, detector.version, fingerprint, sorted(hash_failed))
         stats.detector_runs += 1
-        progress(detector.id, 1, 1)
+        progress(step, 1, 1)
 
 
 def _video_steps(index: ImageIndex, stats: Stats, progress: Progress, zone: tzinfo | None) -> None:
