@@ -1,15 +1,18 @@
 from pathlib import Path
 
 from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, AnalysisContext, Role
+from cribrum_lab.detectors.base import accepted_media_types
 from cribrum_lab.detectors.exact_duplicate import ExactDuplicateDetector
-from cribrum_lab.model import Category, MediaRef
+from cribrum_lab.model import Category, MediaRef, MediaType
 
 
-def write(root: Path, name: str, content: bytes) -> MediaRef:
+def write(
+    root: Path, name: str, content: bytes, media_type: MediaType = MediaType.IMAGE
+) -> MediaRef:
     path = root / name
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content)
-    return MediaRef(path, len(content), 0)
+    return MediaRef(path, len(content), 0, media_type)
 
 
 def run(images, context=None):
@@ -82,3 +85,47 @@ def test_file_gone_since_the_scan_is_skipped(tmp_path):
     gone.path.unlink()
 
     assert set(run([a, b, gone])) == {a, b}
+
+
+def test_the_detector_accepts_images_and_videos():
+    assert accepted_media_types(ExactDuplicateDetector()) == {MediaType.IMAGE, MediaType.VIDEO}
+
+
+def test_identical_videos_form_a_group_with_the_camera_copy_as_the_best(tmp_path):
+    video = MediaType.VIDEO
+    camera = write(tmp_path, "DCIM/Camera/a.mp4", b"clip", video)
+    sent = write(tmp_path, "WhatsApp/Media/WhatsApp Video/Sent/b.mp4", b"clip", video)
+
+    signals = run([sent, camera])
+
+    assert signals[camera][0].evidence[ROLE_KEY] == Role.BEST
+    assert signals[sent][0].evidence[ROLE_KEY] == Role.INFERIOR
+    assert signals[sent][0].evidence[GROUP_KEY] == signals[camera][0].evidence[GROUP_KEY]
+
+
+def test_two_videos_of_one_size_with_different_content_are_not_duplicates(tmp_path):
+    a = write(tmp_path, "a.mp4", b"aaaa", MediaType.VIDEO)
+    b = write(tmp_path, "b.mp4", b"bbbb", MediaType.VIDEO)
+
+    assert run([a, b]) == {}
+
+
+def test_a_video_is_never_grouped_with_an_image(tmp_path):
+    photo = write(tmp_path, "a.jpg", b"same bytes")
+    clip = write(tmp_path, "b.mp4", b"same bytes", MediaType.VIDEO)
+    hashed = []
+
+    def content_hash(image):
+        hashed.append(image)
+        return "same"
+
+    assert run([photo, clip], AnalysisContext(content_hash=content_hash)) == {}
+    assert hashed == []  # alone in its type and size, neither is read
+
+
+def test_a_video_beside_a_pair_of_images_of_its_size_stays_out_of_their_group(tmp_path):
+    one = write(tmp_path, "a.jpg", b"same bytes")
+    two = write(tmp_path, "b.jpg", b"same bytes")
+    clip = write(tmp_path, "c.mp4", b"same bytes", MediaType.VIDEO)
+
+    assert set(run([one, two, clip])) == {one, two}

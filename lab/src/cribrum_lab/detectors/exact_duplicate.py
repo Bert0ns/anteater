@@ -5,22 +5,24 @@ from collections.abc import Sequence
 
 from cribrum_lab.detectors.base import AnalysisContext, Role
 from cribrum_lab.folders import is_camera_folder, is_messaging_folder
-from cribrum_lab.model import GROUP_KEY, ROLE_KEY, Category, MediaRef, Signal
+from cribrum_lab.model import GROUP_KEY, ROLE_KEY, Category, MediaRef, MediaType, Signal
 
 
 class ExactDuplicateDetector:
-    """Groups files by size first, and hashes only the ones that share a size."""
+    """Groups files by type and size first, and hashes only the ones that share both, so a video
+    with no twin is never read and a group never mixes images and videos."""
 
     id = "exact_duplicate"
     version = 1
     category = Category.EXACT_DUPLICATE
+    media_types = frozenset({MediaType.IMAGE, MediaType.VIDEO})
 
     def analyze(
         self, images: Sequence[MediaRef], context: AnalysisContext
     ) -> dict[MediaRef, list[Signal]]:
         by_size = defaultdict(list)
         for image in images:
-            by_size[image.size].append(image)
+            by_size[image.media_type, image.size].append(image)
         by_hash = defaultdict(list)
         for same_size in by_size.values():
             if len(same_size) < 2:
