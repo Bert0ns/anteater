@@ -1126,6 +1126,16 @@ def test_frames_already_embedded_at_the_times_wanted_are_not_read_again(videos, 
     video_scan(videos, index)
 
 
+def test_an_hdr_video_keeps_one_frame_a_keyframe_and_is_not_read_again(videos, index, monkeypatch):
+    shutil.copy(VIDEOS / "hlg.mp4", videos / "hlg.mp4")  # one keyframe, at its start
+    video_scan(videos, index)
+    monkeypatch.setattr(pipeline, "read_frames", lambda *_: pytest.fail("read the frames again"))
+
+    video_scan(videos, index)
+
+    assert sampled(index)["hlg.mp4"] == [300]
+
+
 def test_frames_stored_at_other_times_are_sampled_again(videos, index):
     embedder = MeanColorEmbedder()
     pipeline.run(videos.parent.parent, index, detectors=[], group_detectors=[], videos=True)

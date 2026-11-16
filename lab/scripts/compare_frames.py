@@ -41,13 +41,14 @@ def main() -> None:
     phone = phone_frames(args.log.read_text(errors="replace"))
     if not phone:
         raise SystemExit(f"{args.log}: no frame lines of VideoFramesDeviceTest")
-    times = sorted(phone)
-    images = list(frames.read_frames(args.video, times))
+    taken = dict(frames.read_frames(args.video, sorted(phone)))
+    if missing := sorted(phone.keys() - taken.keys()):
+        print(f"the phone kept frames at {missing} ms, which the lab's keyframes do not")
     vectors = mobileclip.MobileClip().embed_pixels(
-        np.stack([mobileclip.model_input(image) for image in images])
+        np.stack([mobileclip.model_input(image) for image in taken.values()])
     )
     print("time ms  cosine   phone mean RGB      lab mean RGB        phone clip  lab clip")
-    for time_ms, image, vector in zip(times, images, vectors, strict=True):
+    for (time_ms, image), vector in zip(taken.items(), vectors, strict=True):
         mean, clipped, phone_vector = phone[time_ms]
         lab_mean, lab_clipped = frames.brightness(image)
         print(

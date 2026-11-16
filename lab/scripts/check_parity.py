@@ -21,8 +21,9 @@ ANDROID = ROOT / "android/app/src/main/kotlin/io/github/bert0ns/cribrum"
 
 LAB_ONLY: set[str] = set()
 """Ids of detectors the lab has and the app does not yet. Empty when they are all ported."""
-ONE_SIDED = {"near_duplicate.CHUNK", "near_duplicate.ROWS_PER_TASK"}
-"""Constants only one side defines, such as a chunk size that bounds the lab's memory."""
+ONE_SIDED = {"near_duplicate.CHUNK", "near_duplicate.ROWS_PER_TASK", "frames.HDR_GAIN"}
+"""Constants only one side defines, such as a chunk size that bounds the lab's memory, or the lab's
+HDR tone mapping, which copies the one the phone's platform does."""
 
 NUMBER = r"(-?\d+(?:\.\d+)?)"
 LAB_ID = re.compile(r'^\s+id = "(\w+)"', re.M)

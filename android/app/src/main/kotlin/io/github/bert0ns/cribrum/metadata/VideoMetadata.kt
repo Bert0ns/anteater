@@ -40,7 +40,8 @@ class UnreadableVideo(file: File, cause: Throwable? = null) : IOException(file.p
 /** What MediaMetadataRetriever writes for a date: the MP4 creation time, in UTC. */
 private val RETRIEVER_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss.SSS'Z'")
 
-private val HDR_TRANSFERS = setOf(MediaFormat.COLOR_TRANSFER_ST2084, MediaFormat.COLOR_TRANSFER_HLG)
+/** The transfers a video is HDR with: PQ and HLG. */
+internal val HDR_TRANSFERS = setOf(MediaFormat.COLOR_TRANSFER_ST2084, MediaFormat.COLOR_TRANSFER_HLG)
 
 /** The capture time goes to [zone], the phone's own by default (docs/design.md §7). */
 fun readVideoMetadata(file: File, zone: ZoneId = ZoneId.systemDefault()): VideoMetadata {

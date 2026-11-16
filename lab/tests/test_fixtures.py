@@ -65,9 +65,18 @@ FRAMES = json.loads((fixtures.VIDEOS / "frames.json").read_text())
 def test_the_frame_fixtures_cover_every_video_the_lab_reads_at_the_times_of_the_rule():
     videos = json.loads((fixtures.VIDEOS / "expected.json").read_text())["videos"]
 
-    assert {name: entry["times_ms"] for name, entry in FRAMES["videos"].items()} == {
-        name: frame_times(video["duration_ms"]) for name, video in videos.items()
-    }
+    assert FRAMES["videos"].keys() == videos.keys()
+    for name, entry in FRAMES["videos"].items():
+        times = frame_times(videos[name]["duration_ms"])
+        if entry["hdr"]:  # one frame a keyframe, under the first time that took it
+            assert entry["times_ms"] == sorted(set(entry["times_ms"]) & set(times)), name
+        else:
+            assert entry["times_ms"] == times, name
+
+
+def test_the_hdr_fixtures_give_their_only_keyframe_once():
+    for name in ("hdr.mp4", "hlg.mp4"):
+        assert FRAMES["videos"][name]["times_ms"] == [300], name
 
 
 @pytest.mark.skipif(not HAS_MODEL, reason="MobileCLIP files not downloaded into lab/data/models")

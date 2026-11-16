@@ -131,6 +131,9 @@ def main() -> None:
         },
         # The phone reads these or marks them unreadable, and never drops them.
         "phone_may_not_read": ["prores.mov"],
+        # The phone reads their metadata but may give no frames of them, which marks their frames
+        # unreadable: clip.webm has no exact frame and a plain green keyframe on the phone (#424).
+        "phone_frames_may_not_read": ["clip.webm"],
         # A container that counts no frames: each side gives the rate it declares, if any, so the
         # phone's may differ from the lab's (docs/design.md, section 4).
         "frame_rate_may_differ": ["clip.webm"],

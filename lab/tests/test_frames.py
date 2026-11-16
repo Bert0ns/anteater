@@ -48,14 +48,59 @@ def test_each_time_gets_the_frame_closest_to_it(tmp_path):
 
     frames = list(read_frames(video, [0, 240, 1260, 1530, 2900, 5000]))
 
-    assert [index_of(f) for f in frames] == [0, 2, 13, 15, 29, 29]  # past the end: the last
-    assert all(f.size == (64, 48) and f.mode == "RGB" for f in frames)
+    assert [(t, index_of(f)) for t, f in frames] == [
+        (0, 0), (240, 2), (1260, 13), (1530, 15), (2900, 29), (5000, 29)  # past the end: the last
+    ]  # fmt: skip
+    assert all(f.size == (64, 48) and f.mode == "RGB" for _, f in frames)
+
+
+def hlg_ramp(path):
+    """ramp's frames in 10-bit HEVC tagged HLG, with a keyframe every 10 frames: 0, 1 and 2 s."""
+    with av.open(str(path), "w") as container:
+        stream = container.add_stream("libx265", rate=10)
+        stream.width, stream.height, stream.pix_fmt = 64, 48, "yuv420p10le"
+        stream.codec_context.color_trc = 18  # HLG
+        stream.codec_context.color_primaries = stream.codec_context.colorspace = 9  # BT.2020
+        stream.options = {"x265-params": "keyint=10:min-keyint=10:scenecut=0:log-level=error"}
+        for i in range(30):
+            rgb = np.full((48, 64, 3), 8 * i * 257, np.uint16)
+            frame = av.VideoFrame.from_ndarray(rgb, "rgb48le").reformat(format="yuv420p10le")
+            container.mux(stream.encode(frame))
+        container.mux(stream.encode())
+    return path
+
+
+def test_an_hdr_video_takes_the_keyframe_nearest_each_time_once(tmp_path):
+    video = hlg_ramp(tmp_path / "hlg.mp4")  # keyframes at frames 0, 10 and 20
+
+    frames = list(read_frames(video, [300, 400, 700, 1400, 1600]))
+
+    # 300 and 400 land on frame 0, 700 and 1400 on frame 10, 1600 on frame 20: each keyframe
+    # once, under the first time that took it.
+    signal = [np.asarray(f).mean() for _, f in frames]
+    assert [t for t, _ in frames] == [300, 700, 1600]
+    assert signal == sorted(signal) and len(set(signal)) == 3
+
+
+def test_an_hdr_video_snaps_to_a_frame_then_to_its_keyframe_and_a_tie_goes_later(tmp_path):
+    # As AOSP's MP4 extractor does for SEEK_CLOSEST_SYNC: the frame nearest the time, a tie to
+    # the later one, then the keyframe nearest that frame, a tie to the later one again.
+    video = hlg_ramp(tmp_path / "hlg.mp4")  # keyframes at frames 0, 10 and 20
+    keyframe = {k: np.asarray(f) for k in (0, 1000, 2000) for _, f in read_frames(video, [k])}
+
+    frames = list(read_frames(video, [500, 1495, 2900]))
+
+    # 500 is a tie between 0 and 1000. 1495 snaps to the frame at 1500, a tie between 1000 and
+    # 2000. 2900, past the last keyframe, takes it, and it is already taken.
+    assert [t for t, _ in frames] == [500, 1495]
+    np.testing.assert_array_equal(np.asarray(frames[0][1]), keyframe[1000])
+    np.testing.assert_array_equal(np.asarray(frames[1][1]), keyframe[2000])
 
 
 def test_a_portrait_clip_comes_upright():
     # Coded 64 x 48, turned by its display matrix. Turned counterclockwise, as FFmpeg's own
     # autorotate shows it: checked by hand against `ffmpeg -i rotated.mp4`.
-    (frame,) = read_frames(FIXTURES / "rotated.mp4", [500])
+    ((_, frame),) = read_frames(FIXTURES / "rotated.mp4", [500])
 
     assert frame.size == (48, 64)
 
@@ -78,16 +123,20 @@ def hdr_gray(path, signal, transfer):
     return path
 
 
-@pytest.mark.parametrize("transfer, reference_white", [(18, 0.75), (16, 0.58)], ids=["hlg", "pq"])
-def test_an_hdr_frame_is_tone_mapped_with_its_reference_white_at_sdr_white(
-    tmp_path, transfer, reference_white
-):
-    # BT.2408: HDR reference white, 203 cd/m2, is 75% of the HLG signal and 58% of the PQ one.
-    video = hdr_gray(tmp_path / "gray.mkv", reference_white, transfer)
+@pytest.mark.parametrize(
+    "transfer, signal, gray",
+    [(18, 0.5, 77), (18, 0.75, 134), (18, 1.0, 243), (16, 0.58, 118), (16, 0.75, 242)],
+    ids=["hlg-half", "hlg-reference-white", "hlg-peak", "pq-reference-white", "pq-1000-nits"],
+)
+def test_an_hdr_frame_is_tone_mapped_as_the_phone_does(tmp_path, transfer, signal, gray):
+    # By hand from BT.2100: HLG's inverse OETF gives scene light, 1 at the peak, and PQ's EOTF
+    # cd/m2, over HLG's nominal peak of 1000. Times 0.9, then sRGB: 0.75 of HLG is 0.265, so 0.239
+    # and a gray of 134, and 0.58 of PQ is 202 cd/m2, so 0.181 and a gray of 118.
+    video = hdr_gray(tmp_path / "gray.mkv", signal, transfer)
 
-    (frame,) = read_frames(video, [0])
+    ((_, frame),) = read_frames(video, [0])
 
-    assert np.asarray(frame).min() >= 250  # read as SDR, the signal would be a gray of 190 or 147
+    assert np.abs(np.asarray(frame, dtype=float) - gray).max() <= 2
 
 
 def flat_yuv(path, size, y, u, v):
@@ -117,6 +166,6 @@ def test_an_untagged_frame_takes_the_matrix_android_takes_for_its_size(tmp_path,
     # Y 100, U 100, V 180 in limited range, by the BT.709 and BT.601 equations.
     video = flat_yuv(tmp_path / "flat.mkv", size, 100, 100, 180)
 
-    (frame,) = read_frames(video, [0])
+    ((_, frame),) = read_frames(video, [0])
 
     assert np.abs(np.asarray(frame).reshape(-1, 3).mean(axis=0) - rgb).max() <= 2

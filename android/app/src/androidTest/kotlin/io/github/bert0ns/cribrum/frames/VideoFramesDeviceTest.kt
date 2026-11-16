@@ -34,9 +34,10 @@ import kotlin.system.measureNanoTime
  * one video of the phone's own costs (docs/design.md §5). Robolectric decodes no video, so only a phone can run this.
  * Everything goes to logcat under the tag "cribrum-frames".
  *
- * An SDR frame must match the lab's embedding within the cosine floor and its mean colour within a few levels, which a wrong
- * frame or a wrong color matrix misses. An HDR frame is only reported, with its brightness and clipped share on both sides:
- * how HDR is tone mapped waits for those numbers (#394).
+ * Each video must keep the frames at the times the lab's do: all of them for SDR, one a keyframe for HDR. An SDR frame must
+ * match the lab's embedding within the cosine floor and its mean colour within a few levels, which a wrong frame or a wrong
+ * color matrix misses. An HDR frame is only reported, with its brightness and clipped share on both sides: the phone tone
+ * maps these small fixtures another way than its camera's clips, which `-e video` compares (§5).
  *
  * It refuses to run in the app Cribrum is installed as, so build it under another id and let that one read shared storage:
  *
@@ -79,28 +80,35 @@ class VideoFramesDeviceTest {
     @Test
     fun takesTheFramesOfTheGoldenVideosAsTheLabDoes() {
         val frames = JSONObject(assets.open("frames.json").bufferedReader().readText())
-        val mayNotRead = JSONObject(assets.open("expected.json").bufferedReader().readText()).getJSONArray("phone_may_not_read").let { List(it.length(), it::getString) }
+        val expected = JSONObject(assets.open("expected.json").bufferedReader().readText())
+        val mayNotRead = listOf("phone_may_not_read", "phone_frames_may_not_read").flatMap { key -> expected.getJSONArray(key).let { List(it.length(), it::getString) } }
         val tolerance = frames.getJSONObject("tolerance")
-        val floor = tolerance.getDouble("embedding_cosine")
+        val lowered = tolerance.getJSONObject("lowered_embedding_cosine")
         val meanTolerance = tolerance.getDouble("mean_rgb")
         val off = mutableListOf<String>()
         val videos = frames.getJSONObject("videos")
         for (name in videos.keys()) {
             val video = videos.getJSONObject(name)
             val hdr = video.getBoolean("hdr")
+            val floor = lowered.optDouble(name, tolerance.getDouble("embedding_cosine"))
             val times = video.getJSONArray("times_ms").let { List(it.length()) { i -> it.getLong(i) } }
             val taken = try {
-                readFrames(copy(name), times) { Brightness.of(it) to modelInput(it) }
+                readFrames(copy(name), frameTimes(expected.getJSONObject("videos").getJSONObject(name).getLong("duration_ms"))) { Brightness.of(it) to modelInput(it) }
             } catch (error: UnreadableVideo) {
                 if (name in mayNotRead) continue else throw error
             }
-            val embeddings = model.embedPixels(taken.map { it.second })
+            if (taken.keys.toList() != times) {
+                Log.i(TAG, "$name: frames at ${taken.keys} ms against the lab's at $times")
+                off += "$name at ${taken.keys} ms"
+                continue
+            }
+            val embeddings = model.embedPixels(taken.values.map { it.second })
             for ((i, time) in times.withIndex()) {
                 val want = vector(video.getJSONArray("embeddings").getString(i))
                 val cosine = embeddings[i].indices.sumOf { embeddings[i][it].toDouble() * want[it] }
                 val labMean = video.getJSONArray("mean_rgb").getJSONArray(i).doubles()
                 val labClipped = video.getJSONArray("clipped").getDouble(i)
-                val phone = taken[i].first
+                val phone = taken.getValue(time).first
                 Log.i(TAG, "$name $time ms${if (hdr) " (HDR)" else ""}: cosine ${cosine.fixed(5)}, mean RGB ${phone.meanText()} against ${labMean.joinToString(" ") { it.fixed(1) }}, clipped ${phone.clipped.fixed(4)} against ${labClipped.fixed(4)}")
                 if (!hdr && (cosine < floor || phone.mean.zip(labMean).any { (a, b) -> abs(a - b) > meanTolerance })) off += "$name $time ms"
             }
@@ -118,28 +126,33 @@ class VideoFramesDeviceTest {
         val times = frameTimes(meta.durationMs)
         Log.i(TAG, "${file.name}: ${meta.width}x${meta.height}, ${meta.frameRate} fps, ${meta.videoCodec}, hdr ${meta.hdr}, ${meta.durationMs} ms, ${file.length() / 1_000_000} MB, frames at $times")
         model.load()
-        lateinit var taken: List<Pair<Brightness, FloatArray>>
+        lateinit var taken: Map<Long, Pair<Brightness, FloatArray>>
         repeat(2) { round ->
             // The first round warms the decoder, the runtime and the model up.
             val total = measureNanoTime {
                 taken = readFrames(file, times) { Brightness.of(it) to modelInput(it) }
-                model.embedPixels(taken.map { it.second })
+                model.embedPixels(taken.values.map { it.second })
             }
-            Log.i(TAG, "round ${round + 1}: ${millis(total, 1)} ms for the video (${millis(total, times.size)} ms a frame), as the scan does it")
+            Log.i(TAG, "round ${round + 1}: ${millis(total, 1)} ms for the video (${millis(total, taken.size)} ms a frame, ${taken.size} frames at ${taken.keys}), as the scan does it")
         }
-        for ((time, frame) in times.zip(model.embedPixels(taken.map { it.second }).zip(taken.map { it.first }))) {
+        for ((time, frame) in taken.keys.zip(model.embedPixels(taken.values.map { it.second }).zip(taken.values.map { it.first }))) {
             val (embedding, brightness) = frame
             val bytes = ByteBuffer.allocate(4 * embedding.size).order(ByteOrder.LITTLE_ENDIAN).also { it.asFloatBuffer().put(embedding) }.array()
             Log.i(TAG, "frame $time mean ${brightness.meanText()} clipped ${brightness.clipped.fixed(4)} embedding ${Base64.encodeToString(bytes, Base64.NO_WRAP)}")
         }
-        for ((label, option) in listOf("exact" to MediaMetadataRetriever.OPTION_CLOSEST, "sync" to MediaMetadataRetriever.OPTION_PREVIOUS_SYNC)) {
+        for ((label, option) in listOf("exact" to MediaMetadataRetriever.OPTION_CLOSEST, "sync" to MediaMetadataRetriever.OPTION_CLOSEST_SYNC)) {
             val retriever = MediaMetadataRetriever()
             try {
                 retriever.setDataSource(file.path)
                 for (time in times) {
                     var bitmap: Bitmap? = null
                     val decode = measureNanoTime { bitmap = retriever.getFrameAtTime(time * 1000, option) }
-                    val frame = bitmap ?: error("no frame at $time ms")
+                    val frame = bitmap
+                    if (frame == null) {
+                        // What OPTION_CLOSEST gives for an HDR frame (#424).
+                        Log.i(TAG, "$label $time ms: no frame after ${millis(decode, 1)} ms")
+                        continue
+                    }
                     var argb: Argb? = null
                     val copy = measureNanoTime { argb = Argb(frame.width, frame.height, IntArray(frame.width * frame.height).also { frame.getPixels(it, 0, frame.width, 0, 0, frame.width, frame.height) }) }
                     val preprocess = measureNanoTime { modelInput(argb!!) }
