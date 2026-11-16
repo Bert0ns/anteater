@@ -44,11 +44,11 @@ The image script leaves videos on the device. `pull_device_videos.py` copies the
 
 ```bash
 cd lab
-uv run python scripts/pull_device_videos.py --dry-run                # what it would copy, and its size
-uv run python scripts/pull_device_videos.py --sample 20 DCIM/Camera  # 20 camera videos
+uv run python scripts/pull_device_videos.py --sample 20 DCIM/Camera --dry-run  # what, and its size
+uv run python scripts/pull_device_videos.py --sample 20 DCIM/Camera            # 20 camera videos
 ```
 
-Camera videos can take more space than the computer has, so `--sample N` takes N videos from each folder given, the same ones on every run: a larger N adds videos and keeps those already copied. A video already copied with the same size is skipped. Without folders it reads the folders of the image script. From WSL, `--adb adb.exe` uses the Windows adb.
+Camera videos can take more space than the computer has, so a run must say how many videos it takes, and a run without `--sample` or `--all` stops before it reads the phone. `--sample N` takes N videos from each folder given, the same ones on every run: a larger N adds videos and keeps those already copied. `--all` takes every video, as for the messaging folders. It names the folders the phone does not have, and stops if the listing on the phone did not finish. A video already copied with the same size is skipped. Without folders it reads the folders of the image script. From WSL, `--adb adb.exe` uses the Windows adb.
 
 ### From WSL
 
@@ -88,7 +88,7 @@ uv run cribrum-lab label               # then open http://127.0.0.1:8765/
 
 The page shows one image at a time from a sample of 500 (`--size`). Half of the sample are candidates, spread over every category, and half are images no detector flagged, so that recall can also be measured on what the detectors missed. Keys: `k` keep, `d` delete, `u` undo, `s` skip. A label says only whether you would keep the image: the detectors work out why. To check whether an image is really blurry, click it or press `z`: the original opens at full size, where 100% is one image pixel per screen pixel. The mouse wheel zooms, dragging moves the image, and `z` or `Esc` closes it. In a grid, `z` zooms on the image under the mouse. Labels go to `lab/data/labels.sqlite` and are keyed by content hash, so they survive copying the images again. A new run of `label` skips images that are already labeled; `--seed` draws a different sample.
 
-`--videos` labels the videos in the index instead, one at a time: the page plays each one, and `space` plays or pauses it. The labels go to the same file.
+`--videos` labels the videos in the index instead, one at a time: the page plays each one, and `space` plays or pauses it. The labels go to the same file, with their media type, and keys wait while a label is saved, since the server hashes the whole video.
 
 With `--clusters`, similar images in the sample (by MobileCLIP embedding) come first, as grids of up to 48: click an image to leave it out, then one key labels the rest. The images left out and those alike to no other are shown one by one afterwards, or in a later session.
 
