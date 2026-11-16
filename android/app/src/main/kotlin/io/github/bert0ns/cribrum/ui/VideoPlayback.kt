@@ -245,11 +245,14 @@ private fun VideoSurface(playback: VideoPlayback) {
     val shape = size?.let { Modifier.aspectRatio(it.width * it.pixelWidthHeightRatio / it.height) } ?: Modifier.size(1.dp)
     Box(Modifier.fillMaxSize(), Alignment.Center) {
         AndroidView(
-            // The screen stays on while a video plays, and the surface is the only thing that can say so from a dialog.
-            factory = { SurfaceView(it).apply { keepScreenOn = true } },
+            factory = { SurfaceView(it) },
             modifier = shape,
             onRelease = playback::detach,
-            update = playback::attach,
+            update = {
+                playback.attach(it)
+                // The screen stays on while the video plays, not while it is paused or has ended, and the surface is the only thing that can say so from a dialog.
+                it.keepScreenOn = playback.playing
+            },
         )
     }
 }

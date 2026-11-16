@@ -1,5 +1,8 @@
 package io.github.bert0ns.cribrum.ui
 
+import android.view.SurfaceView
+import android.view.View
+import android.view.ViewGroup
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -19,6 +22,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.core.view.children
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.review.VideoItem
@@ -31,6 +35,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowDialog
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36]) // Compose tests reach InputManager.getInstance, which SDK 37 removed
@@ -142,6 +147,33 @@ class VideosScreenTest {
 
         assertFalse(players.made.single().playing)
         compose.onAllNodesWithContentDescription("Play video").assertCountEquals(2) // the page's and the bar's
+    }
+
+    /** The surface the video draws on, which lives in the full size dialog's window. */
+    private fun surface(): SurfaceView? {
+        fun find(view: View): SurfaceView? = if (view is SurfaceView) view else (view as? ViewGroup)?.children?.firstNotNullOfOrNull(::find)
+        return ShadowDialog.getLatestDialog()?.window?.decorView?.let(::find)
+    }
+
+    @Test
+    fun `the screen stays on while the video plays, and not while it is paused or has ended`() {
+        show(videos)
+        openFullSize("middle.mp4")
+        play()
+        compose.waitForIdle()
+        assertTrue(surface()!!.keepScreenOn)
+
+        compose.onNodeWithContentDescription("Pause video").performClick()
+        compose.waitForIdle()
+        assertFalse(surface()!!.keepScreenOn)
+
+        compose.onAllNodesWithContentDescription("Play video").onFirst().performClick()
+        compose.waitForIdle()
+        assertTrue(surface()!!.keepScreenOn)
+
+        players.made.single().ended()
+        compose.waitForIdle()
+        assertFalse(surface()!!.keepScreenOn)
     }
 
     @Test

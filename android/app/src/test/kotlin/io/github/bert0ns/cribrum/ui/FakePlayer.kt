@@ -40,6 +40,13 @@ internal class FakePlayer(private val lengthMs: Long = 61_000) : SimpleBasePlaye
         invalidateState()
     }
 
+    /** Plays to the end of the video, as it does when nobody stops it. */
+    fun ended() {
+        position = lengthMs
+        state = STATE_ENDED
+        invalidateState()
+    }
+
     override fun getState(): State = State.Builder()
         .setAvailableCommands(Player.Commands.Builder().addAllCommands().build())
         .setPlayWhenReady(wanted, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
@@ -83,6 +90,7 @@ internal class FakePlayer(private val lengthMs: Long = 61_000) : SimpleBasePlaye
 
     override fun handleSeek(mediaItemIndex: Int, positionMs: Long, seekCommand: Int): ListenableFuture<*> {
         position = positionMs
+        if (state == STATE_ENDED) state = STATE_READY
         return Futures.immediateVoidFuture()
     }
 
@@ -104,6 +112,7 @@ internal class FakePlayer(private val lengthMs: Long = 61_000) : SimpleBasePlaye
     private companion object {
         const val STATE_IDLE = Player.STATE_IDLE
         const val STATE_READY = Player.STATE_READY
+        const val STATE_ENDED = Player.STATE_ENDED
     }
 }
 
