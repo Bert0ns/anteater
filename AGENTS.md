@@ -69,6 +69,8 @@ Reviews follow the same tiers:
 
 Credits decide what is available on a given day. When one model runs out, use the other one in the same tier, and keep the reviewer different from the author.
 
+In T3 Code, an agent that hands out work starts each issue as its own top-level thread, in a worktree, so the maintainer can follow it and talk to it. It does not start them as subagents or delegated tasks. Reviews and checks of review fixes can run as delegated tasks.
+
 ## Routines
 
 Routines that keep the codebase healthy are issue templates in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/). Nothing runs on its own. The maintainer opens an issue from a template and says "prendi in mano l'issue numero X", and the issue body is the whole prompt. Each routine starts from the commit its previous run recorded in a `Covered commit:` comment on the last closed issue with the same label, and records its own when it finishes. No routine merges anything.
