@@ -30,6 +30,10 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.core.view.children
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.review.VideoItem
@@ -59,10 +63,11 @@ class VideosScreenTest {
 
     private var players = Players()
 
-    private fun show(items: List<VideoItem>, applied: Applied = Applied()) {
+    private fun show(items: List<VideoItem>, applied: Applied = Applied(), owner: LifecycleOwner? = null) {
         compose.setContent {
             var selected by remember { mutableStateOf(emptySet<String>()) }
-            CompositionLocalProvider(LocalPlayerFactory provides players.factory) {
+            val locals = listOfNotNull(LocalPlayerFactory provides players.factory, owner?.let { LocalLifecycleOwner provides it })
+            CompositionLocalProvider(*locals.toTypedArray()) {
                 VideosScreen(items, selected, onToggle = { selected = if (it in selected) selected - it else selected + it }, onApply = { paths, trash ->
                     applied.paths = paths
                     applied.trash = trash
@@ -289,6 +294,25 @@ class VideosScreenTest {
 
         compose.onNodeWithTag("fullSize").assertDoesNotExist()
         assertTrue(players.made.single().released)
+    }
+
+    @Test
+    fun `the video pauses when the app leaves the screen`() {
+        val owner = object : LifecycleOwner {
+            override val lifecycle: LifecycleRegistry = LifecycleRegistry.createUnsafe(this)
+        }
+        compose.runOnUiThread { owner.lifecycle.currentState = Lifecycle.State.RESUMED }
+        show(videos, owner = owner)
+        openFullSize("middle.mp4")
+        play()
+        compose.waitForIdle()
+        assertTrue(players.made.single().playing)
+
+        compose.runOnUiThread { owner.lifecycle.currentState = Lifecycle.State.CREATED } // ON_PAUSE, then ON_STOP
+        compose.waitForIdle()
+
+        assertFalse(players.made.single().playing)
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), players.made.single().paths) // paused, not dropped
     }
 
     @Test
