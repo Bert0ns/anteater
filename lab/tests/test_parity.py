@@ -137,3 +137,15 @@ def test_a_media_types_declaration_that_wraps_over_lines_is_read_whole():
         for source in (android, android_getter)
     ]
     assert [lab_found, *android_found] == [{"d.media_types": "image,video"}] * 3
+
+
+def test_the_frame_constants_are_read_from_each_side():
+    lab = 'FRAMES = 5\nMARGIN_MS = 500\n"""Docs."""\n'
+    android = "const val FRAMES = 5\n\n/** Docs. */\nconst val MARGIN_MS = 400\n"
+
+    problems = parity.mismatches(
+        parity.frame_constants(lab, parity.LAB_CONSTANT),
+        parity.frame_constants(android, parity.ANDROID_CONSTANT),
+    )
+
+    assert problems == ["frames.MARGIN_MS: lab 500, android 400"]

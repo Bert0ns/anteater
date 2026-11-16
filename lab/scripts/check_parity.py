@@ -7,7 +7,8 @@ by id) it compares the version, the media types it accepts (images only when it 
 every numeric constant with an UPPER_CASE name; for the ranker, the thresholds, the protection
 weights and its constants. Everything must exist on both sides,
 except what LAB_ONLY (detectors not ported yet) and ONE_SIDED (implementation details) list.
-It also compares the ids of the detectors a sticker skips, SKIPPED_ON_STICKERS in each pipeline.
+It also compares the ids of the detectors a sticker skips, SKIPPED_ON_STICKERS in each pipeline, and
+the constants of the frames sampled from a video (frames.py and frames/Frames.kt).
 """
 
 import re
@@ -101,11 +102,18 @@ def skipped_mismatch(lab: set[str] | None, android: set[str] | None) -> list[str
     return [f"SKIPPED_ON_STICKERS: lab {show(lab)}, android {show(android)}"]
 
 
+def frame_constants(source: str, constant_re) -> dict[str, str]:
+    """The numbers both sides sample a video's frames with, as "frames.<name>"."""
+    return {f"frames.{name}": number for name, number in constant_re.findall(source)}
+
+
 def main() -> int:
     lab_files = [*sorted((LAB / "detectors").glob("*.py")), LAB / "ranker.py"]
     android_files = [*sorted((ANDROID / "detectors").glob("*.kt")), ANDROID / "ranker/Ranker.kt"]
     lab = collect(lab_files, LAB_ID, LAB_VERSION, LAB_CONSTANT)
     android = collect(android_files, ANDROID_ID, ANDROID_VERSION, ANDROID_CONSTANT)
+    lab |= frame_constants((LAB / "frames.py").read_text(), LAB_CONSTANT)
+    android |= frame_constants((ANDROID / "frames/Frames.kt").read_text(), ANDROID_CONSTANT)
     if not lab or not android:
         print("parity: no detectors found, so the paths or patterns in this script are stale")
         return 1
