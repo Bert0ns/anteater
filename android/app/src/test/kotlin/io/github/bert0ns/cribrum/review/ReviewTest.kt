@@ -1259,6 +1259,59 @@ class ReviewTest {
         file.toMediaRef(MediaType.VIDEO).also { index.record(it) }
     }
 
+    private fun duplicateVideo(path: String, bytes: Int, group: String, role: Role): MediaRef = video(path, bytes).also { runBlocking { index.setSignals(it.path, "exact_duplicate", 1, listOf(duplicate(group, role))) } }
+
+    @Test
+    fun `exact duplicate videos are a category of the videos, counted apart from the photos`() = test {
+        val photo = image("DCIM/a.jpg", duplicate("p", Role.BEST))
+        val photoCopy = image("Download/a.jpg", duplicate("p", Role.INFERIOR))
+        duplicateVideo("DCIM/Camera/clip.mp4", 300, "v", Role.BEST)
+        val copy = duplicateVideo("Download/clip.mp4", 300, "v", Role.INFERIOR)
+
+        val videos = overview(MediaType.VIDEO)
+        val photos = overview()
+
+        assertEquals(listOf(Category.EXACT_DUPLICATE), videos.categories.map { it.category })
+        assertEquals(listOf(1), videos.categories.map { it.count })
+        assertEquals(copy.size, videos.freeableBytes)
+        assertEquals(1, photos.categories.single { it.category == Category.EXACT_DUPLICATE }.count)
+        assertEquals(photoCopy.size, photos.freeableBytes)
+        assertEquals(listOf(photo, photoCopy), shown(page(Category.EXACT_DUPLICATE)))
+    }
+
+    @Test
+    fun `a group of videos is a page with its best copy beside the copies to trash`() = test {
+        val best = duplicateVideo("DCIM/Camera/clip.mp4", 300, "v", Role.BEST)
+        val copy = duplicateVideo("WhatsApp/Media/WhatsApp Video/Sent/clip.mp4", 300, "v", Role.INFERIOR)
+
+        val items = page(Category.EXACT_DUPLICATE, mediaType = MediaType.VIDEO).groups.single().images
+
+        assertEquals(listOf(best, copy), items.map { it.image })
+        assertEquals(listOf(true, false), items.map { it.isBest })
+        assertEquals(listOf(false, true), items.map { it.suggestTrash })
+    }
+
+    @Test
+    fun `the videos' list holds only the categories with a video detector`() = test {
+        val clip = video("DCIM/clip.mp4", 100)
+        index.setSignals(clip.path, "blur", 1, listOf(blurry(0.9f)))
+
+        assertEquals(emptyList<Category>(), overview(MediaType.VIDEO).categories.map { it.category }.filter { it != Category.EXACT_DUPLICATE })
+    }
+
+    @Test
+    fun `trashing the copy of a video group empties the category, and undo brings it back`() = test {
+        duplicateVideo("DCIM/Camera/clip.mp4", 300, "v", Role.BEST)
+        val copy = duplicateVideo("Download/clip.mp4", 300, "v", Role.INFERIOR)
+
+        val decision = applyPage(page(Category.EXACT_DUPLICATE, mediaType = MediaType.VIDEO), setOf(copy.path))
+
+        assertEquals(listOf(copy), decision.trashed)
+        assertEquals(0, overview(MediaType.VIDEO).categories.single().count)
+        undo(decision)
+        assertEquals(1, overview(MediaType.VIDEO).categories.single().count)
+    }
+
     @Test
     fun `largest videos lists every unreviewed video by size, the trashed, kept and excluded ones left out`() = test {
         val small = video("Movies/small.mp4", 10)

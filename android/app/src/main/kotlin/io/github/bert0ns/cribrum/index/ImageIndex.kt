@@ -400,14 +400,14 @@ class ImageIndex(private val db: IndexDatabase) :
         runCatching { LocalDateTime.parse(row.capturedAt) }.getOrNull()?.let { row.path to it }
     }.toMap()
 
-    /** Every image with its review state and signals, as the ranker takes them. No video: nothing reviews one yet (docs/design.md §6.5). */
+    /** Every image and video with its review state and signals, as the ranker takes them. The review lists a video only in the categories that have a video detector (docs/design.md §5). */
     suspend fun indexedMedia(): List<IndexedMedia> = traceSuspend("Index.indexedMedia") {
         readTransaction {
             val signals = dao.allSignals().groupBy({ it.path }, ::signal)
             val seen = dao.allKeptSignals().groupBy({ it.path }) { SignalIdentity(Kind.of(it.category), it.groupId, it.role) }
             dao.statesNow().map { row ->
                 IndexedMedia(
-                    MediaRef(row.path, row.size, row.mtimeNs),
+                    MediaRef(row.path, row.size, row.mtimeNs, MediaType.of(row.mediaType)),
                     ReviewState.of(row.reviewState),
                     signals[row.path].orEmpty(),
                     seen[row.path].orEmpty().toSet(),

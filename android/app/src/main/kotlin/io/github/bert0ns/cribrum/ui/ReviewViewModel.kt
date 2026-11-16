@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.bert0ns.cribrum.CribrumApp
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.pipeline.Coverage
 import io.github.bert0ns.cribrum.pipeline.ScanReport
 import io.github.bert0ns.cribrum.pipeline.coverage
@@ -47,7 +48,9 @@ enum class Destination { Clean, Compress, Settings }
 sealed interface Screen {
     data object Home : Screen
     data object Compress : Screen
-    data class Category(val category: io.github.bert0ns.cribrum.model.Category) : Screen
+
+    /** The review of one category, over the photos (the Photos tab) or the videos (the Videos tab). */
+    data class Category(val category: io.github.bert0ns.cribrum.model.Category, val mediaType: MediaType = MediaType.IMAGE) : Screen
 
     /** The trash belongs to the destination it was opened [from], which Back returns to. */
     data class Trash(val from: Destination) : Screen
@@ -88,6 +91,10 @@ data class ReviewState(
     val cleanTab: CleanTab = CleanTab.PHOTOS,
     /** "Largest videos": every video not reviewed, largest first. Read with the home and again when the page opens. */
     val videos: List<VideoItem> = emptyList(),
+    /** The categories with a video detector and their figures, the rows of the Videos tab. */
+    val videoCategories: List<CategorySummary> = emptyList(),
+    /** "Scan videos" has started once, so a category of the Videos tab that is empty is empty and does not wait for it. */
+    val videoScanRan: Boolean = false,
     /** The index holds a video, reviewed or not: before that, the Videos tab says videos appear after the next scan. */
     val videosIndexed: Boolean = false,
     /** The videos the video steps have not read yet, which the Videos tab says wait for "Scan videos". */
@@ -180,7 +187,7 @@ class ReviewViewModel @JvmOverloads constructor(
         refreshJob?.cancel()
         refreshJob = load {
             val lastScan = withContext(Dispatchers.IO) { app.lastScan.report }
-            it.copy(indexEmpty = photosUnscanned(lastScan), lastScan = lastScan).withOverview(review.overview()).withVideos()
+            it.copy(indexEmpty = photosUnscanned(lastScan), lastScan = lastScan).withOverviews(review.overviews()).withVideos()
         }
     }
 
@@ -191,10 +198,10 @@ class ReviewViewModel @JvmOverloads constructor(
         if (state.value.screen != Screen.Home) refresh()
     }
 
-    fun open(category: Category) = load {
+    fun open(category: Category, mediaType: MediaType = MediaType.IMAGE) = load {
         val grouping = app.reviewOrder[category]
-        it.copy(screen = Screen.Category(category), lastDecision = null, lastExclusion = null, skipped = emptySet(), reviewOrder = grouping)
-            .showing(pageFor(category, it, skipped = emptySet(), grouping = grouping))
+        it.copy(screen = Screen.Category(category, mediaType), lastDecision = null, lastExclusion = null, skipped = emptySet(), reviewOrder = grouping)
+            .showing(pageFor(category, it, skipped = emptySet(), grouping = grouping, mediaType = mediaType))
     }
 
     /** The tab Clean opens on from now on, and shows now. */
@@ -391,10 +398,13 @@ class ReviewViewModel @JvmOverloads constructor(
     /** "Largest videos" read again, with whether the index holds any video at all and how many wait for "Scan videos". The selection keeps the videos still listed. */
     private suspend fun ReviewState.withVideos(): ReviewState {
         val videos = review.largestVideos()
-        return copy(videos = videos, videosIndexed = videos.isNotEmpty() || app.index.hasVideos(), videosWaiting = app.index.videosWaiting(), videoSelected = videoSelected intersect videos.mapTo(HashSet()) { it.video.path })
+        return copy(videoScanRan = withContext(Dispatchers.IO) { app.videoScans.ran }, videos = videos, videosIndexed = videos.isNotEmpty() || app.index.hasVideos(), videosWaiting = app.index.videosWaiting(), videoSelected = videoSelected intersect videos.mapTo(HashSet()) { it.video.path })
     }
 
-    private fun ReviewState.withOverview(overview: Overview) = copy(categories = overview.categories, freeableBytes = overview.freeableBytes)
+    private fun ReviewState.withOverviews(overviews: Map<MediaType, Overview>): ReviewState {
+        val photos = overviews.getValue(MediaType.IMAGE)
+        return copy(categories = photos.categories, freeableBytes = photos.freeableBytes, videoCategories = overviews.getValue(MediaType.VIDEO).categories)
+    }
 
     private suspend fun ReviewState.withThresholds(thresholds: Map<Category, Float>) = copy(thresholds = thresholds, thresholdCounts = review.counts(thresholds))
 
@@ -450,7 +460,7 @@ class ReviewViewModel @JvmOverloads constructor(
     private suspend fun ReviewState.home(): ReviewState {
         val lastScan = withContext(Dispatchers.IO) { app.lastScan.report }
         return copy(screen = Screen.Home, page = emptyList(), videoSelected = emptySet(), lastDecision = null, lastExclusion = null, skipped = emptySet(), indexEmpty = photosUnscanned(lastScan), lastScan = lastScan)
-            .withOverview(review.overview()).withVideos()
+            .withOverviews(review.overviews()).withVideos()
     }
 
     /**
@@ -595,7 +605,13 @@ class ReviewViewModel @JvmOverloads constructor(
     }
 
     /** The one way to read a page, so none forgets the skipped groups or the review order of the open category. */
-    private suspend fun pageFor(category: Category, state: ReviewState, skipped: Set<String> = state.skipped, grouping: ReviewOrder = state.reviewOrder) = review.page(category, skipped, grouping)
+    private suspend fun pageFor(
+        category: Category,
+        state: ReviewState,
+        skipped: Set<String> = state.skipped,
+        grouping: ReviewOrder = state.reviewOrder,
+        mediaType: MediaType = (state.screen as? Screen.Category)?.mediaType ?: MediaType.IMAGE,
+    ) = review.page(category, skipped, grouping, mediaType)
 
     /**
      * Candidates start marked, except gallery favourites, which start kept. With [keepMarksOf], images that were

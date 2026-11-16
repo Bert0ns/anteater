@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
@@ -59,6 +60,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.bert0ns.cribrum.R
+import io.github.bert0ns.cribrum.model.Category
+import io.github.bert0ns.cribrum.review.CategorySummary
 import io.github.bert0ns.cribrum.review.VideoItem
 import io.github.bert0ns.cribrum.trash.TrashRetention
 import java.io.File
@@ -79,7 +82,19 @@ fun CleanTabs(selected: CleanTab, onSelect: (CleanTab) -> Unit, modifier: Modifi
  * phone has none once a scan counted them ([noVideos]).
  */
 @Composable
-fun VideosTab(videos: List<VideoItem>, indexed: Boolean, onOpen: () -> Unit, modifier: Modifier = Modifier, waiting: Int = 0, noVideos: Boolean = false) {
+fun VideosTab(
+    videos: List<VideoItem>,
+    indexed: Boolean,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+    waiting: Int = 0,
+    noVideos: Boolean = false,
+    /** The categories with a video detector, listed after "Largest videos". */
+    categories: List<CategorySummary> = emptyList(),
+    onOpenCategory: (Category) -> Unit = {},
+    /** "Scan videos" has started once: until then a category with nothing in it says it needs that scan. */
+    scanRan: Boolean = true,
+) {
     LazyColumn(modifier.fillMaxSize()) {
         if (!indexed) {
             item { Text(stringResource(if (noVideos) R.string.videos_none_found else R.string.videos_after_scan), Modifier.padding(16.dp)) }
@@ -108,6 +123,25 @@ fun VideosTab(videos: List<VideoItem>, indexed: Boolean, onOpen: () -> Unit, mod
                 },
                 // Greyed out like a category with nothing to open.
                 modifier = Modifier.clickable(enabled = canOpen, onClick = onOpen).alpha(if (canOpen) 1f else 0.5f),
+            )
+            HorizontalDivider()
+        }
+        items(categories, key = { it.category }) { summary ->
+            val canOpen = summary.count > 0
+            ListItem(
+                headlineContent = { Text(categoryName(summary.category)) },
+                supportingContent = {
+                    val count = pluralStringResource(R.plurals.videos_count, summary.count, summary.count)
+                    Text(
+                        when {
+                            canOpen -> stringResource(R.string.scan_joined, count, Formatter.formatShortFileSize(LocalContext.current, summary.bytes))
+                            !scanRan -> stringResource(R.string.videos_category_needs_scan)
+                            else -> count
+                        },
+                    )
+                },
+                // Greyed out like a category with nothing to open.
+                modifier = Modifier.clickable(enabled = canOpen) { onOpenCategory(summary.category) }.alpha(if (canOpen) 1f else 0.5f),
             )
             HorizontalDivider()
         }

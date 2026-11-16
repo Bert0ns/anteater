@@ -129,12 +129,12 @@ class ImageIndexTest {
     }
 
     @Test
-    fun `a video is recorded with its media type and the ranker never sees it`() = test {
+    fun `a video is recorded with its media type and indexedMedia gives it with that type, for the categories of the videos`() = test {
         val video = MediaRef("/videos/v.mp4", 900, 1, MediaType.VIDEO)
         recordAll(listOf(PHOTO, video))
 
         assertEquals(listOf(PHOTO, video), images())
-        assertEquals(listOf(PHOTO), indexedMedia().map { it.ref })
+        assertEquals(listOf(PHOTO, video), indexedMedia().map { it.ref })
     }
 
     @Test
