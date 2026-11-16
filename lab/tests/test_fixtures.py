@@ -3,6 +3,7 @@ import json
 import pytest
 
 from cribrum_lab import fixtures, mobileclip
+from cribrum_lab.frames import frame_times
 
 EXPECTED = json.loads((fixtures.ROOT / "expected.json").read_text())
 HAS_MODEL = all((mobileclip.MODELS / name).exists() for name in mobileclip._FILES)
@@ -55,3 +56,23 @@ def test_lab_still_matches_every_fixture_signal():
     actual = fixtures.expected(fixtures.ROOT, embed=True)["images"]
 
     assert_close(signals(actual), signals(EXPECTED["images"]))
+
+
+FRAMES = json.loads((fixtures.VIDEOS / "frames.json").read_text())
+
+
+def test_the_frame_fixtures_cover_every_video_the_lab_reads_at_the_times_of_the_rule():
+    videos = json.loads((fixtures.VIDEOS / "expected.json").read_text())["videos"]
+
+    assert {name: entry["times_ms"] for name, entry in FRAMES["videos"].items()} == {
+        name: frame_times(video["duration_ms"]) for name, video in videos.items()
+    }
+
+
+@pytest.mark.skipif(not HAS_MODEL, reason="MobileCLIP files not downloaded into lab/data/models")
+def test_lab_still_embeds_the_frames_of_the_fixture_videos_as_they_record():
+    actual = fixtures.frames_expected()["videos"]
+
+    for name, entry in FRAMES["videos"].items():
+        for got, want in zip(actual[name]["embeddings"], entry["embeddings"], strict=True):
+            assert fixtures.decode_vector(got) @ fixtures.decode_vector(want) > 0.99999, name

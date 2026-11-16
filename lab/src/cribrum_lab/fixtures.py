@@ -2,8 +2,9 @@
 
 Synthetic images only, never personal photos, generated from fixed seeds into
 fixtures/golden/ at the repository root, together with expected.json: what the lab's
-detectors say about them. The Android tests run their port on the same files and
-compare. Regenerate after a detector change, and commit both:
+detectors say about them, and fixtures/videos/frames.json: the embeddings of the frames the lab
+samples from the synthetic videos there. The Android tests run their port on the same files and
+compare. Regenerate after a detector change, and commit them:
 
     uv run python -m cribrum_lab.fixtures
 """
@@ -17,7 +18,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-from cribrum_lab import hashing, mobileclip
+from cribrum_lab import frames, hashing, mobileclip
 from cribrum_lab.detectors import AnalysisContext
 from cribrum_lab.metadata import read_metadata
 from cribrum_lab.model import MediaRef
@@ -27,6 +28,10 @@ ROOT = Path(__file__).resolve().parents[3] / "fixtures" / "golden"
 FORMAT_VERSION = 1
 TOLERANCE = {"score": 0.05, "embedding_cosine": 0.99}
 """Decoders and resamplers differ between Pillow and Android: numbers match only closely."""
+VIDEOS = ROOT.parent / "videos"
+FRAME_TOLERANCE = {"embedding_cosine": 0.99, "hdr_embedding_cosine": 0.95}
+"""FFmpeg and the phone turn YUV into RGB each their own way, and tone map HDR each their own way
+(docs/design.md, section 5). Both floors wait for the phone's numbers."""
 
 
 def _texture(seed: int, size: tuple[int, int] = (640, 480)) -> Image.Image:
@@ -170,7 +175,7 @@ def expected(root: Path, embed: bool) -> dict:
         }
         relative = image.path.relative_to(root).as_posix()
         if image in vectors:
-            entry["embedding"] = base64.b64encode(vectors[image].astype("<f4").tobytes()).decode()
+            entry["embedding"] = encode_vector(vectors[image])
         result[relative] = entry
     return {
         "format_version": FORMAT_VERSION,
@@ -180,13 +185,43 @@ def expected(root: Path, embed: bool) -> dict:
     }
 
 
+def frames_expected() -> dict:
+    """The frames the lab samples from each fixture video it reads, and their embeddings."""
+    model = mobileclip.MobileClip()
+    videos = {}
+    for name, video in json.loads((VIDEOS / "expected.json").read_text())["videos"].items():
+        times = frames.frame_times(video["duration_ms"])
+        pixels = [mobileclip.model_input(f) for f in frames.read_frames(VIDEOS / name, times)]
+        videos[name] = {
+            "times_ms": times,
+            "hdr": video["hdr"],
+            "embeddings": [encode_vector(v) for v in model.embed_pixels(np.stack(pixels))],
+        }
+    return {
+        "tolerance": FRAME_TOLERANCE,
+        "embedding_model": mobileclip.MODEL_ID,
+        "videos": videos,
+    }
+
+
+def encode_vector(vector: np.ndarray) -> str:
+    """Base64 of little-endian float32, as expected.json stores an embedding."""
+    return base64.b64encode(vector.astype("<f4").tobytes()).decode()
+
+
+def decode_vector(text: str) -> np.ndarray:
+    return np.frombuffer(base64.b64decode(text), dtype="<f4")
+
+
 def main() -> None:
     if ROOT.exists():
         shutil.rmtree(ROOT)
     write_images(ROOT)
     data = expected(ROOT, embed=True)
     (ROOT / "expected.json").write_text(json.dumps(data, indent=1, sort_keys=True) + "\n")
-    print(f"wrote {ROOT}")
+    frames_json = json.dumps(frames_expected(), indent=1, sort_keys=True) + "\n"
+    (VIDEOS / "frames.json").write_text(frames_json)
+    print(f"wrote {ROOT} and {VIDEOS / 'frames.json'}")
 
 
 if __name__ == "__main__":

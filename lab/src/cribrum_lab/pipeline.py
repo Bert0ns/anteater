@@ -1,5 +1,6 @@
 """Analysis pipeline: scan → metadata → detectors that read no embedding → embeddings →
-detectors that read one → group detectors, then the video steps when a run asks for them.
+detectors that read one → group detectors, then the video steps when a run asks for them: the
+video metadata, then the frames.
 
 Every step stores its results as it goes and skips what the index already holds for the
 same detector version, so an interrupted run resumes where it stopped and a second run on
@@ -32,6 +33,7 @@ from cribrum_lab.detectors.near_duplicate import NearDuplicateDetector
 from cribrum_lab.detectors.screenshot import ScreenshotDetector
 from cribrum_lab.detectors.sticker import StickerDetector
 from cribrum_lab.folders import is_sticker_folder
+from cribrum_lab.frames import frame_times, read_frames
 from cribrum_lab.imaging import Pixels
 from cribrum_lab.index import ImageIndex
 from cribrum_lab.metadata import (
@@ -42,7 +44,7 @@ from cribrum_lab.metadata import (
     read_metadata,
     read_video_metadata,
 )
-from cribrum_lab.model import Category, MediaRef, MediaType, Signal
+from cribrum_lab.model import Category, MediaRef, MediaType, ReviewState, Signal
 from cribrum_lab.sources import FilesystemMediaSource
 
 DETECTORS: list[Detector] = [
@@ -176,7 +178,7 @@ def run(
     if images:
         _image_steps(found, index, detectors, group_detectors, embedder, jobs, stats, progress)
     if videos:
-        _video_steps(found, index, group_detectors, stats, progress, zone)
+        _video_steps(found, index, group_detectors, embedder, jobs, stats, progress, zone)
     media = [i for i in index.images() if i.path in found]
     stats.images = sum(i.media_type is MediaType.IMAGE for i in media)
     stats.videos = len(media) - stats.images
@@ -348,12 +350,14 @@ def _video_steps(
     found: set[Path],
     index: ImageIndex,
     group_detectors: Sequence[GroupDetector],
+    embedder: Embedder | None,
+    jobs: int,
     stats: Stats,
     progress: Progress,
     zone: tzinfo | None,
 ) -> None:
-    """The video steps, which only a run asked for videos takes: the metadata, then the group
-    detectors that accept videos."""
+    """The video steps, which only a run asked for videos takes: the metadata, the frames, then
+    the group detectors that accept videos, which may read the frames."""
     pending = [i for i in index.without_metadata() if i.media_type is MediaType.VIDEO]
     for done, video in enumerate(pending, 1):
         try:
@@ -366,7 +370,51 @@ def _video_steps(
         except UnreadableVideo:
             index.set_unreadable(video.path)
         progress("video_metadata", done, len(pending))
+    if embedder is not None:
+        _embed_frames(embedder, index, jobs, stats, progress)
     _group_steps(MediaType.VIDEO, found, index, group_detectors, (), None, {}, stats, progress)
+
+
+def _embed_frames(
+    embedder: Embedder, index: ImageIndex, jobs: int, stats: Stats, progress: Progress
+) -> None:
+    """Embeds the frames of each readable video whose frames are not stored at the times
+    `frame_times` gives now, so a new rule samples every video again. A video whose frames fail
+    is a failure, and the next run tries it again, as an image whose embedding fails."""
+    stored = index.frame_embeddings(embedder.id, embedder.version)
+    unreadable = set(index.unreadable())
+    todo = []
+    for video in index.images():
+        if video.media_type is not MediaType.VIDEO or video.path in unreadable:
+            continue
+        meta = index.video_metadata(video.path)
+        # No metadata yet means its read failed: the next run reads it first.
+        if meta is None or index.review_state(video.path) is ReviewState.TRASHED:
+            continue
+        times = frame_times(meta.duration_ms)
+        if list(stored.get(video.path, {})) != times:
+            todo.append((video, times))
+    for done, ((video, times), pixels) in enumerate(
+        zip(todo, _map(_frame_pixels, todo, jobs), strict=True), 1
+    ):
+        if isinstance(pixels, str):
+            stats.failures.append(f"{video.path}: frames: {pixels}")
+        else:
+            vectors = embedder.embed_pixels(np.stack(pixels))
+            index.set_frame_embeddings(
+                video.path, embedder.id, embedder.version, dict(zip(times, vectors, strict=True))
+            )
+            stats.detector_runs += len(times)
+        progress("video_frames", done, len(todo))
+
+
+def _frame_pixels(task: tuple[MediaRef, list[int]]) -> list[np.ndarray] | str:
+    """Runs in a worker process: a video's frames, each preprocessed as an image is."""
+    video, times = task
+    try:
+        return [mobileclip.model_input(frame) for frame in read_frames(video.path, times)]
+    except Exception as error:
+        return _describe(error)
 
 
 def _stickers_last(images: list[MediaRef]) -> list[MediaRef]:

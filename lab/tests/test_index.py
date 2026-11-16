@@ -160,6 +160,37 @@ def test_embeddings_are_stored_per_model_version(index):
     assert index.embeddings("clip", 1) == {}
 
 
+def test_frame_embeddings_are_stored_per_video_time_and_model_version(index):
+    index.record(VIDEO)
+    first, last = np.array([1, 0], np.float32), np.array([0, 1], np.float32)
+
+    index.set_frame_embeddings(VIDEO.path, "clip", 2, {300: first, 700: last})
+
+    [(path, frames)] = index.frame_embeddings("clip", 2).items()
+    assert path == VIDEO.path
+    assert list(frames) == [300, 700]
+    np.testing.assert_array_equal(frames[700], last)
+    assert index.frame_embeddings("clip", 1) == {}
+
+
+def test_storing_a_video_s_frames_again_replaces_them_all(index):
+    index.record(VIDEO)
+    index.set_frame_embeddings(VIDEO.path, "clip", 1, {300: np.ones(2, np.float32)})
+
+    index.set_frame_embeddings(VIDEO.path, "clip", 1, {500: np.zeros(2, np.float32)})
+
+    assert list(index.frame_embeddings("clip", 1)[VIDEO.path]) == [500]
+
+
+def test_a_changed_video_drops_its_frames(index):
+    index.record(VIDEO)
+    index.set_frame_embeddings(VIDEO.path, "clip", 1, {300: np.ones(2, np.float32)})
+
+    index.record(MediaRef(VIDEO.path, 901, 2, MediaType.VIDEO))
+
+    assert index.frame_embeddings("clip", 1) == {}
+
+
 def test_deleting_the_embeddings_leaves_the_rest_of_the_index_as_it_was(index):
     other = MediaRef(Path("/photos/b.jpg"), 5, 5)
     index.record(PHOTO)

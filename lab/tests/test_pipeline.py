@@ -2,6 +2,7 @@ import os
 import shutil
 from pathlib import Path
 
+import av
 import numpy as np
 import pytest
 from PIL import Image
@@ -1078,3 +1079,78 @@ def test_a_new_copy_of_a_video_groups_it_at_the_next_video_run_only(videos, inde
     pipeline.run(root, index, detectors=[], group_detectors=exact, images=False, videos=True)
 
     assert [g for g in exact_groups(index) if copy in g] == [{videos / "clip.mp4", copy}]
+
+
+def test_a_video_run_embeds_the_frames_of_each_readable_video_after_its_metadata(videos, index):
+    steps = []
+    embedder = MeanColorEmbedder()
+
+    stats = pipeline.run(
+        videos.parent.parent,
+        index,
+        detectors=[],
+        group_detectors=[],
+        embedder=embedder,
+        images=False,
+        videos=True,
+        progress=lambda step, done, total: steps.append(step),
+    )
+
+    frames = index.frame_embeddings(embedder.id, embedder.version)
+    assert {path.name: list(vectors) for path, vectors in frames.items()} == {
+        "clip.mp4": [300, 400, 500, 600, 700]  # the broken video is unreadable: nothing to sample
+    }
+    assert steps.index("video_frames") > steps.index("video_metadata")
+    assert stats.failures == []
+
+
+def test_frames_already_embedded_at_the_times_wanted_are_not_read_again(videos, index, monkeypatch):
+    run = lambda: pipeline.run(  # noqa: E731
+        videos.parent.parent, index, detectors=[], group_detectors=[],
+        embedder=MeanColorEmbedder(), images=False, videos=True,
+    )  # fmt: skip
+    run()
+    monkeypatch.setattr(pipeline, "read_frames", lambda *_: pytest.fail("read the frames again"))
+
+    run()
+
+
+def test_frames_stored_at_other_times_are_sampled_again(videos, index):
+    embedder = MeanColorEmbedder()
+    pipeline.run(videos.parent.parent, index, detectors=[], group_detectors=[], videos=True)
+    clip = videos / "clip.mp4"
+    index.set_frame_embeddings(clip, embedder.id, embedder.version, {0: np.ones(512)})
+
+    pipeline.run(
+        videos.parent.parent, index, detectors=[], group_detectors=[], embedder=embedder,
+        images=False, videos=True,
+    )  # fmt: skip
+
+    assert list(index.frame_embeddings(embedder.id, embedder.version)[clip]) == [
+        300, 400, 500, 600, 700
+    ]  # fmt: skip
+
+
+def test_a_video_whose_frames_fail_is_a_failure_and_is_tried_again(videos, index, monkeypatch):
+    def fail(*_):
+        raise av.error.InvalidDataError(0, "bad frame")
+
+    monkeypatch.setattr(pipeline, "read_frames", fail)
+    embedder = MeanColorEmbedder()
+    run = lambda: pipeline.run(  # noqa: E731
+        videos.parent.parent, index, detectors=[], group_detectors=[], embedder=embedder,
+        images=False, videos=True,
+    )  # fmt: skip
+
+    stats = run()
+    monkeypatch.undo()
+    run()
+
+    assert [f.split(": ")[1] for f in stats.failures] == ["frames"]
+    assert videos / "clip.mp4" in index.frame_embeddings(embedder.id, embedder.version)
+
+
+def test_a_video_run_without_an_embedder_embeds_no_frame(videos, index, monkeypatch):
+    monkeypatch.setattr(pipeline, "read_frames", lambda *_: pytest.fail("read a frame"))
+
+    pipeline.run(videos.parent.parent, index, detectors=[], group_detectors=[], videos=True)

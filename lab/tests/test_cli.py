@@ -118,7 +118,9 @@ def test_scan_with_only_videos_reads_the_videos_and_no_image(tmp_path, capsys):
     Image.new("RGB", (64, 48)).save(folder / "a.png")
     index = tmp_path / "index.sqlite"
 
-    main(["--index", str(index), "scan", str(folder), "--jobs", "1", "--only-videos"])
+    scan = ["--index", str(index), "scan", str(folder), "--jobs", "1", "--no-embeddings"]
+
+    main([*scan, "--only-videos"])
 
     with ImageIndex(index) as stored:
         assert stored.video_metadata(clip.resolve()).duration_ms == 1000

@@ -81,6 +81,15 @@ CREATE TABLE IF NOT EXISTS embeddings (
     vector BLOB NOT NULL,  -- float32, little-endian
     PRIMARY KEY (path, model)
 );
+-- A video's frames, embedded at the times frames.frame_times gives (docs/design.md, section 7).
+CREATE TABLE IF NOT EXISTS frame_embeddings (
+    path TEXT NOT NULL REFERENCES images ON DELETE CASCADE,
+    model TEXT NOT NULL,
+    model_version INTEGER NOT NULL,
+    time_ms INTEGER NOT NULL,
+    vector BLOB NOT NULL,  -- float32, little-endian
+    PRIMARY KEY (path, model, time_ms)
+);
 -- The image set a group detector version last ran on, so unchanged sets are skipped, with the
 -- paths whose content hash failed in that run.
 CREATE TABLE IF NOT EXISTS group_runs (
@@ -99,7 +108,7 @@ CREATE TABLE IF NOT EXISTS not_images (
     mtime_ns INTEGER NOT NULL
 );
 """
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 """Bump on every schema change: an index from another version is refused, not misread."""
 
 
@@ -175,6 +184,7 @@ class ImageIndex:
             )
             self._db.execute("DELETE FROM analyses WHERE path = ?", (path,))
             self._db.execute("DELETE FROM embeddings WHERE path = ?", (path,))
+            self._db.execute("DELETE FROM frame_embeddings WHERE path = ?", (path,))
         return True
 
     def images(self) -> list[MediaRef]:
@@ -358,6 +368,36 @@ class ImageIndex:
                     "INSERT OR REPLACE INTO embeddings VALUES (?, ?, ?, ?)",
                     (str(path), model, model_version, vector.astype("<f4").tobytes()),
                 )
+
+    def set_frame_embeddings(
+        self, path: Path, model: str, model_version: int, vectors: Mapping[int, np.ndarray]
+    ) -> None:
+        """Replaces the video's frames of this model, by their time in milliseconds."""
+        with self._db:
+            exists = self._db.execute("SELECT 1 FROM images WHERE path = ?", (str(path),))
+            _require(exists.fetchone(), path)
+            self._db.execute(
+                "DELETE FROM frame_embeddings WHERE path = ? AND model = ?", (str(path), model)
+            )
+            self._db.executemany(
+                "INSERT INTO frame_embeddings VALUES (?, ?, ?, ?, ?)",
+                [
+                    (str(path), model, model_version, time_ms, vector.astype("<f4").tobytes())
+                    for time_ms, vector in vectors.items()
+                ],
+            )
+
+    def frame_embeddings(self, model: str, model_version: int) -> dict[Path, dict[int, np.ndarray]]:
+        """Every video's frames of this model version, by time, in the order of their times."""
+        rows = self._db.execute(
+            """SELECT path, time_ms, vector FROM frame_embeddings
+               WHERE model = ? AND model_version = ? ORDER BY path, time_ms""",
+            (model, model_version),
+        )
+        frames: dict[Path, dict[int, np.ndarray]] = defaultdict(dict)
+        for path, time_ms, vector in rows:
+            frames[Path(path)][time_ms] = np.frombuffer(vector, dtype="<f4")
+        return dict(frames)
 
     def delete_embeddings(self) -> None:
         """Deletes every stored embedding and nothing else: the next run computes them again."""
