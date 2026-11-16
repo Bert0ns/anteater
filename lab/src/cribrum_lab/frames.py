@@ -125,7 +125,9 @@ def _displayed(frame: av.VideoFrame) -> Image.Image:
 
 
 HDR_GAIN = 0.9
-"""The share of SDR white that HDR's peak becomes: HLG's signal at 1, and 1000 cd/m2 of PQ."""
+"""The share of SDR white that HDR's peak becomes: HLG's signal at 1, and 1000 cd/m2 of PQ. Fitted
+on the phone's HLG frames. PQ was not measured on a phone, so its half is a guess (docs/design.md,
+section 5)."""
 BT2020_TO_BT709 = np.array(
     [[1.6605, -0.5876, -0.0728], [-0.1246, 1.1329, -0.0083], [-0.0182, -0.1006, 1.1187]]
 )
@@ -135,16 +137,23 @@ BT2020_TO_BT709 = np.array(
 def _tone_mapped(signal: np.ndarray, transfer: int) -> np.ndarray:
     """HDR R'G'B' (16 bits, BT.2020) as sRGB in 8 bits, as the phone's decoder tone maps its own 4K
     HLG clips (docs/design.md, section 5): light from the transfer's equations of BT.2100, with no
-    OOTF, times HDR_GAIN, to BT.709 primaries, clipped and sRGB encoded."""
-    linear = _light(transfer)[signal] @ (HDR_GAIN * BT2020_TO_BT709.T).astype(np.float32)
-    # Linear light in 16 bits is finer than a level of sRGB down to black.
-    return _srgb()[np.round(np.clip(linear, 0, 1) * 65535).astype(np.uint16)]
+    OOTF, times HDR_GAIN, to BT.709 primaries, clipped and sRGB encoded. In bands of rows, so a 4K
+    frame takes about 20 MB beside its pixels, where all at once it took 280 MB."""
+    light, srgb = _light(transfer), _srgb()
+    matrix = (HDR_GAIN * BT2020_TO_BT709.T).astype(np.float32)
+    out = np.empty(signal.shape, np.uint8)
+    for row in range(0, len(signal), 256):
+        linear = light[signal[row : row + 256]] @ matrix
+        # Linear light in 16 bits is finer than a level of sRGB down to black.
+        out[row : row + 256] = srgb[np.round(np.clip(linear, 0, 1) * 65535).astype(np.uint16)]
+    return out
 
 
 @cache
 def _light(transfer: int) -> np.ndarray:
     """Light for each 16-bit signal value: HLG's scene light from 0 to 1 (its inverse OETF), or
-    PQ's cd/m2 over HLG's nominal peak of 1000 cd/m2 (its EOTF)."""
+    PQ's cd/m2 over HLG's nominal peak of 1000 cd/m2 (its EOTF). The PQ half is a guess: no PQ
+    video was measured on a phone (docs/design.md, section 5)."""
     e = np.arange(65536) / 65535
     if transfer == ColorTrc.ARIB_STD_B67:
         a, b, c = 0.17883277, 0.28466892, 0.55991073
