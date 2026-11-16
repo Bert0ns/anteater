@@ -316,6 +316,24 @@ class VideosScreenTest {
     }
 
     @Test
+    fun `a video that leaves the list while it plays is stopped`() {
+        var items by mutableStateOf(videos)
+        compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { VideosScreen(items, emptySet(), onToggle = {}, onApply = { _, _ -> }) } }
+        openFullSize("big.mp4")
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        play()
+        compose.waitForIdle()
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), players.made.single().paths)
+
+        items = items.filter { it.video.path != "/sdcard/Movies/middle.mp4" }
+        compose.waitForIdle()
+
+        assertEquals(emptyList<String>(), players.made.single().paths)
+        assertFalse(players.made.single().released) // the view is still open
+    }
+
+    @Test
     fun `a video that fails to play says so, and the view stays`() {
         show(videos)
         openFullSize("big.mp4")

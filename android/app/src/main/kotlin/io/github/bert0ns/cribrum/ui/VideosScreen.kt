@@ -271,6 +271,9 @@ private fun VideoTile(item: VideoItem, selected: Boolean, onHold: () -> Unit, on
 @Composable
 private fun FullSize(videos: List<VideoItem>, start: VideoItem, selected: Set<String>, onToggle: (String) -> Unit, onClose: () -> Unit) {
     val playback = rememberVideoPlayback()
+    // A video that leaves the list while it plays leaves the pager's page where it was, so no swipe stops it.
+    val paths = videos.map { it.video.path }
+    LaunchedEffect(paths) { if (playback.loaded != null && playback.loaded !in paths) playback.stop() }
     val image: @Composable (Int) -> Unit = { page ->
         videos.getOrNull(page)?.let { VideoPage(File(it.video.path), "Videos.fullSize", playback, it.unreadable, onClose) }
     }

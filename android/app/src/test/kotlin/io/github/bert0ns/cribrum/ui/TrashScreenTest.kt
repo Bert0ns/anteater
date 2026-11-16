@@ -26,6 +26,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.trash.TrashedImage
@@ -311,6 +312,27 @@ class TrashScreenTest {
         compose.onNodeWithContentDescription("Close").performClick()
         compose.waitForIdle()
         assertTrue(players.made.single().released)
+    }
+
+    @Test
+    fun `a video that leaves the trash while it plays is stopped`() {
+        val players = Players()
+        val first = clip.copy(file = File("/sdcard/.cribrum-trash/1/first.mp4"))
+        val second = clip.copy(file = File("/sdcard/.cribrum-trash/2/second.mp4"))
+        for (item in listOf(first, second)) ShadowMediaMetadataRetriever.addMetadata(item.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "102000")
+        var items by mutableStateOf(listOf(first, second))
+        compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { TrashScreen(items, emptySet(), {}, { _, _ -> }, {}, {}) } }
+        compose.onNodeWithContentDescription("first.mp4", substring = true).performTouchInput { longClick() }
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onAllNodesWithContentDescription("Play video").onFirst().performClick()
+        compose.waitForIdle()
+        assertEquals(listOf(second.file.path), players.made.single().paths)
+
+        items = listOf(first)
+        compose.waitForIdle()
+
+        assertEquals(emptyList<String>(), players.made.single().paths)
     }
 
     @Test

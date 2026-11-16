@@ -146,12 +146,15 @@ fun TrashScreen(
     fullSize?.let { start ->
         val close = { fullSize = null }
         val playback = rememberVideoPlayback()
+        // A video that leaves the trash while it plays leaves the pager's page where it was, so no swipe stops it.
+        val paths = trashed.map { it.file.path }
+        LaunchedEffect(paths) { if (playback.loaded != null && playback.loaded !in paths) playback.stop() }
         val image: @Composable (Int) -> Unit = { page ->
             trashed.getOrNull(page)?.let { item ->
                 if (item.isVideo) VideoPage(item.file, "Trash.fullSize", playback, unreadable = false, close) else ZoomableImage(item.file.path, close)
             }
         }
-        FullSizeViewer(trashed.map { it.file.path }, start.file.path, onClose = close, image = image, onPage = { playback.stop() }) { page ->
+        FullSizeViewer(paths, start.file.path, onClose = close, image = image, onPage = { playback.stop() }) { page ->
             val item = trashed.getOrNull(page) ?: return@FullSizeViewer
             FullSizeToggle(item.file.path in selected, stringResource(R.string.tile_selected), MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary) { onSelect(item) }
             FullSizeBar(item.original.path, item.favorite) {
