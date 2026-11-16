@@ -111,7 +111,9 @@
     }
   },
   "phone_may_not_read": [
-    "prores.mov",
+    "prores.mov"
+  ],
+  "phone_frames_may_not_read": [
     "clip.webm"
   ],
   "frame_rate_may_differ": [

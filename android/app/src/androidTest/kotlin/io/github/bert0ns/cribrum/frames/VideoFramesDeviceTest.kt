@@ -81,7 +81,7 @@ class VideoFramesDeviceTest {
     fun takesTheFramesOfTheGoldenVideosAsTheLabDoes() {
         val frames = JSONObject(assets.open("frames.json").bufferedReader().readText())
         val expected = JSONObject(assets.open("expected.json").bufferedReader().readText())
-        val mayNotRead = expected.getJSONArray("phone_may_not_read").let { List(it.length(), it::getString) }
+        val mayNotRead = listOf("phone_may_not_read", "phone_frames_may_not_read").flatMap { key -> expected.getJSONArray(key).let { List(it.length(), it::getString) } }
         val tolerance = frames.getJSONObject("tolerance")
         val lowered = tolerance.getJSONObject("lowered_embedding_cosine")
         val meanTolerance = tolerance.getDouble("mean_rgb")
