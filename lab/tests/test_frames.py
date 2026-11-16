@@ -61,11 +61,11 @@ def test_a_portrait_clip_comes_upright():
 
 
 def hdr_gray(path, signal, transfer):
-    """A video of one flat gray frame, `signal` of the full 10-bit range, tagged with `transfer`."""
+    """A video of one flat gray frame, `signal` of the full 10-bit range, tagged with `transfer`.
+    FFV1 is lossless, so the frame holds that signal exactly."""
     with av.open(str(path), "w") as container:
-        stream = container.add_stream("libx265", rate=10)
+        stream = container.add_stream("ffv1", rate=10)
         stream.width, stream.height, stream.pix_fmt = 64, 48, "yuv420p10le"
-        stream.codec_context.options = {"x265-params": "log-level=error"}
         stream.codec_context.color_trc = transfer
         stream.codec_context.color_primaries = 9  # BT.2020
         stream.codec_context.colorspace = 9
@@ -83,7 +83,6 @@ def test_an_hdr_frame_is_tone_mapped_with_its_reference_white_at_sdr_white(
     tmp_path, transfer, reference_white
 ):
     # BT.2408: HDR reference white, 203 cd/m2, is 75% of the HLG signal and 58% of the PQ one.
-    # Matroska: PyAV's MP4 muxer refuses a second libx265 file in one process.
     video = hdr_gray(tmp_path / "gray.mkv", reference_white, transfer)
 
     (frame,) = read_frames(video, [0])
