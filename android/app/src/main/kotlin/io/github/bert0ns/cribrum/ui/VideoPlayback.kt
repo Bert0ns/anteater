@@ -3,8 +3,9 @@ package io.github.bert0ns.cribrum.ui
 
 import android.content.Context
 import android.net.Uri
+import android.os.Looper
 import android.view.SurfaceView
-import android.view.TextureView
+import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -58,6 +59,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import io.github.bert0ns.cribrum.R
 import kotlinx.coroutines.delay
@@ -66,13 +68,18 @@ import java.io.File
 /** How many frames the strip under the controls shows. */
 internal const val STRIP_FRAMES = 5
 
-/** The player of a full size view, made when the first video plays. A test hands in another. */
-internal val LocalPlayerFactory = staticCompositionLocalOf<(Context) -> Player> { ::exoPlayer }
+/**
+ * The players of a full size view and of the loops in a grid (docs/design.md §8), made on [Looper], which every call on
+ * them must then come from. A test hands in others.
+ */
+internal val LocalPlayerFactory = staticCompositionLocalOf<(Context, Looper) -> Player> { ::exoPlayer }
 
 /** Whether the page that reads it is the one the pager has come to rest on, so not one that is only being swiped past. */
 internal val LocalPageSettled = compositionLocalOf { false }
 
-private fun exoPlayer(context: Context): Player = ExoPlayer.Builder(context).build()
+// setLooper is marked unstable, though Media3 documents it as the way to play off the main thread.
+@OptIn(UnstableApi::class)
+private fun exoPlayer(context: Context, looper: Looper): Player = ExoPlayer.Builder(context).setLooper(looper).build()
 
 private val MOVIE_SOUND = AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build()
 
@@ -85,13 +92,13 @@ internal fun stripTimes(durationMs: Long, count: Int = STRIP_FRAMES): List<Long>
 /**
  * The one player of a full size view, and what the controls show of it. It makes the player when a video first plays, plays
  * one video at a time, and [release]s it when the view closes, so no player outlives the view and there is never a second.
- * A [loop], a short clip's tile (docs/design.md §8), is muted from its first frame, decodes no sound at all and plays its
- * video again and again. A view starts muted too ([startMuted], #440): its video autoplays, and the user's music keeps playing
- * until they unmute, which turns the sound on and only then takes audio focus. The mute state is the view's, so the videos after
- * an unmute play with sound, and a view that opens again starts muted again.
- * Everything runs on the main thread, as Media3 asks.
+ * A view starts muted ([startMuted], #440): its video autoplays, and the user's music keeps playing until they unmute, which
+ * turns the sound on and only then takes audio focus. The mute state is the view's, so the videos after an unmute play with
+ * sound, and a view that opens again starts muted again.
+ * Everything runs on the main thread, where the player is made: one player, made once and released when the view closes,
+ * costs the view little, unlike the loops of a grid (`ClipLoop`).
  */
-internal class VideoPlayback(private val loop: Boolean = false, startMuted: Boolean = loop, private val create: () -> Player) {
+internal class VideoPlayback(startMuted: Boolean = false, private val create: () -> Player) {
     private var player: Player? = null
 
     /** The path of the video the player holds, playing or paused, or null when it holds none. */
@@ -131,12 +138,7 @@ internal class VideoPlayback(private val loop: Boolean = false, startMuted: Bool
         val player = player ?: create().also {
             it.addListener(listener)
             it.sound()
-            // A loop has no sound to lose when headphones come out, and takes no audio decoder nor AudioTrack.
-            (it as? ExoPlayer)?.setHandleAudioBecomingNoisy(!loop)
-            if (loop) {
-                it.repeatMode = Player.REPEAT_MODE_ONE
-                it.trackSelectionParameters = it.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true).build()
-            }
+            (it as? ExoPlayer)?.setHandleAudioBecomingNoisy(true)
             player = it
         }
         failed = null
@@ -221,14 +223,6 @@ internal class VideoPlayback(private val loop: Boolean = false, startMuted: Bool
         player?.clearVideoSurfaceView(view)
     }
 
-    fun attach(view: TextureView) {
-        player?.setVideoTextureView(view)
-    }
-
-    fun detach(view: TextureView) {
-        player?.clearVideoTextureView(view)
-    }
-
     /** Reads the player's state into what the screen shows. */
     fun sync() {
         val player = player ?: return
@@ -239,17 +233,14 @@ internal class VideoPlayback(private val loop: Boolean = false, startMuted: Bool
     }
 }
 
-/**
- * The [VideoPlayback] of the full size view or tile that calls this: it is released when that leaves. When the app leaves
- * the screen a video pauses, and a [loop] lets go of its player, so its codecs are free while the app is in the background.
- */
+/** The [VideoPlayback] of the full size view that calls this: it is released when the view leaves, and pauses when the app leaves the screen. */
 @Composable
-internal fun rememberVideoPlayback(loop: Boolean = false, startMuted: Boolean = true): VideoPlayback {
+internal fun rememberVideoPlayback(startMuted: Boolean = true): VideoPlayback {
     val context = LocalContext.current.applicationContext
     val factory = LocalPlayerFactory.current
-    val playback = remember(context, factory, loop, startMuted) { VideoPlayback(loop, startMuted) { factory(context) } }
+    val playback = remember(context, factory, startMuted) { VideoPlayback(startMuted) { factory(context, Looper.getMainLooper()) } }
     DisposableEffect(playback) { onDispose { playback.release() } }
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { if (loop) playback.release() else playback.pause() }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { playback.pause() }
     return playback
 }
 

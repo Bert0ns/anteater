@@ -1367,6 +1367,41 @@ class ReviewTest {
     }
 
     @Test
+    fun `a page of video copies holds 15 groups, whatever the number of copies in them`() = test {
+        // Groups of 4, so 15 of them hold 60 videos, past the 48 images of a page of photos.
+        repeat(20) {
+            duplicateVideo("DCIM/Camera/v$it.mp4", 300, "exact$it", Role.BEST)
+            video("DCIM/Camera/n$it.mp4", 300).also { v -> runBlocking { index.setSignals(v.path, "near_duplicate", 2, listOf(nearDuplicate("near$it", Role.BEST))) } }
+            for (copy in 1..3) {
+                duplicateVideo("Download/v$it-$copy.mp4", 300, "exact$it", Role.INFERIOR)
+                video("Download/n$it-$copy.mp4", 300).also { v -> runBlocking { index.setSignals(v.path, "near_duplicate", 2, listOf(nearDuplicate("near$it", Role.INFERIOR, 1f))) } }
+            }
+        }
+
+        for (category in listOf(Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE)) {
+            val groups = page(category, mediaType = MediaType.VIDEO).groups
+            assertEquals(15, groups.size)
+            assertEquals(60, groups.sumOf { it.images.size })
+        }
+    }
+
+    @Test
+    fun `a page of short clips, blurry, badly exposed or forwarded videos holds 16 videos`() = test {
+        val signals = listOf(
+            Signal("short_clips", 1, Category.SHORT_CLIPS, 0.9f),
+            Signal("blur", 1, Category.BLURRY, 1f),
+            Signal("exposure", 1, Category.BAD_EXPOSURE, 1f),
+            Signal("forwarded", 2, Category.FORWARDED, 1f),
+        )
+        repeat(30) { i -> video("DCIM/Camera/clip$i.mp4", 300).also { v -> runBlocking { signals.forEach { index.setSignals(v.path, it.detectorId, it.detectorVersion, listOf(it)) } } } }
+
+        for (category in listOf(Category.SHORT_CLIPS, Category.BLURRY, Category.BAD_EXPOSURE, Category.FORWARDED)) {
+            assertEquals(category.name, 16, page(category, mediaType = MediaType.VIDEO).groups.size)
+            assertEquals(category.name, 30, page(category, mediaType = MediaType.VIDEO).remaining)
+        }
+    }
+
+    @Test
     fun `a group of takes left with one take after the other went to the trash is not offered`() = test {
         val first = take("DCIM/Camera/1.mp4")
         take("DCIM/Camera/2.mp4")

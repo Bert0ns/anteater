@@ -187,20 +187,6 @@ class VideoPlaybackTest {
     }
 
     @Test
-    fun `a loop is muted, takes no audio focus, decodes no sound and plays its video again and again`() {
-        val loop = VideoPlayback(loop = true) { FakePlayer().also(players::add) }
-
-        loop.play(one)
-
-        val player = players.single()
-        assertTrue(loop.muted)
-        assertEquals(0f, player.volume, 0f)
-        assertFalse(player.focus)
-        assertTrue(C.TRACK_TYPE_AUDIO in player.trackSelectionParameters.disabledTrackTypes)
-        assertEquals(Player.REPEAT_MODE_ONE, player.repeatMode)
-    }
-
-    @Test
     fun `a video of the full size view keeps its sound track and plays once`() {
         playback.play(one)
 

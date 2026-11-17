@@ -346,11 +346,11 @@ private fun FullSize(photos: List<CompressibleImage>, start: CompressibleImage, 
     }
 }
 
-/** The page's position, and the way to the next and the previous one. */
+/** The page's position in a list of [total] shown [pageSize] at a time, and the way to the next and the previous one. */
 @Composable
-private fun PageControls(page: Int, total: Int, onPage: (Int) -> Unit) {
-    val first = page * COMPRESS_PAGE_SIZE + 1
-    val last = minOf(total, first + COMPRESS_PAGE_SIZE - 1)
+internal fun PageControls(page: Int, total: Int, onPage: (Int) -> Unit, pageSize: Int = COMPRESS_PAGE_SIZE) {
+    val first = page * pageSize + 1
+    val last = minOf(total, first + pageSize - 1)
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton({ onPage(page - 1) }, enabled = page > 0) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.compress_page_previous)) }
         // Polite, so a screen reader says the new position when the page changes.
@@ -360,7 +360,7 @@ private fun PageControls(page: Int, total: Int, onPage: (Int) -> Unit) {
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.titleSmall,
         )
-        IconButton({ onPage(page + 1) }, enabled = page < compressPageCount(total) - 1) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.compress_page_next)) }
+        IconButton({ onPage(page + 1) }, enabled = last < total) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.compress_page_next)) }
     }
 }
 

@@ -1,5 +1,7 @@
 package io.github.bert0ns.cribrum.ui
 
+import android.os.Handler
+import android.os.Looper
 import android.view.SurfaceView
 import android.view.View
 import android.view.ViewGroup
@@ -21,15 +23,19 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
@@ -53,6 +59,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowDialog
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36]) // Compose tests reach InputManager.getInstance, which SDK 37 removed
@@ -68,6 +76,9 @@ class VideosScreenTest {
     private class Applied(var paths: Set<String>? = null, var trash: Boolean? = null)
 
     private var players = Players()
+
+    /** The players of the full size view, made on the main thread, and not the tiles' loops, made on theirs. */
+    private val viewPlayers get() = players.made.filter { it.builtOn == Looper.getMainLooper().thread }
 
     private fun show(items: List<VideoItem>, applied: Applied = Applied(), owner: LifecycleOwner? = null) {
         compose.setContent {
@@ -141,8 +152,8 @@ class VideosScreenTest {
         openFullSize("middle.mp4")
         compose.waitForIdle()
 
-        assertEquals(listOf("/sdcard/Movies/middle.mp4"), players.made.single().paths)
-        assertTrue(players.made.single().playing)
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), viewPlayers.single().paths)
+        assertTrue(viewPlayers.single().playing)
         compose.onNodeWithText("00:00 / 01:01").assertExists()
         compose.onNodeWithContentDescription("Pause video").assertExists()
         compose.onNodeWithContentDescription("Position in the video").assertExists()
@@ -157,14 +168,14 @@ class VideosScreenTest {
         compose.onNodeWithTag("fullSize").performTouchInput { click() }
         compose.waitForIdle()
 
-        assertFalse(players.made.single().playing)
+        assertFalse(viewPlayers.single().playing)
         compose.onNodeWithTag("fullSize").assertExists()
         compose.onAllNodesWithContentDescription("Play video").assertCountEquals(2) // the page's and the bar's
 
         compose.onNodeWithTag("fullSize").performTouchInput { click() }
         compose.waitForIdle()
 
-        assertTrue(players.made.single().playing)
+        assertTrue(viewPlayers.single().playing)
     }
 
     @Test
@@ -200,7 +211,7 @@ class VideosScreenTest {
         compose.waitForIdle()
         assertTrue(surface()!!.keepScreenOn)
 
-        players.made.single().ended()
+        viewPlayers.single().ended()
         compose.waitForIdle()
         assertFalse(surface()!!.keepScreenOn)
     }
@@ -214,8 +225,8 @@ class VideosScreenTest {
         compose.onNodeWithContentDescription("Go to 00:30").performClick()
         compose.waitForIdle()
 
-        assertEquals(30_500, players.made.single().positionMs)
-        assertTrue(players.made.single().playing)
+        assertEquals(30_500, viewPlayers.single().positionMs)
+        assertTrue(viewPlayers.single().playing)
     }
 
     private fun tapSays(label: String) = SemanticsMatcher("a tap that says $label") { it.config.getOrNull(SemanticsActions.OnClick)?.label == label }
@@ -253,19 +264,19 @@ class VideosScreenTest {
         show(videos)
         openFullSize("middle.mp4")
         compose.waitForIdle()
-        assertTrue(players.made.single().playing)
-        assertEquals(0f, players.made.single().volume, 0f)
-        assertFalse(players.made.single().focus) // the user's music plays on
+        assertTrue(viewPlayers.single().playing)
+        assertEquals(0f, viewPlayers.single().volume, 0f)
+        assertFalse(viewPlayers.single().focus) // the user's music plays on
 
         compose.onNodeWithContentDescription("Unmute").performClick()
         compose.waitForIdle()
-        assertEquals(1f, players.made.single().volume, 0f)
-        assertTrue(players.made.single().focus)
+        assertEquals(1f, viewPlayers.single().volume, 0f)
+        assertTrue(viewPlayers.single().focus)
 
         compose.onNodeWithContentDescription("Mute").performClick()
         compose.waitForIdle()
-        assertEquals(0f, players.made.single().volume, 0f)
-        assertFalse(players.made.single().focus)
+        assertEquals(0f, viewPlayers.single().volume, 0f)
+        assertFalse(viewPlayers.single().focus)
     }
 
     @Test
@@ -279,18 +290,18 @@ class VideosScreenTest {
         compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
         compose.waitForIdle()
 
-        assertEquals(listOf("/sdcard/Movies/middle.mp4"), players.made.single().paths)
-        assertEquals(1f, players.made.single().volume, 0f)
-        assertTrue(players.made.single().focus)
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), viewPlayers.single().paths)
+        assertEquals(1f, viewPlayers.single().volume, 0f)
+        assertTrue(viewPlayers.single().focus)
 
         compose.onNodeWithContentDescription("Close").performClick()
         compose.waitForIdle()
         openFullSize("big.mp4")
         compose.waitForIdle()
 
-        assertEquals(2, players.made.size)
-        assertEquals(0f, players.made.last().volume, 0f)
-        assertFalse(players.made.last().focus)
+        assertEquals(2, viewPlayers.size)
+        assertEquals(0f, viewPlayers.last().volume, 0f)
+        assertFalse(viewPlayers.last().focus)
     }
 
     @Test
@@ -298,15 +309,15 @@ class VideosScreenTest {
         show(videos)
         openFullSize("big.mp4")
         compose.waitForIdle()
-        assertEquals(listOf("/sdcard/Movies/big.mp4"), players.made.single().paths)
+        assertEquals(listOf("/sdcard/Movies/big.mp4"), viewPlayers.single().paths)
 
         compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
         compose.waitForIdle()
 
-        assertEquals(1, players.made.size)
-        assertEquals(listOf("/sdcard/Movies/middle.mp4"), players.made.single().paths)
-        assertTrue(players.made.single().playing)
-        assertFalse(players.made.single().released)
+        assertEquals(1, viewPlayers.size)
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), viewPlayers.single().paths)
+        assertTrue(viewPlayers.single().playing)
+        assertFalse(viewPlayers.single().released)
         compose.onNodeWithText("Video, 01:01, 800 MB").assertExists()
         compose.onNodeWithText("00:00 / 01:01").assertExists()
     }
@@ -316,13 +327,13 @@ class VideosScreenTest {
         show(listOf(clip("big.mp4", 1_500_000_000), clip("broken.mp4", 700_000_000, durationMs = null, unreadable = true)))
         openFullSize("big.mp4")
         compose.waitForIdle()
-        assertTrue(players.made.single().playing)
+        assertTrue(viewPlayers.single().playing)
 
         compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
         compose.waitForIdle()
 
-        assertEquals(emptyList<String>(), players.made.single().paths)
-        assertFalse(players.made.single().playing)
+        assertEquals(emptyList<String>(), viewPlayers.single().paths)
+        assertFalse(viewPlayers.single().playing)
     }
 
     @Test
@@ -332,13 +343,13 @@ class VideosScreenTest {
         compose.waitForIdle()
         compose.onNodeWithTag("fullSize").performTouchInput { click() }
         compose.waitForIdle()
-        assertFalse(players.made.single().playing)
+        assertFalse(viewPlayers.single().playing)
 
         compose.onNodeWithTag("fullSize").performTouchInput { swipeRight() } // there is no page before the first
         compose.waitForIdle()
 
-        assertEquals(listOf("/sdcard/Movies/big.mp4"), players.made.single().paths)
-        assertFalse(players.made.single().playing)
+        assertEquals(listOf("/sdcard/Movies/big.mp4"), viewPlayers.single().paths)
+        assertFalse(viewPlayers.single().playing)
     }
 
     private fun pageWidth() = compose.onNodeWithTag("fullSize").fetchSemanticsNode().size.width.toFloat()
@@ -352,7 +363,7 @@ class VideosScreenTest {
         compose.waitForIdle()
         compose.onNodeWithTag("fullSize").performTouchInput { click() }
         compose.waitForIdle()
-        assertFalse(players.made.single().playing)
+        assertFalse(viewPlayers.single().playing)
         val width = pageWidth()
 
         compose.onNodeWithTag("fullSize").performTouchInput {
@@ -361,16 +372,16 @@ class VideosScreenTest {
         }
         compose.waitForIdle()
         // The pager is past the middle of the page, and the video is still there: only a page it rests on takes it away.
-        assertEquals(listOf("/sdcard/Movies/middle.mp4"), players.made.single().paths)
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), viewPlayers.single().paths)
         compose.onNodeWithTag("fullSize").performTouchInput {
             moveBy(Offset(0.7f * width, 0f))
             up()
         }
         compose.waitForIdle()
 
-        assertEquals(listOf("/sdcard/Movies/middle.mp4"), players.made.single().paths)
-        assertFalse(players.made.single().playing)
-        assertEquals(30_500, players.made.single().positionMs)
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), viewPlayers.single().paths)
+        assertFalse(viewPlayers.single().playing)
+        assertEquals(30_500, viewPlayers.single().positionMs)
     }
 
     @Test
@@ -378,7 +389,7 @@ class VideosScreenTest {
         show(videos)
         openFullSize("big.mp4")
         compose.waitForIdle()
-        players.made.single().fail()
+        viewPlayers.single().fail()
         compose.waitForIdle()
         val width = pageWidth()
 
@@ -390,13 +401,13 @@ class VideosScreenTest {
         }
         compose.waitForIdle()
 
-        assertEquals(emptyList<String>(), players.made.single().paths)
+        assertEquals(emptyList<String>(), viewPlayers.single().paths)
         compose.onNodeWithText("This video can't be played.").assertExists()
 
         compose.onAllNodesWithContentDescription("Play video").onFirst().performClick()
         compose.waitForIdle()
 
-        assertEquals(listOf("/sdcard/Movies/big.mp4"), players.made.single().paths)
+        assertEquals(listOf("/sdcard/Movies/big.mp4"), viewPlayers.single().paths)
     }
 
     @Test
@@ -405,13 +416,13 @@ class VideosScreenTest {
         compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { VideosScreen(items, emptySet(), onToggle = {}, onApply = { _, _ -> }) } }
         openFullSize("middle.mp4")
         compose.waitForIdle()
-        assertTrue(players.made.single().playing)
+        assertTrue(viewPlayers.single().playing)
 
         items = items.filter { it.video.path != "/sdcard/Movies/big.mp4" } // the pager's index of the playing video shifts
         compose.waitForIdle()
 
-        assertEquals(listOf("/sdcard/Movies/middle.mp4"), players.made.single().paths)
-        assertTrue(players.made.single().playing)
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), viewPlayers.single().paths)
+        assertTrue(viewPlayers.single().playing)
     }
 
     @Test
@@ -424,7 +435,7 @@ class VideosScreenTest {
         compose.waitForIdle()
 
         compose.onNodeWithTag("fullSize").assertDoesNotExist()
-        assertTrue(players.made.single().released)
+        assertTrue(viewPlayers.single().released)
     }
 
     @Test
@@ -436,13 +447,13 @@ class VideosScreenTest {
         show(videos, owner = owner)
         openFullSize("middle.mp4")
         compose.waitForIdle()
-        assertTrue(players.made.single().playing)
+        assertTrue(viewPlayers.single().playing)
 
         compose.runOnUiThread { owner.lifecycle.currentState = Lifecycle.State.CREATED } // ON_PAUSE, then ON_STOP
         compose.waitForIdle()
 
-        assertFalse(players.made.single().playing)
-        assertEquals(listOf("/sdcard/Movies/middle.mp4"), players.made.single().paths) // paused, not dropped
+        assertFalse(viewPlayers.single().playing)
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), viewPlayers.single().paths) // paused, not dropped
     }
 
     @Test
@@ -452,14 +463,14 @@ class VideosScreenTest {
         openFullSize("big.mp4")
         compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
         compose.waitForIdle()
-        assertEquals(listOf("/sdcard/Movies/middle.mp4"), players.made.single().paths)
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), viewPlayers.single().paths)
 
         items = items.filter { it.video.path != "/sdcard/Movies/middle.mp4" }
         compose.waitForIdle()
 
         // The page that takes its place is the one the pager rests on, so it plays, and the removed video is gone.
-        assertEquals(listOf("/sdcard/Movies/small.mp4"), players.made.single().paths)
-        assertFalse(players.made.single().released) // the view is still open
+        assertEquals(listOf("/sdcard/Movies/small.mp4"), viewPlayers.single().paths)
+        assertFalse(viewPlayers.single().released) // the view is still open
     }
 
     @Test
@@ -468,7 +479,7 @@ class VideosScreenTest {
         openFullSize("big.mp4")
         compose.waitForIdle()
 
-        players.made.single().fail()
+        viewPlayers.single().fail()
         compose.waitForIdle()
 
         compose.onNodeWithText("This video can't be played.").assertExists()
@@ -486,7 +497,7 @@ class VideosScreenTest {
         compose.onAllNodesWithText("Can't be read").assertCountEquals(2) // the tile's and the page's
         compose.onAllNodesWithContentDescription("Play video").assertCountEquals(0)
         compose.onAllNodesWithContentDescription("Go to", substring = true).assertCountEquals(0)
-        assertTrue(players.made.isEmpty())
+        assertTrue(viewPlayers.isEmpty())
     }
 
     @Test
@@ -664,5 +675,139 @@ class VideosScreenTest {
         compose.onNodeWithText("Videos").performClick()
 
         assertEquals(CleanTab.VIDEOS, tab)
+    }
+
+    private fun many(count: Int) = (1..count).map { clip("v$it.mp4", 2_000_000_000L - it) }
+
+    private fun columns(): Int {
+        val tops = compose.onAllNodesWithContentDescription(".mp4", substring = true).fetchSemanticsNodes().map { it.boundsInRoot.top }
+        return tops.count { it == tops.min() }
+    }
+
+    @Test
+    fun `largest videos shows 16 a page, and the next page keeps the selection`() {
+        show(many(20))
+        compose.onAllNodesWithText("1 to 16 of 20").onFirst().assertExists()
+        tile("v17.mp4").assertDoesNotExist()
+        tile("v1.mp4").performClick()
+
+        compose.onAllNodesWithContentDescription("Next page").onFirst().performClick()
+        compose.waitForIdle()
+
+        compose.onAllNodesWithText("17 to 20 of 20").onFirst().assertExists()
+        tile("v17.mp4").assertExists()
+        tile("v1.mp4").assertDoesNotExist()
+        compose.onNodeWithText("Trash 1 video", substring = true).assertExists()
+    }
+
+    @Test
+    fun `trashing the whole last page shows the page before, which stays when the list grows again`() {
+        var items by mutableStateOf(many(20))
+        compose.setContent {
+            var selected by remember { mutableStateOf(emptySet<String>()) }
+            VideosScreen(items, selected, onToggle = { selected = if (it in selected) selected - it else selected + it }, onApply = { paths, _ ->
+                items = items.filterNot { it.video.path in paths }
+                selected = emptySet()
+            })
+        }
+        compose.onAllNodesWithContentDescription("Next page").onFirst().performClick()
+        compose.waitForIdle()
+        for (n in 17..20) tile("v$n.mp4").performClick()
+
+        compose.onNodeWithText("Trash 4 videos", substring = true).performClick()
+        compose.waitForIdle()
+        tile("v1.mp4").assertExists() // the list fits one page now
+
+        items = many(20) // a scan finds them again
+        compose.waitForIdle()
+        tile("v1.mp4").assertExists()
+        tile("v17.mp4").assertDoesNotExist() // still the first page, not the one that was emptied
+    }
+
+    @Test
+    fun `a rotation keeps the scroll of the page where it was`() {
+        val restore = StateRestorationTester(compose)
+        restore.setContent { VideosScreen(many(16), emptySet(), onToggle = {}, onApply = { _, _ -> }) }
+        compose.onNode(hasScrollAction()).performScrollToIndex(10)
+        compose.waitForIdle()
+        tile("v1.mp4").assertDoesNotExist()
+
+        restore.emulateSavedInstanceStateRestore()
+        compose.waitForIdle()
+
+        tile("v1.mp4").assertDoesNotExist()
+        tile("v11.mp4").assertExists()
+    }
+
+    @Test
+    fun `the next page starts at its top`() {
+        show(many(40))
+        compose.onNode(hasScrollAction()).performScrollToIndex(14)
+        compose.waitForIdle()
+
+        compose.onAllNodesWithContentDescription("Next page").onFirst().performClick()
+        compose.waitForIdle()
+
+        tile("v17.mp4").assertExists()
+    }
+
+    @Test
+    fun `a list that fits one page has no page controls`() {
+        show(many(16))
+
+        compose.onAllNodesWithContentDescription("Next page").assertCountEquals(0)
+    }
+
+    @Test
+    @Config(qualifiers = "w500dp-h900dp")
+    fun `largest videos has 2 columns on a compact width`() {
+        show(many(8))
+
+        assertEquals(2, columns())
+    }
+
+    @Test
+    @Config(qualifiers = "w800dp-h1280dp")
+    fun `largest videos has 4 columns on a medium width`() {
+        show(many(8))
+
+        assertEquals(4, columns())
+    }
+
+    /** Lets the screen and the loops' thread answer each other until both are quiet. */
+    private fun settle() {
+        repeat(3) {
+            compose.waitForIdle()
+            val done = CountDownLatch(1)
+            Handler(clipLoops).post { done.countDown() }
+            assertTrue(done.await(5, TimeUnit.SECONDS))
+        }
+        compose.waitForIdle()
+    }
+
+    private val loops get() = players.made.filter { it.builtOn == clipLoops.thread && !it.released }
+    private val slideshows get() = compose.onAllNodesWithTag("slideshow", useUnmergedTree = true).fetchSemanticsNodes().size
+
+    @Test
+    fun `the first two videos on screen play their first 10 seconds, muted, and the others show the slideshow`() {
+        show(many(8))
+        settle()
+
+        assertEquals(listOf("/sdcard/Movies/v1.mp4", "/sdcard/Movies/v2.mp4"), loops.flatMap { it.paths })
+        assertTrue(loops.all { it.endMs == LONG_LOOP_MS && it.muted && it.repeating })
+        assertEquals(compose.onAllNodesWithContentDescription(".mp4", substring = true).fetchSemanticsNodes().size - LOOPING_CLIPS, slideshows)
+    }
+
+    @Test
+    fun `a hot phone or battery saver turns the loops of largest videos into slideshows`() {
+        compose.setContent {
+            CompositionLocalProvider(LocalPlayerFactory provides players.factory) {
+                VideosScreen(many(8), emptySet(), onToggle = {}, onApply = { _, _ -> }, canPlay = false)
+            }
+        }
+        settle()
+
+        assertTrue(loops.isEmpty())
+        assertEquals(compose.onAllNodesWithContentDescription(".mp4", substring = true).fetchSemanticsNodes().size, slideshows)
     }
 }
