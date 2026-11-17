@@ -459,6 +459,10 @@ private fun AppContent(model: ReviewViewModel) {
                             model::setThreshold,
                             model::resetThresholds,
                             Modifier.readableWidth(),
+                            videoThresholds = state.videoThresholds,
+                            videoCounts = state.videoThresholdCounts,
+                            videoDefaultCounts = state.videoDefaultCounts,
+                            onChangeVideo = model::setVideoThreshold,
                         )
                         Screen.StorageMap -> StorageMapScreen(
                             currentFolder = state.storageMap.lastOrNull() ?: Folder.EMPTY,

@@ -9,6 +9,8 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -43,7 +45,7 @@ class ThresholdsScreenTest {
 
         compose.onNodeWithText("Move a slider left to see more images, right to see fewer.").assertIsDisplayed()
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Blurry"))
-        compose.onNodeWithText("Blurry").assertIsDisplayed()
+        compose.onAllNodesWithText("Blurry").onFirst().assertIsDisplayed() // the Videos section has one too
         compose.onNodeWithText("10 images to review").assertIsDisplayed()
         compose.onNodeWithText("15 images fewer than at the default").assertIsDisplayed()
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Documents and notes"))
@@ -110,5 +112,33 @@ class ThresholdsScreenTest {
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Reset to defaults"))
         compose.onNodeWithText("Reset to defaults").performClick()
         assertEquals(listOf(Haptic.TICK.type, Haptic.KEEP.type), given)
+    }
+
+    @Test
+    fun `two sections, Photos and Videos, and a video's slider reports on its own`() {
+        val photos = mutableListOf<Pair<Category, Float>>()
+        val videos = mutableListOf<Pair<Category, Float>>()
+        compose.setContent {
+            ThresholdsScreen(THRESHOLDS, emptyMap(), emptyMap(), { c, v -> photos += c to v }, {}, onChangeVideo = { c, v -> videos += c to v })
+        }
+
+        compose.onNodeWithText("Photos").assertIsDisplayed()
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Videos"))
+        compose.onNodeWithText("Videos").assertIsDisplayed()
+        compose.onNode(hasScrollAction()).performScrollToNode(hasContentDescription("Blurry, videos"))
+        compose.onNodeWithContentDescription("Blurry, videos").performSemanticsAction(SemanticsActions.SetProgress) { it(0.3f) }
+
+        assertEquals(listOf(Category.BLURRY to 0.3f), videos)
+        assertEquals(emptyList<Pair<Category, Float>>(), photos)
+    }
+
+    @Test
+    fun `only the categories whose video score is graded have a slider under Videos`() {
+        compose.setContent { ThresholdsScreen(THRESHOLDS, emptyMap(), emptyMap(), { _, _ -> }, {}) }
+
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Reset to defaults"))
+        compose.onAllNodes(hasContentDescription(", videos", substring = true)).assertCountEquals(2)
+        compose.onNodeWithContentDescription("Blurry, videos").assertExists()
+        compose.onNodeWithContentDescription("Too dark or too bright, videos").assertExists()
     }
 }

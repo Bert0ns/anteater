@@ -15,6 +15,7 @@ import io.github.bert0ns.cribrum.detectors.NearDuplicateDetector
 import io.github.bert0ns.cribrum.detectors.TakesDetector
 import io.github.bert0ns.cribrum.folders.isStickerFolder
 import io.github.bert0ns.cribrum.frames.FRAMES_VERSION
+import io.github.bert0ns.cribrum.frames.SampledFrame
 import io.github.bert0ns.cribrum.hashing.PHASH_DECODE_SIDE
 import io.github.bert0ns.cribrum.hashing.contentHash
 import io.github.bert0ns.cribrum.hashing.perceptualHash
@@ -29,6 +30,7 @@ import io.github.bert0ns.cribrum.metadata.VideoMetadata
 import io.github.bert0ns.cribrum.metadata.readMetadata
 import io.github.bert0ns.cribrum.mobileclip.preprocess
 import io.github.bert0ns.cribrum.model.Category
+import io.github.bert0ns.cribrum.model.FrameMeasures
 import io.github.bert0ns.cribrum.model.GROUP_KEY
 import io.github.bert0ns.cribrum.model.Kind
 import io.github.bert0ns.cribrum.model.MediaRef
@@ -310,9 +312,9 @@ class PipelineTest {
     }
 
     /** Frames as the model takes them, a flat gray each, since Robolectric decodes no video. */
-    private fun grayFrames(file: File, times: List<Long>): Map<Long, FloatArray> = times.associateWith { FloatArray(3 * 256 * 256) { 0.5f } }
+    private fun grayFrames(file: File, times: List<Long>): Map<Long, SampledFrame> = times.associateWith { SampledFrame(FloatArray(3 * 256 * 256) { 0.5f }, GRAY) }
 
-    private fun videoScan(frameReader: (File, List<Long>) -> Map<Long, FloatArray> = ::grayFrames, embedder: Embedder? = MeanColorEmbedder()) = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), embedder = embedder, videoMetadataReader = ::readVideo, frameReader = frameReader)
+    private fun videoScan(frameReader: (File, List<Long>) -> Map<Long, SampledFrame> = ::grayFrames, embedder: Embedder? = MeanColorEmbedder()) = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), embedder = embedder, videoMetadataReader = ::readVideo, frameReader = frameReader)
 
     private fun frameTimesStored(embedder: Embedder = MeanColorEmbedder(), framesVersion: Int = FRAMES_VERSION) = runBlocking { index.sampledTimes(embedder.id, embedder.version, framesVersion) }
 
@@ -2491,3 +2493,6 @@ class PipelineTest {
         assertEquals(0, runBlocking { index.embeddings(embedder.id, embedder.version) }.size)
     }
 }
+
+/** What a flat gray frame measures: no detail, a flat luminance and no face. */
+private val GRAY = FrameMeasures(0.0, 128.0, 128.0, 128.0, 128.0)

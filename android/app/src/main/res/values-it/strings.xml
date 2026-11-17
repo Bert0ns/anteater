@@ -382,6 +382,7 @@
         <item quantity="many">%d di immagini in meno rispetto al valore predefinito</item>
     </plurals>
     <string name="thresholds_reset">Ripristina i valori predefiniti</string>
+    <string name="thresholds_slider_videos">%1$s, video</string>
     <string name="settings_excluded_folders">Cartelle escluse</string>
     <string name="settings_no_excluded_folders">Nessuna cartella è esclusa. Escludine una dalla mappa dell\'archiviazione o da un\'immagine a schermo intero.</string>
     <string name="settings_storage_app">App</string>

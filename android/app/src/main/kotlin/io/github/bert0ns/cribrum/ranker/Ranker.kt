@@ -30,6 +30,16 @@ val THRESHOLDS: Map<Category, Float> = mapOf(
     Category.TAKES to 0.5f,
 )
 
+/**
+ * The threshold of a category for videos, where its video score is graded: a video is not held to the photos' slider, which could hide
+ * it without a word (docs/design.md §6.1 and §8). A category not listed here has one threshold for both. Picked from the sweep of the
+ * video labels (docs/design.md §5). Keep them equal to the lab's.
+ */
+val VIDEO_THRESHOLDS: Map<Category, Float> = mapOf(
+    Category.BLURRY to 0.15f,
+    Category.BAD_EXPOSURE to 0.4f,
+)
+
 /** How much a protection signal at score 1 lowers an image's likelihood. */
 val PROTECTION_WEIGHTS: Map<Protection, Float> =
     mapOf(Protection.FACES to 0.5f, Protection.FAVORITE to 0.8f, Protection.ALBUM to 0.6f)
@@ -54,7 +64,10 @@ data class Candidate(
     val isCandidate: Boolean get() = reasons.isNotEmpty()
 }
 
-class Ranker(private val thresholds: Map<Category, Float> = THRESHOLDS) {
+class Ranker(private val thresholds: Map<Category, Float> = THRESHOLDS, videoThresholds: Map<Category, Float> = VIDEO_THRESHOLDS) {
+    /** What a video is held to: its own threshold where its category has one, the shared one elsewhere. */
+    private val limitsOfVideos = thresholds + videoThresholds
+
     /**
      * The "review everything" order: every unreviewed image, most likely deletable first.
      *
@@ -68,14 +81,15 @@ class Ranker(private val thresholds: Map<Category, Float> = THRESHOLDS) {
         val ranked = mutableListOf<Candidate>()
         for (image in images) {
             if (image.reviewState == ReviewState.TRASHED || isExcluded(image.ref.path, excludedFolders)) continue
-            var reasons = image.signals.filter(::passes)
+            val limits = if (image.ref.mediaType == MediaType.VIDEO) limitsOfVideos else thresholds
+            var reasons = image.signals.filter { passes(it, limits) }
             if (image.reviewState == ReviewState.KEPT) {
                 reasons = reasons.filter { it.identity !in image.seenWhenKept }
                 if (reasons.isEmpty()) continue
             }
             val protection = protection(image.signals)
-            val likelihood = protection * (image.signals.maxOfOrNull(::likelihood) ?: 0f)
-            ranked += Candidate(image, reasons.sortedByDescending(::likelihood), likelihood, protection)
+            val likelihood = protection * (image.signals.maxOfOrNull { likelihood(it, limits) } ?: 0f)
+            ranked += Candidate(image, reasons.sortedByDescending { likelihood(it, limits) }, likelihood, protection)
         }
         // Ties go by a hash of the path: the path itself holds the date in many file names, and
         // photo age is never a signal (docs/design.md, D5).
@@ -88,14 +102,14 @@ class Ranker(private val thresholds: Map<Category, Float> = THRESHOLDS) {
     }
 
     /** Protection signals have no threshold, so they never pass. */
-    private fun passes(signal: Signal): Boolean {
-        val threshold = thresholds[signal.kind] ?: return false
+    private fun passes(signal: Signal, limits: Map<Category, Float>): Boolean {
+        val threshold = limits[signal.kind] ?: return false
         return signal.score >= threshold
     }
 
     /** Score / threshold below the threshold, 1 + the margin over it above, 0 for protection signals. */
-    private fun likelihood(signal: Signal): Float {
-        val threshold = thresholds[signal.kind] ?: return 0f
+    private fun likelihood(signal: Signal, limits: Map<Category, Float>): Float {
+        val threshold = limits[signal.kind] ?: return 0f
         return when {
             signal.score < threshold -> signal.score / threshold
             threshold == 1f -> 1f

@@ -59,6 +59,7 @@ path=<tmp>/device/Pictures/Screenshots/Screenshot_1.png | model=arithmetic | mod
 path=<tmp>/device/WhatsApp/Media/a-copy.png | model=arithmetic | model_version=1 | vector=f092446a751f095c
 [excluded_folders]
 [frame_embeddings]
+[frame_measures]
 [group_runs]
 detector_id=burst | detector_version=3 | fingerprint=#1
 detector_id=exact_duplicate | detector_version=1 | fingerprint=#1
@@ -176,6 +177,7 @@ path=<tmp>/device/Pictures/Screenshots/Screenshot_1.png | model=arithmetic | mod
 path=<tmp>/device/WhatsApp/Media/a-copy.png | model=arithmetic | model_version=1 | vector=f092446a751f095c
 [excluded_folders]
 [frame_embeddings]
+[frame_measures]
 [group_runs]
 detector_id=burst | detector_version=3 | fingerprint=#1
 detector_id=exact_duplicate | detector_version=1 | fingerprint=#1
@@ -303,6 +305,7 @@ path=<tmp>/device/Pictures/Screenshots/Screenshot_1.png | model=arithmetic | mod
 path=<tmp>/device/WhatsApp/Media/a-copy.png | model=arithmetic | model_version=1 | vector=f092446a751f095c
 [excluded_folders]
 [frame_embeddings]
+[frame_measures]
 [group_runs]
 detector_id=burst | detector_version=3 | fingerprint=#1
 detector_id=exact_duplicate | detector_version=1 | fingerprint=#1

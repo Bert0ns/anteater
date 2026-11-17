@@ -26,7 +26,9 @@ import io.github.bert0ns.cribrum.detectors.StickerDetector
 import io.github.bert0ns.cribrum.detectors.TakesDetector
 import io.github.bert0ns.cribrum.folders.isStickerFolder
 import io.github.bert0ns.cribrum.frames.FRAMES_VERSION
+import io.github.bert0ns.cribrum.frames.SampledFrame
 import io.github.bert0ns.cribrum.frames.frameTimes
+import io.github.bert0ns.cribrum.frames.measureFrame
 import io.github.bert0ns.cribrum.frames.readFrames
 import io.github.bert0ns.cribrum.hashing.PHASH_DECODE_SIDE
 import io.github.bert0ns.cribrum.hashing.contentHash
@@ -199,8 +201,8 @@ class Pipeline(
     private val metadataReader: (File) -> ImageMetadata = ::readMetadata,
     private val jpegReader: (File) -> JpegInfo = ::readJpeg,
     private val videoMetadataReader: (File) -> VideoMetadata = { readVideoMetadata(it) },
-    /** A video's frames at these times in milliseconds, by time, each preprocessed as [preprocessing] does an image. */
-    private val frameReader: (File, List<Long>) -> Map<Long, FloatArray> = { file, times -> readFrames(file, times) { modelInput(it) } },
+    /** A video's frames at these times in milliseconds, by time, each preprocessed as [preprocessing] does an image, with its measures. */
+    private val frameReader: (File, List<Long>) -> Map<Long, SampledFrame> = { file, times -> readFrames(file, times) { SampledFrame(modelInput(it), measureFrame(it)) } },
     /** Hashes an image from its task's [Pixels], so it reads the grayscale exposure already computed. */
     private val perceptualHasher: (MediaRef, Pixels) -> ULong = { _, pixels -> perceptualHash(pixels.gray(PHASH_DECODE_SIDE)) },
     private val contentHasher: (MediaRef) -> String = ::contentHash,
@@ -411,16 +413,17 @@ class Pipeline(
     }
 
     /**
-     * The video steps, which only a run asked for videos takes: the metadata, the per-video detectors, which read no frame, then
-     * the frames and the group detectors that accept videos, which may read them. The detectors go before the frames, the longest
-     * step, so a scan stopped there still has their signals.
+     * The video steps, which only a run asked for videos takes: the metadata, the per-video detectors that read no frame, then the
+     * frames, the detectors that read them and the group detectors that accept videos, which may read them too. The detectors that
+     * read no frame go before the frames, the longest step, so a scan stopped there still has their signals. The ones that read them
+     * come after it, from the measures it stored: they take a moment, and they need no frame decoded again.
      */
     private suspend fun videoSteps(found: Set<String>, stats: Stats, progress: Progress) {
         val pending = index.withoutMetadata().filter { it.mediaType == MediaType.VIDEO }
         phase("videoMetadata", stats) {
             readAndStore(pending, VIDEO_METADATA_STEP, progress, read = { attempt { videoMetadataReader(it) } }) { batch -> storeVideoMetadata(batch, stats) }
         }
-        analyzeVideos(found, stats)
+        analyzeVideos(found, stats, usesFrames = false)
         var frames = emptyMap<String, List<FloatArray>>()
         var model = ""
         if (embedder != null) {
@@ -429,20 +432,24 @@ class Pipeline(
             // A video's frames change what its group detectors can see, as embeddings do for images.
             if (frames.isNotEmpty()) model = "${embedder.id}:${embedder.version}:$FRAMES_VERSION:${frames.size}"
         }
+        analyzeVideos(found, stats, usesFrames = true)
         groupSteps(MediaType.VIDEO, found, emptyMap(), model, null, stats, progress, frames)
     }
 
     /**
-     * Runs the per-video detectors on each video that lacks them. They read no frame yet: a video is given no embedding, so a detector
-     * that asks for one fails and is counted. A video whose header did not read is left out, as an unreadable image is.
+     * Runs the detectors that accept videos, and read frames or not as [usesFrames] says, on each video that lacks them. The ones
+     * that read none are given no embedding, so one that asks for it fails and is counted. The ones that read frames take only a video
+     * whose measures are stored: without them a video has nothing to analyze yet, and no empty result is stored. A video whose header
+     * did not read is left out, as an unreadable image is.
      */
-    private suspend fun analyzeVideos(found: Set<String>, stats: Stats) {
-        val selected = detectors.filter { MediaType.VIDEO in it.mediaTypes }
+    private suspend fun analyzeVideos(found: Set<String>, stats: Stats, usesFrames: Boolean) {
+        val selected = detectors.filter { MediaType.VIDEO in it.mediaTypes && it.usesFrames == usesFrames }
         if (selected.isEmpty()) return
         val analyzed = index.analyzedPaths(selected.associate { it.id to it.version })
         val unreadable = index.unreadable().toSet()
-        val context = AnalysisContext()
-        val results = index.images().filter { it.mediaType == MediaType.VIDEO && it.path in found && it.path !in unreadable }.flatMap { video ->
+        val measures = if (usesFrames) index.frameMeasures(FRAMES_VERSION) else emptyMap()
+        val context = AnalysisContext(frameMeasures = { measures[it.path].orEmpty() })
+        val results = index.images().filter { it.mediaType == MediaType.VIDEO && it.path in found && it.path !in unreadable && (!usesFrames || it.path in measures) }.flatMap { video ->
             selected.filter { video.path !in analyzed.getValue(it.id) }.map { detector -> Triple(video.path, detector, attempt { detector.analyze(video, context) }) }
         }
         for (batch in results.chunked(STORE_BATCH)) {
@@ -486,11 +493,14 @@ class Pipeline(
         var unreadable = 0
         for ((done, task) in todo.withIndex()) {
             val (video, times) = task
-            attempt { frameReader(File(video.path), times).let { taken -> taken.keys.zip(embedder.embedPixels(taken.values.toList())).toMap() } }.fold(
-                onSuccess = { vectors ->
-                    // A video gone from the index since the walk keeps nothing.
+            attempt { frameReader(File(video.path), times).let { taken -> taken to taken.keys.zip(embedder.embedPixels(taken.values.map { it.input })).toMap() } }.fold(
+                onSuccess = { (taken, vectors) ->
+                    // A video gone from the index since the walk keeps nothing. A detector's result belongs to the frames it read: new ones mean analyzing again.
                     index.batch(listOf(video.path)) { recorded ->
-                        if (video.path in recorded) index.setFrameEmbeddings(video.path, embedder.id, embedder.version, FRAMES_VERSION, vectors)
+                        if (video.path in recorded) {
+                            index.forgetAnalyses(listOf(video.path), detectors.filter { it.usesFrames }.map { it.id })
+                            index.setFrameEmbeddings(video.path, embedder.id, embedder.version, FRAMES_VERSION, vectors, taken.mapValues { it.value.measures })
+                        }
                     }
                     frames += vectors.size
                     stats.detectorRuns += vectors.size

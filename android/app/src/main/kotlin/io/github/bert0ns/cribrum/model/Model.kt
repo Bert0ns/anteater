@@ -89,6 +89,25 @@ fun File.toMediaRef(mediaType: MediaType = MediaType.IMAGE): MediaRef = toMediaR
 fun File.toMediaRef(attributes: BasicFileAttributes, mediaType: MediaType = MediaType.IMAGE): MediaRef = MediaRef(path, attributes.size(), attributes.lastModifiedTime().to(TimeUnit.NANOSECONDS), mediaType)
 
 /**
+ * What the detectors that read frames keep of one sampled frame of a video: the frame itself is never stored (docs/design.md §5).
+ * The detectors turn the measures of a video's frames into one signal, so a rule can change without decoding the video again.
+ */
+data class FrameMeasures(
+    /** BLURRY's measure: the Laplacian variance of the frame's sharpest region. */
+    val peakVariance: Double,
+    /** Percentiles of the frame's luminance, which BAD_EXPOSURE reads. */
+    val p1: Double,
+    val p5: Double,
+    val p95: Double,
+    val p99: Double,
+    val faces: Int = 0,
+    /** The most confident face's, 0 with none. */
+    val faceConfidence: Double = 0.0,
+    /** The largest face's share of the frame. */
+    val faceArea: Double = 0.0,
+)
+
+/**
  * A detector's evidence that an image may belong to a deletable category, or, with a
  * [Protection], that it may be a memory. Signals never decide on their own: the ranker
  * combines them.

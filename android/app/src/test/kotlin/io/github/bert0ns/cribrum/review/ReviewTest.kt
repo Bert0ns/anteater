@@ -13,6 +13,7 @@ import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.ranker.THRESHOLDS
+import io.github.bert0ns.cribrum.ranker.VIDEO_THRESHOLDS
 import io.github.bert0ns.cribrum.trash.AppTrash
 import io.github.bert0ns.cribrum.trash.Swap
 import io.github.bert0ns.cribrum.trash.Trash
@@ -45,8 +46,9 @@ class ReviewTest {
     private val index = memoryIndex()
     private val volume by lazy { folder.newFolder("storage") }
     private var thresholds: Map<Category, Float> = THRESHOLDS
+    private var videoThresholds: Map<Category, Float> = VIDEO_THRESHOLDS
     private var favorites: Set<String> = emptySet()
-    private val review by lazy { Review(index, AppTrash({ listOf(volume) }), thresholds = { thresholds }, favorites = { favorites }) }
+    private val review by lazy { Review(index, AppTrash({ listOf(volume) }), thresholds = { thresholds }, videoThresholds = { videoThresholds }, favorites = { favorites }) }
 
     @After
     fun close() = index.close()
@@ -1271,8 +1273,8 @@ class ReviewTest {
         val videos = overview(MediaType.VIDEO)
         val photos = overview()
 
-        assertEquals(listOf(Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE, Category.FORWARDED, Category.TAKES), videos.categories.map { it.category })
-        assertEquals(listOf(1, 0, 0, 0), videos.categories.map { it.count })
+        assertEquals(listOf(Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE, Category.BLURRY, Category.BAD_EXPOSURE, Category.FORWARDED, Category.TAKES), videos.categories.map { it.category })
+        assertEquals(listOf(1, 0, 0, 0, 0, 0), videos.categories.map { it.count })
         assertEquals(copy.size, videos.freeableBytes)
         assertEquals(1, photos.categories.single { it.category == Category.EXACT_DUPLICATE }.count)
         assertEquals(photoCopy.size, photos.freeableBytes)
@@ -1296,7 +1298,26 @@ class ReviewTest {
         val clip = video("DCIM/clip.mp4", 100)
         index.setSignals(clip.path, "blur", 1, listOf(blurry(0.9f)))
 
-        assertEquals(listOf(Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE, Category.FORWARDED, Category.TAKES), overview(MediaType.VIDEO).categories.map { it.category })
+        assertEquals(
+            listOf(Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE, Category.BLURRY, Category.BAD_EXPOSURE, Category.FORWARDED, Category.TAKES),
+            overview(MediaType.VIDEO).categories.map { it.category },
+        )
+    }
+
+    @Test
+    fun `a video is listed at its own threshold, which the photos' threshold cannot raise past it`() = test {
+        val clip = video("DCIM/clip.mp4", 100)
+        index.setSignals(clip.path, "blur", 1, listOf(blurry(0.2f)))
+        image("a.jpg", blurry(0.2f))
+        suspend fun blurryVideos() = overview(MediaType.VIDEO).categories.single { it.category == Category.BLURRY }.count
+
+        thresholds = THRESHOLDS + (Category.BLURRY to 1f)
+
+        assertEquals(1, blurryVideos()) // 0.2 is past the video threshold of 0.15
+        assertEquals(0, overview().categories.single { it.category == Category.BLURRY }.count)
+        videoThresholds = VIDEO_THRESHOLDS + (Category.BLURRY to 0.3f)
+        assertEquals(0, blurryVideos())
+        assertEquals(1, counts(thresholds, VIDEO_THRESHOLDS, MediaType.VIDEO)[Category.BLURRY])
     }
 
     @Test

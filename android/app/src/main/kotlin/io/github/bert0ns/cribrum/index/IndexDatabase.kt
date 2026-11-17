@@ -137,6 +137,26 @@ class FrameEmbeddingRow(
     val vector: ByteArray,
 )
 
+/** What the detectors that read frames keep of each of a video's frames, at the same times as [FrameEmbeddingRow] (docs/design.md §7). */
+@Entity(
+    tableName = "frame_measures",
+    primaryKeys = ["path", "time_ms"],
+    foreignKeys = [ForeignKey(ImageRow::class, ["path"], ["path"], onDelete = ForeignKey.CASCADE)],
+)
+class FrameMeasuresRow(
+    val path: String,
+    @ColumnInfo(name = "frames_version") val framesVersion: Int,
+    @ColumnInfo(name = "time_ms") val timeMs: Long,
+    @ColumnInfo(name = "peak_variance") val peakVariance: Double,
+    val p1: Double,
+    val p5: Double,
+    val p95: Double,
+    val p99: Double,
+    val faces: Int,
+    @ColumnInfo(name = "face_confidence") val faceConfidence: Double,
+    @ColumnInfo(name = "face_area") val faceArea: Double,
+)
+
 /** The image set a group detector version last ran on, so unchanged sets are skipped, with the paths whose content hash failed in that run. */
 @Entity(tableName = "group_runs")
 data class GroupRunRow(
@@ -388,6 +408,15 @@ interface IndexDao {
     @Insert
     suspend fun putFrameEmbeddings(frames: List<FrameEmbeddingRow>)
 
+    @Insert
+    suspend fun putFrameMeasures(frames: List<FrameMeasuresRow>)
+
+    @Query("DELETE FROM frame_measures WHERE path = :path")
+    suspend fun deleteFrameMeasures(path: String)
+
+    @Query("SELECT * FROM frame_measures WHERE frames_version = :framesVersion ORDER BY path, time_ms")
+    suspend fun frameMeasures(framesVersion: Int): List<FrameMeasuresRow>
+
     @Query("DELETE FROM frame_embeddings WHERE path = :path AND model = :model")
     suspend fun deleteFrameEmbeddings(path: String, model: String)
 
@@ -595,9 +624,9 @@ interface IndexDao {
 @Database(
     entities = [
         ImageRow::class, AnalysisRow::class, SignalRow::class, KeptSignalRow::class, KeptDetectorRow::class, EmbeddingRow::class,
-        FrameEmbeddingRow::class, GroupRunRow::class, ExcludedFolderRow::class, NotImageRow::class, JpegRow::class,
+        FrameEmbeddingRow::class, FrameMeasuresRow::class, GroupRunRow::class, ExcludedFolderRow::class, NotImageRow::class, JpegRow::class,
     ],
-    version = 9,
+    version = 10,
 )
 abstract class IndexDatabase : RoomDatabase() {
     abstract fun dao(): IndexDao
@@ -691,6 +720,21 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
         db.execSQL(
             "CREATE TABLE IF NOT EXISTS `frame_embeddings` (`path` TEXT NOT NULL, `model` TEXT NOT NULL, `model_version` INTEGER NOT NULL, " +
                 "`frames_version` INTEGER NOT NULL, `time_ms` INTEGER NOT NULL, `vector` BLOB NOT NULL, PRIMARY KEY(`path`, `model`, `time_ms`), " +
+                "FOREIGN KEY(`path`) REFERENCES `images`(`path`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        )
+    }
+}
+
+/**
+ * Version 9 kept nothing of a frame but its embedding, so no video has measures. The frames version went up with them, so the first
+ * video scan with the model samples every video again (docs/design.md §7).
+ */
+val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `frame_measures` (`path` TEXT NOT NULL, `frames_version` INTEGER NOT NULL, `time_ms` INTEGER NOT NULL, " +
+                "`peak_variance` REAL NOT NULL, `p1` REAL NOT NULL, `p5` REAL NOT NULL, `p95` REAL NOT NULL, `p99` REAL NOT NULL, " +
+                "`faces` INTEGER NOT NULL, `face_confidence` REAL NOT NULL, `face_area` REAL NOT NULL, PRIMARY KEY(`path`, `time_ms`), " +
                 "FOREIGN KEY(`path`) REFERENCES `images`(`path`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         )
     }

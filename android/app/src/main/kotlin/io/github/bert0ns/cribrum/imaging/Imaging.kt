@@ -135,7 +135,7 @@ internal fun draftScale(width: Int, height: Int, maxSide: Int): Int {
  * Pillow's RGB to L (ITU-R 601-2 luma in 16-bit fixed point, rounded), read already turned as [transpose] does,
  * so no plane of the other orientation is made.
  */
-private fun turnedLuminance(image: Argb, orientation: Int): Gray {
+internal fun turnedLuminance(image: Argb, orientation: Int): Gray {
     val argb = image.pixels
     return turn(image.width, image.height, orientation) { i ->
         val c = argb[i]

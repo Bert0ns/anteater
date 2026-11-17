@@ -351,4 +351,30 @@ class RankerTest {
             assertTrue("$category", "Category.${category.name}: $threshold," in lab)
         }
     }
+
+    private fun video(name: String, vararg signals: Signal) = IndexedMedia(MediaRef(name, 0, 0, MediaType.VIDEO), signals = signals.toList())
+
+    @Test
+    fun `a video has the threshold of its own where the category has one`() {
+        val ranker = Ranker(TEST_THRESHOLDS, mapOf(Category.BLURRY to 0.15f))
+
+        val ranked = ranker.rank(listOf(video("clip", blur(0.2f)), image("photo", blur(0.2f))))
+
+        assertEquals(listOf("clip" to true, "photo" to false), ranked.map { it.image.ref.path to it.isCandidate })
+    }
+
+    @Test
+    fun `the photos' threshold cannot hide a video`() {
+        val ranker = Ranker(TEST_THRESHOLDS + (Category.BLURRY to 1f), mapOf(Category.BLURRY to 0.15f))
+
+        assertTrue(ranker.rank(listOf(video("clip", blur(0.2f)))).single().isCandidate)
+    }
+
+    @Test
+    fun `a video shares the threshold of a category with no video threshold`() {
+        val ranker = Ranker(TEST_THRESHOLDS, mapOf(Category.BLURRY to 0.15f))
+
+        assertFalse(ranker.rank(listOf(video("clip", screenshot(0.7f)))).single().isCandidate)
+        assertTrue(ranker.rank(listOf(video("clip", screenshot(0.9f)))).single().isCandidate)
+    }
 }
