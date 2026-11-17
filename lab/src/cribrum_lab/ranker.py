@@ -8,7 +8,15 @@ from pathlib import Path
 import xxhash
 
 from cribrum_lab.folders import is_excluded
-from cribrum_lab.model import Category, IndexedMedia, Protection, ReviewState, Signal
+from cribrum_lab.model import (
+    Category,
+    IndexedMedia,
+    MediaRef,
+    MediaType,
+    Protection,
+    ReviewState,
+    Signal,
+)
 
 THRESHOLDS = {
     Category.EXACT_DUPLICATE: 0.5,
@@ -92,7 +100,9 @@ class Ranker:
     @staticmethod
     def by_category(ranked: Sequence[Candidate]) -> dict[Category, list[Candidate]]:
         """Candidates under each category they have a reason for, highest score first, each
-        score lowered by the candidate's protection. A sticker is listed under STICKER only."""
+        score lowered by the candidate's protection. A video's score is also multiplied by its
+        size, so of two equal videos the larger comes first, and an image's size plays no part
+        (docs/design.md, 6.6). A sticker is listed under STICKER only."""
         groups = defaultdict(list)
         for candidate in ranked:
             categories = {s.category for s in candidate.reasons}
@@ -103,7 +113,9 @@ class Ranker:
         for category, candidates in groups.items():
             candidates.sort(
                 key=lambda c: (
-                    -c.protection * max(s.score for s in c.reasons if s.category == category)
+                    -c.protection
+                    * max(s.score for s in c.reasons if s.category == category)
+                    * _weight(c.image.ref)
                 )
             )
         return dict(groups)
@@ -124,6 +136,11 @@ class Ranker:
         if threshold == 1.0:
             return 1.0
         return 1.0 + (signal.score - threshold) / (1.0 - threshold)
+
+
+def _weight(ref: MediaRef) -> float:
+    """The bytes a video frees: a 900 MB video is worth more of a review than a 5 MB clip."""
+    return float(ref.size) if ref.media_type is MediaType.VIDEO else 1.0
 
 
 def _tie_break(path: Path) -> str:
