@@ -56,7 +56,7 @@
     <string name="scan_now">Scansiona ora</string>
     <string name="scan_videos">Scansiona i video</string>
     <string name="scan_stop">Interrompi la scansione</string>
-    <string name="scan_empty">Nessuna immagine trovata finora. Tocca Scansiona ora per cercarle. La prima volta ci vogliono circa 15–20 minuti per 10.000 immagini, e puoi uscire dall\'app. Poi Cribrum ripete la scansione di notte, mentre il telefono si ricarica.</string>
+    <string name="scan_empty">Nessuna immagine trovata finora. Tocca Scansiona ora per cercarle. La prima volta ci vogliono circa 15–20 minuti per 10.000 immagini, e puoi uscire dall\'app. Poi Cribrum ripete la scansione di notte, mentre il telefono si ricarica, se non la disattivi nelle Impostazioni.</string>
     <string name="scan_last">Ultima scansione: %1$s</string>
     <string name="scan_step_scan">Ricerca delle immagini: finora %1$d</string>
     <string name="scan_step_scan_videos">Foto e video trovati: finora %1$d</string>
@@ -371,6 +371,8 @@
     <string name="settings_trash_retention_applies">Vale anche per i file già nel cestino.</string>
     <string name="settings_uninstall_warning">Disinstallando l\'app la cartella del cestino resta, quindi svuotalo prima.</string>
     <string name="settings_haptics">Feedback tattile</string>
+    <string name="settings_images_at_night">Analizza le immagini di notte</string>
+    <string name="settings_images_at_night_hint">Mentre il telefono si ricarica, la scansione notturna analizza le nuove immagini e svuota il cestino scaduto. Con entrambi gli interruttori spenti, svuota solo il cestino.</string>
     <string name="settings_videos_at_night">Analizza i video di notte</string>
     <string name="settings_videos_at_night_hint">Dopo che hai usato Scansiona i video, la scansione notturna analizza anche i nuovi video, dopo le foto.</string>
     <string name="settings_haptics_hint">Una breve vibrazione quando selezioni, salti, tieni o cestini immagini e video. Segue anche l\'impostazione del feedback al tocco del telefono.</string>

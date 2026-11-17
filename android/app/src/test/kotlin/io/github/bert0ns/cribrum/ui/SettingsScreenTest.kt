@@ -156,6 +156,20 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun `the switch for images at night is on as set and reports a change`() {
+        var enabled = true
+        compose.setContent {
+            SettingsScreen(imagesAtNight = enabled, onImagesAtNightChange = { enabled = it })
+        }
+
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Analyse images at night"))
+        compose.onNodeWithText("Analyse images at night").assertIsOn()
+        compose.onNodeWithText("Analyse images at night").performClick()
+
+        assertEquals(false, enabled)
+    }
+
+    @Test
     fun `deleting the embeddings is a strong pulse once confirmed`() {
         val feedback = RecordingHaptics()
         val given = feedback.types

@@ -284,6 +284,17 @@ class VideoScanSetting(private val preferences: SharedPreferences) {
     }
 }
 
+/** The switch in Settings that turns the image part of the night pass off (docs/design.md §4). On until the user turns it off. */
+class ImageScanSetting(private val preferences: SharedPreferences) {
+    var atNight: Boolean
+        get() = preferences.getBoolean(KEY_AT_NIGHT, true)
+        set(value) = preferences.edit { putBoolean(KEY_AT_NIGHT, value) }
+
+    private companion object {
+        const val KEY_AT_NIGHT = "image_scan_at_night"
+    }
+}
+
 /**
  * Purges the expired trash, then runs the pipeline over the whole device. It runs in the
  * foreground, with a notification, since a first scan of thousands of images outlasts the few
@@ -295,6 +306,9 @@ open class IndexWorker(context: Context, parameters: WorkerParameters) : Corouti
 
     /** A "Scan videos" request: the walk, then only the video steps. */
     private val videoScan get() = Indexing.VIDEO_TAG in tags
+
+    /** Whether this run takes the image steps: not "Scan videos", nor a night pass with the images switch off. */
+    private val images by lazy { !videoScan && (!nightly || (applicationContext as CribrumApp).imageScans.atNight) }
 
     override suspend fun doWork(): Result {
         try {
@@ -352,6 +366,13 @@ open class IndexWorker(context: Context, parameters: WorkerParameters) : Corouti
             app.lastScan.recordFailure()
             return Result.failure()
         }
+        // A night pass takes the videos after the images once "Scan videos" has run (docs/design.md §4).
+        val videos = videoScan || nightly && app.videoScans.nightly
+        // Both switches off: the night only empties the trash, as the retention promises, and needs no notification.
+        if (!images && !videos) {
+            purgeTrash(app)
+            return Result.success()
+        }
         try {
             setForegroundInfo(getForegroundInfo())
             isForeground = true
@@ -359,25 +380,14 @@ open class IndexWorker(context: Context, parameters: WorkerParameters) : Corouti
             Log.w(Indexing.TAG, "Foreground service start refused, continuing in background", e)
         }
         try {
-            val trashFailures = mutableListOf<Failure>()
-            try {
-                // The purge has just read the whole trash, so what it left tells which paths are still held.
-                val purge = traceSuspend("Trash.purge") { purgeExpired(app) }
-                app.index.forgetTrashed(traceSuspend("Trash.unheld") { purge.unheldPaths })
-            } catch (error: Exception) {
-                if (error is CancellationException) throw error
-                Log.w(Indexing.TAG, "Failed to purge expired trash", error)
-                trashFailures += Failure("", "trash", failureMessage(error))
-            }
+            val trashFailures = purgeTrash(app)
             // The model loads when the first batch needs it, and the session is closed when the scan ends.
-            // A night pass takes the videos after the images once "Scan videos" has run (docs/design.md §4).
-            val videos = videoScan || nightly && app.videoScans.nightly
             MobileClip(::loadVision).use { embedder ->
-                app.lastScan.run(images = !videoScan, videos = videos) { imagesDone ->
+                app.lastScan.run(images = images, videos = videos) { imagesDone ->
                     // Once, though a night pass hands the same stats to the report of its image steps and to the final one.
                     fun withTrash(stats: Stats) = stats.apply { if (!failures.containsAll(trashFailures)) failures += trashFailures }
                     val source = Indexing.deviceSource(applicationContext, app.index::images, app.index)
-                    withTrash(pipeline(app, embedder).run(source, images = !videoScan, videos = videos, progress = ::report, imagesDone = { imagesDone(withTrash(it)) }))
+                    withTrash(pipeline(app, embedder).run(source, images = images, videos = videos, progress = ::report, imagesDone = { imagesDone(withTrash(it)) }))
                 }
             }
             scanned = true
@@ -385,6 +395,18 @@ open class IndexWorker(context: Context, parameters: WorkerParameters) : Corouti
         } finally {
             applicationContext.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
         }
+    }
+
+    /** Purges the expired trash and forgets the paths it no longer holds. Returns the failure the scan's report keeps. */
+    private suspend fun purgeTrash(app: CribrumApp): List<Failure> = try {
+        // The purge has just read the whole trash, so what it left tells which paths are still held.
+        val purge = traceSuspend("Trash.purge") { purgeExpired(app) }
+        app.index.forgetTrashed(traceSuspend("Trash.unheld") { purge.unheldPaths })
+        emptyList()
+    } catch (error: Exception) {
+        if (error is CancellationException) throw error
+        Log.w(Indexing.TAG, "Failed to purge expired trash", error)
+        listOf(Failure("", "trash", failureMessage(error)))
     }
 
     // The CPU fallback reads the model again only if the GPU fails, so the bytes are not held through the scan.
@@ -416,7 +438,7 @@ open class IndexWorker(context: Context, parameters: WorkerParameters) : Corouti
     protected suspend fun report(step: String, done: Int, total: Int) {
         estimate.update(step, done, total)
         val now = System.currentTimeMillis()
-        val kind = Indexing.kindOf(step, videoScan)
+        val kind = Indexing.kindOf(step, !images)
         val phaseTitle = Indexing.phaseTitle(step, kind)
         val phaseChanged = phaseTitle != title
         if (now - reported < PROGRESS_INTERVAL_MS && done != total && !phaseChanged) return
@@ -436,7 +458,7 @@ open class IndexWorker(context: Context, parameters: WorkerParameters) : Corouti
         }
     }
 
-    override suspend fun getForegroundInfo() = foregroundInfo("scan", Indexing.kindOf("scan", videoScan), applicationContext.getString(R.string.scan_starting))
+    override suspend fun getForegroundInfo() = foregroundInfo("scan", Indexing.kindOf("scan", !images), applicationContext.getString(R.string.scan_starting))
 
     private fun foregroundInfo(step: String, kind: ScanKind, text: String): ForegroundInfo {
         val manager = applicationContext.getSystemService(NotificationManager::class.java)

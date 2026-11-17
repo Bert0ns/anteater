@@ -449,12 +449,16 @@ class IndexingWorkTest {
         private val reads: MutableCollection<String>,
         private val done: CompletableDeferred<Unit>,
         private val readingVideo: () -> Unit = {},
+        private val purges: AtomicInteger = AtomicInteger(),
     ) : IndexWorker(context, parameters) {
         override fun hasStorageAccess() = true
 
         override suspend fun setForegroundInfo(info: ForegroundInfo) {}
 
-        override suspend fun purgeExpired(app: CribrumApp) = ExpiredPurge.NONE
+        override suspend fun purgeExpired(app: CribrumApp): ExpiredPurge {
+            purges.incrementAndGet()
+            return ExpiredPurge.NONE
+        }
 
         override fun pipeline(app: CribrumApp, embedder: MobileClip) = Pipeline(
             app.index,
@@ -483,6 +487,9 @@ class IndexingWorkTest {
     /** Runs as a video is read. */
     private var readingVideo: () -> Unit = {}
 
+    /** The purges of the expired trash that the scans of [reads] ran. */
+    private val purges = AtomicInteger()
+
     /** What a scan that [start] asks for reads, of an image and a video the index holds without their metadata. */
     private fun reads(start: () -> Unit): List<String> {
         val image = File(folder.root, "a.jpg").apply { writeText("a") }.toMediaRef()
@@ -490,7 +497,7 @@ class IndexingWorkTest {
         runBlocking { (app as CribrumApp).index.recordAll(listOf(image, video)) }
         val reads = ConcurrentLinkedQueue<String>()
         val done = CompletableDeferred<Unit>()
-        workerFactory = { ctx, params -> ReadingScan(ctx, params, reads, done, readingVideo) }
+        workerFactory = { ctx, params -> ReadingScan(ctx, params, reads, done, readingVideo, purges) }
         start()
         runBlocking { withTimeout(10_000) { done.await() } }
         return reads.toList()
@@ -541,6 +548,31 @@ class IndexingWorkTest {
         }
 
         assertEquals(listOf("image"), reads(::nightPass))
+    }
+
+    @Test
+    fun `the images switch in Settings keeps the images out of the night pass, and the videos still come`() {
+        (app as CribrumApp).videoScans.ran = true
+        app.imageScans.atNight = false
+
+        assertEquals(listOf("video"), reads(::nightPass))
+    }
+
+    @Test
+    fun `with both switches off the night pass reads nothing and records no scan, but still empties the trash`() {
+        val appInstance = app as CribrumApp
+        appInstance.imageScans.atNight = false
+
+        assertEquals(emptyList<String>(), reads(::nightPass))
+        assertEquals(1, purges.get())
+        assertNull(appInstance.lastScan.report)
+    }
+
+    @Test
+    fun `Scan now reads the images with the images switch off`() {
+        (app as CribrumApp).imageScans.atNight = false
+
+        assertEquals(listOf("image"), reads { Indexing.scanNow(app) })
     }
 
     @Test

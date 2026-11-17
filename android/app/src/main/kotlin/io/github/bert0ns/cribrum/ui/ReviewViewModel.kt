@@ -122,6 +122,7 @@ data class ReviewState(
     val pendingRetention: RetentionChange? = null,
     val hapticsEnabled: Boolean = true,
     /** The switch in Settings that lets the night pass analyse videos once "Scan videos" has run. */
+    val imagesAtNight: Boolean = true,
     val videosAtNight: Boolean = true,
     /** How the open category is grouped by date or sorted by size. Off until the user picks one. */
     val reviewOrder: ReviewOrder = ReviewOrder.OFF,
@@ -181,7 +182,7 @@ class ReviewViewModel @JvmOverloads constructor(
     init {
         // The first read of the preferences can block, so it stays off the main thread.
         load {
-            withContext(Dispatchers.IO) { it.copy(retentionDays = app.trashRetention.days, hapticsEnabled = app.haptics.enabled, videosAtNight = app.videoScans.atNight, cleanTab = app.cleanTab.tab) }
+            withContext(Dispatchers.IO) { it.copy(retentionDays = app.trashRetention.days, hapticsEnabled = app.haptics.enabled, imagesAtNight = app.imageScans.atNight, videosAtNight = app.videoScans.atNight, cleanTab = app.cleanTab.tab) }
         }
     }
 
@@ -365,6 +366,11 @@ class ReviewViewModel @JvmOverloads constructor(
     fun setHaptics(enabled: Boolean) {
         app.haptics.enabled = enabled
         queue { it.copy(hapticsEnabled = enabled) }
+    }
+
+    fun setImagesAtNight(enabled: Boolean) {
+        app.imageScans.atNight = enabled
+        queue { it.copy(imagesAtNight = enabled) }
     }
 
     fun setVideosAtNight(enabled: Boolean) {
