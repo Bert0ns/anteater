@@ -450,6 +450,8 @@ private fun AppContent(model: ReviewViewModel) {
                             onDeleteEmbeddings = model::deleteEmbeddings,
                             hapticsEnabled = state.hapticsEnabled,
                             onHapticsChange = model::setHaptics,
+                            imagesAtNight = state.imagesAtNight,
+                            onImagesAtNightChange = model::setImagesAtNight,
                             videosAtNight = state.videosAtNight,
                             onVideosAtNightChange = model::setVideosAtNight,
                             coverage = state.coverage,

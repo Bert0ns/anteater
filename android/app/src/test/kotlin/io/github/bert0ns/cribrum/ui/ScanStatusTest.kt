@@ -24,7 +24,7 @@ class ScanStatusTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private val empty = "No images found yet. Tap Scan now to look for them. The first time takes about 15 to 20 minutes for 10,000 images, and you can leave the app. Then Cribrum scans again at night while the phone charges."
+    private val empty = "No images found yet. Tap Scan now to look for them. The first time takes about 15 to 20 minutes for 10,000 images, and you can leave the app. Then Cribrum scans again at night while the phone charges, unless you turn that off in Settings."
     private val hot = "The phone is hot, so the scan is slower"
 
     @Test

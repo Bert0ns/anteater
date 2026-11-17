@@ -66,6 +66,8 @@ fun SettingsScreen(
     onDeleteEmbeddings: () -> Unit = {},
     hapticsEnabled: Boolean = true,
     onHapticsChange: (Boolean) -> Unit = {},
+    imagesAtNight: Boolean = true,
+    onImagesAtNightChange: (Boolean) -> Unit = {},
     videosAtNight: Boolean = true,
     onVideosAtNightChange: (Boolean) -> Unit = {},
     coverage: List<Coverage>? = null,
@@ -191,7 +193,15 @@ fun SettingsScreen(
                 modifier = Modifier.toggleable(hapticsEnabled, role = Role.Switch, onValueChange = onHapticsChange),
             )
         }
-        // The video part of the night pass (docs/design.md §4).
+        // The image and the video parts of the night pass, each turned off on its own (docs/design.md §4).
+        item {
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_images_at_night)) },
+                supportingContent = { Text(stringResource(R.string.settings_images_at_night_hint)) },
+                trailingContent = { Switch(imagesAtNight, null) },
+                modifier = Modifier.toggleable(imagesAtNight, role = Role.Switch, onValueChange = onImagesAtNightChange),
+            )
+        }
         item {
             ListItem(
                 headlineContent = { Text(stringResource(R.string.settings_videos_at_night)) },
