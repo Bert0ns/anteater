@@ -292,6 +292,11 @@ p:last-child {
   line-height: 1.5;
 }
 
+/* A paragraph after a feature list */
+.feature-list + p {
+  margin-top: 1.25rem;
+}
+
 /* Ordered steps */
 .steps {
   display: flex;
