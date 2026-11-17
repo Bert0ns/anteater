@@ -193,7 +193,7 @@ data class JpegRow(
     val status: String,
     @ColumnInfo(name = "gain_map") val gainMap: Boolean,
     val quality: Int?,
-    /** The file has the Cribrum marker; the three columns after it hold its keys, null when the marker lacks one. */
+    /** The file has the Anteater marker, or the cribrum one it had before the rename; the three columns after it hold its keys, null when the marker lacks one. */
     val compressed: Boolean,
     @ColumnInfo(name = "marker_version") val markerVersion: Int?,
     @ColumnInfo(name = "marker_level") val markerLevel: String?,

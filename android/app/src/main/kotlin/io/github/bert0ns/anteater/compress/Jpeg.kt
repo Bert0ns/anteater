@@ -1,4 +1,4 @@
-// What the compress page needs from a JPEG: whether it can be compressed, the Cribrum marker, the quality it
+// What the compress page needs from a JPEG: whether it can be compressed, the Anteater marker, the quality it
 // was saved at and what a compressed copy would lose (docs/design.md §9). It reads the header segments, the
 // last bytes and the SEF directory, never the image data. Android only: the lab has no counterpart.
 package io.github.bert0ns.anteater.compress
@@ -41,7 +41,7 @@ enum class JpegStatus(val id: String) {
 /** What a compressed copy loses (§9), so the compress summary can name counts. */
 data class Losses(val reEdit: Boolean = false, val depthMap: Boolean = false, val xmp: Boolean = false, val c2pa: Boolean = false)
 
-/** The Cribrum marker as the file holds it. A key it lacks is null; the marker still means the file was compressed. */
+/** The Anteater marker as the file holds it, or the `cribrum` one of a photo compressed before the rename. A key it lacks is null; the marker still means the file was compressed. */
 data class Marker(val version: Int?, val level: String?, val compressedAt: String?)
 
 data class JpegInfo(
@@ -107,7 +107,7 @@ fun readJpeg(bytes: Bytes): JpegInfo {
         status = status,
         gainMap = gainMap,
         quality = quality(segments),
-        marker = segments.firstOrNull { it.marker == APP15 && it.startsWith(MARKER_ID) }?.let { marker(it.payload!!) },
+        marker = segments.firstOrNull { it.isMarker() }?.let { marker(it.payload!!) },
         losses = Losses(
             reEdit = sef?.names?.contains("PhotoEditor_Re_Edit_Data") == true,
             depthMap = sef?.names?.any { it.startsWith("DualShot_DepthMap") } == true,
@@ -118,7 +118,7 @@ fun readJpeg(bytes: Bytes): JpegInfo {
 }
 
 /**
- * The marker segment (§9): APP15, `cribrum\0`, then ASCII `key=value` lines, each ending in `\n`, with
+ * The marker segment (§9): APP15, `anteater\0`, then ASCII `key=value` lines, each ending in `\n`, with
  * no comment or date line. [compressedAt] is written in UTC to the second.
  */
 fun markerSegment(level: CompressionLevel, compressedAt: Instant): ByteArray {
@@ -130,12 +130,12 @@ fun markerSegment(level: CompressionLevel, compressedAt: Instant): ByteArray {
 /**
  * [jpeg] with [marker] inserted where §9 puts it: directly after the Exif APP1, or with none directly after SOI,
  * or after an APP0 JFIF that follows SOI. Throws when that place is behind the MPF APP2, since a segment between
- * MPF and the gain map moves the gain map away from where MPF says it is, and when [jpeg] already has a Cribrum
- * marker, since a file holds one.
+ * MPF and the gain map moves the gain map away from where MPF says it is, and when [jpeg] already has an Anteater or
+ * Cribrum marker, since a file holds one.
  */
 fun withMarker(jpeg: ByteArray, marker: ByteArray): ByteArray {
     val segments = requireNotNull(segments(jpeg.asBytes(), keep = { it == APP0 || it == APP1 || it == APP2 || it == APP15 })) { "not a JPEG" }
-    require(segments.none { it.marker == APP15 && it.startsWith(MARKER_ID) }) { "the file already has a Cribrum marker" }
+    require(segments.none { it.isMarker() }) { "the file already has a marker" }
     val exif = segments.firstOrNull { it.marker == APP1 && it.startsWith(EXIF) }
     val first = segments.firstOrNull()
     val at = when {
@@ -180,7 +180,10 @@ private val XMP_EXTENSION = ascii("http://ns.adobe.com/xmp/extension/\u0000")
 private val MPF = ascii("MPF\u0000")
 private val ISO_21496 = ascii("urn:iso:std:iso:ts:21496:-1\u0000")
 private val JUMBF = ascii("JP")
-private val MARKER_ID = ascii("cribrum\u0000")
+private val MARKER_ID = ascii("anteater\u0000")
+
+/** The marker of photos compressed before the rename. Reading accepts it, and nothing writes it. */
+private val OLD_MARKER_ID = ascii("cribrum\u0000")
 private const val HDRGM = "http://ns.adobe.com/hdr-gain-map/1.0/"
 
 /**
@@ -347,8 +350,11 @@ private fun mpfImages(mpf: Segment): List<Pair<Long, Long>>? {
 
 private const val MP_ENTRY = 0xB002
 
+private fun Segment.isMarker() = marker == APP15 && (startsWith(MARKER_ID) || startsWith(OLD_MARKER_ID))
+
 private fun marker(payload: ByteArray): Marker {
-    val values = String(payload, MARKER_ID.size, payload.size - MARKER_ID.size, Charsets.US_ASCII).lines()
+    val id = if (payload.startsWith(MARKER_ID)) MARKER_ID else OLD_MARKER_ID
+    val values = String(payload, id.size, payload.size - id.size, Charsets.US_ASCII).lines()
         .mapNotNull { line -> line.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }.toMap()
     return Marker(values["version"]?.toIntOrNull(), values["level"], values["compressed_at"])
 }

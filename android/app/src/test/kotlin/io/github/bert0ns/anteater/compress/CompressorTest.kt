@@ -398,7 +398,7 @@ class CompressorTest {
         val exif = found.indexOfFirst { it.code == 0xE1 && it.startsWith("Exif\u0000\u0000") }
         val marker = found[exif + 1]
         assertEquals(0xEF, marker.code)
-        assertEquals("cribrum\u0000version=1\nlevel=balanced\ncompressed_at=2026-11-03T12:00:00Z\n", String(marker.payload, Charsets.US_ASCII))
+        assertEquals("anteater\u0000version=1\nlevel=balanced\ncompressed_at=2026-11-03T12:00:00Z\n", String(marker.payload, Charsets.US_ASCII))
     }
 
     @Test

@@ -149,34 +149,49 @@ class JpegTest {
 
     @Test
     fun `the marker is read with its keys, wherever it sits before SOS`() {
-        val marker = app15("cribrum\u0000version=1\nlevel=balanced\ncompressed_at=2026-11-03T10:15:30Z\n")
+        val marker = app15("anteater\u0000version=1\nlevel=balanced\ncompressed_at=2026-11-03T10:15:30Z\n")
 
         assertEquals(Marker(1, "balanced", "2026-11-03T10:15:30Z"), readJpeg(jpeg(EXIF, marker)).marker)
         assertEquals(Marker(1, "balanced", "2026-11-03T10:15:30Z"), readJpeg(jpeg(marker, EXIF, xmp(rdf("")))).marker)
     }
 
     @Test
-    fun `a foreign APP15 is ignored, and the first Cribrum one is read`() {
+    fun `a foreign APP15 is ignored, and the first Anteater one is read`() {
         val foreign = app15("Q\u0000\u0001GraphicConverter")
 
         assertNull(readJpeg(jpeg(EXIF, foreign)).marker)
-        val first = app15("cribrum\u0000version=1\nlevel=high\ncompressed_at=2026-01-01T00:00:00Z\n")
-        val second = app15("cribrum\u0000version=1\nlevel=smallest\ncompressed_at=2026-02-01T00:00:00Z\n")
+        val first = app15("anteater\u0000version=1\nlevel=high\ncompressed_at=2026-01-01T00:00:00Z\n")
+        val second = app15("anteater\u0000version=1\nlevel=smallest\ncompressed_at=2026-02-01T00:00:00Z\n")
         assertEquals("high", readJpeg(jpeg(EXIF, foreign, first, second)).marker!!.level)
     }
 
     @Test
-    fun `a marker without keys still marks the file as compressed`() {
+    fun `a photo compressed before the rename has the cribrum marker, which is still read`() {
+        val old = app15("cribrum\u0000version=1\nlevel=high\ncompressed_at=2026-11-03T10:15:30Z\n")
+
+        assertEquals(Marker(1, "high", "2026-11-03T10:15:30Z"), readJpeg(jpeg(EXIF, old)).marker)
         assertEquals(Marker(null, null, null), readJpeg(jpeg(EXIF, app15("cribrum\u0000"))).marker)
+    }
+
+    @Test
+    fun `a photo with the cribrum marker gets no second marker`() {
+        val old = jpeg(EXIF, app15("cribrum\u0000version=1\nlevel=high\ncompressed_at=2026-11-03T10:15:30Z\n"))
+
+        assertThrows(IllegalArgumentException::class.java) { withMarker(old, markerSegment(CompressionLevel.HIGH, Instant.EPOCH)) }
+    }
+
+    @Test
+    fun `a marker without keys still marks the file as compressed`() {
+        assertEquals(Marker(null, null, null), readJpeg(jpeg(EXIF, app15("anteater\u0000"))).marker)
     }
 
     @Test
     fun `the marker segment is the ASCII lines of design md, about 70 bytes`() {
         val segment = markerSegment(CompressionLevel.BALANCED, Instant.parse("2026-11-03T10:15:30.123Z"))
 
-        val expected = ascii("cribrum\u0000version=1\nlevel=balanced\ncompressed_at=2026-11-03T10:15:30Z\n")
+        val expected = ascii("anteater\u0000version=1\nlevel=balanced\ncompressed_at=2026-11-03T10:15:30Z\n")
         assertArrayEquals(segment(0xEF, expected), segment)
-        assertEquals(72, segment.size)
+        assertEquals(73, segment.size)
     }
 
     @Test
@@ -221,7 +236,7 @@ class JpegTest {
     }
 
     @Test
-    fun `a file that already has a Cribrum marker gets no second one`() {
+    fun `a file that already has an Anteater marker gets no second one`() {
         val marked = withMarker(jpeg(EXIF), markerSegment(CompressionLevel.HIGH, Instant.EPOCH))
 
         assertThrows(IllegalArgumentException::class.java) { withMarker(marked, markerSegment(CompressionLevel.SMALLEST, Instant.EPOCH)) }
