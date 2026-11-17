@@ -168,7 +168,12 @@ internal class FakePlayer(private val lengthMs: Long = 61_000, looper: Looper = 
     }
 }
 
-/** The players a screen under test made, as [LocalPlayerFactory] gives them out, on the looper it asks for. */
+/**
+ * The players a screen under test made, as [LocalPlayerFactory] gives them out, on the looper it asks for. A test that shows
+ * a video tile must hand these in (#467): the default builds a real ExoPlayer, whose release waits for its playback thread on
+ * Robolectric's paused clock, so it never times out, and once Robolectric clears that thread's queue between tests it blocks
+ * [clipLoops], which lives for the whole JVM, for good.
+ */
 internal class Players(private val lengthMs: Long = 61_000) {
     /** Filled from the loops' thread as well as the main one. */
     val made: MutableList<FakePlayer> = java.util.concurrent.CopyOnWriteArrayList()

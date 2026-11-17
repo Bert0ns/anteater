@@ -3,6 +3,7 @@ package io.github.bert0ns.anteater.ui
 import android.net.Uri
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -62,7 +63,7 @@ class LanguageTest {
     @Config(qualifiers = "it")
     fun `a favourite video is Preferito, and its dialog agrees with video in the masculine`() {
         val clip = VideoItem(MediaRef("/sdcard/Movies/clip.mp4", 1_500_000_000, 0, MediaType.VIDEO), 61_000, unreadable = false, isFavorite = true)
-        compose.setContent { VideosScreen(listOf(clip), setOf(clip.video.path), {}, { _, _ -> }) }
+        compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides Players().factory) { VideosScreen(listOf(clip), setOf(clip.video.path), {}, { _, _ -> }) } }
 
         compose.onNodeWithContentDescription("clip.mp4. Video, 01:01, 1,5 GB. Selezionato. Preferito").assertExists()
         compose.onNode(hasText("Cestina 1 video", substring = true)).performClick()
