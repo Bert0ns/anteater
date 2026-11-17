@@ -49,6 +49,17 @@ private val FAVORITE_SIGNAL = Signal("favorite", 1, Protection.FAVORITE, 1f)
 const val PAGE_SIZE = 48
 
 /**
+ * Groups shown at once in a review whose video tiles move (docs/design.md §8, #457), in place of [PAGE_SIZE] images: 15
+ * groups of video copies and 16 short clips, a screen or two of tiles.
+ */
+private fun videoGroupsPerPage(category: Category, mediaType: MediaType): Int? = when {
+    mediaType != MediaType.VIDEO -> null
+    category == Category.EXACT_DUPLICATE || category == Category.NEAR_DUPLICATE -> 15
+    category == Category.SHORT_CLIPS -> 16
+    else -> null
+}
+
+/**
  * Images reviewed together. A plain category has one image per group. A duplicate or burst group
  * also holds its best copy, which is never a candidate: it is shown, and kept, so the user can
  * compare the copies side by side.
@@ -301,8 +312,9 @@ class Review(
                 .partition { it.id in skipped }
             val page = mutableListOf<ReviewGroup>()
             var size = 0
+            val groupLimit = videoGroupsPerPage(category, mediaType)
             for (group in groups) {
-                if (page.isNotEmpty() && size + group.images.size > PAGE_SIZE) break
+                if (page.isNotEmpty() && if (groupLimit != null) page.size == groupLimit else size + group.images.size > PAGE_SIZE) break
                 page += group
                 size += group.images.size
             }

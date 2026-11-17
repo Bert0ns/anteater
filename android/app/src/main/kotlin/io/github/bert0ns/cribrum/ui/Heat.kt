@@ -1,15 +1,22 @@
 package io.github.bert0ns.cribrum.ui
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.PowerManager
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -86,4 +93,28 @@ fun rememberHeat(running: Boolean): Heat? {
         }
     }
     return if (running) heatOf(status, headroom) else null
+}
+
+/**
+ * Whether a video review's tiles may play their clip (#457): not while [watching] videos on a phone that is hot, at the
+ * moderate and severe levels the scan screen shows (docs/design.md §4), or in battery saver. The tiles show the slideshow then.
+ */
+@Composable
+fun rememberCanPlay(watching: Boolean): Boolean {
+    val hot = (rememberHeat(watching)?.level ?: HeatLevel.NORMAL) >= HeatLevel.MODERATE
+    val context = LocalContext.current
+    val power = context.getSystemService(PowerManager::class.java)
+    var saving by remember { mutableStateOf(power.isPowerSaveMode) }
+    DisposableEffect(context, watching) {
+        if (!watching) return@DisposableEffect onDispose {}
+        saving = power.isPowerSaveMode
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                saving = power.isPowerSaveMode
+            }
+        }
+        ContextCompat.registerReceiver(context, receiver, IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+    return !watching || !hot && !saving
 }

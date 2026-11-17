@@ -1367,6 +1367,27 @@ class ReviewTest {
     }
 
     @Test
+    fun `a page of video copies holds 15 groups, whatever the number of copies in them`() = test {
+        repeat(20) {
+            duplicateVideo("DCIM/Camera/v$it.mp4", 300, "exact$it", Role.BEST)
+            duplicateVideo("Download/v$it.mp4", 300, "exact$it", Role.INFERIOR)
+            video("DCIM/Camera/n$it.mp4", 300).also { v -> runBlocking { index.setSignals(v.path, "near_duplicate", 2, listOf(nearDuplicate("near$it", Role.BEST))) } }
+            video("Download/n$it.mp4", 300).also { v -> runBlocking { index.setSignals(v.path, "near_duplicate", 2, listOf(nearDuplicate("near$it", Role.INFERIOR, 1f))) } }
+        }
+
+        assertEquals(15, page(Category.EXACT_DUPLICATE, mediaType = MediaType.VIDEO).groups.size)
+        assertEquals(15, page(Category.NEAR_DUPLICATE, mediaType = MediaType.VIDEO).groups.size)
+    }
+
+    @Test
+    fun `a page of short clips holds 16 clips`() = test {
+        repeat(30) { video("DCIM/Camera/clip$it.mp4", 300).also { v -> runBlocking { index.setSignals(v.path, "short_clips", 1, listOf(Signal("short_clips", 1, Category.SHORT_CLIPS, 0.9f))) } } }
+
+        assertEquals(16, page(Category.SHORT_CLIPS, mediaType = MediaType.VIDEO).groups.size)
+        assertEquals(30, page(Category.SHORT_CLIPS, mediaType = MediaType.VIDEO).remaining)
+    }
+
+    @Test
     fun `a group of takes left with one take after the other went to the trash is not offered`() = test {
         val first = take("DCIM/Camera/1.mp4")
         take("DCIM/Camera/2.mp4")

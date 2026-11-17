@@ -17,7 +17,10 @@ import com.google.common.util.concurrent.ListenableFuture
  * A player that decodes nothing, which Robolectric cannot do: it keeps what it was asked and plays as far as the state goes,
  * so the tests see which video is loaded, where it is and what was released.
  */
-internal class FakePlayer(private val lengthMs: Long = 61_000) : SimpleBasePlayer(Looper.getMainLooper()) {
+internal class FakePlayer(private val lengthMs: Long = 61_000, looper: Looper = Looper.getMainLooper()) : SimpleBasePlayer(looper) {
+    /** The thread it was built on. A call from any thread but its looper's throws, as Media3's players do. */
+    val builtOn: Thread = Thread.currentThread()
+
     private var items = emptyList<MediaItem>()
     private var wanted = false
     private var state = Player.STATE_IDLE
@@ -54,6 +57,14 @@ internal class FakePlayer(private val lengthMs: Long = 61_000) : SimpleBasePlaye
         state = STATE_ENDED
         invalidateState()
     }
+
+    /** Muted, and looping its one video, read without the player's own getters, which only its looper may call. */
+    val muted get() = level == 0f
+    val repeating get() = repeat == Player.REPEAT_MODE_ONE
+    val soundless get() = C.TRACK_TYPE_AUDIO in tracks.disabledTrackTypes
+
+    /** Where the first item is clipped to end, in ms, or [C.TIME_END_OF_SOURCE] when it plays to its end. */
+    val endMs get() = items.firstOrNull()?.clippingConfiguration?.endPositionMs ?: C.TIME_END_OF_SOURCE
 
     override fun getState(): State = State.Builder()
         .setAvailableCommands(Player.Commands.Builder().addAllCommands().build())
@@ -141,8 +152,9 @@ internal class FakePlayer(private val lengthMs: Long = 61_000) : SimpleBasePlaye
     }
 }
 
-/** The players a screen under test made, as [LocalPlayerFactory] gives them out. */
+/** The players a screen under test made, as [LocalPlayerFactory] gives them out, on the looper it asks for. */
 internal class Players(private val lengthMs: Long = 61_000) {
-    val made = mutableListOf<FakePlayer>()
-    val factory: (Context) -> Player = { FakePlayer(lengthMs).also(made::add) }
+    /** Filled from the loops' thread as well as the main one. */
+    val made: MutableList<FakePlayer> = java.util.concurrent.CopyOnWriteArrayList()
+    val factory: (Context, Looper) -> Player = { _, looper -> FakePlayer(lengthMs, looper).also(made::add) }
 }

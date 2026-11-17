@@ -95,6 +95,7 @@ import io.github.bert0ns.cribrum.ui.freeNowBytes
 import io.github.bert0ns.cribrum.ui.icon
 import io.github.bert0ns.cribrum.ui.label
 import io.github.bert0ns.cribrum.ui.readableWidth
+import io.github.bert0ns.cribrum.ui.rememberCanPlay
 import io.github.bert0ns.cribrum.ui.rememberHeat
 import io.github.bert0ns.cribrum.ui.showFreeNow
 import io.github.bert0ns.cribrum.ui.trailHue
@@ -422,7 +423,8 @@ private fun AppContent(model: ReviewViewModel) {
                             retentionDays = state.retentionDays,
                             loading = state.loading,
                             mediaType = screen.mediaType,
-                            loopClips = screen.category == Category.SHORT_CLIPS,
+                            category = screen.category,
+                            canPlay = rememberCanPlay(screen.mediaType == MediaType.VIDEO),
                         )
                         is Screen.Trash -> TrashScreen(
                             state.trashed,
