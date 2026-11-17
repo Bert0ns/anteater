@@ -68,7 +68,7 @@ internal const val STRIP_FRAMES = 5
 /** The player of a full size view, made when the first video plays. A test hands in another. */
 internal val LocalPlayerFactory = staticCompositionLocalOf<(Context) -> Player> { ::exoPlayer }
 
-private fun exoPlayer(context: Context): Player = ExoPlayer.Builder(context).setHandleAudioBecomingNoisy(true).build()
+private fun exoPlayer(context: Context): Player = ExoPlayer.Builder(context).build()
 
 private val MOVIE_SOUND = AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build()
 
@@ -81,7 +81,8 @@ internal fun stripTimes(durationMs: Long, count: Int = STRIP_FRAMES): List<Long>
 /**
  * The one player of a full size view, and what the controls show of it. It makes the player when a video first plays, plays
  * one video at a time, and [release]s it when the view closes, so no player outlives the view and there is never a second.
- * A [loop], a short clip's tile (docs/design.md §8), is muted from its first frame and plays its video again and again.
+ * A [loop], a short clip's tile (docs/design.md §8), is muted from its first frame, decodes no sound at all and plays its
+ * video again and again.
  * Everything runs on the main thread, as Media3 asks.
  */
 internal class VideoPlayback(private val loop: Boolean = false, private val create: () -> Player) {
@@ -124,7 +125,12 @@ internal class VideoPlayback(private val loop: Boolean = false, private val crea
         val player = player ?: create().also {
             it.addListener(listener)
             it.sound()
-            if (loop) it.repeatMode = Player.REPEAT_MODE_ONE
+            // A loop has no sound to lose when headphones come out, and takes no audio decoder nor AudioTrack.
+            (it as? ExoPlayer)?.setHandleAudioBecomingNoisy(!loop)
+            if (loop) {
+                it.repeatMode = Player.REPEAT_MODE_ONE
+                it.trackSelectionParameters = it.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true).build()
+            }
             player = it
         }
         failed = null
@@ -227,14 +233,17 @@ internal class VideoPlayback(private val loop: Boolean = false, private val crea
     }
 }
 
-/** The [VideoPlayback] of the full size view or tile that calls this: it is released when that leaves, and pauses when the app leaves the screen. */
+/**
+ * The [VideoPlayback] of the full size view or tile that calls this: it is released when that leaves. When the app leaves
+ * the screen a video pauses, and a [loop] lets go of its player, so its codecs are free while the app is in the background.
+ */
 @Composable
 internal fun rememberVideoPlayback(loop: Boolean = false): VideoPlayback {
     val context = LocalContext.current.applicationContext
     val factory = LocalPlayerFactory.current
     val playback = remember(context, factory, loop) { VideoPlayback(loop) { factory(context) } }
     DisposableEffect(playback) { onDispose { playback.release() } }
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { playback.pause() }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { if (loop) playback.release() else playback.pause() }
     return playback
 }
 

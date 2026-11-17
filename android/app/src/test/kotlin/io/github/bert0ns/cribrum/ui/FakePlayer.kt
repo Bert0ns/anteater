@@ -8,6 +8,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.SimpleBasePlayer
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.VideoSize
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -23,6 +24,7 @@ internal class FakePlayer(private val lengthMs: Long = 61_000) : SimpleBasePlaye
     private var position = 0L
     private var level = 1f
     private var repeat = Player.REPEAT_MODE_OFF
+    private var tracks = TrackSelectionParameters.DEFAULT
     private var failure: PlaybackException? = null
 
     var released = false
@@ -61,6 +63,7 @@ internal class FakePlayer(private val lengthMs: Long = 61_000) : SimpleBasePlaye
         .setContentPositionMs(position)
         .setVolume(level)
         .setRepeatMode(repeat)
+        .setTrackSelectionParameters(tracks)
         .setPlayerError(failure)
         .setVideoSize(if (state == STATE_READY) VideoSize(1920, 1080) else VideoSize.UNKNOWN)
         .build()
@@ -109,6 +112,11 @@ internal class FakePlayer(private val lengthMs: Long = 61_000) : SimpleBasePlaye
 
     override fun handleSetRepeatMode(repeatMode: Int): ListenableFuture<*> {
         repeat = repeatMode
+        return Futures.immediateVoidFuture()
+    }
+
+    override fun handleSetTrackSelectionParameters(trackSelectionParameters: TrackSelectionParameters): ListenableFuture<*> {
+        tracks = trackSelectionParameters
         return Futures.immediateVoidFuture()
     }
 
