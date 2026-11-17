@@ -330,7 +330,8 @@ private fun AppContent(model: ReviewViewModel) {
                     title = {
                         Text(
                             when (screen) {
-                                Screen.Home -> stringResource(R.string.app_name)
+                                // No title: the bar keeps the trash icon and the status bar room, and the summary gets the space (#439).
+                                Screen.Home -> ""
                                 Screen.Compress -> stringResource(R.string.nav_compress)
                                 is Screen.Category -> categoryName(screen.category, screen.mediaType)
                                 Screen.Videos -> stringResource(R.string.videos_largest)
