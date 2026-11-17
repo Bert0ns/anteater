@@ -300,9 +300,9 @@
     <string name="settings_about">About</string>
     <string name="settings_version">Version %1$s</string>
     <string name="settings_website">Website</string>
-    <string name="settings_website_url" translatable="false">https://cribrum.bertons.me</string>
+    <string name="settings_website_url" translatable="false">https://anteater.bertons.me</string>
     <string name="settings_source">Source code</string>
-    <string name="settings_source_url" translatable="false">https://github.com/Bert0ns/cribrum</string>
+    <string name="settings_source_url" translatable="false">https://github.com/Bert0ns/anteater</string>
     <string name="settings_trash_retention">Keep trashed files for</string>
     <plurals name="settings_trash_days">
         <item quantity="one">%d day</item>

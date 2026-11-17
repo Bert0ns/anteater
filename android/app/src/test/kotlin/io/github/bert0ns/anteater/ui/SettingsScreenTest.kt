@@ -203,13 +203,13 @@ class SettingsScreenTest {
         }
 
         // About comes last.
-        compose.onNode(hasScrollAction()).performScrollToNode(hasText("https://cribrum.bertons.me"))
-        compose.onNodeWithText("https://cribrum.bertons.me").performClick()
-        assertEquals(listOf("https://cribrum.bertons.me"), opened)
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("https://anteater.bertons.me"))
+        compose.onNodeWithText("https://anteater.bertons.me").performClick()
+        assertEquals(listOf("https://anteater.bertons.me"), opened)
 
-        compose.onNode(hasScrollAction()).performScrollToNode(hasText("https://github.com/Bert0ns/cribrum"))
-        compose.onNodeWithText("https://github.com/Bert0ns/cribrum").performClick()
-        assertEquals(listOf("https://cribrum.bertons.me", "https://github.com/Bert0ns/cribrum"), opened)
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("https://github.com/Bert0ns/anteater"))
+        compose.onNodeWithText("https://github.com/Bert0ns/anteater").performClick()
+        assertEquals(listOf("https://anteater.bertons.me", "https://github.com/Bert0ns/anteater"), opened)
     }
 
     @Test
