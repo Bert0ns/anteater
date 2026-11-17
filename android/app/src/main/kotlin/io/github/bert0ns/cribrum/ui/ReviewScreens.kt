@@ -219,10 +219,10 @@ private val ReviewOrder.title
 /**
  * A thumbnail that is marked for the trash or kept. Tap toggles, a long press shows it full size.
  * A screen reader hears why the image is here and how it is marked, and gets both as actions too.
- * A video tile that [loop]s plays its clip over its frame.
+ * A video tile that [loop]s plays its clip over its frame, and calls [onLoopFailed] when the clip cannot be played.
  */
 @Composable
-private fun Tile(item: ReviewItem, marked: Boolean, loop: Boolean, onTap: () -> Unit, onHold: () -> Unit) {
+private fun Tile(item: ReviewItem, marked: Boolean, loop: Boolean, onTap: () -> Unit, onHold: () -> Unit, onLoopFailed: () -> Unit) {
     val state = stringResource(
         when {
             marked -> R.string.selected_for_trash
@@ -260,7 +260,7 @@ private fun Tile(item: ReviewItem, marked: Boolean, loop: Boolean, onTap: () -> 
     ) {
         if (video) {
             VideoFrame(File(item.image.path), "Review.tile", Modifier.fillMaxSize(), unreadable = item.unreadable)
-            if (loop) LoopingClip(File(item.image.path), Modifier.fillMaxSize())
+            if (loop) LoopingClip(File(item.image.path), Modifier.fillMaxSize(), onLoopFailed)
             Text(details, Modifier.align(Alignment.BottomStart).background(Color.Black.copy(alpha = 0.6f)).padding(4.dp).clearAndSetSemantics {}, color = Color.White, style = MaterialTheme.typography.labelSmall)
         } else {
             TracedAsyncImage(File(item.image.path), "Review.tile", null, Modifier.fillMaxSize(), tile = true)
@@ -375,9 +375,17 @@ fun CategoryScreen(
         LaunchedEffect(reviewOrder) { grid.scrollToItem(0) }
         val context = LocalContext.current
         val animations = remember(context) { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f }
-        // The tiles' keys are their paths. shortcut: a clip the player cannot play keeps its place, which a scroll frees.
-        val loopable = if (loopClips && animations && fullSize == null) images.filterNot { it.unreadable }.map { it.image.path }.toSet() else emptySet()
-        val looping by remember(grid, loopable) { derivedStateOf { grid.layoutInfo.visibleItemsInfo.map { it.key }.filter { it in loopable }.take(LOOPING_CLIPS).toSet() } }
+        // A clip the player could not play gives its place to the next tile.
+        var failedLoops by remember { mutableStateOf(emptySet<String>()) }
+        val fullSizeOpen = fullSize != null
+        val loopable = remember(images, loopClips, animations, fullSizeOpen, failedLoops) {
+            if (loopClips && animations && !fullSizeOpen) images.filterNot { it.unreadable }.map { it.image.path }.toSet() - failedLoops else emptySet()
+        }
+        // The tiles' keys are their paths. Nothing plays while the grid scrolls, so a fling builds and releases no player
+        // for each row it passes: the clips start once the grid settles.
+        val looping by remember(grid, loopable) {
+            derivedStateOf { if (grid.isScrollInProgress) emptySet() else grid.layoutInfo.visibleItemsInfo.map { it.key }.filter { it in loopable }.take(LOOPING_CLIPS).toSet() }
+        }
         LazyVerticalGrid(GridCells.Adaptive(110.dp), Modifier.weight(1f), grid) {
             for ((position, group) in page.withIndex()) {
                 if (group.date != null && group.date != page.getOrNull(position - 1)?.date) {
@@ -414,6 +422,7 @@ fun CategoryScreen(
                             onToggle(item.image)
                         },
                         onHold = { fullSize = item.image },
+                        onLoopFailed = { failedLoops = failedLoops + item.image.path },
                     )
                 }
             }

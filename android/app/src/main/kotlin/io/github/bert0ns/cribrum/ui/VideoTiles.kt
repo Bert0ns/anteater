@@ -77,14 +77,22 @@ internal const val LOOPING_CLIPS = 2
 /**
  * A short clip playing muted and in a loop over its tile's frame, cropped to the tile as the frame is once the player knows
  * the video's size. Its view is empty, and so transparent, until the first frame arrives, and goes once the clip fails to
- * play, so the frame under it shows through. Its player is released when the tile leaves the composition, and the clip
- * starts again when the app comes back.
+ * play, so the frame under it shows through. A clip that fails releases its player and calls [onFailed], so the grid can
+ * give its place to another tile. Its player is released when the tile leaves the composition or the app leaves the screen,
+ * and the clip starts again when the app comes back.
  */
 @Composable
-internal fun LoopingClip(file: File, modifier: Modifier) {
+internal fun LoopingClip(file: File, modifier: Modifier, onFailed: () -> Unit) {
     val playback = rememberVideoPlayback(loop = true)
     LifecycleEventEffect(Lifecycle.Event.ON_START) { playback.play(file) }
-    if (playback.failed == file.path) return
+    val failed = playback.failed == file.path
+    LaunchedEffect(failed) {
+        if (failed) {
+            playback.release()
+            onFailed()
+        }
+    }
+    if (failed) return
     val size = playback.videoSize
     // A TextureView, not a SurfaceView: it scrolls with the grid and is clipped to the tile like any view.
     AndroidView(

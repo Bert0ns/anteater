@@ -2,6 +2,7 @@ package io.github.bert0ns.cribrum.ui
 
 import android.provider.Settings
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -11,6 +12,10 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.Player
 import androidx.test.core.app.ApplicationProvider
 import io.github.bert0ns.cribrum.model.MediaRef
@@ -36,8 +41,9 @@ class ClipLoopsTest {
     private fun clips(count: Int) = (1..count).map { MediaRef("/sdcard/DCIM/Camera/clip$it.mp4", 2_000_000, 0, MediaType.VIDEO) }
     private fun page(clips: List<MediaRef>, unreadable: Set<Int> = emptySet()) = clips.mapIndexed { i, clip -> ReviewGroup(clip.path, listOf(ReviewItem(clip, suggestTrash = true, isCandidate = true, unreadable = i in unreadable))) }
 
-    private fun show(page: List<ReviewGroup>, loopClips: Boolean = true) = compose.setContent {
-        CompositionLocalProvider(LocalPlayerFactory provides players.factory) {
+    private fun show(page: List<ReviewGroup>, owner: LifecycleOwner? = null, loopClips: Boolean = true) = compose.setContent {
+        val locals = listOfNotNull(LocalPlayerFactory provides players.factory, owner?.let { LocalLifecycleOwner provides it })
+        CompositionLocalProvider(*locals.toTypedArray()) {
             CategoryScreen(page, page.size, emptySet(), false, {}, { _, _ -> }, {}, mediaType = MediaType.VIDEO, loopClips = loopClips)
         }
     }
@@ -82,15 +88,57 @@ class ClipLoopsTest {
     }
 
     @Test
-    fun `a clip that fails to play falls back to its still frame`() {
+    fun `a clip that fails to play falls back to its still frame, releases its player and gives its place to the next one`() {
         show(page(clips(8)))
         compose.waitForIdle()
-        compose.onAllNodesWithTag("clipLoop").assertCountEquals(LOOPING_CLIPS)
+        val failed = players.made.first()
 
-        players.made.first().fail()
+        failed.fail()
         compose.waitForIdle()
 
-        compose.onAllNodesWithTag("clipLoop").assertCountEquals(LOOPING_CLIPS - 1)
+        assertTrue(failed.released)
+        assertEquals((2..LOOPING_CLIPS + 1).map { "/sdcard/DCIM/Camera/clip$it.mp4" }, running.flatMap { it.paths })
+        compose.onAllNodesWithTag("clipLoop").assertCountEquals(LOOPING_CLIPS)
+    }
+
+    @Test
+    fun `nothing plays while the grid scrolls, and the clips start once it settles`() {
+        show(page(clips(60)))
+        compose.waitForIdle()
+        val grid = compose.onNode(hasScrollAction())
+
+        grid.performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -200f))
+        }
+        compose.waitForIdle()
+        assertEquals(LOOPING_CLIPS, players.made.size)
+        assertTrue(running.isEmpty())
+
+        grid.performTouchInput { up() }
+        compose.waitForIdle()
+        assertEquals(LOOPING_CLIPS, running.size)
+    }
+
+    @Test
+    fun `a loop lets go of its player when the app leaves the screen, and plays again when it comes back`() {
+        val owner = object : LifecycleOwner {
+            override val lifecycle: LifecycleRegistry = LifecycleRegistry.createUnsafe(this)
+        }
+        compose.runOnUiThread { owner.lifecycle.currentState = Lifecycle.State.RESUMED }
+        show(page(clips(8)), owner)
+        compose.waitForIdle()
+        val first = players.made.toList()
+
+        compose.runOnUiThread { owner.lifecycle.currentState = Lifecycle.State.CREATED } // ON_PAUSE, then ON_STOP
+        compose.waitForIdle()
+        assertTrue(first.all { it.released })
+        assertTrue(running.isEmpty())
+
+        compose.runOnUiThread { owner.lifecycle.currentState = Lifecycle.State.RESUMED }
+        compose.waitForIdle()
+        assertEquals(first.flatMap { it.paths }, running.flatMap { it.paths })
+        assertTrue(running.all { it.playing })
     }
 
     @Test
