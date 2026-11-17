@@ -398,14 +398,18 @@ class Pipeline(
         }
     }
 
-    /** The video steps, which only a run asked for videos takes: the metadata, the frames, then the detectors and the group detectors that accept videos, which may read the frames. */
+    /**
+     * The video steps, which only a run asked for videos takes: the metadata, the per-video detectors, which read no frame, then
+     * the frames and the group detectors that accept videos, which may read them. The detectors go before the frames, the longest
+     * step, so a scan stopped there still has their signals.
+     */
     private suspend fun videoSteps(found: Set<String>, stats: Stats, progress: Progress) {
         val pending = index.withoutMetadata().filter { it.mediaType == MediaType.VIDEO }
         phase("videoMetadata", stats) {
             readAndStore(pending, VIDEO_METADATA_STEP, progress, read = { attempt { videoMetadataReader(it) } }) { batch -> storeVideoMetadata(batch, stats) }
         }
-        if (embedder != null) phase("videoFrames", stats) { embedFrames(embedder, stats, progress) }
         analyzeVideos(found, stats)
+        if (embedder != null) phase("videoFrames", stats) { embedFrames(embedder, stats, progress) }
         groupSteps(MediaType.VIDEO, found, emptyMap(), "", null, stats, progress)
     }
 

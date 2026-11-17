@@ -3,7 +3,6 @@
 package io.github.bert0ns.cribrum.detectors
 
 import io.github.bert0ns.cribrum.folders.isMessagingFolder
-import io.github.bert0ns.cribrum.folders.isSentFolder
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
@@ -49,20 +48,18 @@ class ForwardedDetector : Detector {
         return listOf(Signal(id, version, Category.FORWARDED, 1f - miss, evidence))
     }
 
-    /** Every video in a messaging app's folder is a candidate, the ones in "Sent" more than the others, and no other video gets a signal. */
+    /**
+     * Every video in a messaging app's folder scores 1, and no other video gets a signal. At 1 no position of the category's
+     * slider, which the photos share, hides it.
+     */
     private fun video(video: MediaRef): List<Signal> {
         if (!isMessagingFolder(video.path)) return emptyList()
-        val sent = isSentFolder(video.path)
-        val score = 1f - (1f - VIDEO_MESSAGING_FOLDER_WEIGHT) * (1f - (if (sent) VIDEO_SENT_FOLDER_WEIGHT else 0f))
-        val evidence = mapOf("messaging_folder" to "yes", "sent_folder" to if (sent) "yes" else "no")
-        return listOf(Signal(id, version, Category.FORWARDED, score, evidence))
+        return listOf(Signal(id, version, Category.FORWARDED, 1f, mapOf("messaging_folder" to "yes")))
     }
 
     companion object {
         const val ZERO_SHOT_WEIGHT = 0.9f
         const val MESSAGING_FOLDER_WEIGHT = 0.4f
         const val NO_CAMERA_EXIF_WEIGHT = 0.1f
-        const val VIDEO_MESSAGING_FOLDER_WEIGHT = 0.6f
-        const val VIDEO_SENT_FOLDER_WEIGHT = 0.5f
     }
 }
