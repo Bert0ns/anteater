@@ -514,7 +514,7 @@ val scenes: List<Scene> = listOf(
         click(plural(R.plurals.videos_trash, 1, 1, Formatter.formatShortFileSize(app, 1_460_000_000L).replace(' ', '\u00A0')))
         awaitText(plural(R.plurals.videos_summary_title, 1, 1))
     },
-    Scene("videos-largest-full-size", "Largest videos, a video at full size", "The video starts playing as the view opens. Pause it with a tap, drag the seek bar, jump to one of the five frames, mute it, select it with the checkbox, swipe to the next one, which stops this one and plays that, or close the view. Robolectric draws no video, so the picture stays the frame.", Variant.base) {
+    Scene("videos-largest-full-size", "Largest videos, a video at full size", "The video starts playing, muted, as the view opens, and the sound icon says it is off. Pause it with a tap, drag the seek bar, jump to one of the five frames, unmute it, select it with the checkbox, swipe to the next one, which stops this one and plays that, or close the view. Robolectric draws no video, so the picture stays the frame.", Variant.base) {
         videoLibrary()
         val model = app()
         openVideos(model)

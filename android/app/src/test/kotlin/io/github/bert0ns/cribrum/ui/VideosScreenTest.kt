@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -248,22 +249,48 @@ class VideosScreenTest {
     }
 
     @Test
-    fun `the sound button mutes the video and brings the sound back`() {
+    fun `a video starts muted without audio focus, and the sound button brings the sound and the focus`() {
         show(videos)
         openFullSize("middle.mp4")
         compose.waitForIdle()
-        assertEquals(1f, players.made.single().volume, 0f)
-        assertTrue(players.made.single().focus) // opening a video takes audio focus, so the user's music pauses
-
-        compose.onNodeWithContentDescription("Mute").performClick()
-        compose.waitForIdle()
+        assertTrue(players.made.single().playing)
         assertEquals(0f, players.made.single().volume, 0f)
-        assertFalse(players.made.single().focus)
+        assertFalse(players.made.single().focus) // the user's music plays on
 
         compose.onNodeWithContentDescription("Unmute").performClick()
         compose.waitForIdle()
         assertEquals(1f, players.made.single().volume, 0f)
         assertTrue(players.made.single().focus)
+
+        compose.onNodeWithContentDescription("Mute").performClick()
+        compose.waitForIdle()
+        assertEquals(0f, players.made.single().volume, 0f)
+        assertFalse(players.made.single().focus)
+    }
+
+    @Test
+    fun `after an unmute the next videos of the view have sound, and a view that opens again starts muted`() {
+        show(videos)
+        openFullSize("big.mp4")
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Unmute").performClick()
+        compose.waitForIdle()
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), players.made.single().paths)
+        assertEquals(1f, players.made.single().volume, 0f)
+        assertTrue(players.made.single().focus)
+
+        compose.onNodeWithContentDescription("Close").performClick()
+        compose.waitForIdle()
+        openFullSize("big.mp4")
+        compose.waitForIdle()
+
+        assertEquals(2, players.made.size)
+        assertEquals(0f, players.made.last().volume, 0f)
+        assertFalse(players.made.last().focus)
     }
 
     @Test
@@ -312,6 +339,79 @@ class VideosScreenTest {
 
         assertEquals(listOf("/sdcard/Movies/big.mp4"), players.made.single().paths)
         assertFalse(players.made.single().playing)
+    }
+
+    private fun pageWidth() = compose.onNodeWithTag("fullSize").fetchSemanticsNode().size.width.toFloat()
+
+    @Test
+    fun `a drag past half a page and back leaves a paused video paused where it was`() {
+        show(videos)
+        openFullSize("middle.mp4")
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Go to 00:30").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("fullSize").performTouchInput { click() }
+        compose.waitForIdle()
+        assertFalse(players.made.single().playing)
+        val width = pageWidth()
+
+        compose.onNodeWithTag("fullSize").performTouchInput {
+            down(center)
+            moveBy(Offset(-0.7f * width, 0f))
+        }
+        compose.waitForIdle()
+        // The pager is past the middle of the page, and the video is still there: only a page it rests on takes it away.
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), players.made.single().paths)
+        compose.onNodeWithTag("fullSize").performTouchInput {
+            moveBy(Offset(0.7f * width, 0f))
+            up()
+        }
+        compose.waitForIdle()
+
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), players.made.single().paths)
+        assertFalse(players.made.single().playing)
+        assertEquals(30_500, players.made.single().positionMs)
+    }
+
+    @Test
+    fun `a video that failed is not tried again by a drag, only by the play button`() {
+        show(videos)
+        openFullSize("big.mp4")
+        compose.waitForIdle()
+        players.made.single().fail()
+        compose.waitForIdle()
+        val width = pageWidth()
+
+        compose.onNodeWithTag("fullSize").performTouchInput {
+            down(center)
+            moveBy(Offset(-0.1f * width, 0f))
+            moveBy(Offset(0.1f * width, 0f))
+            up()
+        }
+        compose.waitForIdle()
+
+        assertEquals(emptyList<String>(), players.made.single().paths)
+        compose.onNodeWithText("This video can't be played.").assertExists()
+
+        compose.onAllNodesWithContentDescription("Play video").onFirst().performClick()
+        compose.waitForIdle()
+
+        assertEquals(listOf("/sdcard/Movies/big.mp4"), players.made.single().paths)
+    }
+
+    @Test
+    fun `a video earlier in the list leaving does not stop the one that plays`() {
+        var items by mutableStateOf(videos)
+        compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { VideosScreen(items, emptySet(), onToggle = {}, onApply = { _, _ -> }) } }
+        openFullSize("middle.mp4")
+        compose.waitForIdle()
+        assertTrue(players.made.single().playing)
+
+        items = items.filter { it.video.path != "/sdcard/Movies/big.mp4" } // the pager's index of the playing video shifts
+        compose.waitForIdle()
+
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), players.made.single().paths)
+        assertTrue(players.made.single().playing)
     }
 
     @Test

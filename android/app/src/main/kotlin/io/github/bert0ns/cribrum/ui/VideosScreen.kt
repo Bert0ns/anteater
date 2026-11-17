@@ -316,7 +316,7 @@ private fun FullSize(videos: List<VideoItem>, start: VideoItem, selected: Set<St
     val image: @Composable (Int) -> Unit = { page ->
         videos.getOrNull(page)?.let { VideoPage(File(it.video.path), "Videos.fullSize", playback, it.unreadable, onClose) }
     }
-    FullSizeViewer(videos.map { it.video.path }, start.video.path, onClose, image, onPage = { playback.stop() }) { page ->
+    FullSizeViewer(videos.map { it.video.path }, start.video.path, onClose, image, onPage = { if (playback.loaded != paths.getOrNull(it)) playback.stop() }) { page ->
         val item = videos.getOrNull(page) ?: return@FullSizeViewer // the list emptied under the dialog; the screen closes it next
         FullSizeToggle(item.video.path in selected, stringResource(R.string.video_tile_selected), MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary) { onToggle(item.video.path) }
         // A selected video is one the user means to trash, and a favourite and a trash contradict each other, as in the review.

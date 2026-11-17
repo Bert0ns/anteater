@@ -511,7 +511,7 @@ private fun FullSize(
         } else {
             { ZoomableImage(paths[it], onClose) }
         },
-        onPage = { playback.stop() },
+        onPage = { if (playback.loaded != paths.getOrNull(it)) playback.stop() },
     ) { page ->
         val current = items.getOrNull(page) ?: return@FullSizeViewer // the page emptied under the dialog; CategoryScreen closes it next
         FullSizeToggle(current.image.path in marked, stringResource(R.string.selected_for_trash), markColor, Color.White) {
@@ -549,7 +549,7 @@ private fun FullSize(
  * The full size view both the review and the Compress page open: a black dialog that pages through
  * [paths] from [start], with [image] in each page, the review's zoomable image unless the screen
  * has its own. [overlay] draws over it what is specific to the screen, for the page the pager is on. [onPage] hears each page
- * the pager moves to, so a video that plays can stop. A page learns from [LocalPageSettled] that the pager came to rest on it.
+ * the pager comes to rest on, so a video that plays can stop; a drag that comes back to the same page tells it nothing. A page learns from [LocalPageSettled] that the pager came to rest on it.
  */
 @Composable
 internal fun FullSizeViewer(
@@ -563,7 +563,7 @@ internal fun FullSizeViewer(
     val pager = rememberPagerState(paths.indexOf(start).coerceAtLeast(0)) { paths.size }
     ClearFullSizeImagesOnExit()
     val pageChanged by rememberUpdatedState(onPage)
-    LaunchedEffect(pager) { snapshotFlow { pager.currentPage }.drop(1).collect { pageChanged(it) } }
+    LaunchedEffect(pager) { snapshotFlow { pager.settledPage }.drop(1).collect { pageChanged(it) } }
     Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             HorizontalPager(pager, Modifier.fillMaxSize().testTag("fullSize"), key = { paths[it] }) { page ->
