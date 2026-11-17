@@ -1250,6 +1250,58 @@ class ReviewViewModelTest {
         assertEquals(before, model.state.value)
     }
 
+    private fun duplicateClips(best: String, copy: String) = runBlocking {
+        for ((path, role) in listOf(best to Role.BEST, copy to Role.INFERIOR)) {
+            app.index.record(MediaRef(path, 100, 1L, MediaType.VIDEO))
+            app.index.setSignals(path, "exact_duplicate", 1, listOf(Signal("exact_duplicate", 1, Category.EXACT_DUPLICATE, 1f, mapOf(GROUP_KEY to "g", ROLE_KEY to role.value))))
+        }
+    }
+
+    @Test
+    fun `a video marked on a page the user left can be hearted on the list`() {
+        duplicateClips("/sdcard/DCIM/clip.mp4", "/sdcard/Download/clip.mp4")
+        val asked = mutableListOf<Pair<String, Boolean>>()
+        val model = ReviewViewModel(app, Review(app.index, RecordingTrash())) { path, favorite ->
+            asked += path to favorite
+            true
+        }
+        model.open(Category.EXACT_DUPLICATE, MediaType.VIDEO)
+        settle(model) { paths(it).size == 2 }
+        assertEquals(setOf("/sdcard/Download/clip.mp4"), model.state.value.marked) // the copy starts marked
+        model.back()
+        settle(model) { it.state.value.screen == Screen.Home }
+        model.openVideos()
+        settle(model) { videoPaths(it).size == 2 }
+
+        model.setFavorite(model.state.value.videos.first { it.video.path == "/sdcard/Download/clip.mp4" }.video, true)
+        settle(model) { videoHearts(it).isNotEmpty() }
+
+        assertEquals(listOf("/sdcard/Download/clip.mp4" to true), asked)
+        assertEquals(listOf("/sdcard/Download/clip.mp4"), videoHearts(model))
+    }
+
+    @Test
+    fun `a video hearted on a page of videos is no surprise at the apply, and the copy is trashed`() {
+        duplicateClips("/sdcard/DCIM/clip.mp4", "/sdcard/Download/clip.mp4")
+        val favorites = mutableSetOf<String>()
+        val trash = RecordingTrash()
+        val model = ReviewViewModel(app, Review(app.index, trash, favorites = { favorites.toSet() })) { path, favorite ->
+            if (favorite) favorites += path else favorites -= path
+            true
+        }
+        model.open(Category.EXACT_DUPLICATE, MediaType.VIDEO)
+        settle(model) { paths(it).size == 2 }
+        val best = model.state.value.page.single().images.first { it.image.path == "/sdcard/DCIM/clip.mp4" }.image
+
+        model.setFavorite(best, true)
+        settle(model) { hearts(it).isNotEmpty() }
+        applyShown(model)
+        settle(model) { it.state.value.lastDecision != null }
+
+        assertFalse(model.state.value.favoriteAppeared)
+        assertEquals(listOf("/sdcard/Download/clip.mp4"), trash.moves.single().map { it.path })
+    }
+
     @Test
     fun `a favourite made on the list is no surprise at the apply`() {
         val trash = RecordingTrash()
