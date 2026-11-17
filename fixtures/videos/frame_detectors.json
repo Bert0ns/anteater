@@ -218,6 +218,15 @@
     "peak_variance": 900.0
    }
   ],
+  "one-frame.mp4": [
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 25.0
+   }
+  ],
   "sharp.mp4": [
    {
     "p1": 5,
@@ -495,6 +504,42 @@
      "dark_score": "0.000",
      "flat_score": "0.000",
      "frames": "5"
+    },
+    "score": 0.0,
+    "version": 1
+   },
+   {
+    "category": "faces",
+    "detector": "faces",
+    "evidence": {
+     "faces": "0",
+     "frames_with_faces": "0",
+     "largest_face": "0.0000"
+    },
+    "score": 0.0,
+    "version": 1
+   }
+  ],
+  "one-frame.mp4": [
+   {
+    "category": "blurry",
+    "detector": "blur",
+    "evidence": {
+     "frames": "1",
+     "median_variance": "25.0"
+    },
+    "score": 0.8,
+    "version": 1
+   },
+   {
+    "category": "bad_exposure",
+    "detector": "exposure",
+    "evidence": {
+     "bright_score": "0.000",
+     "case": "dark",
+     "dark_score": "0.000",
+     "flat_score": "0.000",
+     "frames": "1"
     },
     "score": 0.0,
     "version": 1

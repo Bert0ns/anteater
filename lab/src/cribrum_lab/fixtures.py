@@ -386,6 +386,7 @@ FRAME_CLIPS = {
     "two-dark-frames.mp4": [_DARK, _DARK, _SHARP, _SHARP, _SHARP],
     "bright.mp4": [_BRIGHT] * 4,
     "faces.mp4": [_FACE, _SMALL_FACE, _SHARP, _SHARP, _FACE],
+    "one-frame.mp4": [_BLURRED],
     "no-frames.mp4": [],
 }
 """Made-up clips with the measures of the frames they would have, in the order of their times."""

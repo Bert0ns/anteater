@@ -139,3 +139,6 @@ def test_the_frame_detectors_fixture_still_matches_the_lab():
     assert scores["dark.mp4"]["exposure"] == 1.0
     assert scores["faces.mp4"]["faces"] > 0
     assert scores["no-frames.mp4"] == {}
+    # One frame is its own median: the video scores as that frame does.
+    assert scores["one-frame.mp4"]["blur"] == pytest.approx(0.8)
+    assert expected["signals"]["one-frame.mp4"][0]["evidence"]["frames"] == "1"
