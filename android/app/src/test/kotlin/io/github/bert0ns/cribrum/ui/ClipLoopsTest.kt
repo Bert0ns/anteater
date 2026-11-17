@@ -309,6 +309,16 @@ class ClipLoopsTest {
         assertTrue(frames.none { it.first.endsWith("-1.mp4") || it.first.endsWith("-3.mp4") })
     }
 
+    @Test
+    fun `a moment whose longest take cannot be read moves its longest readable take`() {
+        fun take(group: Int, n: Int, length: Long, unreadable: Boolean = false) = ReviewItem(MediaRef("/sdcard/DCIM/Camera/take$group-$n.mp4", 2_000_000, 0, MediaType.VIDEO), suggestTrash = false, isCandidate = true, unreadable = unreadable, durationMs = length)
+        val takes = listOf(ReviewGroup("t1", listOf(take(1, 1, 2_000), take(1, 2, 9_000, unreadable = true), take(1, 3, 5_000))))
+
+        show(takes, category = Category.TAKES)
+
+        assertEquals(listOf("/sdcard/DCIM/Camera/take1-3.mp4"), players.made.flatMap { it.paths })
+    }
+
     private fun columns(): Int {
         val tops = compose.onAllNodesWithContentDescription(".mp4", substring = true).fetchSemanticsNodes().map { it.boundsInRoot.top }
         return tops.count { it == tops.min() }

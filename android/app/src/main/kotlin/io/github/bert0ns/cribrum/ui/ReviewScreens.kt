@@ -314,11 +314,12 @@ private const val COPY_LOOP_MS = 10_000L
  * unreadable video never moves.
  */
 private fun movingTiles(category: Category, page: List<ReviewGroup>): Set<String> = when (category) {
-    Category.SHORT_CLIPS -> page.flatMap { it.images }
-    Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE -> page.mapNotNull { group -> group.images.firstOrNull { it.isBest } }
-    Category.TAKES -> page.mapNotNull { group -> group.images.maxByOrNull { it.durationMs ?: 0 } }
+    Category.SHORT_CLIPS -> page.flatMap { it.images }.filterNot { it.unreadable }
+    Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE -> page.mapNotNull { group -> group.images.firstOrNull { it.isBest && !it.unreadable } }
+    // The longest readable take, so a moment whose longest take cannot be read still moves.
+    Category.TAKES -> page.mapNotNull { group -> group.images.filterNot { it.unreadable }.maxByOrNull { it.durationMs ?: 0 } }
     else -> emptyList()
-}.filterNot { it.unreadable }.map { it.image.path }.toSet()
+}.map { it.image.path }.toSet()
 
 /** The badge of a tile selected for an action, in Compress and in the trash. A check means "selected" everywhere. */
 @Composable
