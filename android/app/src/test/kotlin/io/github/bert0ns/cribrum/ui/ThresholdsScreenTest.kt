@@ -44,7 +44,7 @@ class ThresholdsScreenTest {
             )
         }
 
-        compose.onNodeWithText("Move a slider left to see more images, right to see fewer.").assertIsDisplayed()
+        compose.onNodeWithText("Move a slider left to see more images or videos, right to see fewer.").assertIsDisplayed()
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Blurry"))
         compose.onAllNodesWithText("Blurry").onFirst().assertIsDisplayed() // the Videos section has one too
         compose.onNodeWithText("10 images to review").assertIsDisplayed()

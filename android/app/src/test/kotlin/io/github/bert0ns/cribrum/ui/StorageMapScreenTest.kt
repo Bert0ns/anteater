@@ -189,7 +189,7 @@ class StorageMapScreenTest {
 
     private fun openStorageMapFromTheBar() {
         compose.onNodeWithText("Settings").performClick()
-        awaitText("Keep trashed images for")
+        awaitText("Keep trashed files for")
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Storage map"))
         compose.onNodeWithText("Storage map").performClick()
         awaitText("DCIM")
