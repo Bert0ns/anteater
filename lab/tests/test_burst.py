@@ -5,10 +5,10 @@ import numpy as np
 import pytest
 from PIL import Image, ImageFilter
 
-from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, AnalysisContext, Role
-from cribrum_lab.detectors.burst import BurstDetector
-from cribrum_lab.metadata import ImageMetadata
-from cribrum_lab.model import Category, MediaRef
+from anteater_lab.detectors import GROUP_KEY, ROLE_KEY, AnalysisContext, Role
+from anteater_lab.detectors.burst import BurstDetector
+from anteater_lab.metadata import ImageMetadata
+from anteater_lab.model import Category, MediaRef
 
 START = datetime(2024, 5, 1, 10, 0, 0)
 

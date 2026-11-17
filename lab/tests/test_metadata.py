@@ -3,7 +3,7 @@ from datetime import datetime
 import pytest
 from PIL import Image
 
-from cribrum_lab.metadata import UnreadableImage, read_metadata
+from anteater_lab.metadata import UnreadableImage, read_metadata
 
 MAKE, MODEL, ORIENTATION, DATETIME = 0x010F, 0x0110, 0x0112, 0x0132
 EXIF_IFD, DATETIME_ORIGINAL = 0x8769, 0x9003

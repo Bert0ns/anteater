@@ -4,10 +4,10 @@ from pathlib import Path
 
 from PIL import Image
 
-from cribrum_lab.cli import main
-from cribrum_lab.index import ImageIndex
-from cribrum_lab.labels import Decision, Label, LabelStore
-from cribrum_lab.model import MediaType
+from anteater_lab.cli import main
+from anteater_lab.index import ImageIndex
+from anteater_lab.labels import Decision, Label, LabelStore
+from anteater_lab.model import MediaType
 
 VIDEOS = Path(__file__).resolve().parents[2] / "fixtures/videos"
 

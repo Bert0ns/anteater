@@ -4,10 +4,10 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, AnalysisContext, Role
-from cribrum_lab.detectors.near_duplicate import NearDuplicateDetector
-from cribrum_lab.metadata import ImageMetadata, read_metadata
-from cribrum_lab.model import Category, MediaRef
+from anteater_lab.detectors import GROUP_KEY, ROLE_KEY, AnalysisContext, Role
+from anteater_lab.detectors.near_duplicate import NearDuplicateDetector
+from anteater_lab.metadata import ImageMetadata, read_metadata
+from anteater_lab.model import Category, MediaRef
 
 
 def scene(seed, size=(1600, 1200)):

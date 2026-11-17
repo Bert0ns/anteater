@@ -1,8 +1,8 @@
 from collections import defaultdict
 from pathlib import Path
 
-from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, AnalysisContext, GroupDetector, Role
-from cribrum_lab.model import Category, MediaRef, Signal
+from anteater_lab.detectors import GROUP_KEY, ROLE_KEY, AnalysisContext, GroupDetector, Role
+from anteater_lab.model import Category, MediaRef, Signal
 
 
 class SameSizeDetector:

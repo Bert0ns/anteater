@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from cribrum_lab.detectors import AnalysisContext
-from cribrum_lab.detectors.screenshot import ScreenshotDetector
-from cribrum_lab.metadata import ImageMetadata
-from cribrum_lab.model import Category, MediaRef
+from anteater_lab.detectors import AnalysisContext
+from anteater_lab.detectors.screenshot import ScreenshotDetector
+from anteater_lab.metadata import ImageMetadata
+from anteater_lab.model import Category, MediaRef
 
 SCREEN = (1080, 2400)
 PHOTO = (4000, 3000)

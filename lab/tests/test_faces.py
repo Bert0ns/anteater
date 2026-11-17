@@ -2,9 +2,9 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from cribrum_lab.detectors import AnalysisContext
-from cribrum_lab.detectors.faces import INPUT_SIDE, STRIDES, FaceDetector, detect, letterbox
-from cribrum_lab.model import MediaRef, Protection
+from anteater_lab.detectors import AnalysisContext
+from anteater_lab.detectors.faces import INPUT_SIDE, STRIDES, FaceDetector, detect, letterbox
+from anteater_lab.model import MediaRef, Protection
 
 
 class FakeYuNet:

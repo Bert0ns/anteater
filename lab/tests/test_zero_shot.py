@@ -5,12 +5,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from cribrum_lab import mobileclip, prompts
-from cribrum_lab.detectors import AnalysisContext
-from cribrum_lab.detectors.document import DocumentDetector
-from cribrum_lab.detectors.forwarded import ForwardedDetector
-from cribrum_lab.metadata import ImageMetadata
-from cribrum_lab.model import Category, MediaRef
+from anteater_lab import mobileclip, prompts
+from anteater_lab.detectors import AnalysisContext
+from anteater_lab.detectors.document import DocumentDetector
+from anteater_lab.detectors.forwarded import ForwardedDetector
+from anteater_lab.metadata import ImageMetadata
+from anteater_lab.model import Category, MediaRef
 
 STORED = json.loads(prompts.EMBEDDINGS.read_text())
 HAS_MODEL = all((mobileclip.MODELS / name).exists() for name in mobileclip._FILES)

@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from cribrum_lab.detectors import AnalysisContext
-from cribrum_lab.detectors.base import accepted_media_types
-from cribrum_lab.detectors.forwarded import ForwardedDetector
-from cribrum_lab.model import Category, MediaRef, MediaType
+from anteater_lab.detectors import AnalysisContext
+from anteater_lab.detectors.base import accepted_media_types
+from anteater_lab.detectors.forwarded import ForwardedDetector
+from anteater_lab.model import Category, MediaRef, MediaType
 
 MEDIA = "/sdcard/Android/media/com.whatsapp/WhatsApp/Media"
 

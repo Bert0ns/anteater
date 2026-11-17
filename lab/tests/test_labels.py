@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from cribrum_lab.labels import Decision, Label, LabelStore, Stratum
-from cribrum_lab.model import MediaType
+from anteater_lab.labels import Decision, Label, LabelStore, Stratum
+from anteater_lab.model import MediaType
 
 
 @pytest.fixture

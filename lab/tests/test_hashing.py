@@ -1,9 +1,9 @@
 import numpy as np
 from PIL import Image, ImageFilter
 
-from cribrum_lab.hashing import content_hash, perceptual_hash
-from cribrum_lab.imaging import Pixels
-from cribrum_lab.model import MediaRef
+from anteater_lab.hashing import content_hash, perceptual_hash
+from anteater_lab.imaging import Pixels
+from anteater_lab.model import MediaRef
 
 
 def scene(seed):

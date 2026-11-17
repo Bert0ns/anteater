@@ -1,7 +1,7 @@
 import importlib.util
 from pathlib import Path
 
-from cribrum_lab.labels import Decision
+from anteater_lab.labels import Decision
 
 _SCRIPT = Path(__file__).parents[1] / "scripts" / "study_video_size_order.py"
 _spec = importlib.util.spec_from_file_location("study_video_size_order", _SCRIPT)

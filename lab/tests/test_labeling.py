@@ -9,11 +9,11 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from cribrum_lab.hashing import content_hash
-from cribrum_lab.labeling import LabelingServer, clusters, sample, strata
-from cribrum_lab.labels import Decision, LabelStore, Stratum
-from cribrum_lab.model import Category, IndexedMedia, MediaRef, MediaType, Signal
-from cribrum_lab.ranker import Candidate
+from anteater_lab.hashing import content_hash
+from anteater_lab.labeling import LabelingServer, clusters, sample, strata
+from anteater_lab.labels import Decision, LabelStore, Stratum
+from anteater_lab.model import Category, IndexedMedia, MediaRef, MediaType, Signal
+from anteater_lab.ranker import Candidate
 
 
 def candidate(name, category=None):
@@ -102,7 +102,7 @@ def test_server_listens_on_localhost_only(server):
 
 
 def test_page_and_queue(server):
-    assert b"Cribrum labeling" in get(server, "/")
+    assert b"Anteater labeling" in get(server, "/")
     queue = json.loads(get(server, "/api/queue"))
 
     assert [Path(item["path"]).name for item in queue["items"]] == ["a.png", "b.jpg", "broken.jpg"]

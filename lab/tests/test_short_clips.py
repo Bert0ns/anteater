@@ -5,9 +5,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from cribrum_lab.detectors import AnalysisContext
-from cribrum_lab.detectors.base import Photo, accepted_media_types
-from cribrum_lab.detectors.short_clips import (
+from anteater_lab.detectors import AnalysisContext
+from anteater_lab.detectors.base import Photo, accepted_media_types
+from anteater_lab.detectors.short_clips import (
     DURATION_WEIGHT,
     FULL_DURATION_MS,
     GIF_WEIGHT,
@@ -18,8 +18,8 @@ from cribrum_lab.detectors.short_clips import (
     TAKE_WEIGHT,
     ShortClipsDetector,
 )
-from cribrum_lab.metadata import VideoMetadata
-from cribrum_lab.model import Category, FrameMeasures, MediaRef, MediaType
+from anteater_lab.metadata import VideoMetadata
+from anteater_lab.model import Category, FrameMeasures, MediaRef, MediaType
 
 START = datetime(2024, 5, 1, 10, 0, 0)
 SHARP = FrameMeasures(peak_variance=900.0, p1=5, p5=20, p95=200, p99=240)

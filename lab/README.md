@@ -1,6 +1,6 @@
-# Cribrum lab
+# Anteater lab
 
-Python prototype and reference implementation of Cribrum's detectors. Detectors are built, tuned, and measured here on real photos, then ported to the Android app. See [`../docs/design.md`](../docs/design.md), section 10.
+Python prototype and reference implementation of Anteater's detectors. Detectors are built, tuned, and measured here on real photos, then ported to the Android app. See [`../docs/design.md`](../docs/design.md), section 10.
 
 ## Setup
 
@@ -74,8 +74,8 @@ If `usbipd attach` fails with "The VBoxUsbMon driver is not correctly installed"
 
 ```bash
 cd lab
-uv run cribrum-lab scan data/device    # find and analyze every image under the folder
-uv run cribrum-lab report              # candidates per category, top 10 paths each
+uv run anteater-lab scan data/device    # find and analyze every image under the folder
+uv run anteater-lab report              # candidates per category, top 10 paths each
 ```
 
 The first `scan` downloads MobileCLIP2-S0 (45 MB) and PP-OCRv4's text detector (5 MB) into `lab/data/models/`; `--no-embeddings` skips it. `scan` stores everything in `lab/data/index.sqlite` as it goes. Run it again after an interruption or after copying new images: it only analyzes what is new or changed, or what a newer detector version has not seen yet. Images that are gone from the folder leave the index. `--jobs` sets the number of worker processes (all cores by default). `scan` finds and records videos without opening them. `--videos` also runs the video steps after the image steps, as a night pass does once "Scan videos" has run, and `--only-videos` runs the walk and the video steps alone, as "Scan videos" does (docs/design.md, section 4). The video steps read the metadata, then take five frames from each video, embed them with MobileCLIP and measure them for `BLURRY`, `BAD_EXPOSURE` and `FACES`, which `--no-embeddings` skips, so it gives a video none of those signals. `--zone` sets the time zone a video's capture time goes to, such as `Europe/Rome`; it defaults to the machine's, so pass the phone's zone when the machine runs in UTC. The index refuses to open if its schema version changed: delete it and scan again.
@@ -83,7 +83,7 @@ The first `scan` downloads MobileCLIP2-S0 (45 MB) and PP-OCRv4's text detector (
 ## Label
 
 ```bash
-uv run cribrum-lab label               # then open http://127.0.0.1:8765/
+uv run anteater-lab label               # then open http://127.0.0.1:8765/
 ```
 
 The page shows one image at a time from a sample of 500 (`--size`). Half of the sample are candidates, spread over every category, and half are images no detector flagged, so that recall can also be measured on what the detectors missed. Keys: `k` keep, `d` delete, `u` undo, `s` skip. A label says only whether you would keep the image: the detectors work out why. To check whether an image is really blurry, click it or press `z`: the original opens at full size, where 100% is one image pixel per screen pixel. The mouse wheel zooms, dragging moves the image, and `z` or `Esc` closes it. In a grid, `z` zooms on the image under the mouse. Labels go to `lab/data/labels.sqlite` and are keyed by content hash, so they survive copying the images again. A new run of `label` skips images that are already labeled; `--seed` draws a different sample.
@@ -95,34 +95,34 @@ With `--clusters`, similar images in the sample (by MobileCLIP embedding) come f
 ## Evaluate
 
 ```bash
-uv run cribrum-lab evaluate            # --out data/report.txt to keep a copy
+uv run anteater-lab evaluate            # --out data/report.txt to keep a copy
 ```
 
-Prints the recall on the labeled images with the current thresholds, and the number of candidates it costs over the whole index. Per category, it counts the images labeled delete and keep that the category flags. A sticker runs neither blur nor exposure, so the `blurry` and `bad_exposure` rows count no sticker (`docs/design.md` §5). Then it suggests a threshold for every category, chosen together so that all categories at once reach 80% recall with as few candidates as it can find: copy them into `THRESHOLDS` in `cribrum_lab/ranker.py`. It ends with the images labeled delete that no detector flagged. When videos have labels, the same report follows for them alone, after a `videos` line. The report lists paths of personal images, so keep it under `lab/data/`.
+Prints the recall on the labeled images with the current thresholds, and the number of candidates it costs over the whole index. Per category, it counts the images labeled delete and keep that the category flags. A sticker runs neither blur nor exposure, so the `blurry` and `bad_exposure` rows count no sticker (`docs/design.md` §5). Then it suggests a threshold for every category, chosen together so that all categories at once reach 80% recall with as few candidates as it can find: copy them into `THRESHOLDS` in `anteater_lab/ranker.py`. It ends with the images labeled delete that no detector flagged. When videos have labels, the same report follows for them alone, after a `videos` line. The report lists paths of personal images, so keep it under `lab/data/`.
 
 ## Layout
 
 | Module | Contents |
 |---|---|
-| `cribrum_lab.model` | Core types: `MediaRef`, `Category`, `Signal` |
-| `cribrum_lab.sources` | `MediaSource` interface and `FilesystemMediaSource`, which finds every image and video under a folder |
-| `cribrum_lab.metadata` | `read_metadata`: displayed size, MIME type, camera EXIF and capture time |
-| `cribrum_lab.index` | `ImageIndex`: SQLite store for images, metadata, signals per detector version, and review state |
-| `cribrum_lab.imaging` | `load_grayscale`: downscaled luminance for content-based detectors |
-| `cribrum_lab.hashing` | `content_hash` (xxHash of a whole file) and `perceptual_hash` (64-bit pHash), for duplicates |
-| `cribrum_lab.screens` | Known screen resolutions, for screenshots |
-| `cribrum_lab.folders` | What a folder says about an image: camera or messaging app |
-| `cribrum_lab.detectors` | `Detector` interface and its implementations |
-| `cribrum_lab.pipeline` | `run`: scan, metadata, detectors and group detectors into the index |
-| `cribrum_lab.cli` | The `cribrum-lab` command |
-| `cribrum_lab.models` | Downloads model files once into `lab/data/models/`, checked against a SHA-256 |
-| `cribrum_lab.assets` | Small model files committed with their license (YuNet face detector) |
-| `cribrum_lab.runtime` | `ModelRuntime` interface and `OnnxRuntime` |
-| `cribrum_lab.mobileclip` | MobileCLIP2-S0 image and text embeddings, zero-shot scores |
-| `cribrum_lab.text` | Text coverage from PP-OCRv4's text detector |
-| `cribrum_lab.prompts` | Zero-shot classes and prompts; their embeddings are committed in `prompt_embeddings.json` |
-| `cribrum_lab.labels` | `LabelStore`: keep/delete labels keyed by content hash |
-| `cribrum_lab.labeling` | Sampling and the local labeling web page |
-| `cribrum_lab.evaluation` | Recall per category, threshold sweep and missed images |
-| `cribrum_lab.comparison` | What a scan option that changes outputs does to the candidates, the recall and each category's order |
-| `cribrum_lab.ranker` | `Ranker`: per-category thresholds, candidates and the review order |
+| `anteater_lab.model` | Core types: `MediaRef`, `Category`, `Signal` |
+| `anteater_lab.sources` | `MediaSource` interface and `FilesystemMediaSource`, which finds every image and video under a folder |
+| `anteater_lab.metadata` | `read_metadata`: displayed size, MIME type, camera EXIF and capture time |
+| `anteater_lab.index` | `ImageIndex`: SQLite store for images, metadata, signals per detector version, and review state |
+| `anteater_lab.imaging` | `load_grayscale`: downscaled luminance for content-based detectors |
+| `anteater_lab.hashing` | `content_hash` (xxHash of a whole file) and `perceptual_hash` (64-bit pHash), for duplicates |
+| `anteater_lab.screens` | Known screen resolutions, for screenshots |
+| `anteater_lab.folders` | What a folder says about an image: camera or messaging app |
+| `anteater_lab.detectors` | `Detector` interface and its implementations |
+| `anteater_lab.pipeline` | `run`: scan, metadata, detectors and group detectors into the index |
+| `anteater_lab.cli` | The `anteater-lab` command |
+| `anteater_lab.models` | Downloads model files once into `lab/data/models/`, checked against a SHA-256 |
+| `anteater_lab.assets` | Small model files committed with their license (YuNet face detector) |
+| `anteater_lab.runtime` | `ModelRuntime` interface and `OnnxRuntime` |
+| `anteater_lab.mobileclip` | MobileCLIP2-S0 image and text embeddings, zero-shot scores |
+| `anteater_lab.text` | Text coverage from PP-OCRv4's text detector |
+| `anteater_lab.prompts` | Zero-shot classes and prompts; their embeddings are committed in `prompt_embeddings.json` |
+| `anteater_lab.labels` | `LabelStore`: keep/delete labels keyed by content hash |
+| `anteater_lab.labeling` | Sampling and the local labeling web page |
+| `anteater_lab.evaluation` | Recall per category, threshold sweep and missed images |
+| `anteater_lab.comparison` | What a scan option that changes outputs does to the candidates, the recall and each category's order |
+| `anteater_lab.ranker` | `Ranker`: per-category thresholds, candidates and the review order |

@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from cribrum_lab import mobileclip, models
-from cribrum_lab.mobileclip import MODELS, MobileClip, model_file, preprocess, zero_shot
+from anteater_lab import mobileclip, models
+from anteater_lab.mobileclip import MODELS, MobileClip, model_file, preprocess, zero_shot
 
 HAS_MODEL = all((MODELS / name).exists() for name in mobileclip._FILES)
 

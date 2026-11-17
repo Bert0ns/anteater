@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from cribrum_lab.compression import (
+from anteater_lab.compression import (
     BALANCED_MAX_PIXELS,
     HIGH_QUALITY,
     SMALLEST,

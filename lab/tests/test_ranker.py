@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, Role
-from cribrum_lab.model import (
+from anteater_lab.detectors import GROUP_KEY, ROLE_KEY, Role
+from anteater_lab.model import (
     Category,
     IndexedMedia,
     MediaRef,
@@ -12,7 +12,7 @@ from cribrum_lab.model import (
     ReviewState,
     Signal,
 )
-from cribrum_lab.ranker import Ranker
+from anteater_lab.ranker import Ranker
 
 THRESHOLDS = {Category.BLURRY: 0.5, Category.SCREENSHOT: 0.8, Category.EXACT_DUPLICATE: 0.5}
 

@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from cribrum_lab.detectors import AnalysisContext
-from cribrum_lab.detectors.base import accepted_media_types
-from cribrum_lab.detectors.blur import BlurDetector
-from cribrum_lab.detectors.exposure import ExposureDetector
-from cribrum_lab.detectors.faces import FaceDetector
-from cribrum_lab.model import Category, FrameMeasures, MediaRef, MediaType, Protection
+from anteater_lab.detectors import AnalysisContext
+from anteater_lab.detectors.base import accepted_media_types
+from anteater_lab.detectors.blur import BlurDetector
+from anteater_lab.detectors.exposure import ExposureDetector
+from anteater_lab.detectors.faces import FaceDetector
+from anteater_lab.model import Category, FrameMeasures, MediaRef, MediaType, Protection
 
 VIDEO = MediaRef(Path("/sdcard/DCIM/Camera/a.mp4"), 0, 0, MediaType.VIDEO)
 SHARP = FrameMeasures(peak_variance=900.0, p1=5, p5=20, p95=200, p99=240)

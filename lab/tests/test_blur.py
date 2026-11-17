@@ -4,9 +4,9 @@ import numpy as np
 import pytest
 from PIL import Image, ImageFilter
 
-from cribrum_lab.detectors import AnalysisContext
-from cribrum_lab.detectors.blur import BlurDetector
-from cribrum_lab.model import Category, MediaRef
+from anteater_lab.detectors import AnalysisContext
+from anteater_lab.detectors.blur import BlurDetector
+from anteater_lab.model import Category, MediaRef
 
 
 def texture(size=(800, 600), seed=0):

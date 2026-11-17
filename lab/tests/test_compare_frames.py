@@ -14,8 +14,8 @@ def test_reads_the_frame_lines_of_the_device_test_out_of_a_logcat_dump():
     vector = np.array([0.6, 0.8], dtype="<f4")
     embedding = base64.b64encode(vector.tobytes()).decode()
     log = (
-        "11-16 13:00:00.000  1234  1234 I cribrum-frames: round 1: 900.0 ms for the video\n"
-        f"11-16 13:00:01.000  1234  1234 I cribrum-frames: frame 1400 mean 120.5 98.0 77.25 "
+        "11-16 13:00:00.000  1234  1234 I anteater-frames: round 1: 900.0 ms for the video\n"
+        f"11-16 13:00:01.000  1234  1234 I anteater-frames: frame 1400 mean 120.5 98.0 77.25 "
         f"clipped 0.0312 embedding {embedding}\n"
     )
 

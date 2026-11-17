@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from cribrum_lab.comparison import compare, with_signals, without_signals
-from cribrum_lab.labels import Decision, Label
-from cribrum_lab.model import Category, IndexedMedia, MediaRef, Protection, Signal
+from anteater_lab.comparison import compare, with_signals, without_signals
+from anteater_lab.labels import Decision, Label
+from anteater_lab.model import Category, IndexedMedia, MediaRef, Protection, Signal
 
 
 def image(name, *signals):

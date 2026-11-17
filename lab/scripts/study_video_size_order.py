@@ -20,14 +20,14 @@ import sqlite3
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from cribrum_lab.detectors.base import AnalysisContext
-from cribrum_lab.detectors.exact_duplicate import ExactDuplicateDetector
-from cribrum_lab.detectors.forwarded import ForwardedDetector
-from cribrum_lab.detectors.takes import TakesDetector
-from cribrum_lab.index import ImageIndex
-from cribrum_lab.labels import Decision, LabelStore
-from cribrum_lab.model import IndexedMedia, MediaType, Signal
-from cribrum_lab.ranker import Ranker
+from anteater_lab.detectors.base import AnalysisContext
+from anteater_lab.detectors.exact_duplicate import ExactDuplicateDetector
+from anteater_lab.detectors.forwarded import ForwardedDetector
+from anteater_lab.detectors.takes import TakesDetector
+from anteater_lab.index import ImageIndex
+from anteater_lab.labels import Decision, LabelStore
+from anteater_lab.model import IndexedMedia, MediaType, Signal
+from anteater_lab.ranker import Ranker
 
 DATA = Path(__file__).resolve().parents[1] / "data"
 FIRST = (1, 5, 10, 20)

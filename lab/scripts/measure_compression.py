@@ -24,7 +24,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from cribrum_lab.compression import (
+from anteater_lab.compression import (
     LEVELS,
     CompressionLevel,
     ImageMeasurement,

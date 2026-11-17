@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from cribrum_lab.detectors import AnalysisContext
-from cribrum_lab.detectors.sticker import StickerDetector
-from cribrum_lab.model import Category, MediaRef
+from anteater_lab.detectors import AnalysisContext
+from anteater_lab.detectors.sticker import StickerDetector
+from anteater_lab.model import Category, MediaRef
 
 MEDIA = "/sdcard/Android/media/com.whatsapp/WhatsApp/Media"
 

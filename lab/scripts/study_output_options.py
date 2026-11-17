@@ -31,18 +31,18 @@ from pathlib import Path
 
 import numpy as np
 
-from cribrum_lab import prompts, text
-from cribrum_lab.comparison import Comparison, compare, with_signals, without_signals
-from cribrum_lab.detectors.base import AnalysisContext
-from cribrum_lab.detectors.document import FULL_COVERAGE, TEXT_WEIGHT, DocumentDetector
-from cribrum_lab.evaluation import CategoryResult, evaluate
-from cribrum_lab.folders import is_sticker_folder
-from cribrum_lab.index import ImageIndex
-from cribrum_lab.labels import Decision, Label, LabelStore
-from cribrum_lab.mobileclip import MobileClip
-from cribrum_lab.model import Category, IndexedMedia, MediaType, Protection, Signal
-from cribrum_lab.ranker import THRESHOLDS, Ranker
-from cribrum_lab.runtime import OnnxRuntime
+from anteater_lab import prompts, text
+from anteater_lab.comparison import Comparison, compare, with_signals, without_signals
+from anteater_lab.detectors.base import AnalysisContext
+from anteater_lab.detectors.document import FULL_COVERAGE, TEXT_WEIGHT, DocumentDetector
+from anteater_lab.evaluation import CategoryResult, evaluate
+from anteater_lab.folders import is_sticker_folder
+from anteater_lab.index import ImageIndex
+from anteater_lab.labels import Decision, Label, LabelStore
+from anteater_lab.mobileclip import MobileClip
+from anteater_lab.model import Category, IndexedMedia, MediaType, Protection, Signal
+from anteater_lab.ranker import THRESHOLDS, Ranker
+from anteater_lab.runtime import OnnxRuntime
 
 DATA = Path(__file__).resolve().parents[1] / "data"
 VARIANTS_DIR = DATA / "models-variants"
