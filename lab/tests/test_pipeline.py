@@ -991,6 +991,36 @@ def test_a_file_with_no_video_track_leaves_the_index_and_is_not_sniffed_again(vi
     assert again.new_or_changed == 0
 
 
+def sent_clip(videos):
+    sent = videos.parent.parent / "WhatsApp/Media/WhatsApp Video/Sent"
+    sent.mkdir(parents=True)
+    shutil.copy(videos / "clip.mp4", sent / "VID-1.mp4")
+    return sent / "VID-1.mp4"
+
+
+def test_a_run_for_videos_lists_a_video_in_a_messaging_folder_as_forwarded(videos, index):
+    sent = sent_clip(videos)
+
+    stats = pipeline.run(videos.parent.parent, index, videos=True, images=False)
+
+    [signal] = [s for s in index.signals(sent) if s.category is Category.FORWARDED]
+    assert signal.evidence == {"messaging_folder": "yes", "sent_folder": "yes"}
+    assert Category.FORWARDED not in categories(index, videos / "clip.mp4")  # the camera's copy
+    assert stats.failures == []
+
+
+def test_a_normal_run_gives_a_video_no_signal_and_a_video_run_does_not_repeat_itself(videos, index):
+    sent = sent_clip(videos)
+
+    pipeline.run(videos.parent.parent, index)
+    assert Category.FORWARDED not in categories(index, sent)
+    pipeline.run(videos.parent.parent, index, videos=True, images=False)
+    assert Category.FORWARDED in categories(index, sent)
+    again = pipeline.run(videos.parent.parent, index, videos=True, images=False)
+
+    assert again.detector_runs == 0
+
+
 def duplicate_clip(videos):
     copy = videos / "copy.mp4"
     shutil.copy(videos / "clip.mp4", copy)
