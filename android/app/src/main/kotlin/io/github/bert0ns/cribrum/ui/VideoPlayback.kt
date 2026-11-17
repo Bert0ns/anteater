@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -67,6 +68,9 @@ internal const val STRIP_FRAMES = 5
 
 /** The player of a full size view, made when the first video plays. A test hands in another. */
 internal val LocalPlayerFactory = staticCompositionLocalOf<(Context) -> Player> { ::exoPlayer }
+
+/** Whether the page that reads it is the one the pager has come to rest on, so not one that is only being swiped past. */
+internal val LocalPageSettled = compositionLocalOf { false }
 
 private fun exoPlayer(context: Context): Player = ExoPlayer.Builder(context).build()
 
@@ -248,13 +252,17 @@ internal fun rememberVideoPlayback(loop: Boolean = false): VideoPlayback {
 }
 
 /**
- * The page of a video in the full size view: its frame, which a tap turns into the video, and a play button over it. A
- * tap pauses the video and plays it again, and the close button closes the view. A video that is [unreadable] is the
- * placeholder, which a tap closes, and never plays.
+ * The page of a video in the full size view: its frame, which starts the video once the pager comes to rest on the page
+ * ([LocalPageSettled]), and a play button over it. A page that is swiped past starts nothing. A tap pauses the video and
+ * plays it again, and the close button closes the view. A video that is [unreadable] is the placeholder, which a tap
+ * closes, and never plays. [autoplay] is false while the page cannot yet tell whether the video is readable. A video that fails to play keeps its frame, and the play button tries it again.
  */
 @Composable
-internal fun VideoPage(file: File, section: String, playback: VideoPlayback, unreadable: Boolean, onClose: () -> Unit) {
+internal fun VideoPage(file: File, section: String, playback: VideoPlayback, unreadable: Boolean, onClose: () -> Unit, autoplay: Boolean = true) {
     val showing = playback.loaded == file.path
+    val settled = LocalPageSettled.current
+    // Only when the video is not loaded, so a pause stays a pause when a swipe comes back to the same page.
+    LaunchedEffect(settled, unreadable, autoplay) { if (settled && autoplay && !unreadable && playback.loaded != file.path) playback.play(file) }
     val tap = stringResource(
         if (unreadable) {
             R.string.close
