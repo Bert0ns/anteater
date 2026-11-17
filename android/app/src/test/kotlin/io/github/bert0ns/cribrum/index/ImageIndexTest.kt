@@ -148,6 +148,23 @@ class ImageIndexTest {
     }
 
     @Test
+    fun `the camera photos are the dated ones in DCIM, screenshots and other folders left out, and a read of them loads no embedding`() = test {
+        val camera = MediaRef("/sdcard/DCIM/Camera/a.jpg", 1, 1)
+        val upper = MediaRef("/sdcard/dcim/Camera/b.jpg", 1, 1)
+        val shot = MediaRef("/sdcard/DCIM/Screenshots/s.jpg", 1, 1)
+        val chat = MediaRef("/sdcard/WhatsApp/c.jpg", 1, 1)
+        val undated = MediaRef("/sdcard/DCIM/Camera/d.jpg", 1, 1)
+        for (photo in listOf(camera, upper, shot, chat, undated)) record(photo)
+        for (photo in listOf(camera, upper, shot, chat)) setMetadata(photo.path, META)
+        setMetadata(undated.path, META.copy(capturedAt = null))
+        setEmbeddings("clip", 1, mapOf(camera.path to floatArrayOf(1f), shot.path to floatArrayOf(1f)))
+
+        assertEquals(setOf(camera.path, upper.path), cameraCaptures().keys)
+        assertEquals(setOf(camera.path), embeddingsOf("clip", 1, listOf(camera.path, upper.path, chat.path)).keys)
+        assertEquals("0:2:1", shortClipInputs("clip", 1, 1))
+    }
+
+    @Test
     fun `a file whose media type changed with its size is recorded with the new one`() = test {
         record(PHOTO)
         val video = MediaRef(PHOTO.path, 900, 1, MediaType.VIDEO)
@@ -1090,6 +1107,9 @@ class ImageIndexTest {
         "hasVideos" to { hasVideos() },
         "videosWaiting" to { videosWaiting() },
         "capturedAt" to { capturedAt() },
+        "cameraCaptures" to { cameraCaptures() },
+        "embeddingsOf" to { embeddingsOf("mobileclip2_s0", 1, listOf(PHOTO.path)) },
+        "shortClipInputs" to { shortClipInputs("mobileclip2_s0", 1, 1) },
         "allVideoMetadata" to { allVideoMetadata() },
         "indexedMedia" to { indexedMedia() },
         "getVersion" to { version },

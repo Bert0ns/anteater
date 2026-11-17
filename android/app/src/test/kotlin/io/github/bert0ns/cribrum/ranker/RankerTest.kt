@@ -377,4 +377,31 @@ class RankerTest {
         assertFalse(ranker.rank(listOf(video("clip", screenshot(0.7f)))).single().isCandidate)
         assertTrue(ranker.rank(listOf(video("clip", screenshot(0.9f)))).single().isCandidate)
     }
+
+    private fun shortClip(score: Float, vararg evidence: Pair<String, String>) = Signal("short_clips", 1, Category.SHORT_CLIPS, score, mapOf(*evidence))
+
+    @Test
+    fun `a short clip is a candidate from its own threshold and faces only lower it`() {
+        assertFalse("a video category: photos have no slider for it", Category.SHORT_CLIPS in THRESHOLDS)
+
+        val (at, below) = Ranker().rank(listOf(video("below", shortClip(0.29f)), video("at", shortClip(0.3f)))).sortedBy { it.image.ref.path }
+        assertFalse(below.isCandidate)
+        assertTrue(at.isCandidate)
+
+        val people = video("people", shortClip(0.8f), faces())
+        val plain = video("plain", shortClip(0.8f))
+        val order = Ranker().rank(listOf(people, plain))
+        assertEquals(listOf("plain", "people"), order.map { it.image.ref.path })
+        assertTrue(order.all { it.isCandidate })
+    }
+
+    @Test
+    fun `a kept short clip stays kept when a photo or a mistake raises its score`() {
+        val kept = shortClip(0.4f, "duration_chance" to "0.400")
+        val stronger = shortClip(0.9f, "duration_chance" to "0.400", "photo_chance" to "0.500", "mistake" to "dark")
+        val clip = IndexedMedia(MediaRef("clip", 0, 0, MediaType.VIDEO), ReviewState.KEPT, listOf(stronger), setOf(kept.identity))
+
+        assertEquals(kept.identity, stronger.identity)
+        assertEquals(emptyList<Candidate>(), Ranker().rank(listOf(clip)))
+    }
 }

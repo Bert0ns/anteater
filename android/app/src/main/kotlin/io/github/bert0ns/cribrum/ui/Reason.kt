@@ -98,7 +98,7 @@ fun reasonOf(signal: Signal): Reason? {
             }
         }
         Category.SHORT_CLIPS -> {
-            // The piece that added the most to the score: the first of equals, as the detector lists them.
+            // The piece that added the most to the score, the first of equals in the order of this list.
             val contributions = listOf(
                 Reason(R.string.reason_short_clip_photo) to number("photo_chance"),
                 Reason(R.string.reason_short_take) to number("failed_take_chance"),

@@ -293,7 +293,7 @@
     <string name="reason_take_plain">One of several takes of one moment</string>
     <string name="reason_short_take">A short take, then a longer one of the same moment</string>
     <string name="reason_short_clip">A short clip</string>
-    <string name="reason_short_clip_photo">A short clip taken within a minute of a photo, like it</string>
+    <string name="reason_short_clip_photo">A short clip taken within a minute of a photo</string>
     <string name="reason_short_clip_gif">A short clip with no sound and a low resolution, like a GIF</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version %1$s</string>

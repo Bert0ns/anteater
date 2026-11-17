@@ -562,6 +562,29 @@ interface IndexDao {
     @Query("SELECT path, captured_at FROM images WHERE captured_at IS NOT NULL")
     suspend fun capturedAt(): List<StoredCapture>
 
+    /**
+     * The camera photos SHORT_CLIPS looks at: a photo with a capture time in a camera folder, but not the screenshots a Samsung saves to
+     * DCIM. LIKE ignores the case of ASCII letters, as the folder checks do.
+     */
+    @Query("SELECT path, captured_at FROM images WHERE media_type = 'image' AND captured_at IS NOT NULL AND path LIKE '%/dcim/%' AND path NOT LIKE '%/screenshots/%'")
+    suspend fun cameraCaptures(): List<StoredCapture>
+
+    @Query("SELECT count(*) FROM images WHERE media_type = 'image' AND captured_at IS NOT NULL AND path LIKE '%/dcim/%' AND path NOT LIKE '%/screenshots/%'")
+    suspend fun cameraPhotoCount(): Int
+
+    @Query(
+        """SELECT count(*) FROM images JOIN embeddings ON embeddings.path = images.path
+           WHERE images.media_type = 'image' AND images.captured_at IS NOT NULL AND images.path LIKE '%/dcim/%' AND images.path NOT LIKE '%/screenshots/%'
+           AND embeddings.model = :model AND embeddings.model_version = :modelVersion""",
+    )
+    suspend fun embeddedCameraPhotoCount(model: String, modelVersion: Int): Int
+
+    @Query("SELECT count(DISTINCT path) FROM frame_measures WHERE frames_version = :framesVersion")
+    suspend fun measuredVideoCount(framesVersion: Int): Int
+
+    @Query("SELECT * FROM embeddings WHERE model = :model AND model_version = :modelVersion AND path IN (:paths)")
+    suspend fun embeddingsOf(model: String, modelVersion: Int, paths: List<String>): List<EmbeddingRow>
+
     @Query("SELECT path, size, mtime_ns, review_state, media_type, unreadable, duration_ms FROM images ORDER BY path")
     suspend fun states(): List<StoredState>
 

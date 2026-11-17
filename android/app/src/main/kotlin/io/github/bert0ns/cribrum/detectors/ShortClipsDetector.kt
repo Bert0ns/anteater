@@ -11,9 +11,11 @@ import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import java.time.Duration
+import java.time.LocalDateTime
 import java.util.Locale
-import kotlin.math.abs
 import kotlin.math.min
 
 /** A video this long or longer gets no signal. On the 49 video labels of #390, 23 of the 26 labeled videos up to 10 s were deleted, and 7 of the 16 between 10 s and 30 s. */
@@ -52,22 +54,33 @@ const val GIF_MAX_SIDE = 480
 class ShortClipsDetector : GroupDetector {
     override val id = "short_clips"
 
-    /** Bump with TAKES, BLURRY and BAD_EXPOSURE, whose results on videos it reads. */
     override val version = 1
     override val category = Category.SHORT_CLIPS
     override val mediaTypes = setOf(MediaType.VIDEO)
 
+    /**
+     * What it reads besides its videos: the versions of TAKES, BLURRY and BAD_EXPOSURE, whose results on videos it takes, and the counts of
+     * the measures and camera photos.
+     */
+    override suspend fun inputsKey(context: AnalysisContext): String = "${TakesDetector().version}:${BlurDetector().version}:${ExposureDetector().version}:${context.storedInputs()}"
+
     override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
         val failed = TakesDetector().analyze(images, context).filterValues { it.single().evidence[ROLE_KEY] == Role.SHORT_TAKE.value }.keys
-        val photos = context.photos()
-        val result = LinkedHashMap<MediaRef, List<Signal>>()
+        val short = LinkedHashMap<MediaRef, VideoMetadata>()
         for (video in images) {
             val meta = metadata(video, context) ?: continue
             val duration = meta.durationMs ?: continue
-            if (duration <= 0 || duration >= SHORT_CLIP_MAX_MS) continue
+            if (duration in 1 until SHORT_CLIP_MAX_MS) short[video] = meta
+        }
+        val photos = context.photos(short.values.mapNotNull { it.capturedAt }, PHOTO_WINDOW_MS).sortedBy { it.capturedAt }
+        val stamps = photos.map { it.capturedAt }
+        val result = LinkedHashMap<MediaRef, List<Signal>>()
+        for ((video, meta) in short) {
+            currentCoroutineContext().ensureActive()
+            val duration = meta.durationMs ?: continue
             val chances = linkedMapOf("duration" to DURATION_WEIGHT * fade(duration))
             val evidence = linkedMapOf("duration_ms" to duration.toString())
-            if (photoBeside(video, meta, photos, context)) chances["photo"] = PHOTO_WEIGHT.toDouble()
+            if (photoBeside(video, meta, photos, stamps, context)) chances["photo"] = PHOTO_WEIGHT.toDouble()
             if (video in failed) chances["failed_take"] = TAKE_WEIGHT.toDouble()
             mistake(video, context)?.let { (name, score) ->
                 chances["mistake"] = MISTAKE_WEIGHT * score
@@ -87,12 +100,13 @@ class ShortClipsDetector : GroupDetector {
     private fun fade(durationMs: Long): Double = min(1.0, (SHORT_CLIP_MAX_MS - durationMs).toDouble() / (SHORT_CLIP_MAX_MS - FULL_DURATION_MS))
 
     /** Recall first: without an embedding of the photo or frames of the clip, time alone decides. */
-    private suspend fun photoBeside(video: MediaRef, meta: VideoMetadata, photos: List<Photo>, context: AnalysisContext): Boolean {
+    private suspend fun photoBeside(video: MediaRef, meta: VideoMetadata, photos: List<Photo>, stamps: List<LocalDateTime>, context: AnalysisContext): Boolean {
         val capturedAt = meta.capturedAt ?: return false
+        val window = Duration.ofMillis(PHOTO_WINDOW_MS.toLong())
         val frames = context.frames(video)
-        return photos.any { photo ->
-            val gap = abs(Duration.between(capturedAt, photo.capturedAt).toMillis())
-            gap <= PHOTO_WINDOW_MS && (photo.embedding == null || frames.isEmpty() || frames.maxOf { dot(photo.embedding, it) } >= PHOTO_MIN_COSINE)
+        // The photos are sorted by time, so the window is found by bisection.
+        return photos.subList(firstAtOrAfter(stamps, capturedAt - window), firstAfter(stamps, capturedAt + window)).any { photo ->
+            photo.embedding == null || frames.isEmpty() || frames.maxOf { dot(photo.embedding, it) } >= PHOTO_MIN_COSINE
         }
     }
 
