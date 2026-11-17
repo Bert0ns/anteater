@@ -72,8 +72,8 @@ class SettingsScreenTest {
 
         compose.onNodeWithText("Clean").performClick()
         // Leaving settings reloads the home screen on the view model's own scope.
-        compose.waitUntil(5_000) { compose.onAllNodesWithText("Cribrum").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Cribrum").assertIsDisplayed()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Scan now").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Scan now").assertIsDisplayed()
         compose.onNodeWithText("Settings").assertIsDisplayed()
     }
 
