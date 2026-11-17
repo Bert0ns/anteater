@@ -23,6 +23,7 @@ import io.github.bert0ns.cribrum.compress.Losses
 import io.github.bert0ns.cribrum.compress.Marker
 import io.github.bert0ns.cribrum.compress.Refusal
 import io.github.bert0ns.cribrum.model.Category
+import io.github.bert0ns.cribrum.metadata.VideoMetadata
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.pipeline.Failure
@@ -104,6 +105,40 @@ private fun Gallery.videoLibrary(): Pair<MediaRef, MediaRef> {
     runBlocking { app.index.setUnreadable(refs[4].path) }
     world.favorites += refs[1].path
     return refs[1] to refs[4]
+}
+
+/** Short camera clips and clips in a chat folder, flagged as the video detectors flag them, for the Videos tab's categories. */
+private fun Gallery.clipsLibrary() {
+    val clips = listOf(
+        Triple("VID_20261030_193345.mp4", 41_000_000L, 4_200L),
+        Triple("VID_20261029_101822.mp4", 27_000_000L, 3_100L),
+        Triple("VID_20261027_164410.mp4", 66_000_000L, 7_800L),
+        Triple("VID_20261024_090511.mp4", 18_000_000L, 2_400L),
+        Triple("VID_20261022_201407.mp4", 93_000_000L, 9_600L),
+        Triple("VID_20261019_121903.mp4", 52_000_000L, 5_900L),
+        Triple("VID_20261016_183005.mp4", 31_000_000L, 3_700L),
+        Triple("VID_20261012_075540.mp4", 74_000_000L, 8_300L),
+        Triple("VID_20261008_142251.mp4", 22_000_000L, 2_800L),
+    )
+    val lengths = mutableMapOf<String, Long>()
+    clips.forEachIndexed { index, (name, bytes, millis) ->
+        val score = 0.4f + (index % 4) * 0.12f
+        val signal = world.signal(Category.SHORT_CLIPS, score, "duration_ms" to millis.toString(), "duration_chance" to "0.400", "photo_chance" to if (index % 3 == 0) "0.500" else "0.000")
+        val ref = world.video(CAMERA, name, bytes, taken(index), signal)
+        world.show(ref.path, millis, GalleryPictures.scene(7_100 + index))
+        lengths[ref.path] = millis
+    }
+    for (index in 0 until 3) {
+        val ref = world.video("WhatsApp/Media/WhatsApp Video", "VID-2026101${index}-WA000${index + 3}.mp4", 24_000_000L + index * 61_000_000L, taken(index + 3), world.signal(Category.FORWARDED, 1f, "messaging_folder" to "yes"))
+        world.show(ref.path, 18_000L + index * 41_000L, GalleryPictures.scene(7_200 + index))
+        lengths[ref.path] = 18_000L + index * 41_000L
+    }
+    world.commit()
+    // The video steps have run: each video has its length, so tiles show it and none waits for a scan.
+    runBlocking {
+        for ((path, millis) in lengths) app.index.setVideoMetadata(path, VideoMetadata(1920, 1080, millis, 30.0, 8_000_000L, true, "video/avc", false))
+    }
+    app.videoScans.ran = true
 }
 
 /** Opens "Largest videos" from the Videos tab of the home. */
@@ -369,6 +404,22 @@ val scenes: List<Scene> = listOf(
         awaitHome(model)
         click(str(R.string.tab_videos))
         awaitText(str(R.string.videos_largest))
+    },
+    Scene("videos-tab-categories", "Clean, the Videos tab with its categories", "See the video categories next to Largest videos, each with how many videos it lists and how much space they take. Open one, or start Scan videos.", Variant.base) {
+        clipsLibrary()
+        val model = app()
+        awaitHome(model)
+        click(str(R.string.tab_videos))
+        awaitText(str(R.string.category_short_clips))
+    },
+    Scene("review-short-clips", "Review of Short clips, a page of tiles with a frame, the length and the size", "Tap a clip to keep it or mark it for the trash, hold one to see it full size, trash the marked ones or skip the page.", Variant.base) {
+        clipsLibrary()
+        val model = app()
+        awaitHome(model)
+        click(str(R.string.tab_videos))
+        click(str(R.string.category_short_clips))
+        awaitModel(model, "a page") { it.state.value.screen is Screen.Category && it.state.value.page.isNotEmpty() }
+        awaitText(applyText(model))
     },
     Scene("videos-tab-before-scan", "Clean, the Videos tab before a scan has found a video", "Read that videos appear after the next scan, and start Scan videos to look for them.", Variant.base) {
         world.library()

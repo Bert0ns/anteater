@@ -86,6 +86,15 @@ class ReadmeScreenshots {
     fun fullSize() = render("review-full-size", "full-size.png")
 
     @Test
+    fun videos() = render("videos-tab-categories", "videos.png")
+
+    @Test
+    fun shortClips() = render("review-short-clips", "short-clips.png")
+
+    @Test
+    fun videoFullSize() = render("videos-largest-full-size", "video-full-size.png")
+
+    @Test
     fun compress() = render("compress-selected", "compress.png")
 
     @Test
