@@ -335,6 +335,14 @@ class ImageIndex:
         )
         return {Path(path): _video_metadata(row) for path, *row in rows}
 
+    def photo_captures(self) -> dict[Path, datetime]:
+        """The capture time of every image that has one, by path, in one query."""
+        rows = self._db.execute(
+            """SELECT path, captured_at FROM images
+               WHERE media_type = 'image' AND captured_at IS NOT NULL"""
+        )
+        return {Path(path): datetime.fromisoformat(at) for path, at in rows}
+
     def read_videos(self, frames_version: int) -> list[tuple[MediaRef, int | None]]:
         """The videos whose metadata was read, readable and out of the trash, with their
         duration, leaving out those whose frames did not read at `frames_version`: the ones the

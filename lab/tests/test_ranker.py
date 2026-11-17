@@ -365,3 +365,20 @@ def test_a_video_shares_the_threshold_of_a_category_with_no_video_threshold():
 
     assert not clip.is_candidate  # 0.8 for photos and videos alike
     assert ranker.rank([video("clip", screenshot(0.9))])[0].is_candidate
+
+
+def test_a_short_clip_is_a_candidate_from_its_own_threshold_and_faces_only_lower_it():
+    def short_clip(score):
+        return Signal("short_clips", 1, Category.SHORT_CLIPS, score)
+
+    ranker = Ranker()
+    assert Category.SHORT_CLIPS not in THRESHOLDS  # a video category: photos have no slider for it
+
+    below, at = ranker.rank([video("below", short_clip(0.29)), video("at", short_clip(0.3))])[::-1]
+    assert not below.is_candidate
+    assert at.is_candidate
+
+    people = video("people", short_clip(0.8), Signal("faces", 1, Protection.FACES, 1.0))
+    plain = video("plain", short_clip(0.8))
+    assert names(ranker.rank([people, plain])) == ["plain", "people"]
+    assert all(c.is_candidate for c in ranker.rank([people, plain]))

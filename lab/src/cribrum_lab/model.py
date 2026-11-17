@@ -22,6 +22,7 @@ class Category(Enum):
     FORWARDED = "forwarded"
     STICKER = "sticker"
     TAKES = "takes"
+    SHORT_CLIPS = "short_clips"
 
 
 class Protection(Enum):

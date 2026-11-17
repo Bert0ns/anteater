@@ -142,3 +142,18 @@ def test_the_frame_detectors_fixture_still_matches_the_lab():
     # One frame is its own median: the video scores as that frame does.
     assert scores["one-frame.mp4"]["blur"] == pytest.approx(0.8)
     assert expected["signals"]["one-frame.mp4"][0]["evidence"]["frames"] == "1"
+
+
+def test_the_short_clips_fixture_still_matches_the_lab():
+    expected = json.loads(fixtures.SHORT_CLIPS.read_text())
+
+    assert fixtures.short_clips_expected() == expected
+    # Every piece of evidence shows in some clip, and the clips that get none have no signal.
+    pieces = {
+        key.removesuffix("_chance")
+        for found in expected["signals"].values()
+        for key in found[0]["evidence"]
+        if key.endswith("_chance")
+    }
+    assert pieces == {"duration", "photo", "failed_take", "mistake", "gif"}
+    assert "DCIM/Camera/at-the-limit.mp4" not in expected["signals"]
