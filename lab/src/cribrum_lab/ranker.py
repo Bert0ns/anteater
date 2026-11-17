@@ -36,6 +36,7 @@ evaluation report's sweep, for recall (docs/design.md, 10). Keep them equal to t
 VIDEO_THRESHOLDS = {
     Category.BLURRY: 0.15,
     Category.BAD_EXPOSURE: 0.4,
+    Category.SHORT_CLIPS: 0.3,
 }
 """The threshold of a category for videos, where its video score is graded: a video is not held to
 the photos' slider, which could hide it without a word (docs/design.md, 6.1 and 8). A category

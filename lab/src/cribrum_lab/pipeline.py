@@ -22,7 +22,7 @@ import xxhash
 
 from cribrum_lab import hashing, mobileclip
 from cribrum_lab.detectors import AnalysisContext, Detector, GroupDetector, blur
-from cribrum_lab.detectors.base import accepted_media_types
+from cribrum_lab.detectors.base import Photo, accepted_media_types
 from cribrum_lab.detectors.blur import BlurDetector
 from cribrum_lab.detectors.burst import BurstDetector
 from cribrum_lab.detectors.document import DocumentDetector
@@ -32,9 +32,10 @@ from cribrum_lab.detectors.faces import FaceDetector
 from cribrum_lab.detectors.forwarded import ForwardedDetector
 from cribrum_lab.detectors.near_duplicate import NearDuplicateDetector
 from cribrum_lab.detectors.screenshot import ScreenshotDetector
+from cribrum_lab.detectors.short_clips import ShortClipsDetector
 from cribrum_lab.detectors.sticker import StickerDetector
 from cribrum_lab.detectors.takes import TakesDetector
-from cribrum_lab.folders import is_sticker_folder
+from cribrum_lab.folders import is_camera_folder, is_sticker_folder
 from cribrum_lab.frame_measures import measure_frame
 from cribrum_lab.frames import FRAMES_VERSION, frame_times, read_frames
 from cribrum_lab.imaging import Pixels
@@ -65,6 +66,7 @@ GROUP_DETECTORS: list[GroupDetector] = [
     NearDuplicateDetector(),
     BurstDetector(),
     TakesDetector(),
+    ShortClipsDetector(),
 ]
 
 SKIPPED_ON_STICKERS = frozenset({"blur", "exposure", "faces"})
@@ -295,7 +297,10 @@ def _group_steps(
     frames, in the order of their times."""
     frames = frames or {}
     # Read once: a query per video would be slow on a large library, as it was for the images.
-    videos = index.all_video_metadata() if media_type is MediaType.VIDEO else {}
+    video = media_type is MediaType.VIDEO
+    videos = index.all_video_metadata() if video else {}
+    measures = index.frame_measures(FRAMES_VERSION) if video else {}
+    photos = _camera_photos(index, embedder) if video else []
     inputs = [i for i in index.images() if i.path in found and i.media_type is media_type]
     # The exact detector skips an image whose content hash fails: the run stores those paths
     # with its fingerprint.
@@ -325,6 +330,8 @@ def _group_steps(
         metadata=_metadata(index),
         video_metadata=_video_metadata(videos),
         frames=lambda video: frames.get(video.path, []),
+        frame_measures=lambda video: measures.get(video.path, ()),
+        photos=lambda: photos,
         embedding=_stored_embedding(embeddings),
         sharpness=_stored_sharpness(index, blur_detector),
     )
@@ -334,10 +341,15 @@ def _group_steps(
         model = f"{embedder.id}:{embedder.version}:{FRAMES_VERSION}:{len(frames)}" if frames else ""
         # A capture time read again, as by a migration, is new input though no file changed.
         model += f":{sum(m.captured_instant is not None for m in videos.values())}"
+        # The measures and the photos beside a clip are new input to SHORT_CLIPS too.
+        model += f":{len(measures)}:{len(photos)}:{sum(p.embedding is not None for p in photos)}"
     # A hash that failed on an earlier run is a result a group detector lacked.
     hashed = index.hashed_paths()
     # Burst reads blur's stored measure: a new blur version is new input, though no file changed.
     blur_input = f"{blur_detector.id}:{blur_detector.version}" if blur_detector else ""
+    if video:  # SHORT_CLIPS reads the video's exposure too
+        exposure = next((d for d in detectors if d.category == Category.BAD_EXPOSURE), None)
+        blur_input += f":{exposure.id}:{exposure.version}" if exposure else ""
     for detector in group_detectors:
         if media_type not in accepted_media_types(detector):
             continue
@@ -364,6 +376,17 @@ def _group_steps(
         index.set_group_fingerprint(run_id, detector.version, fingerprint, sorted(hash_failed))
         stats.detector_runs += 1
         progress(step, 1, 1)
+
+
+def _camera_photos(index: ImageIndex, embedder: Embedder | None) -> list[Photo]:
+    """The photos in a camera folder with a capture time, with their embeddings when the run has
+    a model: what SHORT_CLIPS looks at for a photo beside a clip."""
+    embeddings = index.embeddings(embedder.id, embedder.version) if embedder else {}
+    return [
+        Photo(at, embeddings.get(path))
+        for path, at in index.photo_captures().items()
+        if is_camera_folder(path)
+    ]
 
 
 def _video_steps(
@@ -403,7 +426,16 @@ def _video_steps(
         frames = {path: list(by_time.values()) for path, by_time in stored.items()}
     _video_detectors(found, index, detectors, stats, uses_frames=True)
     _group_steps(
-        MediaType.VIDEO, found, index, group_detectors, (), embedder, {}, stats, progress, frames
+        MediaType.VIDEO,
+        found,
+        index,
+        group_detectors,
+        detectors,
+        embedder,
+        {},
+        stats,
+        progress,
+        frames,
     )
 
 

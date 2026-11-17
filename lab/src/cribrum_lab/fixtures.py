@@ -7,7 +7,9 @@ samples from the synthetic videos there, and fixtures/videos/takes.json: capture
 and frames of made-up videos and the takes the lab chains them into, and
 fixtures/videos/near_duplicates.json: lengths, sizes and frames of made-up videos and the copies the
 lab links, and fixtures/videos/frame_detectors.json: the measures of the frames of made-up videos
-and the signals the lab's BLURRY, BAD_EXPOSURE and FACES give them. The Android tests run their
+and the signals the lab's BLURRY, BAD_EXPOSURE and FACES give them, and
+fixtures/videos/short_clips.json: made-up clips, the photos beside them and the signals the lab's
+SHORT_CLIPS gives them. The Android tests run their
 port on the same files and compare. Regenerate after a detector change, and commit them:
 
     uv run python -m cribrum_lab.fixtures
@@ -25,10 +27,12 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from cribrum_lab import frames, hashing, mobileclip
 from cribrum_lab.detectors import AnalysisContext
+from cribrum_lab.detectors.base import Photo
 from cribrum_lab.detectors.blur import BlurDetector
 from cribrum_lab.detectors.exposure import ExposureDetector
 from cribrum_lab.detectors.faces import FaceDetector
 from cribrum_lab.detectors.near_duplicate import NearDuplicateDetector
+from cribrum_lab.detectors.short_clips import ShortClipsDetector
 from cribrum_lab.detectors.takes import TakesDetector
 from cribrum_lab.metadata import VideoMetadata, read_metadata
 from cribrum_lab.model import FrameMeasures, MediaRef, MediaType
@@ -418,6 +422,100 @@ def write_frame_detectors() -> None:
     FRAME_DETECTORS.write_text(text)
 
 
+SHORT_CLIPS = VIDEOS / "short_clips.json"
+_GIFS = "WhatsApp/Media/WhatsApp Animated Gifs"
+SHORT_CLIP_CLIPS = [
+    # A clip of the full length term, one halfway down it, one at the longest length, and none.
+    {"path": "DCIM/Camera/short.mp4", "duration_ms": 3000},
+    {"path": "DCIM/Camera/fading.mp4", "duration_ms": 10000},
+    {"path": "DCIM/Camera/at-the-limit.mp4", "duration_ms": 15000},
+    {"path": "DCIM/Camera/no-length.mp4", "duration_ms": None},
+    # A photo exactly a minute away, one a second further, one unlike the clip, and one with no
+    # embedding to compare. Each clip has its own time, so the photos sit beside one clip only.
+    {"path": "DCIM/Camera/beside.mp4", "duration_ms": 6000, "at": "10:00:00",
+     "frames": [[1, 0, 0]]},
+    {"path": "DCIM/Camera/too-late.mp4", "duration_ms": 6000, "at": "11:00:00",
+     "frames": [[1, 0, 0]]},
+    {"path": "DCIM/Camera/unlike.mp4", "duration_ms": 6000, "at": "12:00:00",
+     "frames": [[1, 0, 0]]},
+    {"path": "DCIM/Camera/no-embedding.mp4", "duration_ms": 6000, "at": "13:00:00"},
+    {"path": "DCIM/Camera/long-beside.mp4", "duration_ms": 60000, "at": "14:00:00"},
+    # A failed start and the longer take after it.
+    {"path": "DCIM/Camera/take-1.mp4", "duration_ms": 3000, "at": "15:00:00"},
+    {"path": "DCIM/Camera/take-2.mp4", "duration_ms": 30000, "at": "15:00:30"},
+    # Dark and blurred on most frames, and on one frame only.
+    {"path": "DCIM/Camera/dark.mp4", "duration_ms": 8000, "measures": [_DARK] * 3 + [_SHARP] * 2},
+    {"path": "DCIM/Camera/blurred.mp4", "duration_ms": 8000,
+     "measures": [_BLURRED] * 3 + [_SHARP] * 2},
+    {"path": "DCIM/Camera/one-dark-frame.mp4", "duration_ms": 8000,
+     "measures": [_DARK] + [_SHARP] * 4},
+    # A GIF-style clip, and the three that are not: sound, a high resolution, a camera folder.
+    {"path": f"{_GIFS}/gif.mp4", "duration_ms": 8000, "width": 480, "height": 848,
+     "has_audio": False},
+    {"path": f"{_GIFS}/with-sound.mp4", "duration_ms": 8000, "width": 480, "height": 848},
+    {"path": f"{_GIFS}/hd.mp4", "duration_ms": 8000, "width": 1080, "height": 1920,
+     "has_audio": False},
+    {"path": "DCIM/Camera/camera-no-sound.mp4", "duration_ms": 8000, "width": 480,
+     "height": 848, "has_audio": False},
+    # Every piece at once.
+    {"path": f"{_GIFS}/all.mp4", "duration_ms": 4000, "width": 480, "height": 848,
+     "has_audio": False, "measures": [_DARK] * 5},
+]  # fmt: skip
+SHORT_CLIP_PHOTOS = [
+    {"captured_at": "2024-05-01T10:01:00", "embedding": [1, 0, 0]},
+    {"captured_at": "2024-05-01T11:01:01", "embedding": [1, 0, 0]},
+    {"captured_at": "2024-05-01T12:00:10", "embedding": [0, 1, 0]},
+    {"captured_at": "2024-05-01T13:00:30", "embedding": None},
+    {"captured_at": "2024-05-01T14:00:20", "embedding": None},
+]  # fmt: skip
+
+
+def short_clips_expected() -> dict:
+    """The made-up clips and photos above and the signals SHORT_CLIPS gives the clips."""
+    clips = {MediaRef(Path(c["path"]), 0, 0, MediaType.VIDEO): c for c in SHORT_CLIP_CLIPS}
+
+    def metadata(video: MediaRef) -> VideoMetadata:
+        clip = clips[video]
+        at = clip.get("at")
+        captured = None if at is None else datetime.fromisoformat(f"2024-05-01T{at}")
+        return VideoMetadata(
+            clip.get("width", 1080), clip.get("height", 1920), clip["duration_ms"], None, None,
+            clip.get("has_audio", True), None, False, captured, None if at is None else _at(at),
+        )  # fmt: skip
+
+    context = AnalysisContext(
+        video_metadata=metadata,
+        frames=lambda video: [
+            np.array(f, dtype=np.float32) for f in clips[video].get("frames", [])
+        ],
+        frame_measures=lambda video: [FrameMeasures(**m) for m in clips[video].get("measures", [])],
+        photos=lambda: [
+            Photo(
+                datetime.fromisoformat(p["captured_at"]),
+                None if p["embedding"] is None else np.array(p["embedding"], dtype=np.float32),
+            )
+            for p in SHORT_CLIP_PHOTOS
+        ],
+    )
+    found = ShortClipsDetector().analyze(list(clips), context)
+    return {
+        "clips": SHORT_CLIP_CLIPS,
+        "photos": SHORT_CLIP_PHOTOS,
+        "signals": {
+            str(video.path): [
+                {"detector": s.detector_id, "version": s.detector_version,
+                 "category": s.category.value, "score": s.score, "evidence": s.evidence}
+                for s in signals
+            ]
+            for video, signals in sorted(found.items(), key=lambda item: str(item[0].path))
+        },
+    }  # fmt: skip
+
+
+def write_short_clips() -> None:
+    SHORT_CLIPS.write_text(json.dumps(short_clips_expected(), indent=1, sort_keys=True) + "\n")
+
+
 def encode_vector(vector: np.ndarray) -> str:
     """Base64 of little-endian float32, as expected.json stores an embedding."""
     return base64.b64encode(vector.astype("<f4").tobytes()).decode()
@@ -438,6 +536,7 @@ def main() -> None:
     write_takes()
     write_near_duplicates()
     write_frame_detectors()
+    write_short_clips()
     print(f"wrote {ROOT} and {VIDEOS / 'frames.json'}")
 
 

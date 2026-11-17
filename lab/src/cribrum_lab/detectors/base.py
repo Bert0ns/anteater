@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from typing import Protocol
 
@@ -28,6 +29,17 @@ class Role(StrEnum):
     """A take of one moment: a group of takes has no best copy (docs/design.md, section 5)."""
     SHORT_TAKE = "short_take"
     """A take much shorter than the next one of the same moment, which reads as a failed take."""
+
+
+@dataclass(frozen=True)
+class Photo:
+    """A camera photo, as a video detector that looks for a photo beside a clip sees it."""
+
+    captured_at: datetime
+    """Local time with no zone, as `VideoMetadata.captured_at` is, so the two compare as wall
+    clocks."""
+    embedding: np.ndarray | None
+    """L2-normalized MobileCLIP embedding, None when the photo has none stored."""
 
 
 @dataclass(frozen=True)
@@ -58,6 +70,8 @@ class AnalysisContext:
     frame_measures: Callable[[MediaRef], Sequence[FrameMeasures]] = lambda video: ()
     """What `frame_measures.measure_frame` kept of the video's sampled frames, in the order of their
     times: none when it has no frames stored."""
+    photos: Callable[[], Sequence[Photo]] = lambda: ()
+    """The photos in a camera folder with a capture time: none when the run has none to give."""
     screen_sizes: Collection[tuple[int, int]] = SCREEN_SIZES
     """Known screen resolutions as (short side, long side)."""
     pixels: Callable[[MediaRef], Pixels] = lambda image: Pixels(image.path)

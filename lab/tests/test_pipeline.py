@@ -18,6 +18,7 @@ from cribrum_lab.detectors.faces import FaceDetector
 from cribrum_lab.frames import FRAMES_VERSION
 from cribrum_lab.imaging import load_grayscale
 from cribrum_lab.index import ImageIndex
+from cribrum_lab.metadata import ImageMetadata
 from cribrum_lab.model import Category, MediaRef, MediaType, Protection, ReviewState, Signal
 from cribrum_lab.ranker import Ranker
 
@@ -1424,3 +1425,24 @@ def test_a_capture_time_read_again_runs_the_takes_again(videos, index):
 
     assert "video_groups" in scan()
     assert takes_groups(index) == []
+
+
+def test_a_photo_stored_beside_a_clip_runs_the_short_clips_again(videos, index):
+    root = videos.parent.parent
+
+    def evidence():
+        pipeline.run(
+            root, index, detectors=[], group_detectors=[pipeline.ShortClipsDetector()],
+            images=False, videos=True,
+        )  # fmt: skip
+        [signal] = index.signals(videos / "clip.mp4")
+        assert signal.category is Category.SHORT_CLIPS
+        return signal.evidence
+
+    assert "photo_chance" not in evidence()
+    clip = index.video_metadata(videos / "clip.mp4")
+    index.set_metadata(
+        videos / "a.png", ImageMetadata(64, 48, "image/png", captured_at=clip.captured_at)
+    )
+
+    assert "photo_chance" in evidence()

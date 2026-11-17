@@ -1,0 +1,497 @@
+{
+ "clips": [
+  {
+   "duration_ms": 3000,
+   "path": "DCIM/Camera/short.mp4"
+  },
+  {
+   "duration_ms": 10000,
+   "path": "DCIM/Camera/fading.mp4"
+  },
+  {
+   "duration_ms": 15000,
+   "path": "DCIM/Camera/at-the-limit.mp4"
+  },
+  {
+   "duration_ms": null,
+   "path": "DCIM/Camera/no-length.mp4"
+  },
+  {
+   "at": "10:00:00",
+   "duration_ms": 6000,
+   "frames": [
+    [
+     1,
+     0,
+     0
+    ]
+   ],
+   "path": "DCIM/Camera/beside.mp4"
+  },
+  {
+   "at": "11:00:00",
+   "duration_ms": 6000,
+   "frames": [
+    [
+     1,
+     0,
+     0
+    ]
+   ],
+   "path": "DCIM/Camera/too-late.mp4"
+  },
+  {
+   "at": "12:00:00",
+   "duration_ms": 6000,
+   "frames": [
+    [
+     1,
+     0,
+     0
+    ]
+   ],
+   "path": "DCIM/Camera/unlike.mp4"
+  },
+  {
+   "at": "13:00:00",
+   "duration_ms": 6000,
+   "path": "DCIM/Camera/no-embedding.mp4"
+  },
+  {
+   "at": "14:00:00",
+   "duration_ms": 60000,
+   "path": "DCIM/Camera/long-beside.mp4"
+  },
+  {
+   "at": "15:00:00",
+   "duration_ms": 3000,
+   "path": "DCIM/Camera/take-1.mp4"
+  },
+  {
+   "at": "15:00:30",
+   "duration_ms": 30000,
+   "path": "DCIM/Camera/take-2.mp4"
+  },
+  {
+   "duration_ms": 8000,
+   "measures": [
+    {
+     "p1": 0,
+     "p5": 1,
+     "p95": 6,
+     "p99": 9,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 0,
+     "p5": 1,
+     "p95": 6,
+     "p99": 9,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 0,
+     "p5": 1,
+     "p95": 6,
+     "p99": 9,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 200,
+     "p99": 240,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 200,
+     "p99": 240,
+     "peak_variance": 900.0
+    }
+   ],
+   "path": "DCIM/Camera/dark.mp4"
+  },
+  {
+   "duration_ms": 8000,
+   "measures": [
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 200,
+     "p99": 240,
+     "peak_variance": 25.0
+    },
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 200,
+     "p99": 240,
+     "peak_variance": 25.0
+    },
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 200,
+     "p99": 240,
+     "peak_variance": 25.0
+    },
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 200,
+     "p99": 240,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 200,
+     "p99": 240,
+     "peak_variance": 900.0
+    }
+   ],
+   "path": "DCIM/Camera/blurred.mp4"
+  },
+  {
+   "duration_ms": 8000,
+   "measures": [
+    {
+     "p1": 0,
+     "p5": 1,
+     "p95": 6,
+     "p99": 9,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 200,
+     "p99": 240,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 200,
+     "p99": 240,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 200,
+     "p99": 240,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 200,
+     "p99": 240,
+     "peak_variance": 900.0
+    }
+   ],
+   "path": "DCIM/Camera/one-dark-frame.mp4"
+  },
+  {
+   "duration_ms": 8000,
+   "has_audio": false,
+   "height": 848,
+   "path": "WhatsApp/Media/WhatsApp Animated Gifs/gif.mp4",
+   "width": 480
+  },
+  {
+   "duration_ms": 8000,
+   "height": 848,
+   "path": "WhatsApp/Media/WhatsApp Animated Gifs/with-sound.mp4",
+   "width": 480
+  },
+  {
+   "duration_ms": 8000,
+   "has_audio": false,
+   "height": 1920,
+   "path": "WhatsApp/Media/WhatsApp Animated Gifs/hd.mp4",
+   "width": 1080
+  },
+  {
+   "duration_ms": 8000,
+   "has_audio": false,
+   "height": 848,
+   "path": "DCIM/Camera/camera-no-sound.mp4",
+   "width": 480
+  },
+  {
+   "duration_ms": 4000,
+   "has_audio": false,
+   "height": 848,
+   "measures": [
+    {
+     "p1": 0,
+     "p5": 1,
+     "p95": 6,
+     "p99": 9,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 0,
+     "p5": 1,
+     "p95": 6,
+     "p99": 9,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 0,
+     "p5": 1,
+     "p95": 6,
+     "p99": 9,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 0,
+     "p5": 1,
+     "p95": 6,
+     "p99": 9,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 0,
+     "p5": 1,
+     "p95": 6,
+     "p99": 9,
+     "peak_variance": 900.0
+    }
+   ],
+   "path": "WhatsApp/Media/WhatsApp Animated Gifs/all.mp4",
+   "width": 480
+  }
+ ],
+ "photos": [
+  {
+   "captured_at": "2024-05-01T10:01:00",
+   "embedding": [
+    1,
+    0,
+    0
+   ]
+  },
+  {
+   "captured_at": "2024-05-01T11:01:01",
+   "embedding": [
+    1,
+    0,
+    0
+   ]
+  },
+  {
+   "captured_at": "2024-05-01T12:00:10",
+   "embedding": [
+    0,
+    1,
+    0
+   ]
+  },
+  {
+   "captured_at": "2024-05-01T13:00:30",
+   "embedding": null
+  },
+  {
+   "captured_at": "2024-05-01T14:00:20",
+   "embedding": null
+  }
+ ],
+ "signals": {
+  "DCIM/Camera/beside.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.360",
+     "duration_ms": "6000",
+     "photo_chance": "0.500"
+    },
+    "score": 0.68,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/blurred.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.280",
+     "duration_ms": "8000",
+     "mistake": "blurry",
+     "mistake_chance": "0.640"
+    },
+    "score": 0.7408000000000001,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/camera-no-sound.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.280",
+     "duration_ms": "8000"
+    },
+    "score": 0.28,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/dark.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.280",
+     "duration_ms": "8000",
+     "mistake": "dark",
+     "mistake_chance": "0.800"
+    },
+    "score": 0.8560000000000001,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/fading.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.200",
+     "duration_ms": "10000"
+    },
+    "score": 0.19999999999999996,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/no-embedding.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.360",
+     "duration_ms": "6000",
+     "photo_chance": "0.500"
+    },
+    "score": 0.68,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/one-dark-frame.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.280",
+     "duration_ms": "8000"
+    },
+    "score": 0.28,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/short.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.400",
+     "duration_ms": "3000"
+    },
+    "score": 0.4,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/take-1.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.400",
+     "duration_ms": "3000",
+     "failed_take_chance": "0.600"
+    },
+    "score": 0.76,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/too-late.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.360",
+     "duration_ms": "6000"
+    },
+    "score": 0.3600000000000001,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/unlike.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.360",
+     "duration_ms": "6000"
+    },
+    "score": 0.3600000000000001,
+    "version": 1
+   }
+  ],
+  "WhatsApp/Media/WhatsApp Animated Gifs/all.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.400",
+     "duration_ms": "4000",
+     "gif_chance": "0.600",
+     "mistake": "dark",
+     "mistake_chance": "0.800"
+    },
+    "score": 0.952,
+    "version": 1
+   }
+  ],
+  "WhatsApp/Media/WhatsApp Animated Gifs/gif.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.280",
+     "duration_ms": "8000",
+     "gif_chance": "0.600"
+    },
+    "score": 0.712,
+    "version": 1
+   }
+  ],
+  "WhatsApp/Media/WhatsApp Animated Gifs/hd.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.280",
+     "duration_ms": "8000"
+    },
+    "score": 0.28,
+    "version": 1
+   }
+  ],
+  "WhatsApp/Media/WhatsApp Animated Gifs/with-sound.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.280",
+     "duration_ms": "8000"
+    },
+    "score": 0.28,
+    "version": 1
+   }
+  ]
+ }
+}
