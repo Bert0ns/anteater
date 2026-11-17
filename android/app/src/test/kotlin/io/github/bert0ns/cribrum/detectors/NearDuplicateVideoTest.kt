@@ -6,6 +6,7 @@ import io.github.bert0ns.cribrum.metadata.VideoMetadata
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
+import io.github.bert0ns.cribrum.model.ROLE_KEY
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -27,7 +28,7 @@ class NearDuplicateVideoTest {
             videoMetadata = { video ->
                 val clip = byVideo.getValue(video)
                 fun long(key: String) = if (clip.isNull(key)) null else clip.getLong(key)
-                VideoMetadata(clip.getInt("width"), clip.getInt("height"), long("duration_ms"), null, long("bitrate"), false, null, false)
+                VideoMetadata(clip.getInt("width"), clip.getInt("height"), long("duration_ms"), null, long("bitrate"), false, null, false, null, long("captured_instant"))
             },
             frames = { video ->
                 val frames = byVideo.getValue(video).optJSONArray("frames") ?: JSONArray()
@@ -72,5 +73,20 @@ class NearDuplicateVideoTest {
         val before = NearDuplicateDetector().analyze(listOf(original, first, second), context).getValue(second)
 
         assertEquals(before, NearDuplicateDetector().analyze(listOf(original, second), context).getValue(second))
+    }
+
+    @Test
+    fun `camera videos captured at different instants are takes and not copies, and one with the same instant or none is a copy`() = runBlocking {
+        fun camera(name: String) = MediaRef("DCIM/Camera/$name.mp4", 0, 0, MediaType.VIDEO)
+        val instants = mapOf("first" to 1_714_550_400_000L, "second" to 1_714_550_460_000L, "export" to 1_714_550_400_000L, "no-time" to null)
+        val context = AnalysisContext(
+            videoMetadata = { VideoMetadata(if (it.path.contains("first")) 1080 else 480, 1920, 10_000, null, null, false, null, false, null, instants.getValue(File(it.path).nameWithoutExtension)) },
+            frames = { listOf(floatArrayOf(1f, 0f)) },
+        )
+
+        assertEquals(emptyMap<MediaRef, Any>(), NearDuplicateDetector().analyze(listOf(camera("first"), camera("second")), context))
+        val roles = NearDuplicateDetector().analyze(listOf(camera("first"), camera("export"), camera("no-time")), context)
+            .mapKeys { File(it.key.path).nameWithoutExtension }.mapValues { it.value.single().evidence.getValue(ROLE_KEY) }
+        assertEquals(mapOf("first" to "best", "export" to "inferior", "no-time" to "inferior"), roles)
     }
 }
