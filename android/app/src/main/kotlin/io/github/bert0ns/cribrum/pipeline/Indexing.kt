@@ -369,9 +369,9 @@ open class IndexWorker(context: Context, parameters: WorkerParameters) : Corouti
         // A night pass takes the videos after the images once "Scan videos" has run (docs/design.md §4).
         val videos = videoScan || nightly && app.videoScans.nightly
         // Both parts off: the night only empties the trash, as the retention promises, and needs no notification.
-        // A failed purge sets the failed flag, as in a scan, but writes no scan report.
+        // It is the latest attempt, so the failed flag follows the purge, but it writes no scan report.
         if (!images && !videos) {
-            if (purgeTrash(app).isNotEmpty()) app.lastScan.recordFailure()
+            app.lastScan.failed = purgeTrash(app).isNotEmpty()
             return Result.success()
         }
         try {

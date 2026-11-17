@@ -38,8 +38,10 @@ class LastScan(private val preferences: SharedPreferences) {
     val report: ScanReport?
         get() = preferences.getString(KEY, null)?.let { runCatching { parse(JSONObject(it)) }.getOrNull() }
 
-    val failed: Boolean
+    /** Whether the last attempt failed. Set on its own by a night that only purges the trash, which writes no report. */
+    var failed: Boolean
         get() = preferences.getBoolean(KEY_FAILED, false)
+        set(value) = preferences.edit { putBoolean(KEY_FAILED, value) }
 
     fun recordFailure() {
         preferences.edit { putBoolean(KEY_FAILED, true) }
