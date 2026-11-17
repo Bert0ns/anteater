@@ -314,7 +314,8 @@ class Review(
             var size = 0
             val groupLimit = videoGroupsPerPage(category, mediaType)
             for (group in groups) {
-                if (page.isNotEmpty() && if (groupLimit != null) page.size == groupLimit else size + group.images.size > PAGE_SIZE) break
+                val full = if (groupLimit != null) page.size >= groupLimit else size + group.images.size > PAGE_SIZE
+                if (page.isNotEmpty() && full) break
                 page += group
                 size += group.images.size
             }
