@@ -108,7 +108,8 @@ class Ranker(private val thresholds: Map<Category, Float> = THRESHOLDS) {
          * Candidates under each category they have a reason for, highest score first, each score
          * lowered by the candidate's protection. A video's score is also multiplied by its size, so
          * of two equal videos the larger comes first, and an image's size plays no part
-         * (docs/design.md §6.6). A sticker is listed under STICKER only.
+         * (docs/design.md §6.6). A list's order holds only within one media type, since a video's
+         * key is in bytes and an image's is not. A sticker is listed under STICKER only.
          */
         fun byCategory(ranked: List<Candidate>): Map<Category, List<Candidate>> {
             val groups = mutableMapOf<Category, MutableList<Candidate>>()
@@ -121,15 +122,18 @@ class Ranker(private val thresholds: Map<Category, Float> = THRESHOLDS) {
             }
             return groups.mapValues { (category, candidates) ->
                 candidates.sortedByDescending { c ->
-                    c.protection * c.reasons.filter { it.kind == category }.maxOf { it.score } * weight(c.image.ref)
+                    c.protection * c.reasons.filter { it.kind == category }.maxOf { it.score } * sizeFactor(c.image.ref)
                 }
             }
         }
     }
 }
 
-/** The bytes a video frees: a 900 MB video is worth more of a review than a 5 MB clip. Double, as a Float would round sizes. */
-private fun weight(ref: MediaRef): Double = if (ref.mediaType == MediaType.VIDEO) ref.size.toDouble() else 1.0
+/**
+ * The bytes a video frees: a 900 MB video is worth more of a review than a 5 MB clip. At least 1, so an
+ * empty video keeps its score and protection order. Double, as a Float would round sizes.
+ */
+private fun sizeFactor(ref: MediaRef): Double = if (ref.mediaType == MediaType.VIDEO) ref.size.coerceAtLeast(1).toDouble() else 1.0
 
 /**
  * xxh3 of the path as an unsigned number, which orders the same as the lab's `_tie_break` hex

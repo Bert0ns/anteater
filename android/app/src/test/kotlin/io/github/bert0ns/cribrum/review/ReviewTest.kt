@@ -1352,6 +1352,18 @@ class ReviewTest {
     }
 
     @Test
+    fun `the suggested order puts a group of takes with a large video before groups of small ones`() = test {
+        take("DCIM/Camera/a1.mp4", group = "small", bytes = 100)
+        take("DCIM/Camera/a2.mp4", group = "small", bytes = 100)
+        take("DCIM/Camera/c1.mp4", group = "smaller", bytes = 50)
+        take("DCIM/Camera/c2.mp4", group = "smaller", bytes = 50)
+        take("DCIM/Camera/b1.mp4", group = "big", bytes = 900)
+        take("DCIM/Camera/b2.mp4", group = "big", bytes = 10)
+
+        assertEquals(listOf("big", "small", "smaller"), page(Category.TAKES, mediaType = MediaType.VIDEO).groups.map { it.id })
+    }
+
+    @Test
     fun `the takes of one moment are a page of videos where every take counts and none is preselected`() = test {
         val takes = listOf(take("DCIM/Camera/1.mp4", Role.SHORT_TAKE), take("DCIM/Camera/2.mp4"), take("DCIM/Camera/3.mp4"))
 

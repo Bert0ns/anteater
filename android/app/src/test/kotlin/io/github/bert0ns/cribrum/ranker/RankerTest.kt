@@ -299,6 +299,16 @@ class RankerTest {
     }
 
     @Test
+    fun `an empty video keeps its score order`() {
+        // Size 0 would zero both products and leave the order of rank, where the screenshot puts
+        // "shot" first, though its blur score is the lower.
+        val order = rank(sized("blurry", 0, blur(0.9f)), sized("shot", 0, blur(0.6f), screenshot(1f)))
+
+        assertEquals(listOf("shot", "blurry"), names(order))
+        assertEquals(listOf("blurry", "shot"), names(Ranker.byCategory(order).getValue(Category.BLURRY)))
+    }
+
+    @Test
     fun `an image's size does not change its place`() {
         // The path hash puts "small" first, and an image keeps that order whatever its size.
         val order = rank(
