@@ -1,16 +1,18 @@
+<img src="site/logo.png" width="96" alt="Cribrum app icon: an anteater in the shape of a C">
+
 # Cribrum
 
 Website: https://cribrum.bertons.me
 
 *Cribrum* is Latin for "sieve" (Italian: *crivello*).
 
-Cribrum finds images on your device that you can delete or recompress without losing memories that matter: blurry shots, duplicate copies, burst sequences, photos of lecture slides and notes, screenshots, and media scattered by messaging apps.
+Cribrum finds photos and videos on your phone that you can delete or recompress without losing memories that matter: blurry shots, duplicate copies, bursts, takes of one moment, short clips recorded by mistake, photos of lecture slides and notes, screenshots, and media scattered by messaging apps.
 
-It suggests and you decide. Nothing is deleted without confirmation. Deleted images move to a local trash folder first, so you can restore them at any time during the retention window.
+It suggests and you decide. Deleted files move to a local trash folder first, so you can restore them during the retention window.
 
 ## What it does
 
-Cribrum is an Android app that inspects device storage, including folders marked with `.nomedia` that system gallery apps skip. It groups candidate images into clear categories for review, offers safe JPEG recompression for large camera photos, and gives you a visual storage map to track space usage.
+Cribrum is an Android app that inspects device storage, including folders marked with `.nomedia` that gallery apps skip, such as `WhatsApp Video/Sent`. It groups candidates into categories for review, recompresses large camera JPEGs, and draws a storage map.
 
 The detectors are tuned on one person's library, so expect some wrong suggestions and some misses. Cloud libraries such as Google Photos, iOS and desktop are not covered.
 
@@ -18,78 +20,98 @@ The detectors are tuned on one person's library, so expect some wrong suggestion
 
 ### Categories and cleanup
 
-The Clean screen summarizes how much storage you can free across nine categories:
+The Photos tab of Clean lists the space you can free in nine categories:
 
-- **Exact copies.** Identical files matched byte-for-byte with xxHash3-64 in the group detection phase.
-- **Similar copies.** Recompressed, resized, or edited copies found with 64-bit DCT perceptual hashes (pHash) and MobileCLIP image embeddings.
-- **Bursts.** Photos taken in rapid succession within three seconds of each other.
-- **Blurry.** Images with low Laplacian sharpness on subject areas, while keeping intentional portrait blur.
-- **Too dark or too bright.** Pocket shots, black frames, and overexposed images identified by luminance histograms.
-- **Screenshots.** Screen captures detected by directory path, display dimensions, and missing camera metadata.
-- **Documents and notes.** Slides, whiteboards, handwritten notes, receipts, and printed pages detected with PP-OCRv4 text detection and zero-shot image classification.
-- **Forwarded.** Memes and graphics in messaging folders that lack camera metadata.
-- **WhatsApp stickers.** Files located in WhatsApp sticker folders across storage.
+- **Exact copies.** Identical files, matched with xxHash3-64.
+- **Similar copies.** Recompressed, resized or edited copies, found with 64-bit DCT perceptual hashes (pHash) and MobileCLIP embeddings.
+- **Bursts.** Photos taken at most three seconds apart.
+- **Blurry.** Low Laplacian sharpness on the subject, so intentional portrait blur is not flagged.
+- **Too dark or too bright.** Pocket shots, black frames and blown-out images, from luminance histograms.
+- **Screenshots.** Directory, display dimensions and missing camera metadata.
+- **Documents and notes.** Slides, whiteboards, handwriting, receipts and printed pages, from PP-OCRv4 text coverage and zero-shot classification.
+- **Forwarded.** Memes and greeting images in messaging folders that lack camera metadata.
+- **WhatsApp stickers.** Files in messaging apps' sticker folders.
 
-Each category opens into a grid with suggested deletions already marked. You can tap an image to keep it, hold it to inspect the image at full size with the reasons it was flagged, or change the sorting order. The main button under the grid moves marked images to Cribrum's trash immediately, accompanied by an undo snackbar.
+A category opens into a grid with the suggested deletions already marked. A tap flips a mark, a long press opens the image at full size with the reasons it was flagged, and a menu sorts by day, week, month or size. The button under the grid moves the marked images to the trash and shows an Undo snackbar.
 
 ### Duplicate and burst groups
 
-Exact duplicates, similar copies, and burst shots appear in grouped views. The app picks the best copy to keep, such as the highest resolution file or the sharpest shot. You review the copies side by side, swap which copy to keep, or mark copies for trash.
+Exact copies, similar copies and bursts open as groups. The app picks the best copy to keep, such as the highest resolution or the sharpest shot, and shows it beside the others. You compare them side by side and change which copy stays.
+
+### Videos
+
+The Videos tab of Clean has its own scan button ("Scan videos"), its own counts and its own total. It lists "Largest videos", every video you have not reviewed, biggest first, and the categories that have a video detector:
+
+- **Exact copies.** Same size and content hash.
+- **Similar copies.** Videos of nearly the same length (within 100 ms) whose five MobileCLIP frame embeddings match. It finds the re-encoded copy WhatsApp keeps in `Sent` and keeps the camera original.
+- **Blurry** and **Too dark or too bright.** The median over the five frames, with thresholds of their own.
+- **Forwarded.** Every video in a messaging app's folder, `Sent` included.
+- **Takes of one moment.** Camera videos that start within five minutes of the previous one's end, split where the frames differ. There is no best take, so nothing is preselected.
+- **Short clips.** Clips under 15 seconds, scored higher when a camera photo was taken beside them, they are a failed take, they are dark or blurred, or they are silent clips in a chat folder.
+
+A tile shows a frame, the length and the size. In Short clips the first tiles on screen loop muted, so you can decide at a glance. Holding a tile opens the video in the app (Media3 ExoPlayer), with a strip of five frames to jump to. In a video category, the larger of two videos with the same score comes first.
 
 ### Photo compression
 
-Instead of deleting photos, the Compress tab lets you recompress large camera JPEGs to reclaim storage space.
+The Compress tab recompresses large camera JPEGs instead of deleting them. It lists photos only, largest first, and preselects none. Video compression is not built.
 
-- **Three quality levels.** High quality uses JPEG 90 at original resolution. Balanced uses JPEG 85 and scales down photos larger than 50 MP. In the lab it saved a median 47% on one phone's camera photos. Smallest files uses JPEG 80 and scales down photos larger than 12 MP.
-- **Split comparison slider.** An interactive split handle lets you compare the original image against the recompressed result before confirming, with deep zooming down to individual pixels.
-- **Preserved metadata.** Recompressed copies preserve standard EXIF tags (date taken, camera details, lens info, orientation), GPS coordinates, and Ultra HDR gain maps on Android 14 and newer. Original XMP (except new gain map data on Ultra HDR), Samsung SEF trailers, C2PA content credentials, IPTC data, EXIF thumbnails, and shooting mode info are not preserved, and custom maker notes are not guaranteed. The original photo moves to the trash, where it can be restored with all metadata intact within the retention window.
-- **Reversible originals.** Original photos move to Cribrum's trash folder. You can undo the entire compression batch from the summary screen or restore individual originals later.
-- **Background batches.** Batches run in the background with progress notifications and pause when the device reaches severe heat.
+- **Three levels.** High quality is JPEG 90 at full resolution. Balanced is JPEG 85 and scales photos above 50 MP down to 50 MP. Smallest is JPEG 80 and scales photos above 12 MP down to 12 MP. Balanced saved a median 47% on one phone's camera photos in the lab.
+- **Split comparison.** A slider compares the original with the real recompressed result before you confirm, and zooms down to single pixels.
+- **Metadata.** The copy keeps the standard EXIF tags (date taken, camera and lens, orientation), GPS and, on Android 14 and newer, the Ultra HDR gain map. It loses the original XMP (except the new gain map's), the Samsung SEF trailer, C2PA credentials, IPTC, the EXIF thumbnail and the shooting mode info, and maker notes are not guaranteed. The summary says so before you confirm.
+- **Reversible.** The original goes to the trash, and one button undoes the whole batch.
+- **Background batches.** A batch runs with a notification and pauses while the phone is severely hot.
 
 ### Trash and undo
 
-Applying a review page moves deleted files to Cribrum's trash folder on shared storage and shows an immediate undo snackbar.
-
-- **Retention window.** The trash keeps deleted files for 30 days by default, configurable from 7 to 90 days in settings.
-- **Restoration.** Restoring a photo returns it to its original directory path.
-- **Automatic cleanup.** Files are permanently removed only after their retention period expires or when you empty the trash manually.
+- **Where.** A `.cribrum-trash` folder at the root of each storage volume, with a `.nomedia` file. Moving is a rename on the same volume, never a copy, and the folder survives an uninstall.
+- **Retention.** 30 days by default, or 7, 14, 60 or 90 days in Settings. The scan purges expired files. Files are deleted for good only after the retention ends or when you delete them from the trash, which asks first.
+- **Restore.** A file goes back to its original path, and is not restored over another file.
+- **Freeing space now.** After a page that trashes more than 1 GB, the snackbar offers "Free 2.3 GB now", which deletes only the files of that page.
 
 ### Favourites and protection
 
-- **Gallery favourites.** Photos marked as favourites in your gallery show a heart badge and start unticked.
-- **Confirmation.** If you choose to trash a favourite, the app asks for confirmation before moving it.
-- **Recall over precision.** Protections never hide candidates from review. Instead, they demote protected images in the ranking order so you remain in control.
+- **Gallery favourites.** Photos and videos you hearted in the gallery show a heart and start unticked. You can heart or unheart one from the full-size view.
+- **Confirmation.** A page that marks a favourite for the trash asks first.
+- **Recall over precision.** Protections never hide a candidate. They only move it down the order.
 
 ### Background scans
 
-Cribrum runs an incremental scan automatically once a night at 02:00 while the phone charges, or whenever you tap "Scan now". The app indicates when the phone is hot enough to slow the scan down, though scan work itself does not throttle or pause for heat. Only photo compression batches pause when the device reaches severe heat.
+"Scan now" scans photos and "Scan videos" scans videos. Either runs as a foreground service with a stop button. Cribrum also scans once a night at 02:00 while the phone charges (it only runs between 00:00 and 06:00, otherwise it waits for the next night).
+
+- **Photos.** The normal scan finds and records videos but never opens them, so you do not pay for the video steps.
+- **Videos.** The night scan analyses new videos only after you ran "Scan videos" once.
+- **Two switches.** Settings has "Analyse images at night" and "Analyse videos at night", both on by default. With both off, the night run only empties the expired trash.
+- **Heat.** The scan shows a line when the phone is hot enough to slow it down, and does not pause for it. Compression batches do pause.
 
 ### Settings and storage map
 
-The Settings screen provides configuration and diagnostics:
-
-- **Storage map.** An interactive treemap displays storage consumption across folders. You can tap a block to inspect its size and file count, zoom into subfolders, or exclude an entire folder from future scans.
-- **Trash retention.** Select 7, 14, 30, 60, or 90 days before automatic deletion.
-- **Detection thresholds.** Sliders adjust detection sensitivity for each category, showing live candidate counts as you move them.
-- **Folder exclusions.** View and manage directories excluded from review.
-- **Haptics.** Toggle vibration feedback for selection and review actions.
+- **Trash retention** and the **Haptics** and **Language** items.
+- **Detection thresholds.** One slider per category, with live candidate counts. Blurry and Too dark or too bright have a second slider for videos, and Short clips has one for videos only.
+- **Excluded folders.** Folders and their subfolders left out of the review and the map.
+- **Storage map.** A treemap of the photo and video space per folder. Tap a block for its size, file count and video share, open it, or exclude the folder.
+- **Scan report.** The last scan, the steps that have not covered every file and what the app takes on the phone.
 
 ## Screenshots
 
 <table>
   <tr>
-    <td><img src="docs/screenshots/home.png" width="250" alt="Clean home screen showing categories and space savings"></td>
-    <td><img src="docs/screenshots/category.png" width="250" alt="Category review grid with marked items"></td>
-    <td><img src="docs/screenshots/group.png" width="250" alt="Group view showing duplicate copies with best copy kept"></td>
+    <td><img src="docs/screenshots/home.png" width="250" alt="Clean home screen showing the photo categories and space savings"></td>
+    <td><img src="docs/screenshots/category.png" width="250" alt="Category review grid with marked photos"></td>
+    <td><img src="docs/screenshots/group.png" width="250" alt="Group view showing similar copies with the best copy kept"></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/full-size.png" width="250" alt="Full size photo view with candidate details"></td>
+    <td><img src="docs/screenshots/full-size.png" width="250" alt="Full size photo view with the reason it was flagged"></td>
+    <td><img src="docs/screenshots/videos.png" width="250" alt="Videos tab with Largest videos and the video categories"></td>
+    <td><img src="docs/screenshots/short-clips.png" width="250" alt="Short clips page with a frame, the length and the size on each tile"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/video-full-size.png" width="250" alt="Full size video view with play controls and a strip of five frames"></td>
     <td><img src="docs/screenshots/compress.png" width="250" alt="Compress screen with photo selection and savings estimate"></td>
-    <td><img src="docs/screenshots/compress-summary.png" width="250" alt="Compression confirmation dialog before moving originals to trash"></td>
+    <td><img src="docs/screenshots/compress-summary.png" width="250" alt="Compression summary before the originals move to the trash"></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/trash.png" width="250" alt="Trash screen showing days left before deletion"></td>
-    <td><img src="docs/screenshots/settings.png" width="250" alt="Settings screen with trash retention and options"></td>
+    <td><img src="docs/screenshots/trash.png" width="250" alt="Trash screen showing the days left before deletion"></td>
+    <td><img src="docs/screenshots/settings.png" width="250" alt="Settings screen with trash retention and the night scan switches"></td>
     <td><img src="docs/screenshots/storage-map.png" width="250" alt="Storage map treemap of device folders"></td>
   </tr>
 </table>
@@ -98,46 +120,44 @@ The images in the screenshots are drawn in code, and the counts are made up.
 
 ## Technical architecture
 
-Cribrum performs all scanning, inference, and file operations directly on the device. It has no network permissions.
+Cribrum scans, runs its models and changes files on the device. The app has no network permission.
 
 ### Signals and ranking
 
-Analysis runs as a pipeline where individual detectors emit `Signal` values with confidence scores. The `Ranker` combines these signals into ordered candidate lists:
+Detectors emit `Signal` values with confidence scores, and the `Ranker` combines them into ordered candidate lists. A detector never decides on its own.
 
-- **Recall over precision.** Surfacing a photo that turns out to be worth keeping is acceptable. Missing clutter that the user wanted to delete is not.
-- **Protections reorder without dropping.** Faces and gallery favourites lower an image in the review order, and never take it out of the candidates. The user still decides on every image.
+- **Recall over precision.** Showing a photo that turns out to be worth keeping is acceptable. Missing clutter is not.
+- **Protections reorder without dropping.** Faces and gallery favourites lower an item in the review order and never remove it from the candidates.
+- **No age signal.** The age of a photo or video is never a reason to delete it.
 
 ### On-device models
 
-The app bundles three local neural models:
+The app bundles three neural models and runs them with ONNX Runtime:
 
-- **MobileCLIP2-S0.** A 45 MB float32 image encoder (MCi0) running on ONNX Runtime. It generates 512-dimensional embeddings used for similar photo clustering, zero-shot document identification, and meme detection. Prompt embeddings for text queries are precomputed in the Python lab and stored as JSON in the APK assets, avoiding on-device text tokenization.
-- **YuNet.** A 230 KB ONNX face detection model. It locates faces and facial landmarks to protect portraits.
-- **PP-OCRv4.** An ONNX text detection model that measures the proportion of an image covered by text lines, identifying slides, documents, and paper receipts.
-
-Models run through ONNX Runtime. The image encoder tries the GPU through WebGPU and falls back to the CPU when the phone or the build has none.
+- **MobileCLIP2-S0.** A 45 MB image encoder that gives 512-dimensional embeddings for similar-copy search, zero-shot document and meme detection, and the five frames of each video. The text prompts are embedded in the Python lab and shipped as JSON, so the phone has no text encoder. The encoder runs on the GPU through WebGPU and falls back to the CPU.
+- **YuNet.** A 230 KB face detector that protects portraits.
+- **PP-OCRv4.** A text detector that measures how much of an image is text.
 
 ### Storage index and scan worker
 
-- **Room database.** A SQLite database tracks file metadata, content hashes, perceptual hashes, embeddings, and emitted signals.
-- **Five-phase incremental scan.** Scans run through five phases ([`docs/design.md §4, §7`](docs/design.md)): (1) filesystem walk ("Looking for images"), (2) metadata extraction ("Reading the images"), (3) non-embedding detectors ("Analyzing the images": `BLURRY`, `BAD_EXPOSURE`, `SCREENSHOT`, `FACES`, `STICKER`, and 64-bit DCT pHash), (4) embedding generation with the embedded detectors running beside it ("Classifying the images": `DOCUMENT` with PP-OCRv4 text coverage, and `FORWARDED`), and (5) group detectors ("Finding duplicates and bursts": exact duplicates with xxHash3-64, near duplicates with DCT pHash and embeddings, and bursts). Files with unchanged size and modification timestamps skip earlier phases.
-- **WorkManager.** `IndexWorker` manages nightly scans at 02:00 when connected to power, running within a 00:00 to 06:00 window and rescheduling for the next night if skipped.
+- **Room database.** SQLite holds file metadata, hashes, embeddings (a video's frames too) and signals. A file is identified by path, size and modification time, so only new or changed files are analysed again.
+- **Photo scan, five phases** ([`docs/design.md §4, §7`](docs/design.md)): the file walk, metadata, the detectors that read no embedding (`BLURRY`, `BAD_EXPOSURE`, `SCREENSHOT`, `FACES`, `STICKER` and the pHash), the embeddings with the detectors that read them (`DOCUMENT`, `FORWARDED`), and the group detectors (exact copies, similar copies, bursts).
+- **Video scan, four phases.** The walk, the metadata, the five frames of each video (measured for blur, exposure and faces while they decode), and the group detectors that take videos.
+- **WorkManager.** `IndexWorker` runs the night scan and the two scan buttons, one scan at a time.
 
 ### Python lab and parity
 
-The `lab/` directory contains the Python reference implementation for all detectors, ranking algorithms, and data structures.
+`lab/` is the Python reference implementation of the detectors and the ranking.
 
-- **Component mirroring.** Python modules in `cribrum_lab` mirror Kotlin packages in `io.github.bert0ns.cribrum` with matching names and type contracts.
-- **Golden test fixtures.** The `fixtures/golden/` directory holds synthetic test images. Both the Python test suite and Android unit tests evaluate these fixtures through their respective image decoders to verify that detector scoring and rankings agree.
-- **Parity verification.** Running `python3 lab/scripts/check_parity.py` statically checks that detector IDs, versions, thresholds, protection weights, and numeric constants match between Python and Kotlin.
+- **Mirrored components.** Modules in `cribrum_lab` mirror the Kotlin packages in `io.github.bert0ns.cribrum`, with the same names and types.
+- **Golden fixtures.** `fixtures/` holds synthetic images and videos. The Python tests and the Android unit tests read them through their own decoders, to check that scores and rankings agree.
+- **Parity check.** `python3 lab/scripts/check_parity.py` compares detector ids, versions, thresholds, protection weights and constants between Python and Kotlin.
 
 ## Build and verification
 
 ### Android app
 
 Prerequisites: JDK 21 and the Android SDK.
-
-To check code formatting, run unit tests, run Android lint, build the debug APK, and compile baseline profiles:
 
 ```bash
 cd android
@@ -169,20 +189,20 @@ From the repository root:
 python3 lab/scripts/check_parity.py
 ```
 
-[`AGENTS.md`](AGENTS.md) has the complete instructions for contributors (including shared cache locking and required JDK 21), and [`android/README.md`](android/README.md) covers installing a build on a phone.
+[`AGENTS.md`](AGENTS.md) has the instructions for contributors (shared Gradle locking, JDK 21), and [`android/README.md`](android/README.md) covers installing a build on a phone.
 
 ## Status and requirements
 
-- **Android version.** Android 11 (API 30) or newer. Android 11 introduced the scoped storage rules and `MANAGE_EXTERNAL_STORAGE` permission that Cribrum relies on.
-- **Permissions.** Requires "All files access" to inspect directories outside MediaStore, such as WhatsApp `.nomedia` media folders, and to manage the trash directory. Cribrum explicitly removes the `android.permission.INTERNET` permission in its manifest.
-- **Distribution.** Sideloaded APK available from the [GitHub releases page](https://github.com/Bert0ns/cribrum/releases). Not distributed on Google Play because of storage access policy restrictions.
+- **Android version.** Android 11 (API 30) or newer, the first version with the scoped storage rules and `MANAGE_EXTERNAL_STORAGE` that Cribrum relies on.
+- **Permissions.** "All files access" is required, to read folders outside MediaStore such as WhatsApp's `.nomedia` folders and to manage the trash. The manifest removes `android.permission.INTERNET`.
+- **Distribution.** A sideloaded APK from the [GitHub releases page](https://github.com/Bert0ns/cribrum/releases). It is not on Google Play because of its storage access policy.
 
 ## Principles
 
-- **Practical over pretty.** A clean, minimal UI whose features actually work.
-- **Recall over precision.** Surface potential candidates for the user to review. Missing clutter is worse than asking about a keeper.
-- **Private by design.** All processing stays on your device. The app cannot make network connections.
-- **Nothing is lost by accident.** Every deletion and compression is confirmed and reversible through Cribrum's trash folder.
+- **Practical over pretty.** A clean, minimal UI whose features work.
+- **Recall over precision.** Surface candidates for review. Missing clutter is worse than asking about a keeper.
+- **Private by design.** Everything stays on the device, and the app cannot connect to a network.
+- **Nothing is lost by accident.** A page of deletions has an Undo, a favourite asks first, a compression keeps its original in the trash, and deleting for good asks first.
 
 ## Repository layout
 
@@ -190,8 +210,8 @@ python3 lab/scripts/check_parity.py
 |---|---|
 | [`docs/design.md`](docs/design.md) | Design document: goals, decisions, architecture, roadmap |
 | [`lab/`](lab/) | Python lab: reference implementation of detectors and labeling tools |
-| [`android/`](android/) | Android app: Kotlin and Jetpack Compose codebase |
-| [`fixtures/`](fixtures/) | Golden test images used for parity verification |
+| [`android/`](android/) | Android app: Kotlin and Jetpack Compose |
+| [`fixtures/`](fixtures/) | Golden test images and videos for parity verification |
 | [`site/`](site/) | Website source files |
 | [`docs/screenshots/`](docs/screenshots/) | Rendered application screenshots |
 
