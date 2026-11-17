@@ -4,6 +4,7 @@ Mirrors the planned Room schema (docs/design.md, section 7). Keep the database
 under lab/data/: it holds paths and metadata of personal images.
 """
 
+import dataclasses
 import json
 import sqlite3
 from collections import defaultdict
@@ -15,7 +16,15 @@ from typing import Self
 import numpy as np
 
 from cribrum_lab.metadata import ImageMetadata, VideoMetadata
-from cribrum_lab.model import IndexedMedia, MediaRef, MediaType, ReviewState, Signal, kind
+from cribrum_lab.model import (
+    FrameMeasures,
+    IndexedMedia,
+    MediaRef,
+    MediaType,
+    ReviewState,
+    Signal,
+    kind,
+)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS images (
@@ -94,6 +103,21 @@ CREATE TABLE IF NOT EXISTS frame_embeddings (
     vector BLOB NOT NULL,  -- float32, little-endian
     PRIMARY KEY (path, model, time_ms)
 );
+-- What the detectors that read frames keep of each of a video's frames, at the same times.
+CREATE TABLE IF NOT EXISTS frame_measures (
+    path TEXT NOT NULL REFERENCES images ON DELETE CASCADE,
+    frames_version INTEGER NOT NULL,
+    time_ms INTEGER NOT NULL,
+    peak_variance REAL NOT NULL,
+    p1 REAL NOT NULL,
+    p5 REAL NOT NULL,
+    p95 REAL NOT NULL,
+    p99 REAL NOT NULL,
+    faces INTEGER NOT NULL,
+    face_confidence REAL NOT NULL,
+    face_area REAL NOT NULL,
+    PRIMARY KEY (path, time_ms)
+);
 -- The image set a group detector version last ran on, so unchanged sets are skipped, with the
 -- paths whose content hash failed in that run.
 CREATE TABLE IF NOT EXISTS group_runs (
@@ -112,7 +136,7 @@ CREATE TABLE IF NOT EXISTS not_images (
     mtime_ns INTEGER NOT NULL
 );
 """
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 """Bump on every schema change: an index from another version is refused, not misread."""
 
 
@@ -190,6 +214,7 @@ class ImageIndex:
             self._db.execute("DELETE FROM analyses WHERE path = ?", (path,))
             self._db.execute("DELETE FROM embeddings WHERE path = ?", (path,))
             self._db.execute("DELETE FROM frame_embeddings WHERE path = ?", (path,))
+            self._db.execute("DELETE FROM frame_measures WHERE path = ?", (path,))
         return True
 
     def images(self) -> list[MediaRef]:
@@ -386,13 +411,23 @@ class ImageIndex:
         model_version: int,
         frames_version: int,
         vectors: Mapping[int, np.ndarray],
+        measures: Mapping[int, FrameMeasures] | None = None,
     ) -> None:
-        """Replaces the video's frames of this model, by their time in milliseconds."""
+        """Replaces the video's frames of this model, by their time in milliseconds, and the
+        measures of the same frames in the same transaction."""
         with self._db:
             exists = self._db.execute("SELECT 1 FROM images WHERE path = ?", (str(path),))
             _require(exists.fetchone(), path)
             self._db.execute(
                 "DELETE FROM frame_embeddings WHERE path = ? AND model = ?", (str(path), model)
+            )
+            self._db.execute("DELETE FROM frame_measures WHERE path = ?", (str(path),))
+            self._db.executemany(
+                "INSERT INTO frame_measures VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    (str(path), frames_version, time_ms, *dataclasses.astuple(frame))
+                    for time_ms, frame in (measures or {}).items()
+                ],
             )
             self._db.executemany(
                 "INSERT INTO frame_embeddings VALUES (?, ?, ?, ?, ?, ?)",
@@ -423,6 +458,18 @@ class ImageIndex:
         for path, time_ms, vector in rows:
             frames[Path(path)][time_ms] = np.frombuffer(vector, dtype="<f4")
         return dict(frames)
+
+    def frame_measures(self, frames_version: int) -> dict[Path, list[FrameMeasures]]:
+        """Every video's frame measures of this frames version, in the order of their times."""
+        rows = self._db.execute(
+            """SELECT path, peak_variance, p1, p5, p95, p99, faces, face_confidence, face_area
+               FROM frame_measures WHERE frames_version = ? ORDER BY path, time_ms""",
+            (frames_version,),
+        )
+        measures: dict[Path, list[FrameMeasures]] = defaultdict(list)
+        for path, *values in rows:
+            measures[Path(path)].append(FrameMeasures(*values))
+        return dict(measures)
 
     def sampled_times(
         self, model: str, model_version: int, frames_version: int

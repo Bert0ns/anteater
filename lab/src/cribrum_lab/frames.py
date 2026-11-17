@@ -16,9 +16,9 @@ from PIL import Image
 from cribrum_lab.metadata import HDR_TRANSFERS, UnreadableVideo
 
 FRAMES = 5
-FRAMES_VERSION = 2
-"""Bump it when the frames a video gives change, such as their times or their decoding: the frames
-stored at another version are sampled again."""
+FRAMES_VERSION = 3
+"""Bump it when the frames a video gives change, such as their times or their decoding, or what is
+kept of each frame (its measures): the frames stored at another version are sampled again."""
 MARGIN_MS = 500
 """Kept off each end, where a clip fades in, starts black or catches the hand on the button."""
 

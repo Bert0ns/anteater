@@ -15,7 +15,7 @@ from cribrum_lab.labeling import LabelingServer, clusters, sample, strata
 from cribrum_lab.labels import LabelStore
 from cribrum_lab.mobileclip import MobileClip
 from cribrum_lab.model import MediaType
-from cribrum_lab.ranker import Ranker
+from cribrum_lab.ranker import THRESHOLDS, VIDEO_THRESHOLDS, Ranker
 
 DATA = Path(__file__).resolve().parents[2] / "data"
 """lab/data/, which git ignores: the index and the labels hold paths of personal images."""
@@ -190,8 +190,10 @@ def _evaluate(index: ImageIndex, labels: Path, out: Path | None) -> None:
         )
     )
     if videos := [x for x in every if x.media_type is MediaType.VIDEO]:
+        # A video's categories have the thresholds of their own where the video score is graded.
+        thresholds = THRESHOLDS | VIDEO_THRESHOLDS
         text += "\n\nvideos\n" + format_report(
-            evaluate(index.indexed_media(MediaType.VIDEO), videos)
+            evaluate(index.indexed_media(MediaType.VIDEO), videos, thresholds)
         )
     print(text)
     if out:

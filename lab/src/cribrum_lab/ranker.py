@@ -33,6 +33,15 @@ THRESHOLDS = {
 """Score a signal needs to make an image a candidate. Picked by the maintainer from the
 evaluation report's sweep, for recall (docs/design.md, 10). Keep them equal to the app's."""
 
+VIDEO_THRESHOLDS = {
+    Category.BLURRY: 0.15,
+    Category.BAD_EXPOSURE: 0.4,
+}
+"""The threshold of a category for videos, where its video score is graded: a video is not held to
+the photos' slider, which could hide it without a word (docs/design.md, 6.1 and 8). A category
+not listed here has one threshold for both. Picked from the sweep of the video labels
+(docs/design.md, 5). Keep them equal to the app's."""
+
 PROTECTION_WEIGHTS = {Protection.FACES: 0.5, Protection.FAVORITE: 0.8, Protection.ALBUM: 0.6}
 """How much a protection signal at score 1 lowers an image's likelihood."""
 UNIQUE_WEIGHT = 0.2
@@ -62,8 +71,13 @@ class Candidate:
 
 
 class Ranker:
-    def __init__(self, thresholds: Mapping[Category, float] = THRESHOLDS) -> None:
+    def __init__(
+        self,
+        thresholds: Mapping[Category, float] = THRESHOLDS,
+        video_thresholds: Mapping[Category, float] = VIDEO_THRESHOLDS,
+    ) -> None:
         self.thresholds = thresholds
+        self.video_thresholds = {**thresholds, **video_thresholds}
 
     def rank(
         self, images: Sequence[IndexedMedia], excluded_folders: Iterable[Path] = ()
@@ -83,14 +97,17 @@ class Ranker:
         for image in images:
             if image.review_state is ReviewState.TRASHED or is_excluded(image.ref.path, excluded):
                 continue
-            reasons = [s for s in image.signals if self._passes(s)]
+            limits = self._limits(image)
+            reasons = [s for s in image.signals if _passes(s, limits)]
             if image.review_state is ReviewState.KEPT:
                 reasons = [s for s in reasons if s.identity not in image.seen_when_kept]
                 if not reasons:
                     continue
-            reasons.sort(key=self._likelihood, reverse=True)
+            reasons.sort(key=lambda s: _likelihood(s, limits), reverse=True)
             protection = _protection(image.signals)
-            likelihood = protection * max(map(self._likelihood, image.signals), default=0.0)
+            likelihood = protection * max(
+                (_likelihood(s, limits) for s in image.signals), default=0.0
+            )
             ranked.append(Candidate(image, tuple(reasons), likelihood, protection))
         # Ties go by a hash of the path: the path itself holds the date in many file names, and
         # photo age is never a signal (docs/design.md, D5).
@@ -121,22 +138,27 @@ class Ranker:
             )
         return dict(groups)
 
-    def _passes(self, signal: Signal) -> bool:
-        """Protection signals have no threshold, so they never pass."""
-        threshold = self.thresholds.get(signal.category)
-        return threshold is not None and signal.score >= threshold
+    def _limits(self, image: IndexedMedia) -> Mapping[Category, float]:
+        return self.video_thresholds if image.ref.media_type is MediaType.VIDEO else self.thresholds
 
-    def _likelihood(self, signal: Signal) -> float:
-        """Score / threshold below the threshold, 1 + the margin over it above, 0 for
-        protection signals."""
-        threshold = self.thresholds.get(signal.category)
-        if threshold is None:
-            return 0.0
-        if signal.score < threshold:
-            return signal.score / threshold
-        if threshold == 1.0:
-            return 1.0
-        return 1.0 + (signal.score - threshold) / (1.0 - threshold)
+
+def _passes(signal: Signal, limits: Mapping[Category, float]) -> bool:
+    """Protection signals have no threshold, so they never pass."""
+    threshold = limits.get(signal.category)
+    return threshold is not None and signal.score >= threshold
+
+
+def _likelihood(signal: Signal, limits: Mapping[Category, float]) -> float:
+    """Score / threshold below the threshold, 1 + the margin over it above, 0 for
+    protection signals."""
+    threshold = limits.get(signal.category)
+    if threshold is None:
+        return 0.0
+    if signal.score < threshold:
+        return signal.score / threshold
+    if threshold == 1.0:
+        return 1.0
+    return 1.0 + (signal.score - threshold) / (1.0 - threshold)
 
 
 def _size_factor(ref: MediaRef) -> float:

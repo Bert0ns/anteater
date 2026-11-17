@@ -149,3 +149,24 @@ def test_the_frame_constants_are_read_from_each_side():
     )
 
     assert problems == ["frames.MARGIN_MS: lab 500, android 400"]
+
+
+def test_the_video_thresholds_are_a_table_apart_from_the_photos():
+    lab = (
+        "THRESHOLDS = {\n    Category.BLURRY: 0.4,\n}\n"
+        "VIDEO_THRESHOLDS = {\n    Category.BLURRY: 0.15,\n}\n"
+    )
+    android = (
+        "val THRESHOLDS: Map<Category, Float> = mapOf(\n    Category.BLURRY to 0.4f,\n)\n"
+        "val VIDEO_THRESHOLDS: Map<Category, Float> = mapOf(\n    Category.BLURRY to 0.2f,\n)\n"
+    )
+
+    found_lab = parity.values(lab, parity.LAB_ID, parity.LAB_VERSION, parity.LAB_CONSTANT, "ranker")
+    found_android = parity.values(
+        android, parity.ANDROID_ID, parity.ANDROID_VERSION, parity.ANDROID_CONSTANT, "ranker"
+    )
+
+    assert found_lab["ranker.Category.BLURRY"] == found_android["ranker.Category.BLURRY"] == "0.4"
+    assert parity.mismatches(found_lab, found_android) == [
+        "ranker.video.Category.BLURRY: lab 0.15, android 0.2"
+    ]

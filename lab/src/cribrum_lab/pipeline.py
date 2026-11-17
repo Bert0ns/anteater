@@ -35,6 +35,7 @@ from cribrum_lab.detectors.screenshot import ScreenshotDetector
 from cribrum_lab.detectors.sticker import StickerDetector
 from cribrum_lab.detectors.takes import TakesDetector
 from cribrum_lab.folders import is_sticker_folder
+from cribrum_lab.frame_measures import measure_frame
 from cribrum_lab.frames import FRAMES_VERSION, frame_times, read_frames
 from cribrum_lab.imaging import Pixels
 from cribrum_lab.index import ImageIndex
@@ -47,7 +48,7 @@ from cribrum_lab.metadata import (
     read_metadata,
     read_video_metadata,
 )
-from cribrum_lab.model import Category, MediaRef, MediaType, Signal
+from cribrum_lab.model import Category, FrameMeasures, MediaRef, MediaType, Signal
 from cribrum_lab.sources import FilesystemMediaSource
 
 DETECTORS: list[Detector] = [
@@ -377,9 +378,11 @@ def _video_steps(
     zone: tzinfo | None,
 ) -> None:
     """The video steps, which only a run asked for videos takes: the metadata, the per-video
-    detectors, which read no frame, then the frames and the group detectors that accept videos,
-    which may read them. The detectors go before the frames, the longest step, so a run stopped
-    there still has their signals."""
+    detectors that read no frame, then the frames, the detectors that read them and the group
+    detectors that accept videos, which may read them too. The detectors that read no frame go
+    before the frames, the longest step, so a run stopped there still has their signals. The
+    ones that read them come after it, from the measures it stored: they take a moment, and
+    they need no frame decoded again."""
     pending = [i for i in index.without_metadata() if i.media_type is MediaType.VIDEO]
     for done, video in enumerate(pending, 1):
         try:
@@ -392,29 +395,43 @@ def _video_steps(
         except UnreadableVideo:
             index.set_unreadable(video.path)
         progress("video_metadata", done, len(pending))
-    _video_detectors(found, index, detectors, stats)
+    _video_detectors(found, index, detectors, stats, uses_frames=False)
     frames = {}
     if embedder is not None:
-        _embed_frames(embedder, index, jobs, stats, progress)
+        _embed_frames(embedder, index, detectors, jobs, stats, progress)
         stored = index.frame_embeddings(embedder.id, embedder.version, FRAMES_VERSION)
         frames = {path: list(by_time.values()) for path, by_time in stored.items()}
+    _video_detectors(found, index, detectors, stats, uses_frames=True)
     _group_steps(
         MediaType.VIDEO, found, index, group_detectors, (), embedder, {}, stats, progress, frames
     )
 
 
 def _video_detectors(
-    found: set[Path], index: ImageIndex, detectors: Sequence[Detector], stats: Stats
+    found: set[Path],
+    index: ImageIndex,
+    detectors: Sequence[Detector],
+    stats: Stats,
+    *,
+    uses_frames: bool,
 ) -> None:
-    """Runs the detectors that accept videos on each video that lacks them. They read no frame
-    yet: a video is given no embedding, so one that asks for it fails and is counted."""
-    selected = [d for d in detectors if MediaType.VIDEO in accepted_media_types(d)]
+    """Runs the detectors that accept videos, and read frames or not as `uses_frames` says, on
+    each video that lacks them. The ones that read none are given no embedding, so one that asks
+    for it fails and is counted. The ones that read frames take only a video whose measures are
+    stored: without them a video has nothing to analyze yet, and no empty result is stored."""
+    selected = [
+        d
+        for d in detectors
+        if MediaType.VIDEO in accepted_media_types(d)
+        and getattr(d, "uses_frames", False) is uses_frames
+    ]
     unreadable = set(index.unreadable())
-    context = AnalysisContext()
+    measures = index.frame_measures(FRAMES_VERSION) if uses_frames else {}
+    context = AnalysisContext(frame_measures=lambda video: measures.get(video.path, ()))
     for video in index.images():
         if video.media_type is not MediaType.VIDEO or video.path not in found:
             continue
-        if video.path in unreadable:
+        if video.path in unreadable or (uses_frames and video.path not in measures):
             continue
         for detector in selected:
             if index.is_analyzed(video.path, detector.id, detector.version):
@@ -429,12 +446,17 @@ def _video_detectors(
 
 
 def _embed_frames(
-    embedder: Embedder, index: ImageIndex, jobs: int, stats: Stats, progress: Progress
+    embedder: Embedder,
+    index: ImageIndex,
+    detectors: Sequence[Detector],
+    jobs: int,
+    stats: Stats,
+    progress: Progress,
 ) -> None:
-    """Embeds the frames of each readable video with no frames at FRAMES_VERSION, or with one at a
-    time `frame_times` does not give now. An HDR video stores one frame a keyframe, so some of the
-    times may be missing. A rule that adds times must bump FRAMES_VERSION, or the videos sampled
-    before it keep their frames.
+    """Embeds and measures the frames of each readable video with no frames at FRAMES_VERSION, or
+    with one at a time `frame_times` does not give now. An HDR video stores one frame a keyframe,
+    so some of the times may be missing. A rule that adds times must bump FRAMES_VERSION, or the
+    videos sampled before it keep their frames.
 
     A video whose frames do not read is marked, as an unreadable image is, and not decoded again
     until the file or FRAMES_VERSION changes. Any other error is a failure, and the next run tries
@@ -454,24 +476,37 @@ def _embed_frames(
         elif isinstance(pixels, str):
             stats.failures.append(f"{video.path}: video_frames: {pixels}")
         else:
-            vectors = embedder.embed_pixels(np.stack(list(pixels.values())))
+            inputs, measures = pixels
+            vectors = embedder.embed_pixels(np.stack(list(inputs.values())))
+            # A detector's result belongs to the frames it read: new ones mean analyzing again.
+            index.forget_analyses(
+                [video.path], [d.id for d in detectors if getattr(d, "uses_frames", False)]
+            )
             index.set_frame_embeddings(
                 video.path,
                 embedder.id,
                 embedder.version,
                 FRAMES_VERSION,
-                dict(zip(pixels, vectors, strict=True)),
+                dict(zip(inputs, vectors, strict=True)),
+                measures,
             )
-            stats.detector_runs += len(pixels)
+            stats.detector_runs += len(inputs)
         progress("video_frames", done, len(todo))
 
 
-def _frame_pixels(task: tuple[MediaRef, list[int]]) -> dict[int, np.ndarray] | str | None:
-    """Runs in a worker process: a video's frames by time, each preprocessed as an image is, None
-    when the file is there and its frames do not read, or the error as text."""
+def _frame_pixels(
+    task: tuple[MediaRef, list[int]],
+) -> tuple[dict[int, np.ndarray], dict[int, FrameMeasures]] | str | None:
+    """Runs in a worker process: a video's frames by time, each preprocessed as an image is, and
+    the measures of each, which is all of a frame the detectors keep. None when the file is there
+    and its frames do not read, or the error as text."""
     video, times = task
     try:
-        return {t: mobileclip.model_input(frame) for t, frame in read_frames(video.path, times)}
+        inputs, measures = {}, {}
+        for time_ms, frame in read_frames(video.path, times):
+            inputs[time_ms] = mobileclip.model_input(frame)
+            measures[time_ms] = measure_frame(frame)
+        return inputs, measures
     except (UnreadableVideo, av.FFmpegError) as error:
         # A file moved since the walk, such as one the user trashed, is not the video's fault.
         return None if video.path.is_file() else _describe(error)

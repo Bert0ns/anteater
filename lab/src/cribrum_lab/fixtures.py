@@ -6,7 +6,8 @@ detectors say about them, and fixtures/videos/frames.json: the embeddings of the
 samples from the synthetic videos there, and fixtures/videos/takes.json: capture times, lengths
 and frames of made-up videos and the takes the lab chains them into, and
 fixtures/videos/near_duplicates.json: lengths, sizes and frames of made-up videos and the copies the
-lab links. The Android tests run their
+lab links, and fixtures/videos/frame_detectors.json: the measures of the frames of made-up videos
+and the signals the lab's BLURRY, BAD_EXPOSURE and FACES give them. The Android tests run their
 port on the same files and compare. Regenerate after a detector change, and commit them:
 
     uv run python -m cribrum_lab.fixtures
@@ -24,10 +25,13 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from cribrum_lab import frames, hashing, mobileclip
 from cribrum_lab.detectors import AnalysisContext
+from cribrum_lab.detectors.blur import BlurDetector
+from cribrum_lab.detectors.exposure import ExposureDetector
+from cribrum_lab.detectors.faces import FaceDetector
 from cribrum_lab.detectors.near_duplicate import NearDuplicateDetector
 from cribrum_lab.detectors.takes import TakesDetector
 from cribrum_lab.metadata import VideoMetadata, read_metadata
-from cribrum_lab.model import MediaRef, MediaType
+from cribrum_lab.model import FrameMeasures, MediaRef, MediaType
 from cribrum_lab.pipeline import DETECTORS, GROUP_DETECTORS
 
 ROOT = Path(__file__).resolve().parents[3] / "fixtures" / "golden"
@@ -365,6 +369,54 @@ def _video_group_expected(made_up: list[dict], detector) -> dict:
     }  # fmt: skip
 
 
+FRAME_DETECTORS = VIDEOS / "frame_detectors.json"
+
+_SHARP = {"peak_variance": 900.0, "p1": 5, "p5": 20, "p95": 200, "p99": 240}
+_BLURRED = _SHARP | {"peak_variance": 25.0}
+_DARK = _SHARP | {"p1": 0, "p5": 1, "p95": 6, "p99": 9}
+_BRIGHT = _SHARP | {"p1": 200, "p5": 230, "p95": 254, "p99": 255}
+_FACE = _SHARP | {"faces": 2, "face_confidence": 0.8, "face_area": 0.1}
+_SMALL_FACE = _SHARP | {"faces": 1, "face_confidence": 0.65, "face_area": 0.02}
+FRAME_CLIPS = {
+    "sharp.mp4": [_SHARP] * 5,
+    "blurred.mp4": [_BLURRED, _BLURRED, _BLURRED, _SHARP, _SHARP],
+    "one-blurred-frame.mp4": [_SHARP, _SHARP, _BLURRED, _SHARP, _SHARP],
+    "four-frames.mp4": [_BLURRED, _BLURRED, _SHARP, _SHARP],
+    "dark.mp4": [_DARK, _DARK, _DARK, _SHARP, _SHARP],
+    "two-dark-frames.mp4": [_DARK, _DARK, _SHARP, _SHARP, _SHARP],
+    "bright.mp4": [_BRIGHT] * 4,
+    "faces.mp4": [_FACE, _SMALL_FACE, _SHARP, _SHARP, _FACE],
+    "no-frames.mp4": [],
+}
+"""Made-up clips with the measures of the frames they would have, in the order of their times."""
+
+
+def frame_detectors_expected() -> dict:
+    """The measures of FRAME_CLIPS and the signals BLURRY, BAD_EXPOSURE and FACES give them."""
+    clips = {MediaRef(Path(name), 0, 0, MediaType.VIDEO): m for name, m in FRAME_CLIPS.items()}
+    context = AnalysisContext(
+        frame_measures=lambda video: [FrameMeasures(**m) for m in clips[video]]
+    )
+    detectors = [BlurDetector(), ExposureDetector(), FaceDetector()]
+    return {
+        "clips": FRAME_CLIPS,
+        "signals": {
+            str(video.path): [
+                {"detector": s.detector_id, "version": s.detector_version,
+                 "category": s.category.value, "score": s.score, "evidence": s.evidence}
+                for d in detectors
+                for s in d.analyze(video, context)
+            ]
+            for video in clips
+        },
+    }  # fmt: skip
+
+
+def write_frame_detectors() -> None:
+    text = json.dumps(frame_detectors_expected(), indent=1, sort_keys=True) + "\n"
+    FRAME_DETECTORS.write_text(text)
+
+
 def encode_vector(vector: np.ndarray) -> str:
     """Base64 of little-endian float32, as expected.json stores an embedding."""
     return base64.b64encode(vector.astype("<f4").tobytes()).decode()
@@ -384,6 +436,7 @@ def main() -> None:
     (VIDEOS / "frames.json").write_text(frames_json)
     write_takes()
     write_near_duplicates()
+    write_frame_detectors()
     print(f"wrote {ROOT} and {VIDEOS / 'frames.json'}")
 
 

@@ -10,7 +10,7 @@ import numpy as np
 from cribrum_lab import hashing
 from cribrum_lab.imaging import Pixels
 from cribrum_lab.metadata import ImageMetadata, VideoMetadata, read_metadata, read_video_metadata
-from cribrum_lab.model import Category, MediaRef, MediaType, Signal
+from cribrum_lab.model import Category, FrameMeasures, MediaRef, MediaType, Signal
 from cribrum_lab.screens import SCREEN_SIZES
 
 IMAGES_ONLY = frozenset({MediaType.IMAGE})
@@ -55,6 +55,9 @@ class AnalysisContext:
     frames: Callable[[MediaRef], Sequence[np.ndarray]] = lambda video: ()
     """The L2-normalized embeddings of the video's sampled frames, in the order of their times:
     none when it has no frames stored."""
+    frame_measures: Callable[[MediaRef], Sequence[FrameMeasures]] = lambda video: ()
+    """What `frame_measures.measure_frame` kept of the video's sampled frames, in the order of their
+    times: none when it has no frames stored."""
     screen_sizes: Collection[tuple[int, int]] = SCREEN_SIZES
     """Known screen resolutions as (short side, long side)."""
     pixels: Callable[[MediaRef], Pixels] = lambda image: Pixels(image.path)
@@ -87,6 +90,10 @@ class Detector(Protocol):
     A detector that decodes the image sets `decode_side` to the draft side it decodes at, read
     the same way. The pipeline runs an image's detectors from the largest side down, as the
     app does, where the sides that give one sample size share a decode.
+
+    A detector that reads a video's frames sets `uses_frames = True`, read the same way. The
+    pipeline runs it after the frames step and only on a video with measures stored, and a new
+    sampling of the frames makes its stored result stale.
 
     A detector gets only the media types in `media_types`, read with `accepted_media_types`:
     images only when it does not set it.

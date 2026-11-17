@@ -4,8 +4,8 @@ Run it from anywhere: python3 lab/scripts/check_parity.py
 
 It reads the sources with regular expressions, so it needs no dependencies. Per detector (matched
 by id) it compares the version, the media types it accepts (images only when it declares none) and
-every numeric constant with an UPPER_CASE name; for the ranker, the thresholds, the protection
-weights and its constants. Everything must exist on both sides,
+every numeric constant with an UPPER_CASE name; for the ranker, the thresholds, the video
+thresholds, the protection weights and its constants. Everything must exist on both sides,
 except what LAB_ONLY (detectors not ported yet) and ONE_SIDED (implementation details) list.
 It also compares the ids of the detectors a sticker skips, SKIPPED_ON_STICKERS in each pipeline, and
 the constants of the frames sampled from a video (frames.py and frames/Frames.kt).
@@ -38,6 +38,7 @@ ANDROID_CONSTANT = re.compile(
 LAB_MEDIA_TYPES = re.compile(r"^\s+media_types\b[^=\n]*=\s*(?:frozenset\(\s*)?\{([^}]*)\}", re.M)
 ANDROID_MEDIA_TYPES = re.compile(r"\boverride val mediaTypes\b[^=]*=\s*setOf\(([^)]*)\)")
 SKIPPED = re.compile(r"^(?:val )?SKIPPED_ON_STICKERS\b.*$", re.M)
+VIDEO_THRESHOLDS = re.compile(r"^(?:val )?VIDEO_THRESHOLDS\b[^=\n]*=.*?^[)}]", re.M | re.S)
 WEIGHT = re.compile(rf"\b((?:Category|Protection)\.\w+)\s*(?::|to)\s*{NUMBER}")
 
 
@@ -52,7 +53,12 @@ def values(source: str, id_re, version_re, constant_re, owner=None) -> dict[str,
     if version := version_re.search(source):
         found[f"{owner}.version"] = version.group(1)
     if owner == "ranker":
-        found |= {f"ranker.{name}": number for name, number in WEIGHT.findall(source)}
+        # The video thresholds are a second table of the same categories, kept apart.
+        video = VIDEO_THRESHOLDS.search(source)
+        rest = source.replace(video.group(0), "") if video else source
+        found |= {f"ranker.{name}": number for name, number in WEIGHT.findall(rest)}
+        if video:
+            found |= {f"ranker.video.{n}": v for n, v in WEIGHT.findall(video.group(0))}
     else:
         declared = (LAB_MEDIA_TYPES if id_re is LAB_ID else ANDROID_MEDIA_TYPES).search(source)
         types = set(re.findall(r"MediaType\.(\w+)", declared.group(1))) if declared else {"IMAGE"}
