@@ -593,6 +593,26 @@ class IndexingWorkTest {
     }
 
     @Test
+    fun `with both switches off a good purge the next night clears the failed flag`() {
+        val appInstance = app as CribrumApp
+        appInstance.imageScans.atNight = false
+        purge = { throw IOException("trash unreadable") }
+        reads(::nightPass)
+        assertTrue(appInstance.lastScan.failed)
+        runBlocking { withTimeout(10_000) { while (nightly().nextScheduleTimeMillis != millis(at(23, 2))) yield() } }
+
+        purge = { ExpiredPurge.NONE }
+        reads {
+            startNightlyAt(at(23, 2, 30))
+            WorkManagerTestInitHelper.getTestDriver(app)!!.setPeriodDelayMet(nightly().id)
+        }
+
+        assertEquals(2, purges.get())
+        assertFalse(appInstance.lastScan.failed)
+        assertNull(appInstance.lastScan.report)
+    }
+
+    @Test
     fun `Scan now reads the images with the images switch off`() {
         (app as CribrumApp).imageScans.atNight = false
 
