@@ -323,6 +323,19 @@
         <item quantity="one">%d image more than at the default</item>
         <item quantity="other">%d images more than at the default</item>
     </plurals>
+    <!-- The same under "Videos" on the thresholds screen. -->
+    <plurals name="candidates_videos">
+        <item quantity="one">%d video to review</item>
+        <item quantity="other">%d videos to review</item>
+    </plurals>
+    <plurals name="thresholds_more_videos">
+        <item quantity="one">%d video more than at the default</item>
+        <item quantity="other">%d videos more than at the default</item>
+    </plurals>
+    <plurals name="thresholds_fewer_videos">
+        <item quantity="one">%d video fewer than at the default</item>
+        <item quantity="other">%d videos fewer than at the default</item>
+    </plurals>
     <plurals name="thresholds_fewer">
         <item quantity="one">%d image fewer than at the default</item>
         <item quantity="other">%d images fewer than at the default</item>

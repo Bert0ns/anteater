@@ -51,4 +51,17 @@ class FrameDetectorsTest {
             }
         }
     }
+
+    @Test
+    fun `a video of one frame scores as that frame, and is pinned by the fixture`() = runBlocking {
+        val clips = fixture.getJSONObject("clips")
+        assertEquals(1, clips.getJSONArray("one-frame.mp4").length())
+        val video = MediaRef("one-frame.mp4", 0, 0, MediaType.VIDEO)
+        val context = AnalysisContext(frameMeasures = { measures(clips.getJSONArray("one-frame.mp4")) })
+
+        val signal = BlurDetector().analyze(video, context).single()
+
+        assertEquals(0.8, signal.score.toDouble(), 1e-6)
+        assertEquals("1", signal.evidence["frames"])
+    }
 }

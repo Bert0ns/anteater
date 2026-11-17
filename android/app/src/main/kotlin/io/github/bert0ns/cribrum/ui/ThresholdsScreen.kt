@@ -106,10 +106,11 @@ private fun ThresholdRow(category: Category, value: Float, count: Int, defaultCo
                     colors = SliderDefaults.colors(activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent),
                     modifier = Modifier.semantics { contentDescription = description },
                 )
-                Text(pluralStringResource(R.plurals.candidates, count, count))
+                val videos = mediaType == MediaType.VIDEO
+                Text(pluralStringResource(if (videos) R.plurals.candidates_videos else R.plurals.candidates, count, count))
                 when {
-                    change > 0 -> Text(pluralStringResource(R.plurals.thresholds_more, change, change))
-                    change < 0 -> Text(pluralStringResource(R.plurals.thresholds_fewer, -change, -change))
+                    change > 0 -> Text(pluralStringResource(if (videos) R.plurals.thresholds_more_videos else R.plurals.thresholds_more, change, change))
+                    change < 0 -> Text(pluralStringResource(if (videos) R.plurals.thresholds_fewer_videos else R.plurals.thresholds_fewer, -change, -change))
                 }
             }
         },

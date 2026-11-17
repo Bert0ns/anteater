@@ -376,6 +376,21 @@
         <item quantity="other">%d immagini in più rispetto al valore predefinito</item>
         <item quantity="many">%d di immagini in più rispetto al valore predefinito</item>
     </plurals>
+    <plurals name="candidates_videos">
+        <item quantity="one">%d video da controllare</item>
+        <item quantity="other">%d video da controllare</item>
+        <item quantity="many">%d di video da controllare</item>
+    </plurals>
+    <plurals name="thresholds_more_videos">
+        <item quantity="one">%d video in più rispetto al valore predefinito</item>
+        <item quantity="other">%d video in più rispetto al valore predefinito</item>
+        <item quantity="many">%d di video in più rispetto al valore predefinito</item>
+    </plurals>
+    <plurals name="thresholds_fewer_videos">
+        <item quantity="one">%d video in meno rispetto al valore predefinito</item>
+        <item quantity="other">%d video in meno rispetto al valore predefinito</item>
+        <item quantity="many">%d di video in meno rispetto al valore predefinito</item>
+    </plurals>
     <plurals name="thresholds_fewer">
         <item quantity="one">%d immagine in meno rispetto al valore predefinito</item>
         <item quantity="other">%d immagini in meno rispetto al valore predefinito</item>

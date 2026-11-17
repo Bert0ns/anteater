@@ -141,4 +141,26 @@ class ThresholdsScreenTest {
         compose.onNodeWithContentDescription("Blurry, videos").assertExists()
         compose.onNodeWithContentDescription("Too dark or too bright, videos").assertExists()
     }
+
+    @Test
+    fun `the Videos section counts videos, not images`() {
+        compose.setContent {
+            ThresholdsScreen(
+                THRESHOLDS,
+                emptyMap(),
+                emptyMap(),
+                { _, _ -> },
+                {},
+                videoCounts = mapOf(Category.BLURRY to 3, Category.BAD_EXPOSURE to 1),
+                videoDefaultCounts = mapOf(Category.BLURRY to 6, Category.BAD_EXPOSURE to 0),
+            )
+        }
+
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Reset to defaults"))
+        compose.onNodeWithText("3 videos to review").assertExists()
+        compose.onNodeWithText("3 videos fewer than at the default").assertExists()
+        compose.onNodeWithText("1 video to review").assertExists()
+        compose.onNodeWithText("1 video more than at the default").assertExists()
+        compose.onAllNodes(hasText("3 images", substring = true)).assertCountEquals(0)
+    }
 }
