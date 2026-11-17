@@ -212,7 +212,7 @@ abstract class CopyFiles : DefaultTask() {
 
 // Ships prompt embeddings generated in the lab, without committing them here.
 val copyPromptEmbeddings = tasks.register<CopyFiles>("copyPromptEmbeddings") {
-    inputFiles.from(rootProject.file("../lab/src/cribrum_lab/prompt_embeddings.json"))
+    inputFiles.from(rootProject.file("../lab/src/anteater_lab/prompt_embeddings.json"))
     outputDirectory.set(layout.buildDirectory.dir("generated/prompts"))
 }
 
@@ -220,8 +220,8 @@ val copyPromptEmbeddings = tasks.register<CopyFiles>("copyPromptEmbeddings") {
 // the same file.
 val copyYuNet = tasks.register<CopyFiles>("copyYuNet") {
     inputFiles.from(
-        rootProject.file("../lab/src/cribrum_lab/assets/face_detection_yunet_2023mar.onnx"),
-        rootProject.file("../lab/src/cribrum_lab/assets/LICENSE.yunet"),
+        rootProject.file("../lab/src/anteater_lab/assets/face_detection_yunet_2023mar.onnx"),
+        rootProject.file("../lab/src/anteater_lab/assets/LICENSE.yunet"),
     )
     outputDirectory.set(layout.buildDirectory.dir("generated/yunet"))
 }

@@ -10,7 +10,7 @@ import java.io.File
 
 /** The schema the lab writes, from lab/src/anteater_lab/index.py. */
 private fun labSchema(): List<String> {
-    val source = File("../../lab/src/cribrum_lab/index.py").readText()
+    val source = File("../../lab/src/anteater_lab/index.py").readText()
     val sql = source.substringAfter("_SCHEMA = \"\"\"").substringBefore("\"\"\"")
     return sql.lines().joinToString("\n") { it.substringBefore("--") }.split(";").filter { it.isNotBlank() }
 }
