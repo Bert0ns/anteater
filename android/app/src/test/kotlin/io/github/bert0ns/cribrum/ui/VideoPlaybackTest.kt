@@ -169,6 +169,22 @@ class VideoPlaybackTest {
     }
 
     @Test
+    fun `a muted video lets go of audio focus, so the user's music plays on, and unmuting takes it again`() {
+        playback.play(one)
+        assertTrue(players.single().focus)
+
+        playback.toggleMute()
+        assertFalse(players.single().focus)
+
+        playback.release()
+        playback.play(two)
+        assertFalse(players.last().focus) // muted from its first frame: the music never pauses
+
+        playback.toggleMute()
+        assertTrue(players.last().focus)
+    }
+
+    @Test
     fun `the strip's frames are the middles of five equal parts of the video`() {
         assertEquals(listOf(6_100L, 18_300L, 30_500L, 42_700L, 54_900L), stripTimes(61_000))
     }
