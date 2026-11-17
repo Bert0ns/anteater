@@ -116,3 +116,11 @@ def test_the_takes_fixture_still_matches_the_lab():
     assert fixtures.takes_expected() == expected
     roles = {s[0]["evidence"]["role"] for s in expected["signals"].values()}
     assert roles == {"take", "short_take"}
+
+
+def test_the_near_duplicates_fixture_still_matches_the_lab():
+    expected = json.loads(fixtures.NEAR_DUPLICATES.read_text())
+
+    assert fixtures.near_duplicates_expected() == expected
+    roles = {s[0]["evidence"]["role"] for s in expected["signals"].values()}
+    assert roles == {"best", "inferior"}
