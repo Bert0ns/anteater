@@ -2,6 +2,7 @@
 // summary before trashing.
 package io.github.bert0ns.cribrum.ui
 
+import android.provider.Settings
 import android.text.format.Formatter
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -63,6 +64,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -217,9 +219,10 @@ private val ReviewOrder.title
 /**
  * A thumbnail that is marked for the trash or kept. Tap toggles, a long press shows it full size.
  * A screen reader hears why the image is here and how it is marked, and gets both as actions too.
+ * A video tile that [loop]s plays its clip over its frame.
  */
 @Composable
-private fun Tile(item: ReviewItem, marked: Boolean, onTap: () -> Unit, onHold: () -> Unit) {
+private fun Tile(item: ReviewItem, marked: Boolean, loop: Boolean, onTap: () -> Unit, onHold: () -> Unit) {
     val state = stringResource(
         when {
             marked -> R.string.selected_for_trash
@@ -257,6 +260,7 @@ private fun Tile(item: ReviewItem, marked: Boolean, onTap: () -> Unit, onHold: (
     ) {
         if (video) {
             VideoFrame(File(item.image.path), "Review.tile", Modifier.fillMaxSize(), unreadable = item.unreadable)
+            if (loop) LoopingClip(File(item.image.path), Modifier.fillMaxSize())
             Text(details, Modifier.align(Alignment.BottomStart).background(Color.Black.copy(alpha = 0.6f)).padding(4.dp).clearAndSetSemantics {}, color = Color.White, style = MaterialTheme.typography.labelSmall)
         } else {
             TracedAsyncImage(File(item.image.path), "Review.tile", null, Modifier.fillMaxSize(), tile = true)
@@ -324,6 +328,8 @@ fun CategoryScreen(
     loading: Boolean = false,
     /** What the page holds: the texts say "images" or "videos". */
     mediaType: MediaType = MediaType.IMAGE,
+    /** The short clips grid: the first readable tiles on screen play their clip, unless the system removes animations. */
+    loopClips: Boolean = false,
 ) {
     val videos = mediaType == MediaType.VIDEO
     val locale = LocalConfiguration.current.locales[0]
@@ -367,6 +373,11 @@ fun CategoryScreen(
         // A new grouping reorders the page: start at its top instead of in the middle of it.
         val grid = rememberLazyGridState()
         LaunchedEffect(reviewOrder) { grid.scrollToItem(0) }
+        val context = LocalContext.current
+        val animations = remember(context) { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f }
+        // The tiles' keys are their paths. shortcut: a clip the player cannot play keeps its place, which a scroll frees.
+        val loopable = if (loopClips && animations && fullSize == null) images.filterNot { it.unreadable }.map { it.image.path }.toSet() else emptySet()
+        val looping by remember(grid, loopable) { derivedStateOf { grid.layoutInfo.visibleItemsInfo.map { it.key }.filter { it in loopable }.take(LOOPING_CLIPS).toSet() } }
         LazyVerticalGrid(GridCells.Adaptive(110.dp), Modifier.weight(1f), grid) {
             for ((position, group) in page.withIndex()) {
                 if (group.date != null && group.date != page.getOrNull(position - 1)?.date) {
@@ -397,6 +408,7 @@ fun CategoryScreen(
                     Tile(
                         item,
                         item.image.path in marked,
+                        item.image.path in looping,
                         onTap = {
                             haptics.performHapticFeedback(Haptic.TICK.type)
                             onToggle(item.image)

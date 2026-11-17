@@ -22,6 +22,7 @@ internal class FakePlayer(private val lengthMs: Long = 61_000) : SimpleBasePlaye
     private var state = Player.STATE_IDLE
     private var position = 0L
     private var level = 1f
+    private var repeat = Player.REPEAT_MODE_OFF
     private var failure: PlaybackException? = null
 
     var released = false
@@ -59,6 +60,7 @@ internal class FakePlayer(private val lengthMs: Long = 61_000) : SimpleBasePlaye
         .setPlaylist(items.map { MediaItemData.Builder(it).setDurationUs(lengthMs * 1000).build() })
         .setContentPositionMs(position)
         .setVolume(level)
+        .setRepeatMode(repeat)
         .setPlayerError(failure)
         .setVideoSize(if (state == STATE_READY) VideoSize(1920, 1080) else VideoSize.UNKNOWN)
         .build()
@@ -102,6 +104,11 @@ internal class FakePlayer(private val lengthMs: Long = 61_000) : SimpleBasePlaye
     @Suppress("OVERRIDE_DEPRECATION")
     override fun handleSetVolume(volume: Float): ListenableFuture<*> {
         level = volume
+        return Futures.immediateVoidFuture()
+    }
+
+    override fun handleSetRepeatMode(repeatMode: Int): ListenableFuture<*> {
+        repeat = repeatMode
         return Futures.immediateVoidFuture()
     }
 

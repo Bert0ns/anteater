@@ -1,10 +1,11 @@
-// What a video's tile shows, on the trash screen and on "Largest videos" (docs/design.md §8, §9): a frame, the length and the size.
+// What a video's tile shows, on the trash screen, on "Largest videos" and in the review (docs/design.md §8, §9): a frame, the length and the size, and a short clip playing.
 package io.github.bert0ns.cribrum.ui
 
 import android.media.MediaMetadataRetriever
 import android.text.format.DateUtils
 import android.text.format.Formatter
 import android.util.LruCache
+import android.view.TextureView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,11 +25,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import coil3.compose.AsyncImage
 import coil3.decode.Decoder
 import coil3.request.ImageRequest
@@ -39,6 +47,7 @@ import io.github.bert0ns.cribrum.tracing.traced
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.roundToInt
 
 /** Decodes a frame of the file whatever its name says: the screen that draws it knows it holds a video. */
 private val videoFrames = Decoder.Factory { result, options, _ -> VideoFrameDecoder(result.source, options) }
@@ -60,6 +69,37 @@ internal fun VideoFrame(file: File, section: String, modifier: Modifier, content
         }
         AsyncImage(request, null, modifier, contentScale = contentScale, onError = { failed = true })
     }
+}
+
+/** How many tiles of the short clips grid play at once: a decoder each. A guess until the phone shows how many it runs while the grid scrolls (#398). */
+internal const val LOOPING_CLIPS = 2
+
+/**
+ * A short clip playing muted and in a loop over its tile's frame, cropped to the tile as the frame is once the player knows
+ * the video's size. Its view is empty, and so transparent, until the first frame arrives, and goes once the clip fails to
+ * play, so the frame under it shows through. Its player is released when the tile leaves the composition, and the clip
+ * starts again when the app comes back.
+ */
+@Composable
+internal fun LoopingClip(file: File, modifier: Modifier) {
+    val playback = rememberVideoPlayback(loop = true)
+    LifecycleEventEffect(Lifecycle.Event.ON_START) { playback.play(file) }
+    if (playback.failed == file.path) return
+    val size = playback.videoSize
+    // A TextureView, not a SurfaceView: it scrolls with the grid and is clipped to the tile like any view.
+    AndroidView(
+        factory = { TextureView(it) },
+        modifier = modifier.clipToBounds().testTag("clipLoop").layout { measurable, constraints ->
+            val width = size?.let { it.width * it.pixelWidthHeightRatio } ?: constraints.maxWidth.toFloat()
+            val height = size?.height?.toFloat() ?: constraints.maxHeight.toFloat()
+            val scale = maxOf(constraints.maxWidth / width, constraints.maxHeight / height)
+            val placeable = measurable.measure(Constraints.fixed((width * scale).roundToInt(), (height * scale).roundToInt()))
+            layout(constraints.maxWidth, constraints.maxHeight) { placeable.place((constraints.maxWidth - placeable.width) / 2, (constraints.maxHeight - placeable.height) / 2) }
+        },
+        onRelease = playback::detach,
+        // Reads loaded, so the view is attached again once the player exists: the first update runs before the first play.
+        update = { if (playback.loaded != null) playback.attach(it) },
+    )
 }
 
 /** The tile of a video that cannot be read: a warning and a note, in place of a frame. */
