@@ -1,5 +1,6 @@
 package io.github.bert0ns.cribrum.ui
 
+import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.os.Handler
 import android.os.Looper
@@ -25,9 +26,12 @@ import androidx.test.core.app.ApplicationProvider
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.annotation.DelicateCoilApi
+import coil3.asImage
+import coil3.decode.DataSource
 import coil3.intercept.Interceptor
 import coil3.request.CachePolicy
 import coil3.request.ErrorResult
+import coil3.request.SuccessResult
 import coil3.size.Size
 import coil3.video.videoFrameMicros
 import coil3.video.videoFrameOption
@@ -82,6 +86,10 @@ class ClipLoopsTest {
     private val slides = ConcurrentLinkedQueue<Slide>()
     private val frames get() = slides.map { it.path to it.ms }
 
+    /** Whether a frame decodes to a small bitmap, as on the phone. */
+    @Volatile
+    private var decode = false
+
     /** Whether a frame decode waits until it is cancelled, as a slow one would, and the videos whose decode waits so. */
     @Volatile
     private var hang = false
@@ -96,6 +104,7 @@ class ClipLoopsTest {
             if (micros < 0) return@Interceptor chain.proceed()
             val path = (chain.request.data as File).path
             slides += Slide(path, micros / 1000, chain.size, chain.request.videoFrameOption, chain.request.memoryCachePolicy)
+            if (decode) return@Interceptor SuccessResult(Bitmap.createBitmap(4, 4, Bitmap.Config.RGB_565).asImage(), chain.request, DataSource.DISK)
             if (hang) {
                 pending += path
                 try {
@@ -187,6 +196,21 @@ class ClipLoopsTest {
 
         assertEquals(listOf(187L, 562L, 937L, 1_312L, 1_687L, 2_062L, 2_437L, 2_812L), framesOf(third))
         assertTrue(framesOf("/sdcard/DCIM/Camera/clip1.mp4").isEmpty()) // a playing tile shows no slideshow
+    }
+
+    @Test
+    fun `a slideshow draws the frames it decoded, and decodes each only once across cycles`() {
+        decode = true
+        show(page(clips(8)))
+        val third = "/sdcard/DCIM/Camera/clip3.mp4"
+
+        repeat(3 * SLIDE_FRAMES) {
+            compose.mainClock.advanceTimeBy(SLIDE_MS)
+            compose.waitForIdle()
+        }
+
+        assertEquals(SLIDE_FRAMES, framesOf(third).size)
+        assertTrue(compose.onAllNodesWithTag("slide", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
     }
 
     @Test

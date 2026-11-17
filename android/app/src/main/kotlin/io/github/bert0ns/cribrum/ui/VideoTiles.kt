@@ -360,7 +360,7 @@ internal fun Slideshow(file: File, durationMs: Long, modifier: Modifier) {
             frames[frame]?.let { shown = it }
         }
     }
-    Box(modifier.testTag("slideshow")) { shown?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) } }
+    Box(modifier.testTag("slideshow")) { shown?.let { Image(it, null, Modifier.fillMaxSize().testTag("slide"), contentScale = ContentScale.Crop) } }
 }
 
 private fun slideFrameRequest(context: Context, file: File, atMillis: Long) = ImageRequest.Builder(context).data(file).decoderFactory(videoFrames)
