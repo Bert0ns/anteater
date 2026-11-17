@@ -21,6 +21,7 @@ class Category(Enum):
     DOCUMENT = "document"
     FORWARDED = "forwarded"
     STICKER = "sticker"
+    TAKES = "takes"
 
 
 class Protection(Enum):

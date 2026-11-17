@@ -3,8 +3,9 @@
 Synthetic images only, never personal photos, generated from fixed seeds into
 fixtures/golden/ at the repository root, together with expected.json: what the lab's
 detectors say about them, and fixtures/videos/frames.json: the embeddings of the frames the lab
-samples from the synthetic videos there. The Android tests run their port on the same files and
-compare. Regenerate after a detector change, and commit them:
+samples from the synthetic videos there, and fixtures/videos/takes.json: capture times, lengths
+and frames of made-up videos and the takes the lab chains them into. The Android tests run their
+port on the same files and compare. Regenerate after a detector change, and commit them:
 
     uv run python -m cribrum_lab.fixtures
 """
@@ -13,6 +14,7 @@ import base64
 import contextlib
 import json
 import shutil
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -20,8 +22,9 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from cribrum_lab import frames, hashing, mobileclip
 from cribrum_lab.detectors import AnalysisContext
-from cribrum_lab.metadata import read_metadata
-from cribrum_lab.model import MediaRef
+from cribrum_lab.detectors.takes import TakesDetector
+from cribrum_lab.metadata import VideoMetadata, read_metadata
+from cribrum_lab.model import MediaRef, MediaType
 from cribrum_lab.pipeline import DETECTORS, GROUP_DETECTORS
 
 ROOT = Path(__file__).resolve().parents[3] / "fixtures" / "golden"
@@ -215,6 +218,61 @@ def frames_expected() -> dict:
     }
 
 
+TAKES = VIDEOS / "takes.json"
+TAKE_CLIPS = [
+    # A failed start, the take it was for, one exactly the gap after that one ends, the last one.
+    {"path": "DCIM/Camera/a1.mp4", "captured_at": "2024-05-01T10:00:00", "duration_ms": 2000},
+    {"path": "DCIM/Camera/a2.mp4", "captured_at": "2024-05-01T10:00:10", "duration_ms": 30000},
+    {"path": "DCIM/Camera/a3.mp4", "captured_at": "2024-05-01T10:05:40", "duration_ms": 5000},
+    {"path": "DCIM/Camera/a4.mp4", "captured_at": "2024-05-01T10:05:50", "duration_ms": 10000},
+    # A second past the gap after a4 ends: a moment of its own, alone.
+    {"path": "DCIM/Camera/b.mp4", "captured_at": "2024-05-01T10:11:01", "duration_ms": 4000},
+    # A sent copy and a clip with no time are no takes.
+    {"path": "WhatsApp/Media/WhatsApp Video/Sent/a2.mp4", "captured_at": "2024-05-01T10:00:10",
+     "duration_ms": 30000},
+    {"path": "DCIM/Camera/no-time.mp4", "captured_at": None, "duration_ms": 30000},
+    # Frames: c2 has one frame like c1's, c3 looks like neither, and c4 has none.
+    {"path": "DCIM/Camera/c1.mp4", "captured_at": "2024-05-01T12:00:00", "duration_ms": 10000,
+     "frames": [[1, 0, 0], [0.6, 0.8, 0]]},
+    {"path": "DCIM/Camera/c2.mp4", "captured_at": "2024-05-01T12:01:00", "duration_ms": 10000,
+     "frames": [[0, 0.8, 0.6]]},
+    {"path": "DCIM/Camera/c3.mp4", "captured_at": "2024-05-01T12:02:00", "duration_ms": None,
+     "frames": [[1, 0, 0]]},
+    {"path": "DCIM/Camera/c4.mp4", "captured_at": "2024-05-01T12:03:00", "duration_ms": 10000},
+]  # fmt: skip
+
+
+def takes_expected() -> dict:
+    """The made-up clips of TAKE_CLIPS and the signals TAKES gives them."""
+    clips = {MediaRef(Path(c["path"]), 0, 0, MediaType.VIDEO): c for c in TAKE_CLIPS}
+
+    def metadata(video: MediaRef) -> VideoMetadata:
+        clip = clips[video]
+        captured = clip["captured_at"] and datetime.fromisoformat(clip["captured_at"])
+        return VideoMetadata(0, 0, clip["duration_ms"], None, None, False, None, False, captured)
+
+    def frames(video: MediaRef) -> list[np.ndarray]:
+        return [np.array(f, dtype=np.float32) for f in clips[video].get("frames", [])]
+
+    context = AnalysisContext(video_metadata=metadata, frames=frames)
+    found = TakesDetector().analyze(list(clips), context)
+    return {
+        "clips": TAKE_CLIPS,
+        "signals": {
+            str(video.path): [
+                {"detector": s.detector_id, "version": s.detector_version,
+                 "category": s.category.value, "score": s.score, "evidence": s.evidence}
+                for s in signals
+            ]
+            for video, signals in sorted(found.items(), key=lambda item: str(item[0].path))
+        },
+    }  # fmt: skip
+
+
+def write_takes() -> None:
+    TAKES.write_text(json.dumps(takes_expected(), indent=1, sort_keys=True) + "\n")
+
+
 def encode_vector(vector: np.ndarray) -> str:
     """Base64 of little-endian float32, as expected.json stores an embedding."""
     return base64.b64encode(vector.astype("<f4").tobytes()).decode()
@@ -232,6 +290,7 @@ def main() -> None:
     (ROOT / "expected.json").write_text(json.dumps(data, indent=1, sort_keys=True) + "\n")
     frames_json = json.dumps(frames_expected(), indent=1, sort_keys=True) + "\n"
     (VIDEOS / "frames.json").write_text(frames_json)
+    write_takes()
     print(f"wrote {ROOT} and {VIDEOS / 'frames.json'}")
 
 

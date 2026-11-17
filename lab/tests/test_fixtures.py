@@ -108,3 +108,11 @@ def test_a_missing_tone_map_moves_the_mean_of_an_hlg_frame_past_the_tolerance():
 
     gap = max(abs(a - b) for a, b in zip(raw, hlg["mean_rgb"][0], strict=True))
     assert gap > 3 * FRAMES["tolerance"]["mean_rgb"]
+
+
+def test_the_takes_fixture_still_matches_the_lab():
+    expected = json.loads(fixtures.TAKES.read_text())
+
+    assert fixtures.takes_expected() == expected
+    roles = {s[0]["evidence"]["role"] for s in expected["signals"].values()}
+    assert roles == {"take", "short_take"}

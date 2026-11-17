@@ -9,7 +9,7 @@ import numpy as np
 
 from cribrum_lab import hashing
 from cribrum_lab.imaging import Pixels
-from cribrum_lab.metadata import ImageMetadata, read_metadata
+from cribrum_lab.metadata import ImageMetadata, VideoMetadata, read_metadata, read_video_metadata
 from cribrum_lab.model import Category, MediaRef, MediaType, Signal
 from cribrum_lab.screens import SCREEN_SIZES
 
@@ -24,6 +24,10 @@ def accepted_media_types(detector: "Detector | GroupDetector") -> frozenset[Medi
 class Role(StrEnum):
     BEST = "best"
     INFERIOR = "inferior"
+    TAKE = "take"
+    """A take of one moment: a group of takes has no best copy (docs/design.md, section 5)."""
+    SHORT_TAKE = "short_take"
+    """A take much shorter than the next one of the same moment, which reads as a failed take."""
 
 
 @dataclass(frozen=True)
@@ -44,6 +48,13 @@ class AnalysisContext:
     sharpness: Callable[[MediaRef], float] = lambda image: _peak_variance(image)
     """The BLURRY measure of the image, the Laplacian variance of its sharpest region: 0 when it
     can't be decoded."""
+    video_metadata: Callable[[MediaRef], VideoMetadata] = lambda video: read_video_metadata(
+        video.path
+    )
+    """Raises `UnreadableVideo` when the header can't be read."""
+    frames: Callable[[MediaRef], Sequence[np.ndarray]] = lambda video: ()
+    """The L2-normalized embeddings of the video's sampled frames, in the order of their times:
+    none when it has no frames stored."""
     screen_sizes: Collection[tuple[int, int]] = SCREEN_SIZES
     """Known screen resolutions as (short side, long side)."""
     pixels: Callable[[MediaRef], Pixels] = lambda image: Pixels(image.path)
@@ -95,8 +106,9 @@ class GroupDetector(Protocol):
     Every member of a group gets a signal, so the review screen can show the whole
     group. Its evidence holds the group id under `GROUP_KEY` and the member's role
     under `ROLE_KEY`: the copy to keep is `Role.BEST` with score 0, so no threshold
-    ever suggests it; the others are `Role.INFERIOR`. Images in no group are left
-    out of the result.
+    ever suggests it; the others are `Role.INFERIOR`. A group of takes has no copy to keep,
+    and its members are `Role.TAKE` or `Role.SHORT_TAKE`. Images in no group are left out of
+    the result.
 
     `version` follows the same rule as `Detector.version`, and `media_types` the one of
     `Detector.media_types`. Per-image data they need (content hashes, metadata, embeddings) comes
