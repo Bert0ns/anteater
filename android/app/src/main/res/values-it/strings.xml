@@ -276,6 +276,7 @@
         <item quantity="other">%d di questi sono tra i preferiti della galleria. Spostarli comunque nel cestino?</item>
         <item quantity="many">%d di questi sono tra i preferiti della galleria. Spostarli comunque nel cestino?</item>
     </plurals>
+    <string name="favorite_off_marked_video">Non disponibile finché il video è segnato per il cestino. Togli prima il segno.</string>
     <string name="favorite_video">Preferito</string>
     <string name="favorite_appeared_videos_snackbar">Un video è diventato preferito nel frattempo. Controlla l\'elenco.</string>
     <plurals name="trashed_files_snackbar">

@@ -155,6 +155,33 @@ class CategoryScreenTest {
     }
 
     @Test
+    fun `the full size heart of a page of videos makes a kept video a favourite, and is off while it is marked`() {
+        val requests = mutableListOf<Pair<String, Boolean>>()
+        compose.setContent {
+            CompositionLocalProvider(LocalPlayerFactory provides Players().factory) {
+                var shown by remember { mutableStateOf(listOf(clipGroup)) }
+                CategoryScreen(shown, 1, setOf(clips[1].path), grouped = true, onToggle = {}, onApply = { _, _ -> }, onSkip = {}, mediaType = MediaType.VIDEO, onFavorite = { video, favorite ->
+                    requests += video.path to favorite
+                    shown = shown.map { group -> group.copy(images = group.images.map { if (it.image == video) it.copy(isFavorite = favorite) else it }) }
+                })
+            }
+        }
+
+        tile("clip.mp4").performTouchInput { longClick() } // the best copy, kept
+        compose.onNodeWithContentDescription("Add to favourites").assertIsEnabled().performClick()
+        compose.onNodeWithContentDescription("Remove from favourites").assertExists()
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() } // the copy, marked for the trash
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Add to favourites").assertIsNotEnabled()
+        assertEquals(
+            "Unavailable while the video is marked for the trash. Unmark it first.",
+            compose.onNodeWithContentDescription("Add to favourites").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription),
+        )
+
+        assertEquals(listOf(clips[0].path to true), requests)
+    }
+
+    @Test
     fun `category list has no trash row`() {
         compose.setContent {
             CategoryList(categories = listOf(CategorySummary(Category.BLURRY, 3, hasDetector = true)), freeableBytes = 0, onOpen = {})

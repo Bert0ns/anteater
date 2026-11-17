@@ -1282,6 +1282,21 @@ class ReviewTest {
     }
 
     @Test
+    fun `a favourite video copy stays a candidate, is flagged and its group comes after the same group without one`() = test {
+        duplicateVideo("DCIM/Camera/a.mp4", 300, "fav", Role.BEST)
+        val favourite = duplicateVideo("Download/a.mp4", 300, "fav", Role.INFERIOR)
+        duplicateVideo("DCIM/Camera/b.mp4", 300, "plain", Role.BEST)
+        val other = duplicateVideo("Download/b.mp4", 300, "plain", Role.INFERIOR)
+        favorites = setOf(favourite.path)
+
+        val copies = page(Category.EXACT_DUPLICATE, mediaType = MediaType.VIDEO).groups.flatMap { it.images }.filter { it.isCandidate }
+
+        assertEquals(listOf(other, favourite), copies.map { it.image })
+        assertEquals(listOf(false, true), copies.map { it.isFavorite })
+        assertEquals(2, overview(MediaType.VIDEO).categories.single { it.category == Category.EXACT_DUPLICATE }.count)
+    }
+
+    @Test
     fun `a group of videos is a page with its best copy beside the copies to trash`() = test {
         val best = duplicateVideo("DCIM/Camera/clip.mp4", 300, "v", Role.BEST)
         val copy = duplicateVideo("WhatsApp/Media/WhatsApp Video/Sent/clip.mp4", 300, "v", Role.INFERIOR)

@@ -15,6 +15,8 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.click
@@ -376,6 +378,53 @@ class VideosScreenTest {
         compose.onNodeWithText("Move to trash anyway").performClick()
         assertEquals(setOf("/sdcard/Movies/big.mp4"), applied.paths)
         assertEquals(true, applied.trash)
+    }
+
+    /** The screen with a list of its own, as the view model holds it: a heart flips the flag of its video in place. */
+    private fun showHearts(requests: MutableList<Pair<String, Boolean>>, start: List<VideoItem>) {
+        compose.setContent {
+            var items by remember { mutableStateOf(start) }
+            var selected by remember { mutableStateOf(emptySet<String>()) }
+            CompositionLocalProvider(LocalPlayerFactory provides players.factory) {
+                VideosScreen(items, selected, onToggle = { selected = if (it in selected) selected - it else selected + it }, onApply = { _, _ -> }, onFavorite = { video, favorite ->
+                    requests += video.path to favorite
+                    items = items.map { if (it.video == video) it.copy(isFavorite = favorite) else it }
+                })
+            }
+        }
+    }
+
+    private fun heart(label: String) = compose.onNodeWithContentDescription(label)
+
+    @Test
+    fun `the full size heart makes a video a favourite and takes the mark off again`() {
+        val requests = mutableListOf<Pair<String, Boolean>>()
+        showHearts(requests, videos)
+
+        openFullSize("big.mp4")
+        heart("Add to favourites").assertIsEnabled().performClick()
+        heart("Remove from favourites").assertIsEnabled().performClick()
+        heart("Add to favourites").assertExists()
+
+        assertEquals(listOf("/sdcard/Movies/big.mp4" to true, "/sdcard/Movies/big.mp4" to false), requests)
+    }
+
+    @Test
+    fun `the heart is off while the video is selected for the trash, says why, and comes on when it is deselected`() {
+        val requests = mutableListOf<Pair<String, Boolean>>()
+        showHearts(requests, videos)
+        tile("big.mp4").performClick() // selected
+
+        openFullSize("big.mp4")
+        heart("Add to favourites").assertIsNotEnabled().performClick()
+        assertEquals(
+            "Unavailable while the video is marked for the trash. Unmark it first.",
+            heart("Add to favourites").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription),
+        )
+        assertEquals(emptyList<Pair<String, Boolean>>(), requests)
+
+        compose.onNodeWithText("Selected").performClick() // the full size checkbox
+        heart("Add to favourites").assertIsEnabled()
     }
 
     @Test
