@@ -12,4 +12,13 @@ class GroupSupportTest {
         assertEquals("f217b24abc767173", groupId("/pics/b.jpg"))
         assertEquals("2d06800538d394c2", groupId(""))
     }
+
+    @Test
+    fun `the first index at or after a target, and the first after it, for equal and missing times`() {
+        val sorted = listOf(1, 3, 3, 5)
+
+        assertEquals(listOf(0, 0, 1, 3, 3, 4), listOf(0, 1, 3, 4, 5, 6).map { firstAtOrAfter(sorted, it) })
+        assertEquals(listOf(0, 1, 3, 3, 4, 4), listOf(0, 1, 3, 4, 5, 6).map { firstAfter(sorted, it) })
+        assertEquals(0, firstAtOrAfter(emptyList<Int>(), 1))
+    }
 }

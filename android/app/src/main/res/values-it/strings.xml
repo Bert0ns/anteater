@@ -344,7 +344,7 @@
     <string name="reason_take_plain">Una di più riprese dello stesso momento</string>
     <string name="reason_short_take">Una ripresa breve, poi una più lunga dello stesso momento</string>
     <string name="reason_short_clip">Una clip breve</string>
-    <string name="reason_short_clip_photo">Una clip breve girata a meno di un minuto da una foto simile</string>
+    <string name="reason_short_clip_photo">Una clip breve girata a meno di un minuto da una foto</string>
     <string name="reason_short_clip_gif">Una clip breve senza audio e a bassa risoluzione, come una GIF</string>
     <string name="settings_about">Informazioni</string>
     <string name="settings_version">Versione %1$s</string>

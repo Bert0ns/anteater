@@ -248,6 +248,17 @@ class ImageIndex(private val db: IndexDatabase) :
         }
     }
 
+    /** The capture time of every camera photo (a photo with one, in a camera folder, screenshots left out), which reads no embedding. A time that does not parse is left out. */
+    suspend fun cameraCaptures(): Map<String, LocalDateTime> = dao.cameraCaptures().mapNotNull { row ->
+        runCatching { LocalDateTime.parse(row.capturedAt) }.getOrNull()?.let { row.path to it }
+    }.toMap()
+
+    /** The stored embeddings of these [paths] only, in chunks the database takes. */
+    suspend fun embeddingsOf(model: String, modelVersion: Int, paths: Collection<String>): Map<String, FloatArray> = paths.chunked(EMBEDDINGS_OF_CHUNK).flatMap { dao.embeddingsOf(model, modelVersion, it) }.associate { row -> row.path to floats(row.vector) }
+
+    /** What SHORT_CLIPS reads besides the videos, as counts that change when it does: the videos with frame measures, the camera photos, and those with an embedding. */
+    suspend fun shortClipInputs(model: String, modelVersion: Int, framesVersion: Int): String = "${dao.measuredVideoCount(framesVersion)}:${dao.cameraPhotoCount()}:${dao.embeddedCameraPhotoCount(model, modelVersion)}"
+
     /** Every stored embedding of this model version, loaded at once for group detectors. */
     suspend fun embeddings(model: String, modelVersion: Int): Map<String, FloatArray> = dao.embeddings(model, modelVersion).associate { row -> row.path to floats(row.vector) }
 
@@ -629,5 +640,7 @@ private class LazyEvidence(private val json: String) : AbstractMap<String, Strin
 
 /** float32, little-endian, as the lab stores a vector. */
 private fun bytes(vector: FloatArray): ByteArray = ByteBuffer.allocate(4 * vector.size).order(ByteOrder.LITTLE_ENDIAN).also { it.asFloatBuffer().put(vector) }.array()
+
+private const val EMBEDDINGS_OF_CHUNK = 500
 
 private fun floats(bytes: ByteArray): FloatArray = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().let { FloatArray(it.remaining()).also(it::get) }

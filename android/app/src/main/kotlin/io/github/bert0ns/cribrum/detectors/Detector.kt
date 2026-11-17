@@ -43,8 +43,13 @@ data class AnalysisContext(
     val frames: suspend (MediaRef) -> List<FloatArray> = { emptyList() },
     /** What [io.github.bert0ns.cribrum.frames.measureFrame] kept of the video's sampled frames, in the order of their times: none when it has no frames stored. */
     val frameMeasures: suspend (MediaRef) -> List<FrameMeasures> = { emptyList() },
-    /** The photos in a camera folder with a capture time: none when the run has none to give. */
-    val photos: suspend () -> List<Photo> = { emptyList() },
+    /**
+     * The camera photos (a photo with a capture time in a camera folder, screenshots left out) taken within the given milliseconds of any of
+     * the times, with their embeddings when the run has a model: none when it has none to give. It loads only those, not every photo.
+     */
+    val photos: suspend (List<LocalDateTime>, Int) -> List<Photo> = { _, _ -> emptyList() },
+    /** Counts of the frame measures and the camera photos a group detector that reads them sees, which change when they do. Cheap queries: a detector that is up to date loads nothing. */
+    val storedInputs: suspend () -> String = { "" },
     /** Known screen resolutions as (short side, long side). */
     val screenSizes: Set<Pair<Int, Int>> = SCREEN_SIZES,
 )
@@ -118,6 +123,12 @@ interface GroupDetector {
 
     /** As in [Detector]. */
     val mediaTypes: Set<MediaType> get() = IMAGES_ONLY
+
+    /**
+     * What it reads besides the files it is given, such as the results of other detectors: the pipeline adds it to the detector's own
+     * fingerprint, so only this detector runs again when it changes.
+     */
+    suspend fun inputsKey(context: AnalysisContext): String = ""
 
     suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>>
 }

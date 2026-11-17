@@ -56,7 +56,7 @@ class ShortClipsDetectorTest {
                     FrameMeasures(it.getDouble("peak_variance"), it.getDouble("p1"), it.getDouble("p5"), it.getDouble("p95"), it.getDouble("p99"))
                 }
             },
-            photos = { photos },
+            photos = { _, _ -> photos },
         )
 
         val found = ShortClipsDetector().analyze(clips.keys.toList(), context)

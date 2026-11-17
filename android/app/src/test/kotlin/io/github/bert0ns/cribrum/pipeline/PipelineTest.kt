@@ -440,19 +440,51 @@ class PipelineTest {
         assertEquals(listOf(setOf("clip.mp4", "later.mp4")), takesGroups())
     }
 
+    private fun clipRun(vararg detectors: GroupDetector): Stats {
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = detectors.toList(), videoMetadataReader = ::readVideo)
+        return runBlocking { pipeline.run(source, images = false, videos = true) }
+    }
+
+    private fun clipEvidence() = runBlocking { index.signals(File(root, "DCIM/Camera/clip.mp4").path).single { it.kind == Category.SHORT_CLIPS }.evidence }
+
+    private fun photoBesideClip(path: String = "DCIM/Camera/a.png") = runBlocking { index.setMetadata(File(root, path).path, ImageMetadata(64, 48, "image/png", capturedAt = clipMeta.capturedAt)) }
+
     @Test
     fun `a photo stored beside a clip runs the short clips again`() {
         videos()
-        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(ShortClipsDetector()), videoMetadataReader = ::readVideo)
-        fun evidence() = runBlocking {
-            runBlocking { pipeline.run(source, images = false, videos = true) }
-            index.signals(File(root, "DCIM/Camera/clip.mp4").path).single { it.kind == Category.SHORT_CLIPS }.evidence
-        }
+        clipRun(ShortClipsDetector())
+        assertFalse("photo_chance" in clipEvidence())
 
-        assertFalse("photo_chance" in evidence())
-        runBlocking { index.setMetadata(File(root, "DCIM/Camera/a.png").path, ImageMetadata(64, 48, "image/png", capturedAt = clipMeta.capturedAt)) }
+        photoBesideClip()
+        clipRun(ShortClipsDetector())
 
-        assertTrue("photo_chance" in evidence())
+        assertTrue("photo_chance" in clipEvidence())
+    }
+
+    @Test
+    fun `a new photo runs the short clips and no other group detector`() {
+        videos()
+        val detectors = arrayOf(NearDuplicateDetector(), ShortClipsDetector())
+        assertEquals(listOf("near_duplicate:video", "short_clips:video"), clipRun(*detectors).ranGroupDetectors.sorted())
+
+        photoBesideClip()
+        val again = clipRun(*detectors)
+
+        assertEquals(listOf("short_clips:video"), again.ranGroupDetectors)
+        assertEquals(listOf("near_duplicate:video"), again.skippedGroupDetectors)
+        assertEquals(emptyList<String>(), clipRun(*detectors).ranGroupDetectors)
+    }
+
+    @Test
+    fun `a screenshot in DCIM is no photo beside a clip`() {
+        videos()
+        save("DCIM/Screenshots/shot.png", seed = 7)
+        clipRun(ShortClipsDetector()) // records the file
+        photoBesideClip("DCIM/Screenshots/shot.png")
+
+        clipRun(ShortClipsDetector())
+
+        assertFalse("photo_chance" in clipEvidence())
     }
 
     @Test

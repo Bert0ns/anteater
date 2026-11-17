@@ -26,7 +26,8 @@ import io.github.bert0ns.cribrum.detectors.ScreenshotDetector
 import io.github.bert0ns.cribrum.detectors.ShortClipsDetector
 import io.github.bert0ns.cribrum.detectors.StickerDetector
 import io.github.bert0ns.cribrum.detectors.TakesDetector
-import io.github.bert0ns.cribrum.folders.isCameraFolder
+import io.github.bert0ns.cribrum.detectors.firstAfter
+import io.github.bert0ns.cribrum.detectors.firstAtOrAfter
 import io.github.bert0ns.cribrum.folders.isStickerFolder
 import io.github.bert0ns.cribrum.frames.FRAMES_VERSION
 import io.github.bert0ns.cribrum.frames.SampledFrame
@@ -48,6 +49,7 @@ import io.github.bert0ns.cribrum.metadata.readVideoMetadata
 import io.github.bert0ns.cribrum.mobileclip.modelInput
 import io.github.bert0ns.cribrum.mobileclip.preprocess
 import io.github.bert0ns.cribrum.model.Category
+import io.github.bert0ns.cribrum.model.FrameMeasures
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.ReviewState
@@ -69,6 +71,8 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
+import java.time.Duration
+import java.time.LocalDateTime
 
 val DETECTORS: List<Detector> = listOf(
     BlurDetector(),
@@ -342,7 +346,7 @@ class Pipeline(
 
         // Embeddings change what group detectors can see: a run with them is a different run.
         val model = embedder?.let { "${it.id}:${it.version}:${embeddings.size}" }.orEmpty()
-        groupSteps(MediaType.IMAGE, found, embeddings, model, detectors.firstOrNull { it.category == Category.BLURRY }, null, stats, progress)
+        groupSteps(MediaType.IMAGE, found, embeddings, model, detectors.firstOrNull { it.category == Category.BLURRY }, stats, progress)
     }
 
     /**
@@ -350,7 +354,7 @@ class Pipeline(
      * The image run and the video run each keep a fingerprint of their own, so neither runs the other's detectors again.
      * [frames] holds the videos' stored frames, in the order of their times.
      */
-    private suspend fun groupSteps(mediaType: MediaType, found: Set<String>, embeddings: Map<String, FloatArray>, model: String, blur: Detector?, exposure: Detector?, stats: Stats, progress: Progress, frames: Map<String, List<FloatArray>> = emptyMap()) {
+    private suspend fun groupSteps(mediaType: MediaType, found: Set<String>, embeddings: Map<String, FloatArray>, model: String, blur: Detector?, stats: Stats, progress: Progress, frames: Map<String, List<FloatArray>> = emptyMap()) {
         val media = index.images().filter { it.path in found && it.mediaType == mediaType }
         val video = mediaType == MediaType.VIDEO
         // The exact detector skips an image whose content hash fails: the run stores those paths with its fingerprint.
@@ -359,8 +363,7 @@ class Pipeline(
         val perceptualHashes = index.perceptualHashes()
         val metadata = index.allMetadata()
         val videoMetadata = if (video) index.allVideoMetadata() else emptyMap()
-        val measures = if (video) index.frameMeasures(FRAMES_VERSION) else emptyMap()
-        val photos = if (video) cameraPhotos() else emptyList()
+        val stored = StoredForClips()
         val context = AnalysisContext(
             contentHash = {
                 try {
@@ -375,8 +378,9 @@ class Pipeline(
             metadata = { metadata[it.path] ?: throw UnreadableImage(File(it.path)) },
             videoMetadata = { videoMetadata[it.path] ?: throw UnreadableVideo(File(it.path)) },
             frames = { frames[it.path].orEmpty() },
-            frameMeasures = { measures[it.path].orEmpty() },
-            photos = { photos },
+            frameMeasures = { stored.measures(it) },
+            photos = { times, windowMs -> stored.photosNear(times, windowMs) },
+            storedInputs = { stored.inputs() },
             // Burst ranks its shots by the measure blur stored, and decodes a shot again only when blur left none.
             sharpness = { storedSharpness(blur, it) ?: BlurDetector.peakVariance(it) },
         )
@@ -384,7 +388,7 @@ class Pipeline(
         // analysis), so when the next scan reads the metadata and the hash appears, this changes the fingerprint and is what puts the image back in its burst.
         val hashed = index.hashedPaths()
         // Burst reads blur's stored measure: a new blur version is new input, though no file changed.
-        val blurInput = blur?.let { "${it.id}:${it.version}" }.orEmpty() + exposure?.let { ":${it.id}:${it.version}" }.orEmpty()
+        val blurInput = blur?.let { "${it.id}:${it.version}" }.orEmpty()
         phase(if (video) "videoGroups" else "groupDetectors", stats) {
             for (detector in groupDetectors) {
                 if (mediaType !in detector.mediaTypes) continue
@@ -393,9 +397,10 @@ class Pipeline(
                 val runId = if (video) "${detector.id}:${mediaType.value}" else detector.id
                 val step = if (video) VIDEO_GROUPS_STEP else detector.id
                 // A capture time read again, as by a migration, is new input to the takes though no file changed.
-                // The measures and the photos beside a clip are new input to SHORT_CLIPS too.
-                val captured = if (video) ":${videoMetadata.values.count { it.capturedInstant != null }}:${measures.size}:${photos.size}:${photos.count { it.embedding != null }}" else ""
-                val fingerprint = fingerprint(inputs, "$model:${inputs.count { it.path in hashed }}:$blurInput$captured")
+                val captured = if (video) ":${videoMetadata.values.count { it.capturedInstant != null }}" else ""
+                // A detector that reads more than its files, such as the photos beside a clip, adds its own inputs: a new photo runs it again and no other group detector.
+                val own = detector.inputsKey(context).let { if (it.isEmpty()) "" else ":$it" }
+                val fingerprint = fingerprint(inputs, "$model:${inputs.count { it.path in hashed }}:$blurInput$captured$own")
                 if (upToDate(detector, runId, fingerprint, inputs)) {
                     stats.skippedGroupDetectors += runId
                     continue
@@ -420,11 +425,32 @@ class Pipeline(
         }
     }
 
-    /** The photos in a camera folder with a capture time, with their embeddings when the run has a model: what SHORT_CLIPS looks at for a photo beside a clip. */
-    private suspend fun cameraPhotos(): List<Photo> {
-        val embeddings = embedder?.let { index.embeddings(it.id, it.version) }.orEmpty()
-        val images = index.images().filter { it.mediaType == MediaType.IMAGE }.map { it.path }.toSet()
-        return index.capturedAt().filterKeys { it in images && isCameraFolder(it) }.map { (path, at) -> Photo(at, embeddings[path]) }
+    /**
+     * What SHORT_CLIPS reads from the index besides the videos. Each part loads when a detector asks for it, not before: a run that finds
+     * the detector up to date reads none of it.
+     */
+    private inner class StoredForClips {
+        private var measures: Map<String, List<FrameMeasures>>? = null
+        private var captures: List<Pair<String, LocalDateTime>>? = null
+
+        suspend fun measures(video: MediaRef): List<FrameMeasures> = (measures ?: index.frameMeasures(FRAMES_VERSION).also { measures = it })[video.path].orEmpty()
+
+        /** The camera photos within [windowMs] of any of [times], with their embeddings. */
+        suspend fun photosNear(times: List<LocalDateTime>, windowMs: Int): List<Photo> {
+            val ordered = captures ?: index.cameraCaptures().toList().sortedBy { it.second }.also { captures = it }
+            val stamps = ordered.map { it.second }
+            val window = Duration.ofMillis(windowMs.toLong())
+            val near = LinkedHashMap<String, LocalDateTime>()
+            for (time in times) {
+                val start = firstAtOrAfter(stamps, time - window)
+                val end = firstAfter(stamps, time + window)
+                for (i in start until end) near[ordered[i].first] = ordered[i].second
+            }
+            val vectors = embedder?.let { index.embeddingsOf(it.id, it.version, near.keys) }.orEmpty()
+            return near.map { (path, at) -> Photo(at, vectors[path]) }
+        }
+
+        suspend fun inputs(): String = index.shortClipInputs(embedder?.id.orEmpty(), embedder?.version ?: 0, FRAMES_VERSION)
     }
 
     /**
@@ -448,7 +474,7 @@ class Pipeline(
             if (frames.isNotEmpty()) model = "${embedder.id}:${embedder.version}:$FRAMES_VERSION:${frames.size}"
         }
         analyzeVideos(found, stats, usesFrames = true)
-        groupSteps(MediaType.VIDEO, found, emptyMap(), model, detectors.firstOrNull { it.category == Category.BLURRY }, detectors.firstOrNull { it.category == Category.BAD_EXPOSURE }, stats, progress, frames)
+        groupSteps(MediaType.VIDEO, found, emptyMap(), model, null, stats, progress, frames)
     }
 
     /**
