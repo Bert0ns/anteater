@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
+import android.provider.Settings
 import android.text.format.DateUtils
 import android.text.format.Formatter
 import android.util.LruCache
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
@@ -30,11 +32,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -49,6 +53,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -68,6 +75,7 @@ import coil3.video.VideoFrameDecoder
 import coil3.video.videoFrameMillis
 import coil3.video.videoFrameOption
 import io.github.bert0ns.cribrum.R
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.tracing.traced
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -136,10 +144,10 @@ internal class ClipLoop(private val create: (Looper) -> Player) : TextureView.Su
     }
 
     /**
-     * Plays [file] again and again, only its first [endMs] when that is set. Muted from the first frame, with its audio
-     * track off, so it takes no audio focus, no audio decoder and no AudioTrack.
+     * Plays [file] again and again from [startMs], only its first [endMs] when that is set. Muted from the first frame, with
+     * its audio track off, so it takes no audio focus, no audio decoder and no AudioTrack.
      */
-    fun play(file: File, endMs: Long?) {
+    fun play(file: File, endMs: Long?, startMs: Long = 0) {
         loops.post {
             val player = player ?: create(clipLoops).also {
                 it.addListener(listener)
@@ -150,18 +158,21 @@ internal class ClipLoop(private val create: (Looper) -> Player) : TextureView.Su
             }
             val item = MediaItem.Builder().setUri(Uri.fromFile(file))
             if (endMs != null) item.setClippingConfiguration(MediaItem.ClippingConfiguration.Builder().setEndPositionMs(endMs).build())
-            player.setMediaItem(item.build())
+            player.setMediaItem(item.build(), startMs)
             surface?.let(player::setVideoSurface)
             player.prepare()
             player.playWhenReady = true
         }
     }
 
-    fun release() {
+    /** Lets go of the player, and tells [onReleased] on the main thread where in the clip it was. */
+    fun release(onReleased: (Long) -> Unit = {}) {
         loops.post {
             player?.run {
+                val at = currentPosition
                 removeListener(listener)
                 release()
+                main.post { onReleased(at) }
             }
             player = null
         }
@@ -192,19 +203,20 @@ internal class ClipLoop(private val create: (Looper) -> Player) : TextureView.Su
 }
 
 /**
- * A clip playing muted and in a loop over its tile's frame, its first [endMs] only when that is set, cropped to the tile as
- * the frame is once the player knows the video's size. Its view is empty, and so transparent, until the first frame arrives,
- * and goes once the clip fails to play, so the frame under it shows through. A clip that fails releases its player and calls
- * [onFailed], so the grid can give its place to another tile. Its player is released when the tile leaves the composition.
+ * A clip playing muted and in a loop over its tile's frame from [startMs], its first [endMs] only when that is set, cropped
+ * to the tile as the frame is once the player knows the video's size. Its view is empty, and so transparent, until the first
+ * frame arrives, and goes once the clip fails to play, so the frame under it shows through. A clip that fails releases its
+ * player and calls [onFailed], so the grid can give its place to another tile. Its player is released when the tile leaves
+ * the composition, and [onReleased] hears where the clip was.
  */
 @Composable
-internal fun LoopingClip(file: File, endMs: Long?, modifier: Modifier, onFailed: () -> Unit) {
+internal fun LoopingClip(file: File, endMs: Long?, startMs: Long, modifier: Modifier, onReleased: (Long) -> Unit, onFailed: () -> Unit) {
     val context = LocalContext.current.applicationContext
     val factory = LocalPlayerFactory.current
     val loop = remember(file, factory) { ClipLoop { factory(context, it) } }
     DisposableEffect(loop) {
-        loop.play(file, endMs)
-        onDispose { loop.release() }
+        loop.play(file, endMs, startMs)
+        onDispose { loop.release(onReleased) }
     }
     LaunchedEffect(loop.failed) {
         if (loop.failed) {
@@ -228,6 +240,70 @@ internal fun LoopingClip(file: File, endMs: Long?, modifier: Modifier, onFailed:
             },
         )
     }
+}
+
+/**
+ * Which video tiles on screen move (docs/design.md §8, #457), by key: the ones in [loops] play their clip and the ones in
+ * [slides] show the slideshow. It also keeps, for the life of the screen, the clips that failed to play and where each clip
+ * was when its player was released, so it plays on from there.
+ */
+@Stable
+internal class TileMotion {
+    var loops by mutableStateOf(emptySet<Any>())
+        private set
+    var slides by mutableStateOf(emptySet<Any>())
+        private set
+    var failed by mutableStateOf(emptySet<String>())
+        private set
+    private val positions = HashMap<String, Long>()
+
+    /**
+     * Moves the [onScreen] tiles, in grid order. A tile that plays keeps its player for as long as it is on screen, scroll or
+     * not, and the places left free go to the first tiles on screen only once the grid is [settled], so a fling builds no
+     * player for the rows it passes. The others on screen show the slideshow.
+     */
+    fun update(onScreen: List<Any>, settled: Boolean, canPlay: Boolean) {
+        val kept = onScreen.filter { it in loops && it !in failed }
+        loops = when {
+            !canPlay -> emptySet()
+            !settled -> kept.toSet()
+            else -> (kept + onScreen.filter { it !in kept && it !in failed }).take(LOOPING_CLIPS).toSet()
+        }
+        slides = onScreen.toSet() - loops
+    }
+
+    /** The clip that plays, or the slideshow, over a moving tile's frame of [video], whose length is [durationMs] when known. */
+    @Composable
+    fun Over(video: MediaRef, durationMs: Long?, endMs: Long?, modifier: Modifier) {
+        val file = File(video.path)
+        when (video.path) {
+            in loops -> LoopingClip(file, endMs, positions[video.path] ?: 0, modifier, onReleased = { positions[video.path] = it }, onFailed = { failed = failed + video.path })
+            in slides -> {
+                val length = durationMs ?: rememberLengthMillis(file, "${video.path}|${video.size}|${video.mtimeNs}")
+                if (length != null && length > 0) Slideshow(file, length, modifier)
+            }
+        }
+    }
+}
+
+/**
+ * The [TileMotion] of a grid whose tiles in [movers] move, while they may: not while the system removes animations (read
+ * when the screen opens), the full size view is [open] or the app is in the background. Unless [canPlay], they all show
+ * the slideshow.
+ */
+@Composable
+internal fun rememberTileMotion(grid: LazyGridState, movers: Set<String>, open: Boolean, canPlay: Boolean): TileMotion {
+    val context = LocalContext.current
+    val animations = remember(context) { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f }
+    val started = LocalLifecycleOwner.current.lifecycle.currentStateAsState().value.isAtLeast(Lifecycle.State.STARTED)
+    val moves = animations && started && !open
+    val motion = remember { TileMotion() }
+    LaunchedEffect(motion, grid, movers, moves, canPlay) {
+        // The tiles' keys are their paths. This emits when a tile comes or goes, the grid settles, or a clip fails.
+        snapshotFlow { Triple(grid.layoutInfo.visibleItemsInfo.map { it.key }.filter { it in movers }, grid.isScrollInProgress, motion.failed) }
+            .collect { (onScreen, scrolling, _) -> motion.update(if (moves) onScreen else emptyList(), !scrolling, canPlay) }
+    }
+    return motion
 }
 
 /** How many frames a slideshow steps through, and how long it shows each: a cycle of 4 seconds. */

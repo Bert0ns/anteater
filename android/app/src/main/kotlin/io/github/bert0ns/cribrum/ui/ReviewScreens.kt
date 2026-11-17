@@ -2,7 +2,6 @@
 // summary before trashing.
 package io.github.bert0ns.cribrum.ui
 
-import android.provider.Settings
 import android.text.format.Formatter
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
@@ -67,7 +66,6 @@ import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -75,7 +73,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -106,9 +103,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.compose.currentStateAsState
 import androidx.window.core.layout.WindowSizeClass
 import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.model.Category
@@ -227,11 +221,10 @@ private val ReviewOrder.title
 /**
  * A thumbnail that is marked for the trash or kept. Tap toggles, a long press shows it full size.
  * A screen reader hears why the image is here and how it is marked, and gets both as actions too.
- * A video tile that [loop]s plays its clip over its frame, to [loopEndMs] when that is set, and calls [onLoopFailed] when the
- * clip cannot be played. One that shows [slides] steps through the frames of its strip instead.
+ * A video tile that moves, by [motion], plays its clip over its frame, to [loopEndMs] when that is set, or shows its slideshow.
  */
 @Composable
-private fun Tile(item: ReviewItem, marked: Boolean, loop: Boolean, slides: Boolean, loopEndMs: Long?, onTap: () -> Unit, onHold: () -> Unit, onLoopFailed: () -> Unit) {
+private fun Tile(item: ReviewItem, marked: Boolean, motion: TileMotion, loopEndMs: Long?, onTap: () -> Unit, onHold: () -> Unit) {
     val state = stringResource(
         when {
             marked -> R.string.selected_for_trash
@@ -270,11 +263,7 @@ private fun Tile(item: ReviewItem, marked: Boolean, loop: Boolean, slides: Boole
         if (video) {
             val file = File(item.image.path)
             VideoFrame(file, "Review.tile", Modifier.fillMaxSize(), unreadable = item.unreadable)
-            if (slides) {
-                val length = item.durationMs ?: rememberLengthMillis(file, "${item.image.path}|${item.image.size}|${item.image.mtimeNs}")
-                if (length != null && length > 0) Slideshow(file, length, Modifier.fillMaxSize())
-            }
-            if (loop) LoopingClip(file, loopEndMs, Modifier.fillMaxSize(), onLoopFailed)
+            motion.Over(item.image, item.durationMs, loopEndMs, Modifier.fillMaxSize())
             Text(details, Modifier.align(Alignment.BottomStart).background(Color.Black.copy(alpha = 0.6f)).padding(4.dp).clearAndSetSemantics {}, color = Color.White, style = MaterialTheme.typography.labelSmall)
         } else {
             TracedAsyncImage(File(item.image.path), "Review.tile", null, Modifier.fillMaxSize(), tile = true)
@@ -301,9 +290,6 @@ private fun Tile(item: ReviewItem, marked: Boolean, loop: Boolean, slides: Boole
         }
     }
 }
-
-/** The tiles on screen that play their clip, and the ones that show a slideshow, by key. */
-private data class Motion(val loops: Set<Any>, val slides: Set<Any>)
 
 /** How much of a copy a tile loops: its first 10 seconds, since copies can be long videos. A short clip or a take loops whole. */
 private const val COPY_LOOP_MS = 10_000L
@@ -408,24 +394,8 @@ fun CategoryScreen(
         // A new grouping reorders the page: start at its top instead of in the middle of it.
         val grid = rememberLazyGridState()
         LaunchedEffect(reviewOrder) { grid.scrollToItem(0) }
-        val context = LocalContext.current
-        val animations = remember(context) { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f }
-        val started = LocalLifecycleOwner.current.lifecycle.currentStateAsState().value.isAtLeast(Lifecycle.State.STARTED)
-        // Nothing moves behind the full size view, so its player is the only one, nor in the background.
-        val moves = animations && started && fullSize == null
         val movers = remember(page, category, videos) { if (videos && category != null) movingTiles(category, page) else emptySet() }
-        // A clip the player could not play gives its player to the next tile, and shows the slideshow.
-        var failedLoops by remember { mutableStateOf(emptySet<String>()) }
-        // The tiles' keys are their paths. The first tiles on screen that move play, in grid order, and the others show the
-        // slideshow. Nothing moves while the grid scrolls, so a fling builds and releases no player and decodes no frame for
-        // each row it passes: the tiles on screen start once the grid settles.
-        val motion by remember(grid, movers, moves, canPlay) {
-            derivedStateOf(structuralEqualityPolicy()) {
-                val onScreen = if (!moves || grid.isScrollInProgress) emptyList() else grid.layoutInfo.visibleItemsInfo.map { it.key }.filter { it in movers }
-                val loops = if (canPlay) onScreen.filterNot { it in failedLoops }.take(LOOPING_CLIPS).toSet() else emptySet()
-                Motion(loops, onScreen.toSet() - loops)
-            }
-        }
+        val motion = rememberTileMotion(grid, movers, fullSize != null, canPlay)
         val loopEndMs = if (category == Category.EXACT_DUPLICATE || category == Category.NEAR_DUPLICATE) COPY_LOOP_MS else null
         val columns = if (videos && category == Category.SHORT_CLIPS) {
             GridCells.Fixed(if (currentWindowAdaptiveInfo().windowSizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)) 4 else 2)
@@ -462,15 +432,13 @@ fun CategoryScreen(
                     Tile(
                         item,
                         item.image.path in marked,
-                        item.image.path in motion.loops,
-                        item.image.path in motion.slides,
+                        motion,
                         loopEndMs,
                         onTap = {
                             haptics.performHapticFeedback(Haptic.TICK.type)
                             onToggle(item.image)
                         },
                         onHold = { fullSize = item.image },
-                        onLoopFailed = { failedLoops = failedLoops + item.image.path },
                     )
                 }
             }

@@ -36,6 +36,7 @@ import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.review.ReviewGroup
 import io.github.bert0ns.cribrum.review.ReviewItem
+import kotlinx.coroutines.awaitCancellation
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -48,6 +49,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -79,6 +81,11 @@ class ClipLoopsTest {
     private val slides = ConcurrentLinkedQueue<Slide>()
     private val frames get() = slides.map { it.path to it.ms }
 
+    /** Whether a frame decode waits until it is cancelled, as a slow one would, and the videos whose decode waits so. */
+    @Volatile
+    private var hang = false
+    private val pending: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
     @OptIn(DelicateCoilApi::class)
     @Before
     fun recordFrames() {
@@ -86,7 +93,16 @@ class ClipLoopsTest {
         val record = Interceptor { chain ->
             val micros = chain.request.videoFrameMicros
             if (micros < 0) return@Interceptor chain.proceed()
-            slides += Slide((chain.request.data as File).path, micros / 1000, chain.size, chain.request.videoFrameOption, chain.request.memoryCachePolicy)
+            val path = (chain.request.data as File).path
+            slides += Slide(path, micros / 1000, chain.size, chain.request.videoFrameOption, chain.request.memoryCachePolicy)
+            if (hang) {
+                pending += path
+                try {
+                    awaitCancellation()
+                } finally {
+                    pending -= path
+                }
+            }
             ErrorResult(null, chain.request, IllegalStateException("no video decoder"))
         }
         SingletonImageLoader.setUnsafe(ImageLoader.Builder(ApplicationProvider.getApplicationContext()).components { add(record) }.build())
@@ -226,27 +242,73 @@ class ClipLoopsTest {
     }
 
     @Test
-    fun `nothing plays and no slideshow steps while the grid scrolls, and they start once it settles`() {
+    fun `a playing tile keeps playing while the grid scrolls, and the slideshows keep stepping`() {
         show(page(clips(16)))
+        val first = players.made.toList()
         val grid = compose.onNode(hasScrollAction())
 
         grid.performTouchInput {
             down(center)
-            moveBy(Offset(0f, -200f))
+            moveBy(Offset(0f, -100f)) // the first row stays on screen
         }
         settle()
-        assertEquals(LOOPING_CLIPS, players.made.size)
-        assertTrue(running.isEmpty())
-        assertEquals(0, slideshows)
-        val asked = frames.size
-        compose.mainClock.advanceTimeBy(3 * SLIDE_MS)
-        compose.waitForIdle()
-        assertEquals(asked, frames.size)
+        firstSlide()
+
+        assertEquals(first, running)
+        assertTrue(slideshows > 0)
+        assertTrue(frames.isNotEmpty())
+        grid.performTouchInput { up() }
+    }
+
+    @Test
+    fun `a playing tile that leaves the screen mid scroll lets go of its player, and its place is filled once the grid settles`() {
+        show(page(clips(16)))
+        val first = players.made.toList()
+        val grid = compose.onNode(hasScrollAction())
+
+        grid.performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -700f)) // the first rows leave the screen
+        }
+        settle()
+        assertTrue(first.all { it.released })
+        assertEquals(LOOPING_CLIPS, players.made.size) // no player is built mid scroll
+        assertTrue(slideshows > 0)
 
         grid.performTouchInput { up() }
         settle()
         assertEquals(LOOPING_CLIPS, running.size)
-        assertTrue(slideshows > 0)
+        assertTrue(running.none { it in first })
+    }
+
+    @Test
+    fun `a clip that plays again goes on from where it was`() {
+        show(page(clips(16)))
+        val clip1 = players.made.first()
+        onLoops { clip1.seekTo(1_200) }
+
+        compose.onNode(hasScrollAction()).performScrollToIndex(15)
+        settle()
+        assertTrue(clip1.released)
+        compose.onNode(hasScrollAction()).performScrollToIndex(0)
+        settle()
+
+        val again = running.single { it.paths == clip1.paths }
+        assertTrue(again.positionMs in 1_200L until 3_000L) // where it was, and a little after as it played
+    }
+
+    @Test
+    fun `a tile that leaves the screen cancels the frame its slideshow waits for`() {
+        hang = true
+        show(page(clips(16)))
+        firstSlide()
+        val waiting = pending.toSet()
+        assertTrue(waiting.isNotEmpty())
+
+        compose.onNode(hasScrollAction()).performScrollToIndex(15)
+        settle()
+
+        assertTrue(waiting.none { it in pending })
     }
 
     @Test
