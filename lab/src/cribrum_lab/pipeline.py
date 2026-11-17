@@ -181,7 +181,9 @@ def run(
     if images:
         _image_steps(found, index, detectors, group_detectors, embedder, jobs, stats, progress)
     if videos:
-        _video_steps(found, index, group_detectors, embedder, jobs, stats, progress, zone)
+        _video_steps(
+            found, index, detectors, group_detectors, embedder, jobs, stats, progress, zone
+        )
     media = [i for i in index.images() if i.path in found]
     stats.images = sum(i.media_type is MediaType.IMAGE for i in media)
     stats.videos = len(media) - stats.images
@@ -352,6 +354,7 @@ def _group_steps(
 def _video_steps(
     found: set[Path],
     index: ImageIndex,
+    detectors: Sequence[Detector],
     group_detectors: Sequence[GroupDetector],
     embedder: Embedder | None,
     jobs: int,
@@ -360,7 +363,8 @@ def _video_steps(
     zone: tzinfo | None,
 ) -> None:
     """The video steps, which only a run asked for videos takes: the metadata, the frames, then
-    the group detectors that accept videos, which may read the frames."""
+    the per-video detectors and the group detectors that accept videos, which may read the
+    frames."""
     pending = [i for i in index.without_metadata() if i.media_type is MediaType.VIDEO]
     for done, video in enumerate(pending, 1):
         try:
@@ -375,7 +379,33 @@ def _video_steps(
         progress("video_metadata", done, len(pending))
     if embedder is not None:
         _embed_frames(embedder, index, jobs, stats, progress)
+    _video_detectors(found, index, detectors, stats)
     _group_steps(MediaType.VIDEO, found, index, group_detectors, (), None, {}, stats, progress)
+
+
+def _video_detectors(
+    found: set[Path], index: ImageIndex, detectors: Sequence[Detector], stats: Stats
+) -> None:
+    """Runs the detectors that accept videos on each video that lacks them. They read no frame
+    yet: a video is given no embedding, so one that asks for it fails and is counted."""
+    selected = [d for d in detectors if MediaType.VIDEO in accepted_media_types(d)]
+    unreadable = set(index.unreadable())
+    context = AnalysisContext()
+    for video in index.images():
+        if video.media_type is not MediaType.VIDEO or video.path not in found:
+            continue
+        if video.path in unreadable:
+            continue
+        for detector in selected:
+            if index.is_analyzed(video.path, detector.id, detector.version):
+                continue
+            try:
+                signals = detector.analyze(video, context)
+            except Exception as error:
+                stats.failures.append(f"{video.path}: {detector.id}: {_describe(error)}")
+                continue
+            index.set_signals(video.path, detector.id, detector.version, signals)
+            stats.detector_runs += 1
 
 
 def _embed_frames(
