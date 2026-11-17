@@ -314,6 +314,26 @@ class ClipLoopsTest {
     }
 
     @Test
+    fun `a clip that leaves and comes back before its release has run still goes on from where it was`() {
+        show(page(clips(16)))
+        val clip1 = players.made.first()
+        onLoops { clip1.seekTo(1_200) }
+        val busy = CountDownLatch(1)
+        Handler(clipLoops).post { busy.await(5, TimeUnit.SECONDS) } // a release that takes its time
+        val grid = compose.onNode(hasScrollAction())
+
+        grid.performScrollToIndex(15)
+        compose.waitForIdle()
+        grid.performScrollToIndex(0)
+        compose.waitForIdle()
+        busy.countDown()
+        settle()
+
+        val again = running.single { it.paths == clip1.paths }
+        assertTrue(again.positionMs in 1_200L until 3_000L)
+    }
+
+    @Test
     fun `a tile that leaves the screen cancels the frame its slideshow waits for`() {
         hang = true
         show(page(clips(16)))

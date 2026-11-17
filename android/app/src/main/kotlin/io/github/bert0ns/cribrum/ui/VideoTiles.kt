@@ -124,15 +124,18 @@ internal val clipLoops: Looper by lazy { HandlerThread("ClipLoops").apply { star
  * A clip playing muted and in a loop in a tile, on a player made by [create] on [clipLoops]. Every call on the player is
  * posted there, and what the tile shows of it comes back to the main thread. The player draws on a [Surface] of the tile's
  * [TextureView], handed over on that thread too: Media3's own TextureView listener would call the player from the main thread,
- * and wait there for the codec to let go of the surface.
+ * and wait there for the codec to let go of the surface. [positions] holds where each clip was when its player was
+ * released, and only that thread touches it: a release and the next play of the same clip are queued there in order, so
+ * the play always finds where the release left it.
  */
-internal class ClipLoop(private val create: (Looper) -> Player) : TextureView.SurfaceTextureListener {
+internal class ClipLoop(private val positions: MutableMap<String, Long> = HashMap(), private val create: (Looper) -> Player) : TextureView.SurfaceTextureListener {
     private val loops = Handler(clipLoops)
     private val main = Handler(Looper.getMainLooper())
 
     // Only touched on the loops' thread.
     private var player: Player? = null
     private var surface: Surface? = null
+    private var path: String? = null
 
     var videoSize by mutableStateOf<VideoSize?>(null)
         private set
@@ -150,11 +153,12 @@ internal class ClipLoop(private val create: (Looper) -> Player) : TextureView.Su
     }
 
     /**
-     * Plays [file] again and again from [startMs], only its first [endMs] when that is set. Muted from the first frame, with
-     * its audio track off, so it takes no audio focus, no audio decoder and no AudioTrack.
+     * Plays [file] again and again from where it was last released, only its first [endMs] when that is set. Muted from the
+     * first frame, with its audio track off, so it takes no audio focus, no audio decoder and no AudioTrack.
      */
-    fun play(file: File, endMs: Long?, startMs: Long = 0) {
+    fun play(file: File, endMs: Long?) {
         loops.post {
+            path = file.path
             val player = player ?: create(clipLoops).also {
                 it.addListener(listener)
                 it.volume = 0f
@@ -164,21 +168,20 @@ internal class ClipLoop(private val create: (Looper) -> Player) : TextureView.Su
             }
             val item = MediaItem.Builder().setUri(Uri.fromFile(file))
             if (endMs != null) item.setClippingConfiguration(MediaItem.ClippingConfiguration.Builder().setEndPositionMs(endMs).build())
-            player.setMediaItem(item.build(), startMs)
+            player.setMediaItem(item.build(), positions[file.path] ?: 0)
             surface?.let(player::setVideoSurface)
             player.prepare()
             player.playWhenReady = true
         }
     }
 
-    /** Lets go of the player, and tells [onReleased] on the main thread where in the clip it was. */
-    fun release(onReleased: (Long) -> Unit = {}) {
+    /** Lets go of the player, and keeps where in the clip it was. */
+    fun release() {
         loops.post {
             player?.run {
-                val at = currentPosition
+                path?.let { positions[it] = currentPosition }
                 removeListener(listener)
                 release()
-                main.post { onReleased(at) }
             }
             player = null
         }
@@ -209,20 +212,20 @@ internal class ClipLoop(private val create: (Looper) -> Player) : TextureView.Su
 }
 
 /**
- * A clip playing muted and in a loop over its tile's frame from [startMs], its first [endMs] only when that is set, cropped
- * to the tile as the frame is once the player knows the video's size. Its view is empty, and so transparent, until the first
- * frame arrives, and goes once the clip fails to play, so the frame under it shows through. A clip that fails releases its
- * player and calls [onFailed], so the grid can give its place to another tile. Its player is released when the tile leaves
- * the composition, and [onReleased] hears where the clip was.
+ * A clip playing muted and in a loop over its tile's frame from where it was in [positions], its first [endMs] only when
+ * that is set, cropped to the tile as the frame is once the player knows the video's size. Its view is empty, and so
+ * transparent, until the first frame arrives, and goes once the clip fails to play, so the frame under it shows through. A
+ * clip that fails releases its player and calls [onFailed], so the grid can give its place to another tile. Its player is
+ * released when the tile leaves the composition, and [positions] keeps where the clip was.
  */
 @Composable
-internal fun LoopingClip(file: File, endMs: Long?, startMs: Long, modifier: Modifier, onReleased: (Long) -> Unit, onFailed: () -> Unit) {
+internal fun LoopingClip(file: File, endMs: Long?, positions: MutableMap<String, Long>, modifier: Modifier, onFailed: () -> Unit) {
     val context = LocalContext.current.applicationContext
     val factory = LocalPlayerFactory.current
-    val loop = remember(file, factory) { ClipLoop { factory(context, it) } }
+    val loop = remember(file, factory, positions) { ClipLoop(positions) { factory(context, it) } }
     DisposableEffect(loop) {
-        loop.play(file, endMs, startMs)
-        onDispose { loop.release(onReleased) }
+        loop.play(file, endMs)
+        onDispose { loop.release() }
     }
     LaunchedEffect(loop.failed) {
         if (loop.failed) {
@@ -268,6 +271,8 @@ internal class TileMotion {
         private set
     var failed by mutableStateOf(emptySet<String>())
         private set
+
+    /** Where each clip was when its player was released. Only the loops' thread touches it (see [ClipLoop]). */
     private val positions = HashMap<String, Long>()
 
     /**
@@ -290,7 +295,7 @@ internal class TileMotion {
     fun Over(video: MediaRef, durationMs: Long?, endMs: Long?, modifier: Modifier) {
         val file = File(video.path)
         when (video.path) {
-            in loops -> LoopingClip(file, endMs, positions[video.path] ?: 0, modifier, onReleased = { positions[video.path] = it }, onFailed = { failed = failed + video.path })
+            in loops -> LoopingClip(file, endMs, positions, modifier, onFailed = { failed = failed + video.path })
             in slides -> {
                 val length = durationMs ?: rememberLengthMillis(file, "${video.path}|${video.size}|${video.mtimeNs}")
                 if (length != null && length > 0) Slideshow(file, length, modifier)
