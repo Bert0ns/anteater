@@ -10,6 +10,19 @@ plugins {
     alias(libs.plugins.ktlint)
 }
 
+// Builds without -PversionName show the latest release tag: "3.0.0", then "3.0.0-12-g687d204" after it, "-dirty" with local edits.
+// Without git or the tags (a shallow checkout, a source archive) the build falls back to 0.1.0 instead of failing.
+// sh keeps a missing git from failing the build: Gradle can't catch a process that does not start.
+val gitVersionName: String =
+    providers
+        .exec {
+            commandLine("sh", "-c", "git describe --tags --match 'v*' --dirty 2>/dev/null || true")
+        }.standardOutput.asText
+        .get()
+        .trim()
+        .removePrefix("v")
+        .ifEmpty { "0.1.0" }
+
 android {
     namespace = "io.github.bert0ns.cribrum"
     compileSdk = 37
@@ -23,7 +36,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // The release workflow sets both from the version it publishes.
         versionCode = providers.gradleProperty("versionCode").orNull?.toInt() ?: 1
-        versionName = providers.gradleProperty("versionName").orNull ?: "0.1.0"
+        versionName = providers.gradleProperty("versionName").orNull ?: gitVersionName
         // ONNX Runtime ships a 35 MB native library per ABI: only phones' is kept.
         ndk { abiFilters += "arm64-v8a" }
     }

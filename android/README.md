@@ -13,6 +13,8 @@ cd android
 
 `./gradlew ktlintFormat` fixes the formatting that `ktlintCheck` reports (rules in `.editorconfig`).
 
+A build takes its version name from `git describe --tags --match 'v*' --dirty` with the `v` dropped, so Settings shows `3.0.0` on a release commit and `3.0.0-12-g687d204` twelve commits after it, plus `-dirty` with uncommitted edits. Without git or the tags (a shallow checkout, a source archive) it shows `0.1.0`. `-PversionName=X` overrides it, which is how the release workflow sets the version. The version code stays 1 unless `-PversionCode` sets it, so a debug build never blocks installing a release over it.
+
 Unit tests run on the JVM with Robolectric, so they need no phone. CI runs the same command on every pull request that changes `android/`, `fixtures/` or `lab/src/`, and keeps the debug APK as an artifact.
 
 A run filtered to one test used to abort the JVM now and then with `Class not found: java/nio/FloatBuffer` (or `ShortBuffer`, exit 134) before any test reported (#377). Robolectric's native runtime builds Android's `JniConstants` on the first native graphics call, with a `JNIEnv` that is not the calling thread's, and when that call came from a worker thread (a scan decoding on `Dispatchers.Default`) the lookup failed. `WarmedNativeRuntimeLoader` (`src/test`, registered in `META-INF/services`) makes that first call on the test thread when the runtime loads (native graphics tests on SDK 36 and later). A test that decodes images off the test thread needs no setup of its own.
