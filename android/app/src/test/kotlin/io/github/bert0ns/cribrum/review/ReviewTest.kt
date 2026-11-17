@@ -1368,15 +1368,21 @@ class ReviewTest {
 
     @Test
     fun `a page of video copies holds 15 groups, whatever the number of copies in them`() = test {
+        // Groups of 4, so 15 of them hold 60 videos, past the 48 images of a page of photos.
         repeat(20) {
             duplicateVideo("DCIM/Camera/v$it.mp4", 300, "exact$it", Role.BEST)
-            duplicateVideo("Download/v$it.mp4", 300, "exact$it", Role.INFERIOR)
             video("DCIM/Camera/n$it.mp4", 300).also { v -> runBlocking { index.setSignals(v.path, "near_duplicate", 2, listOf(nearDuplicate("near$it", Role.BEST))) } }
-            video("Download/n$it.mp4", 300).also { v -> runBlocking { index.setSignals(v.path, "near_duplicate", 2, listOf(nearDuplicate("near$it", Role.INFERIOR, 1f))) } }
+            for (copy in 1..3) {
+                duplicateVideo("Download/v$it-$copy.mp4", 300, "exact$it", Role.INFERIOR)
+                video("Download/n$it-$copy.mp4", 300).also { v -> runBlocking { index.setSignals(v.path, "near_duplicate", 2, listOf(nearDuplicate("near$it", Role.INFERIOR, 1f))) } }
+            }
         }
 
-        assertEquals(15, page(Category.EXACT_DUPLICATE, mediaType = MediaType.VIDEO).groups.size)
-        assertEquals(15, page(Category.NEAR_DUPLICATE, mediaType = MediaType.VIDEO).groups.size)
+        for (category in listOf(Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE)) {
+            val groups = page(category, mediaType = MediaType.VIDEO).groups
+            assertEquals(15, groups.size)
+            assertEquals(60, groups.sumOf { it.images.size })
+        }
     }
 
     @Test
