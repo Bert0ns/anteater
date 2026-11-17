@@ -1,8 +1,8 @@
 # Archived Mascot Assets: Baleen Whale
 
-This directory contains the original launcher icon and website assets depicting the **Baleen Whale** mascot, introduced in [#304](https://github.com/Bert0ns/cribrum/issues/304) and refined in [#318](https://github.com/Bert0ns/cribrum/issues/318).
+This directory contains the original launcher icon and website assets depicting the **Baleen Whale** mascot, introduced in [#304](https://github.com/Bert0ns/anteater/issues/304) and refined in [#318](https://github.com/Bert0ns/anteater/issues/318).
 
-These assets were archived as part of [#362](https://github.com/Bert0ns/cribrum/issues/362) and [#367](https://github.com/Bert0ns/cribrum/issues/367) when Cribrum transitioned to **The Sweeping Plume Giant Anteater** mascot.
+These assets were archived as part of [#362](https://github.com/Bert0ns/anteater/issues/362) and [#367](https://github.com/Bert0ns/anteater/issues/367) when Cribrum transitioned to **The Sweeping Plume Giant Anteater** mascot.
 
 ## Contents
 

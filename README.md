@@ -1,18 +1,18 @@
-<img src="site/logo.png" width="96" alt="Cribrum app icon: an anteater in the shape of a C">
+<img src="site/logo.png" width="96" alt="Anteater app icon">
 
-# Cribrum
+# Anteater
 
-Website: https://cribrum.bertons.me
+Website: https://anteater.bertons.me
 
-*Cribrum* is Latin for "sieve" (Italian: *crivello*).
+Find the photos and videos you can delete without losing the memories that matter.
 
-Cribrum finds photos and videos on your phone that you can delete or recompress without losing memories that matter: blurry shots, duplicate copies, bursts, takes of one moment, short clips recorded by mistake, photos of lecture slides and notes, screenshots, and media scattered by messaging apps.
+Anteater finds photos and videos on your phone that you can delete or recompress: blurry shots, duplicate copies, bursts, takes of one moment, short clips recorded by mistake, photos of lecture slides and notes, screenshots, and media scattered by messaging apps.
 
 It suggests and you decide. Nothing is deleted without your confirmation. The button under each page moves the marked files to a trash folder on the phone, where you can restore them until the retention ends.
 
 ## What it does
 
-Cribrum is an Android app that inspects device storage, including folders marked with `.nomedia` that gallery apps skip, such as `WhatsApp Video/Sent`. It groups candidates into categories for review, recompresses large camera JPEGs, and draws a storage map.
+Anteater is an Android app that inspects device storage, including folders marked with `.nomedia` that gallery apps skip, such as `WhatsApp Video/Sent`. It groups candidates into categories for review, recompresses large camera JPEGs, and draws a storage map.
 
 The detectors are tuned on one person's library, so expect some wrong suggestions and some misses. Cloud libraries such as Google Photos, iOS and desktop are not covered.
 
@@ -63,7 +63,7 @@ The Compress tab recompresses large camera JPEGs instead of deleting them. It li
 
 ### Trash and undo
 
-- **Where.** A `.cribrum-trash` folder at the root of each storage volume, with a `.nomedia` file. Moving is a rename on the same volume, never a copy, and the folder survives an uninstall.
+- **Where.** A `.anteater-trash` folder at the root of each storage volume, with a `.nomedia` file. Moving is a rename on the same volume, never a copy, and the folder survives an uninstall.
 - **Retention.** 30 days by default, or 7, 14, 60 or 90 days in Settings. The scan purges expired files. Files are deleted for good only when the retention ends, when you delete them from the trash, or when you tap "Free X now". The last two ask first.
 - **Restore.** A file goes back to its original path, and is not restored over another file.
 - **Freeing space now.** After a page that trashes more than 1 GB, the snackbar offers "Free 2.3 GB now". It asks first, then deletes only the files of that page.
@@ -76,7 +76,7 @@ The Compress tab recompresses large camera JPEGs instead of deleting them. It li
 
 ### Background scans
 
-"Scan now" scans photos and "Scan videos" scans videos. Either runs as a foreground service with a stop button. Cribrum also scans once a night at 02:00 while the phone charges (it only runs between 00:00 and 06:00, otherwise it waits for the next night).
+"Scan now" scans photos and "Scan videos" scans videos. Either runs as a foreground service with a stop button. Anteater also scans once a night at 02:00 while the phone charges (it only runs between 00:00 and 06:00, otherwise it waits for the next night).
 
 - **Photos.** The normal scan finds and records videos but never opens them, so you do not pay for the video steps.
 - **Videos.** The night scan analyses new videos only after you ran "Scan videos" once.
@@ -120,7 +120,7 @@ The images in the screenshots are drawn in code, and the counts are made up.
 
 ## Technical architecture
 
-Cribrum scans, runs its models and changes files on the device. The app has no network permission.
+Anteater scans, runs its models and changes files on the device. The app has no network permission.
 
 ### Signals and ranking
 
@@ -149,7 +149,7 @@ The app bundles three neural models and runs them with ONNX Runtime:
 
 `lab/` is the Python reference implementation of the detectors and the ranking.
 
-- **Mirrored components.** Modules in `cribrum_lab` mirror the Kotlin packages in `io.github.bert0ns.cribrum`, with the same names and types.
+- **Mirrored components.** Modules in `anteater_lab` mirror the Kotlin packages in `io.github.bert0ns.anteater`, with the same names and types.
 - **Golden fixtures.** `fixtures/` holds synthetic images and videos. The Python tests and the Android unit tests read them through their own decoders, to check that scores and rankings agree.
 - **Parity check.** `python3 lab/scripts/check_parity.py` compares detector ids, versions, thresholds, protection weights and constants between Python and Kotlin.
 
@@ -193,9 +193,9 @@ python3 lab/scripts/check_parity.py
 
 ## Status and requirements
 
-- **Android version.** Android 11 (API 30) or newer, the first version with the scoped storage rules and `MANAGE_EXTERNAL_STORAGE` that Cribrum relies on.
+- **Android version.** Android 11 (API 30) or newer, the first version with the scoped storage rules and `MANAGE_EXTERNAL_STORAGE` that Anteater relies on.
 - **Permissions.** "All files access" is required, to read folders outside MediaStore such as WhatsApp's `.nomedia` folders and to manage the trash. The manifest removes `android.permission.INTERNET`.
-- **Distribution.** A sideloaded APK from the [GitHub releases page](https://github.com/Bert0ns/cribrum/releases). It is not on Google Play because of its storage access policy.
+- **Distribution.** A sideloaded APK from the [GitHub releases page](https://github.com/Bert0ns/anteater/releases). It is not on Google Play because of its storage access policy.
 
 ## Principles
 
@@ -221,4 +221,4 @@ The next steps are in [`docs/design.md`](docs/design.md#11-future-work-and-open-
 
 ## License
 
-Cribrum is free software, released under the [GNU General Public License v3.0](LICENSE).
+Anteater is free software, released under the [GNU General Public License v3.0](LICENSE).

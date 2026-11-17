@@ -17,14 +17,14 @@ The council cannot use the phone, which holds personal photos. It looks at the *
 
 ```bash
 cd android && ANDROID_HOME=~/android-sdk JAVA_HOME=~/.local/jdks/jdk-21.0.12.1+1 \
-  flock /tmp/cribrum-gradle.lock ./gradlew -PuiGallery=/tmp/cribrum-ui-gallery-<run> testDebugUnitTest --tests '*UiGallery'
+  flock /tmp/cribrum-gradle.lock ./gradlew -PuiGallery=/tmp/anteater-ui-gallery-<run> testDebugUnitTest --tests '*UiGallery'
 ```
 
 `<run>` is the version, such as `2.0.0`. It takes about ten minutes. Look at a sample: a few phone images in Italian, the dark theme, font 1.5 and the unfolded Fold. A state with no scene is invisible to the council, so add the missing scene first in its own PR. The notes at the top of `index.md` (`NOTES` in `GalleryScenes.kt`) must match the app.
 
 ### 2. Write the flows
 
-Make the council folder, `/tmp/cribrum-ui-council-<run>/`, and write `flows.md` there from the code, or give it to a worker model while the gallery renders. For each main flow, list the screens in order, the taps of each step and what each shows. Cover:
+Make the council folder, `/tmp/anteater-ui-council-<run>/`, and write `flows.md` there from the code, or give it to a worker model while the gallery renders. For each main flow, list the screens in order, the taps of each step and what each shows. Cover:
 - the first run;
 - reviewing a category;
 - compressing a batch;

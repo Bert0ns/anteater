@@ -11,7 +11,7 @@ Area (the maintainer may fill this in, otherwise leave it empty):
 
 ## Choose the area
 
-The areas, in rotation order, with where they live. Android paths are under `android/app/src/main/kotlin/io/github/bert0ns/cribrum/`, lab paths under `lab/src/cribrum_lab/`. Tests live next to them in `android/app/src/test` and `lab/tests`.
+The areas, in rotation order, with where they live. Android paths are under `android/app/src/main/kotlin/io/github/bert0ns/anteater/`, lab paths under `lab/src/anteater_lab/`. Tests live next to them in `android/app/src/test` and `lab/tests`.
 
 1. `ranker`. `ranker/`, `ranker.py`, and section 6 of the design.
 2. `pipeline`. `pipeline/`, `pipeline.py`, and sections 4 and 7.
