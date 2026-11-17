@@ -6,9 +6,11 @@ import io.github.bert0ns.cribrum.folders.isCameraFolder
 import io.github.bert0ns.cribrum.folders.isMessagingFolder
 import io.github.bert0ns.cribrum.hashing.isFlatHash
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
+import io.github.bert0ns.cribrum.metadata.VideoMetadata
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
@@ -29,17 +31,28 @@ const val MAX_DISTANCE = 10
  */
 const val NEAR_DUPLICATE_MIN_COSINE = 0.90f
 
+/** Two videos further apart in length are not compared. A WhatsApp copy and its original had the same length on the labeled videos (docs/design.md §5). */
+const val VIDEO_MAX_DURATION_GAP_MS = 250
+
+/** Frame similarity that still links two videos of about one length. On the labeled videos the two copies scored 0.887 and 0.980, and no other pair within the length gap above 0.6. */
+const val VIDEO_MIN_FRAME_COSINE = 0.80f
+
 /**
  * Two images are linked when their perceptual hashes are within a Hamming distance, which catches
  * resized and recompressed copies such as WhatsApp's, or when their embeddings are close, which
  * also catches crops and edits. Linked images form a group. Recall first: both thresholds start loose.
+ *
+ * Two videos are linked when their lengths match and their frames look alike: a copy WhatsApp
+ * re-encoded, such as the one in `Sent`, never matches its original by content hash (#396).
  */
 class NearDuplicateDetector : GroupDetector {
     override val id = "near_duplicate"
     override val version = 3
     override val category = Category.NEAR_DUPLICATE
+    override val mediaTypes = setOf(MediaType.IMAGE, MediaType.VIDEO)
 
     override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
+        if (images.firstOrNull()?.mediaType == MediaType.VIDEO) return videos(images, context) // a group run has one media type
         val members = mutableListOf<MediaRef>()
         val hashes = mutableListOf<ULong>()
         val vectors = mutableListOf<FloatArray?>()
@@ -92,6 +105,59 @@ class NearDuplicateDetector : GroupDetector {
             }
         }
         return result
+    }
+
+    private class Clip(val video: MediaRef, val meta: VideoMetadata, val lengthMs: Long, val frames: List<FloatArray>)
+
+    /** A video with no length or no frames is linked to none: a length alone is no evidence, since many clips share one. */
+    private suspend fun videos(videos: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
+        val members = mutableListOf<Clip>()
+        for (video in videos) {
+            val meta = try {
+                context.videoMetadata(video)
+            } catch (error: Exception) { // unreadable header: no length to compare
+                if (error is CancellationException) throw error
+                continue
+            }
+            val frames = context.frames(video)
+            if (meta.durationMs != null && frames.isNotEmpty()) members += Clip(video, meta, meta.durationMs, frames)
+        }
+        members.sortWith(compareBy({ it.lengthMs }, { it.video.path }))
+        val links = mutableListOf<Pair<Int, Int>>()
+        for (i in members.indices) {
+            for (j in (i + 1) until members.size) {
+                if (members[j].lengthMs - members[i].lengthMs > VIDEO_MAX_DURATION_GAP_MS) break
+                if (frameSimilarity(members[i].frames, members[j].frames) >= VIDEO_MIN_FRAME_COSINE) links += i to j
+            }
+        }
+        val result = LinkedHashMap<MediaRef, List<Signal>>()
+        for (component in components(members.size, links)) {
+            val best = component.minWith(compareBy({ folderRank(members[it].video.path) }, { -members[it].meta.width.toLong() * members[it].meta.height }, { -(members[it].meta.bitrate ?: 0) }, { members[it].video.path }))
+            val groupId = groupId(members[best].video.path)
+            for (i in component) {
+                val role = if (i == best) Role.BEST else Role.INFERIOR
+                val evidence = mapOf(GROUP_KEY to groupId, ROLE_KEY to role.value)
+                result[members[i].video] = listOf(Signal(id, version, Category.NEAR_DUPLICATE, if (i == best) 0f else 1f, evidence))
+            }
+        }
+        return result
+    }
+
+    /**
+     * The mean, over the frames of both videos, of each frame's closest cosine in the other one. Closest and not
+     * same-time frames, since an HDR video's frames are keyframes, fewer and up to half a second off the times a copy's
+     * exact frames are at.
+     */
+    private fun frameSimilarity(a: List<FloatArray>, b: List<FloatArray>): Float {
+        val sum = a.sumOf { x -> b.maxOf { y -> dot(x, y) }.toDouble() } + b.sumOf { y -> a.maxOf { x -> dot(x, y) }.toDouble() }
+        return (sum / (a.size + b.size)).toFloat()
+    }
+
+    /** A copy in the camera folder is kept first and one in a messaging folder last. */
+    private fun folderRank(path: String): Int = when {
+        isMessagingFolder(path) -> 2
+        isCameraFolder(path) -> 0
+        else -> 1
     }
 
     private suspend fun hashLinks(hashes: List<ULong>): List<Pair<Int, Int>> {
@@ -171,11 +237,7 @@ class NearDuplicateDetector : GroupDetector {
             ImageMetadata(0, 0, null)
         }
         val pixels = (meta.width.toLong() * meta.height).coerceAtLeast(1L)
-        val folder = when {
-            isMessagingFolder(image.path) -> 2
-            isCameraFolder(image.path) -> 0
-            else -> 1
-        }
+        val folder = folderRank(image.path)
         return CandidatePreference(
             index = index,
             pixels = meta.width.toLong() * meta.height,
