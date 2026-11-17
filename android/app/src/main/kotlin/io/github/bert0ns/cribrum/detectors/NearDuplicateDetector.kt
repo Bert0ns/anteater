@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import java.util.Locale
 
@@ -31,10 +32,13 @@ const val MAX_DISTANCE = 10
  */
 const val NEAR_DUPLICATE_MIN_COSINE = 0.90f
 
-/** Two videos further apart in length are not compared. A WhatsApp copy and its original had the same length on the labeled videos (docs/design.md §5). */
-const val VIDEO_MAX_DURATION_GAP_MS = 250
+/**
+ * Two videos further apart in length are not compared. A WhatsApp copy and its original had the same length on the labeled videos, and a
+ * re-encode moves it by an audio frame or two at most (docs/design.md §5).
+ */
+const val VIDEO_MAX_DURATION_GAP_MS = 100
 
-/** Frame similarity that still links two videos of about one length. On the labeled videos the two copies scored 0.887 and 0.980, and no other pair within the length gap above 0.6. */
+/** Frame similarity that still links two videos of about one length. On the labeled videos the two copies scored 0.887 and 0.980, and no other pair within the length gap above 0.6. Without the gap, 0.7% of the other pairs reach it. */
 const val VIDEO_MIN_FRAME_COSINE = 0.80f
 
 /**
@@ -109,7 +113,10 @@ class NearDuplicateDetector : GroupDetector {
 
     private class Clip(val video: MediaRef, val meta: VideoMetadata, val lengthMs: Long, val frames: List<FloatArray>)
 
-    /** A video with no length or no frames is linked to none: a length alone is no evidence, since many clips share one. */
+    /**
+     * A video with no length or no frames is linked to none: a length alone is no evidence, since many clips share one. Two camera videos captured
+     * at different instants are takes of a moment, not copies (docs/design.md §5).
+     */
     private suspend fun videos(videos: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
         val members = mutableListOf<Clip>()
         for (video in videos) {
@@ -125,8 +132,10 @@ class NearDuplicateDetector : GroupDetector {
         members.sortWith(compareBy({ it.lengthMs }, { it.video.path }))
         val links = mutableListOf<Pair<Int, Int>>()
         for (i in members.indices) {
+            currentCoroutineContext().ensureActive()
             for (j in (i + 1) until members.size) {
                 if (members[j].lengthMs - members[i].lengthMs > VIDEO_MAX_DURATION_GAP_MS) break
+                if (takes(members[i], members[j])) continue
                 if (frameSimilarity(members[i].frames, members[j].frames) >= VIDEO_MIN_FRAME_COSINE) links += i to j
             }
         }
@@ -149,8 +158,17 @@ class NearDuplicateDetector : GroupDetector {
      * exact frames are at.
      */
     private fun frameSimilarity(a: List<FloatArray>, b: List<FloatArray>): Float {
-        val sum = a.sumOf { x -> b.maxOf { y -> dot(x, y) }.toDouble() } + b.sumOf { y -> a.maxOf { x -> dot(x, y) }.toDouble() }
-        return (sum / (a.size + b.size)).toFloat()
+        val cosines = Array(a.size) { i -> FloatArray(b.size) { j -> dot(a[i], b[j]) } }
+        val rows = cosines.sumOf { row -> row.max().toDouble() }
+        val columns = b.indices.sumOf { j -> cosines.maxOf { it[j] }.toDouble() }
+        return ((rows + columns) / (a.size + b.size)).toFloat()
+    }
+
+    /** Two camera videos with capture instants that differ were filmed apart. A copy saved to the camera folder keeps its original's instant or has none. */
+    private fun takes(a: Clip, b: Clip): Boolean {
+        val instantA = a.meta.capturedInstant ?: return false
+        val instantB = b.meta.capturedInstant ?: return false
+        return isCameraFolder(a.video.path) && isCameraFolder(b.video.path) && instantA != instantB
     }
 
     /** A copy in the camera folder is kept first and one in a messaging folder last. */
