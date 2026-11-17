@@ -2,6 +2,7 @@ package io.github.bert0ns.cribrum.ui
 
 import android.content.Context
 import android.os.Looper
+import android.view.Surface
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -136,9 +137,24 @@ internal class FakePlayer(private val lengthMs: Long = 61_000, looper: Looper = 
         return Futures.immediateVoidFuture()
     }
 
-    override fun handleSetVideoOutput(videoOutput: Any): ListenableFuture<*> = Futures.immediateVoidFuture()
+    /** What it draws on, a surface or a view, or null when it draws on nothing. */
+    var output: Any? = null
+        private set
 
-    override fun handleClearVideoOutput(videoOutput: Any?): ListenableFuture<*> = Futures.immediateVoidFuture()
+    /** Whether the surface it was last told to let go of was still valid then, or null when it was told to let go of none. */
+    var clearedValid: Boolean? = null
+        private set
+
+    override fun handleSetVideoOutput(videoOutput: Any): ListenableFuture<*> {
+        output = videoOutput
+        return Futures.immediateVoidFuture()
+    }
+
+    override fun handleClearVideoOutput(videoOutput: Any?): ListenableFuture<*> {
+        clearedValid = (videoOutput as? Surface)?.isValid
+        output = null
+        return Futures.immediateVoidFuture()
+    }
 
     override fun handleRelease(): ListenableFuture<*> {
         released = true
