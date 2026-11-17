@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cribrum: Clean photos and videos on Android</title>
-  <meta name="description" content="A private, on-device sieve for Android. Finds blurry shots, duplicates, short clips and other clutter in your photos and videos, and recompresses large photos.">
-  <meta property="og:title" content="Cribrum: Clean photos and videos on Android">
+  <title>Anteater - Media Cleaner for Android</title>
+  <meta name="description" content="Anteater finds blurry shots, duplicates, short clips and other clutter in the photos and videos on your Android phone. It works offline, and removed files wait in a trash you can restore from.">
+  <meta property="og:title" content="Anteater - Media Cleaner for Android">
   <meta property="og:description" content="Finds clutter in your photos and videos. Everything runs on the phone, nothing is deleted without your confirmation, and removed files wait in a trash you can restore from.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://cribrum.bertons.me">
+  <meta property="og:url" content="https://anteater.bertons.me">
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -17,7 +17,7 @@
     <div class="top-bar">
       <a href="#" class="brand">
         <img class="brand-mark" src="logo.png" width="32" height="32" alt="">
-        <span>Cribrum</span>
+        <span>Anteater</span>
       </a>
 
       <div class="nav-links">
@@ -27,7 +27,7 @@
         <a href="#trash">Trash</a>
         <a href="#settings">Settings</a>
         <a href="#install">Install</a>
-        <a href="https://github.com/Bert0ns/cribrum" target="_blank" rel="noopener noreferrer">Source</a>
+        <a href="https://github.com/Bert0ns/anteater" target="_blank" rel="noopener noreferrer">Source</a>
         <button class="theme-toggle" id="theme-btn" aria-label="Toggle theme" title="Toggle theme">
           <svg id="theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="5"/>
@@ -45,21 +45,21 @@
     </div>
 
     <header class="hero">
-      <h1>A local sieve for the photos and videos on your Android phone</h1>
+      <h1>Find the photos and videos you can delete</h1>
       <p class="hero-lead">
-        Cribrum finds the photos and videos you can delete or recompress: blurry shots, duplicates, short clips, screenshots and files that messaging apps leave behind. It suggests and you decide. Nothing is deleted without your confirmation, and nothing leaves the phone.
+        Anteater finds the photos and videos on your Android phone that you can delete or recompress: blurry shots, duplicates, short clips, screenshots and files that messaging apps leave behind. It suggests and you decide. Nothing is deleted without your confirmation, removed files wait in a trash you can restore from, and nothing leaves the phone.
       </p>
 
       <div class="cta-row">
-        <a href="https://github.com/Bert0ns/cribrum/releases/latest" class="btn btn-primary">
+        <a href="https://github.com/Bert0ns/anteater/releases/latest" class="btn btn-primary">
           Download latest APK
         </a>
-        <a href="https://github.com/Bert0ns/cribrum" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">
+        <a href="https://github.com/Bert0ns/anteater" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">
           View source on GitHub
         </a>
       </div>
       <p class="meta-text">Requires Android 11 or newer. Free software under GPL-3.0.</p>
-      <p class="meta-text">The detectors are tuned on one person's library, so expect some wrong suggestions and some misses. Cloud libraries such as Google Photos, iOS and desktop are not covered.</p>
+      <p class="meta-text">The suggestions are tuned on one person's library, so expect some wrong ones and some misses. Cloud libraries such as Google Photos, iOS and desktop are not covered.</p>
 
       <div class="screenshots" aria-label="App screenshots">
         <figure class="screenshot-figure">
@@ -118,12 +118,12 @@
       <section id="clean">
         <h2>Photos: what it finds</h2>
         <p>
-          Cribrum scans your storage, including folders that gallery apps skip, such as WhatsApp's. The Photos tab of Clean lists nine categories. A category opens into a grid with the suggested photos already marked. Tap one to keep it, hold it to see it at full size and why it was flagged, and press the button under the grid to move the marked ones to the trash.
+          Anteater scans your storage, including folders that gallery apps skip, such as WhatsApp's. The Photos tab of Clean lists nine categories. A category opens into a grid with the suggested photos already marked. Tap one to keep it, hold it to see it at full size and why it was flagged, and press the button under the grid to move the marked ones to the trash.
         </p>
         <div class="feature-list">
           <div class="feature-row">
             <div class="feature-term">Exact copies</div>
-            <div class="feature-desc">The same file saved twice. Cribrum marks the extra ones.</div>
+            <div class="feature-desc">The same file saved twice. Anteater marks the extra ones.</div>
           </div>
           <div class="feature-row">
             <div class="feature-term">Similar copies</div>
@@ -159,7 +159,7 @@
           </div>
         </div>
         <p>
-          Exact copies, similar copies and bursts open as groups. Cribrum picks the best copy and shows it beside the others, and you can change which one stays.
+          Exact copies, similar copies and bursts open as groups. Anteater picks the best copy and shows it beside the others, and you can change which one stays.
         </p>
       </section>
 
@@ -179,7 +179,7 @@
           </div>
           <div class="feature-row">
             <div class="feature-term">Similar copies</div>
-            <div class="feature-desc">The smaller copy WhatsApp keeps in its Sent folder. Cribrum keeps the camera original.</div>
+            <div class="feature-desc">The smaller copy WhatsApp keeps in its Sent folder. Anteater keeps the camera original.</div>
           </div>
           <div class="feature-row">
             <div class="feature-term">Blurry, too dark or too bright</div>
@@ -191,7 +191,7 @@
           </div>
           <div class="feature-row">
             <div class="feature-term">Takes of one moment</div>
-            <div class="feature-desc">Several takes recorded one after the other. None is preselected, because Cribrum cannot tell which is best.</div>
+            <div class="feature-desc">Several takes recorded one after the other. None is preselected, because Anteater cannot tell which is best.</div>
           </div>
           <div class="feature-row">
             <div class="feature-term">Short clips</div>
@@ -288,16 +288,16 @@
         </div>
       </section>
 
-      <section id="principles">
-        <h2>Principles</h2>
+      <section id="expect">
+        <h2>What to expect</h2>
         <div class="feature-list">
           <div class="feature-row">
-            <div class="feature-term">Practical over pretty</div>
-            <div class="feature-desc">A clean, minimal UI whose features work.</div>
+            <div class="feature-term">Simple to use</div>
+            <div class="feature-desc">Open a category, check what is marked, and press one button.</div>
           </div>
           <div class="feature-row">
-            <div class="feature-term">Recall over precision</div>
-            <div class="feature-desc">Showing a photo worth keeping is fine. Missing clutter is not.</div>
+            <div class="feature-term">It errs on showing too much</div>
+            <div class="feature-desc">You may see a photo worth keeping, and you can keep it with a tap. Anteater would rather show it than hide clutter from you.</div>
           </div>
           <div class="feature-row">
             <div class="feature-term">Private by design</div>
@@ -313,10 +313,10 @@
       <section id="permissions">
         <h2>Permissions</h2>
         <p>
-          Gallery apps only see the folders Android indexes, and skip folders with a <code>.nomedia</code> file, such as WhatsApp's sent media. Cribrum asks for All files access, so it can read those folders and manage its trash.
+          Gallery apps only see the folders Android indexes, and skip folders with a <code>.nomedia</code> file, such as WhatsApp's sent media. Anteater asks for All files access, so it can read those folders and manage its trash.
         </p>
         <p>
-          Google Play allows that permission only for a few kinds of apps, such as file managers, so Cribrum is a direct APK download on GitHub. The app has no network permission, so it cannot send anything anywhere.
+          Google Play allows that permission only for a few kinds of apps, such as file managers, so Anteater is a direct APK download on GitHub. The app has no network permission, so it cannot send anything anywhere.
         </p>
       </section>
 
@@ -327,9 +327,9 @@
             <span class="step-num">1</span>
             <div class="step-body">
               <h3>Download the APK</h3>
-              <p>Get the latest release from the <a href="https://github.com/Bert0ns/cribrum/releases/latest" style="color: var(--brand); font-weight: 600;">GitHub releases page</a>. To check the download, compare its SHA-256 digest:</p>
+              <p>Get the latest release from the <a href="https://github.com/Bert0ns/anteater/releases/latest" style="color: var(--brand); font-weight: 600;">GitHub releases page</a>. To check the download, compare its SHA-256 digest:</p>
               <div class="code-box">
-                <code>sha256sum -c cribrum-*.apk.sha256</code>
+                <code>sha256sum -c *.apk.sha256</code>
                 <button class="copy-btn" id="copy-btn">Copy</button>
               </div>
             </div>
@@ -345,14 +345,14 @@
             <span class="step-num">3</span>
             <div class="step-body">
               <h3>Grant storage access</h3>
-              <p>On first launch, Android sends you to a system screen. Turn on All files access for Cribrum.</p>
+              <p>On first launch, Android sends you to a system screen. Turn on All files access for Anteater.</p>
             </div>
           </li>
           <li class="step-item">
             <span class="step-num">4</span>
             <div class="step-body">
               <h3>Scan and review</h3>
-              <p>Tap Scan now for photos and Scan videos for videos. After that, Cribrum also scans new files once a night while the phone charges. Then open a category to review it, or recompress large photos from the Compress tab.</p>
+              <p>Tap Scan now for photos and Scan videos for videos. After that, Anteater also scans new files once a night while the phone charges. Then open a category to review it, or recompress large photos from the Compress tab.</p>
             </div>
           </li>
         </ol>
@@ -361,21 +361,21 @@
       <section id="source">
         <h2>Source code and license</h2>
         <p>
-          Cribrum is free software under the <a href="https://github.com/Bert0ns/cribrum/blob/main/LICENSE" style="color: var(--brand); font-weight: 600;">GNU General Public License v3.0</a>.
+          Anteater is free software under the <a href="https://github.com/Bert0ns/anteater/blob/main/LICENSE" style="color: var(--brand); font-weight: 600;">GNU General Public License v3.0</a>.
           The source, the technical details and the design notes are on GitHub:
-          <a href="https://github.com/Bert0ns/cribrum" style="color: var(--brand); font-weight: 600;" target="_blank" rel="noopener noreferrer">https://github.com/Bert0ns/cribrum</a>
+          <a href="https://github.com/Bert0ns/anteater" style="color: var(--brand); font-weight: 600;" target="_blank" rel="noopener noreferrer">https://github.com/Bert0ns/anteater</a>
         </p>
       </section>
     </main>
 
     <footer>
-      <div>Cribrum &bull; GNU GPLv3</div>
+      <div>Anteater &bull; GNU GPLv3</div>
       <div class="footer-nav">
         <a href="#clean">Photos</a>
         <a href="#videos">Videos</a>
-        <a href="https://github.com/Bert0ns/cribrum" target="_blank" rel="noopener noreferrer">GitHub</a>
-        <a href="https://github.com/Bert0ns/cribrum/releases/latest" target="_blank" rel="noopener noreferrer">Releases</a>
-        <a href="https://github.com/Bert0ns/cribrum/blob/main/docs/design.md" target="_blank" rel="noopener noreferrer">Design</a>
+        <a href="https://github.com/Bert0ns/anteater" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://github.com/Bert0ns/anteater/releases/latest" target="_blank" rel="noopener noreferrer">Releases</a>
+        <a href="https://github.com/Bert0ns/anteater/blob/main/docs/design.md" target="_blank" rel="noopener noreferrer">Design</a>
       </div>
     </footer>
   </div>
@@ -383,13 +383,13 @@
   <script>
     const themeBtn = document.getElementById('theme-btn');
     function getTheme() {
-      const stored = localStorage.getItem('cribrum-theme');
+      const stored = localStorage.getItem('anteater-theme');
       if (stored === 'dark' || stored === 'light') return stored;
       return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
     function setTheme(theme) {
       document.documentElement.setAttribute('data-theme', theme);
-      localStorage.setItem('cribrum-theme', theme);
+      localStorage.setItem('anteater-theme', theme);
       if (!themeBtn) return;
       if (theme === 'dark') {
         themeBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
@@ -410,7 +410,7 @@
     const copyBtn = document.getElementById('copy-btn');
     if (copyBtn) {
       copyBtn.addEventListener('click', () => {
-        navigator.clipboard.writeText('sha256sum -c cribrum-*.apk.sha256');
+        navigator.clipboard.writeText('sha256sum -c *.apk.sha256');
         copyBtn.textContent = 'Copied';
         setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
       });

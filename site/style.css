@@ -354,6 +354,11 @@ code {
   color: var(--text);
 }
 
+.code-box code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .copy-btn {
   background: var(--surface);
   border: 1px solid var(--border);
