@@ -52,6 +52,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.bert0ns.cribrum.compress.BatchState
+import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.pipeline.Indexing
@@ -419,6 +420,7 @@ private fun AppContent(model: ReviewViewModel) {
                             retentionDays = state.retentionDays,
                             loading = state.loading,
                             mediaType = screen.mediaType,
+                            loopClips = screen.category == Category.SHORT_CLIPS,
                         )
                         is Screen.Trash -> TrashScreen(
                             state.trashed,

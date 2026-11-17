@@ -82,7 +82,7 @@ strings() {
 
 # Only a category title may be tapped, never a button such as Trash or Skip.
 mapfile -t titles < <(strings category_exact_duplicate category_near_duplicate category_burst category_blurry \
-    category_bad_exposure category_screenshot category_document category_forwarded category_sticker)
+    category_bad_exposure category_screenshot category_document category_forwarded category_sticker category_short_clips)
 for name in "${categories[@]}"; do
     known=false
     for title in "${titles[@]}"; do [[ $name == "$title" ]] && known=true; done

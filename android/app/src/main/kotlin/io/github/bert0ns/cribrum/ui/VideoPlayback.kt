@@ -4,6 +4,7 @@ package io.github.bert0ns.cribrum.ui
 import android.content.Context
 import android.net.Uri
 import android.view.SurfaceView
+import android.view.TextureView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -80,9 +81,10 @@ internal fun stripTimes(durationMs: Long, count: Int = STRIP_FRAMES): List<Long>
 /**
  * The one player of a full size view, and what the controls show of it. It makes the player when a video first plays, plays
  * one video at a time, and [release]s it when the view closes, so no player outlives the view and there is never a second.
+ * A [loop], a short clip's tile (docs/design.md §8), is muted from its first frame and plays its video again and again.
  * Everything runs on the main thread, as Media3 asks.
  */
-internal class VideoPlayback(private val create: () -> Player) {
+internal class VideoPlayback(private val loop: Boolean = false, private val create: () -> Player) {
     private var player: Player? = null
 
     /** The path of the video the player holds, playing or paused, or null when it holds none. */
@@ -100,7 +102,7 @@ internal class VideoPlayback(private val create: () -> Player) {
         private set
     var videoSize by mutableStateOf<VideoSize?>(null)
         private set
-    var muted by mutableStateOf(false)
+    var muted by mutableStateOf(loop)
         private set
 
     /** The video whose last play failed. A video that does not play is a line of text, never a crash. */
@@ -122,6 +124,7 @@ internal class VideoPlayback(private val create: () -> Player) {
         val player = player ?: create().also {
             it.addListener(listener)
             it.sound()
+            if (loop) it.repeatMode = Player.REPEAT_MODE_ONE
             player = it
         }
         failed = null
@@ -206,6 +209,14 @@ internal class VideoPlayback(private val create: () -> Player) {
         player?.clearVideoSurfaceView(view)
     }
 
+    fun attach(view: TextureView) {
+        player?.setVideoTextureView(view)
+    }
+
+    fun detach(view: TextureView) {
+        player?.clearVideoTextureView(view)
+    }
+
     /** Reads the player's state into what the screen shows. */
     fun sync() {
         val player = player ?: return
@@ -216,12 +227,12 @@ internal class VideoPlayback(private val create: () -> Player) {
     }
 }
 
-/** The [VideoPlayback] of the full size view that calls this: it is released when the view closes, and pauses when the app leaves the screen. */
+/** The [VideoPlayback] of the full size view or tile that calls this: it is released when that leaves, and pauses when the app leaves the screen. */
 @Composable
-internal fun rememberVideoPlayback(): VideoPlayback {
+internal fun rememberVideoPlayback(loop: Boolean = false): VideoPlayback {
     val context = LocalContext.current.applicationContext
     val factory = LocalPlayerFactory.current
-    val playback = remember(context, factory) { VideoPlayback { factory(context) } }
+    val playback = remember(context, factory, loop) { VideoPlayback(loop) { factory(context) } }
     DisposableEffect(playback) { onDispose { playback.release() } }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { playback.pause() }
     return playback
