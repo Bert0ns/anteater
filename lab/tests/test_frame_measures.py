@@ -4,12 +4,12 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from cribrum_lab.detectors import AnalysisContext
-from cribrum_lab.detectors.blur import BlurDetector
-from cribrum_lab.detectors.exposure import ExposureDetector
-from cribrum_lab.detectors.faces import FaceDetector
-from cribrum_lab.frame_measures import measure_frame
-from cribrum_lab.model import MediaRef, MediaType
+from anteater_lab.detectors import AnalysisContext
+from anteater_lab.detectors.blur import BlurDetector
+from anteater_lab.detectors.exposure import ExposureDetector
+from anteater_lab.detectors.faces import FaceDetector
+from anteater_lab.frame_measures import measure_frame
+from anteater_lab.model import MediaRef, MediaType
 
 GOLDEN = Path(__file__).resolve().parents[2] / "fixtures" / "golden"
 

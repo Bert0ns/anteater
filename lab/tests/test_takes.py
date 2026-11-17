@@ -3,10 +3,10 @@ from pathlib import Path
 
 import numpy as np
 
-from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, AnalysisContext, Role
-from cribrum_lab.detectors.takes import TAKES_MAX_GAP_MS, TakesDetector
-from cribrum_lab.metadata import VideoMetadata
-from cribrum_lab.model import Category, MediaRef, MediaType, Signal
+from anteater_lab.detectors import GROUP_KEY, ROLE_KEY, AnalysisContext, Role
+from anteater_lab.detectors.takes import TAKES_MAX_GAP_MS, TakesDetector
+from anteater_lab.metadata import VideoMetadata
+from anteater_lab.model import Category, MediaRef, MediaType, Signal
 
 START = datetime(2024, 5, 1, 10, 0, 0)
 START_MS = 1714550400000

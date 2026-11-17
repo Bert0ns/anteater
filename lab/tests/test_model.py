@@ -1,6 +1,6 @@
 import pytest
 
-from cribrum_lab.model import Category, Signal
+from anteater_lab.model import Category, Signal
 
 
 def test_signal_accepts_score_in_range():

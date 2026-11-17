@@ -4,7 +4,7 @@ import av
 import numpy as np
 import pytest
 
-from cribrum_lab.frames import frame_times, read_frames
+from anteater_lab.frames import frame_times, read_frames
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "videos"
 

@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, AnalysisContext, Role
-from cribrum_lab.detectors.base import accepted_media_types
-from cribrum_lab.detectors.exact_duplicate import ExactDuplicateDetector
-from cribrum_lab.model import Category, MediaRef, MediaType
+from anteater_lab.detectors import GROUP_KEY, ROLE_KEY, AnalysisContext, Role
+from anteater_lab.detectors.base import accepted_media_types
+from anteater_lab.detectors.exact_duplicate import ExactDuplicateDetector
+from anteater_lab.model import Category, MediaRef, MediaType
 
 
 def write(

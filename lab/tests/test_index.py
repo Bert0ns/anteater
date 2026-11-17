@@ -5,10 +5,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, Role
-from cribrum_lab.index import ImageIndex, IndexVersionError
-from cribrum_lab.metadata import ImageMetadata, VideoMetadata
-from cribrum_lab.model import (
+from anteater_lab.detectors import GROUP_KEY, ROLE_KEY, Role
+from anteater_lab.index import ImageIndex, IndexVersionError
+from anteater_lab.metadata import ImageMetadata, VideoMetadata
+from anteater_lab.model import (
     Category,
     FrameMeasures,
     MediaRef,
@@ -17,7 +17,7 @@ from cribrum_lab.model import (
     ReviewState,
     Signal,
 )
-from cribrum_lab.ranker import Ranker
+from anteater_lab.ranker import Ranker
 
 PHOTO = MediaRef(Path("/photos/a.jpg"), 100, 1)
 META = ImageMetadata(4000, 3000, "image/jpeg", "Google", "Pixel 8", datetime(2024, 5, 1, 10, 20))

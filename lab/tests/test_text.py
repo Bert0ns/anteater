@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from cribrum_lab.text import INPUT_SIDE, preprocess, text_coverage
+from anteater_lab.text import INPUT_SIDE, preprocess, text_coverage
 
 
 class FakeDetector:

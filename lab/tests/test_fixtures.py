@@ -3,8 +3,8 @@ import json
 import av
 import pytest
 
-from cribrum_lab import fixtures, mobileclip
-from cribrum_lab.frames import frame_times
+from anteater_lab import fixtures, mobileclip
+from anteater_lab.frames import frame_times
 
 EXPECTED = json.loads((fixtures.ROOT / "expected.json").read_text())
 HAS_MODEL = all((mobileclip.MODELS / name).exists() for name in mobileclip._FILES)

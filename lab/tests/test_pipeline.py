@@ -8,19 +8,19 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from cribrum_lab import pipeline
-from cribrum_lab.detectors import blur
-from cribrum_lab.detectors.base import accepted_media_types
-from cribrum_lab.detectors.blur import BlurDetector
-from cribrum_lab.detectors.burst import BurstDetector
-from cribrum_lab.detectors.exposure import ExposureDetector
-from cribrum_lab.detectors.faces import FaceDetector
-from cribrum_lab.frames import FRAMES_VERSION
-from cribrum_lab.imaging import load_grayscale
-from cribrum_lab.index import ImageIndex
-from cribrum_lab.metadata import ImageMetadata
-from cribrum_lab.model import Category, MediaRef, MediaType, Protection, ReviewState, Signal
-from cribrum_lab.ranker import Ranker
+from anteater_lab import pipeline
+from anteater_lab.detectors import blur
+from anteater_lab.detectors.base import accepted_media_types
+from anteater_lab.detectors.blur import BlurDetector
+from anteater_lab.detectors.burst import BurstDetector
+from anteater_lab.detectors.exposure import ExposureDetector
+from anteater_lab.detectors.faces import FaceDetector
+from anteater_lab.frames import FRAMES_VERSION
+from anteater_lab.imaging import load_grayscale
+from anteater_lab.index import ImageIndex
+from anteater_lab.metadata import ImageMetadata
+from anteater_lab.model import Category, MediaRef, MediaType, Protection, ReviewState, Signal
+from anteater_lab.ranker import Ranker
 
 IMAGE_GROUP_DETECTORS = sum(
     MediaType.IMAGE in accepted_media_types(d) for d in pipeline.GROUP_DETECTORS

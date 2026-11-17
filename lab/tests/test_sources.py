@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from cribrum_lab.model import MediaRef, MediaType
-from cribrum_lab.sources import FilesystemMediaSource
+from anteater_lab.model import MediaRef, MediaType
+from anteater_lab.sources import FilesystemMediaSource
 
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 16
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16

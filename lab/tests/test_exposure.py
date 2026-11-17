@@ -2,9 +2,9 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from cribrum_lab.detectors import AnalysisContext
-from cribrum_lab.detectors.exposure import ExposureDetector
-from cribrum_lab.model import Category, MediaRef
+from anteater_lab.detectors import AnalysisContext
+from anteater_lab.detectors.exposure import ExposureDetector
+from anteater_lab.model import Category, MediaRef
 
 
 def analyze(tmp_path, image):

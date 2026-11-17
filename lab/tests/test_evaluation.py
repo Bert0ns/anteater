@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from cribrum_lab.evaluation import evaluate, format_report
-from cribrum_lab.labels import Decision, Label, Stratum
-from cribrum_lab.model import Category, IndexedMedia, MediaRef, ReviewState, Signal
+from anteater_lab.evaluation import evaluate, format_report
+from anteater_lab.labels import Decision, Label, Stratum
+from anteater_lab.model import Category, IndexedMedia, MediaRef, ReviewState, Signal
 
 THRESHOLDS = {Category.BLURRY: 0.5, Category.SCREENSHOT: 0.5}
 

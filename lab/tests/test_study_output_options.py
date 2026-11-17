@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from cribrum_lab import prompts
-from cribrum_lab.labels import Decision, Label
-from cribrum_lab.model import Category, IndexedMedia, MediaRef, Protection, Signal
+from anteater_lab import prompts
+from anteater_lab.labels import Decision, Label
+from anteater_lab.model import Category, IndexedMedia, MediaRef, Protection, Signal
 
 _SCRIPT = Path(__file__).parents[1] / "scripts" / "study_output_options.py"
 _spec = importlib.util.spec_from_file_location("study_output_options", _SCRIPT)

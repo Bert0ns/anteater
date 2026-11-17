@@ -8,8 +8,8 @@ from zoneinfo import ZoneInfo
 import av
 import pytest
 
-from cribrum_lab import metadata
-from cribrum_lab.metadata import NoVideoTrack, UnreadableVideo, read_video_metadata
+from anteater_lab import metadata
+from anteater_lab.metadata import NoVideoTrack, UnreadableVideo, read_video_metadata
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "videos"
 EXPECTED = json.loads((FIXTURES / "expected.json").read_text())

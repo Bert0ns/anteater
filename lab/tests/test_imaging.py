@@ -1,7 +1,7 @@
 import numpy as np
 from PIL import Image
 
-from cribrum_lab.imaging import Pixels, load_grayscale
+from anteater_lab.imaging import Pixels, load_grayscale
 
 
 def test_16_bit_images_are_scaled_not_clipped(tmp_path):

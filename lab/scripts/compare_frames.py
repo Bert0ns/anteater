@@ -1,8 +1,8 @@
 """Compares the frames the phone took from a video with the lab's (docs/design.md, section 5).
 
 VideoFramesDeviceTest logs a line for each frame of the video it times, under the tag
-cribrum-frames: "frame <time_ms> mean <r> <g> <b> clipped <share> embedding <base64>". Pull the same
-video into lab/data/, dump the log, and run from lab/:
+anteater-frames: "frame <time_ms> mean <r> <g> <b> clipped <share> embedding <base64>". Pull the
+same video into lab/data/, dump the log, and run from lab/:
 
     uv run python scripts/compare_frames.py data/<video>.mp4 data/frames-log.txt
 
@@ -17,7 +17,7 @@ from pathlib import Path
 
 import numpy as np
 
-from cribrum_lab import frames, mobileclip
+from anteater_lab import frames, mobileclip
 
 LINE = re.compile(
     r"frame (\d+) mean ([\d.]+) ([\d.]+) ([\d.]+) clipped ([\d.]+) embedding ([A-Za-z0-9+/=]+)"

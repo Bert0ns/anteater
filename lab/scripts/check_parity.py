@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-LAB = ROOT / "lab/src/cribrum_lab"
+LAB = ROOT / "lab/src/anteater_lab"
 ANDROID = ROOT / "android/app/src/main/kotlin/io/github/bert0ns/anteater"
 
 LAB_ONLY: set[str] = set()

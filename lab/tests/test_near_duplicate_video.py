@@ -2,13 +2,13 @@ from pathlib import Path
 
 import numpy as np
 
-from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, AnalysisContext, Role
-from cribrum_lab.detectors.near_duplicate import (
+from anteater_lab.detectors import GROUP_KEY, ROLE_KEY, AnalysisContext, Role
+from anteater_lab.detectors.near_duplicate import (
     VIDEO_MAX_DURATION_GAP_MS,
     NearDuplicateDetector,
 )
-from cribrum_lab.metadata import VideoMetadata
-from cribrum_lab.model import Category, MediaRef, MediaType
+from anteater_lab.metadata import VideoMetadata
+from anteater_lab.model import Category, MediaRef, MediaType
 
 CAMERA = "DCIM/Camera"
 SENT = "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video/Sent"
