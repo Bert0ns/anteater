@@ -4,6 +4,7 @@ package io.github.bert0ns.cribrum.ui
 
 import android.provider.Settings
 import android.text.format.Formatter
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -518,7 +519,7 @@ private fun FullSize(
         }
         val marked = current.image.path in marked
         val heart: @Composable () -> Unit = {
-            FavoriteToggle(current.isFavorite, enabled = !marked, video = video) {
+            FavoriteToggle(current.isFavorite, enabled = !marked, offReason = if (video) R.string.favorite_off_marked_video else R.string.favorite_off_marked) {
                 haptics.performHapticFeedback(Haptic.TICK.type)
                 onFavorite(current.image, it)
             }
@@ -614,14 +615,14 @@ internal fun BoxScope.FullSizeBar(path: String, favorite: Boolean, heart: @Compo
 }
 
 /**
- * The heart of the full size view of a photo or a [video]: filled for a favourite, an outline for any other, and a tap says
- * the other. It is off while the item is marked for the trash, and says why to a screen reader, which would only hear
- * "dimmed" from a plain disabled button.
+ * The heart of the full size view of a photo or a video: filled for a favourite, an outline for any other, and a tap says
+ * the other. It is off while the item is marked for the trash, and says why with [offReason] to a screen reader, which would
+ * only hear "dimmed" from a plain disabled button.
  */
 @Composable
-internal fun FavoriteToggle(favorite: Boolean, enabled: Boolean, video: Boolean = false, onChange: (Boolean) -> Unit) {
+internal fun FavoriteToggle(favorite: Boolean, enabled: Boolean, @StringRes offReason: Int = R.string.favorite_off_marked, onChange: (Boolean) -> Unit) {
     val label = stringResource(if (favorite) R.string.favorite_remove else R.string.favorite_add)
-    val reason = stringResource(if (video) R.string.favorite_off_marked_video else R.string.favorite_off_marked)
+    val reason = stringResource(offReason)
     IconButton(
         { onChange(!favorite) },
         Modifier.semantics { if (!enabled) stateDescription = reason },

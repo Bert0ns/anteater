@@ -321,7 +321,7 @@ private fun FullSize(videos: List<VideoItem>, start: VideoItem, selected: Set<St
         FullSizeToggle(item.video.path in selected, stringResource(R.string.video_tile_selected), MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary) { onToggle(item.video.path) }
         // A selected video is one the user means to trash, and a favourite and a trash contradict each other, as in the review.
         val heart: @Composable () -> Unit = {
-            FavoriteToggle(item.isFavorite, enabled = item.video.path !in selected, video = true) {
+            FavoriteToggle(item.isFavorite, enabled = item.video.path !in selected, offReason = R.string.favorite_off_selected_video) {
                 haptics.performHapticFeedback(Haptic.TICK.type)
                 onFavorite(item.video, it)
             }
