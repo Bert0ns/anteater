@@ -320,7 +320,7 @@
     <string name="settings_uninstall_warning">Uninstalling keeps the trash folder, so empty it first.</string>
     <string name="settings_haptics">Haptic feedback</string>
     <string name="settings_images_at_night">Analyse images at night</string>
-    <string name="settings_images_at_night_hint">While the phone charges, the night scan analyses new images and empties the expired trash. With both switches off, it only empties the trash.</string>
+    <string name="settings_images_at_night_hint">While the phone charges, the night scan analyses new images and empties the expired trash. If the videos are not analysed at night either, it only empties the trash.</string>
     <string name="settings_videos_at_night">Analyse videos at night</string>
     <string name="settings_videos_at_night_hint">Once you have run Scan videos, the night scan also analyses new videos, after the photos.</string>
     <string name="settings_haptics_hint">A short vibration when you select, skip, keep or trash images and videos. It also follows the phone\'s touch feedback setting.</string>
