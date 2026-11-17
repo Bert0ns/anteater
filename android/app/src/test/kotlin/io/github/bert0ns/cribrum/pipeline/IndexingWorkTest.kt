@@ -56,6 +56,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.io.File
+import java.io.IOException
 import java.time.Duration
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -450,14 +451,18 @@ class IndexingWorkTest {
         private val done: CompletableDeferred<Unit>,
         private val readingVideo: () -> Unit = {},
         private val purges: AtomicInteger = AtomicInteger(),
+        private val foregrounds: AtomicInteger = AtomicInteger(),
+        private val purge: () -> ExpiredPurge = { ExpiredPurge.NONE },
     ) : IndexWorker(context, parameters) {
         override fun hasStorageAccess() = true
 
-        override suspend fun setForegroundInfo(info: ForegroundInfo) {}
+        override suspend fun setForegroundInfo(info: ForegroundInfo) {
+            foregrounds.incrementAndGet()
+        }
 
         override suspend fun purgeExpired(app: CribrumApp): ExpiredPurge {
             purges.incrementAndGet()
-            return ExpiredPurge.NONE
+            return purge()
         }
 
         override fun pipeline(app: CribrumApp, embedder: MobileClip) = Pipeline(
@@ -490,6 +495,12 @@ class IndexingWorkTest {
     /** The purges of the expired trash that the scans of [reads] ran. */
     private val purges = AtomicInteger()
 
+    /** The foreground starts of the scans of [reads]. */
+    private val foregrounds = AtomicInteger()
+
+    /** What the scans of [reads] get from the purge of the expired trash. */
+    private var purge: () -> ExpiredPurge = { ExpiredPurge.NONE }
+
     /** What a scan that [start] asks for reads, of an image and a video the index holds without their metadata. */
     private fun reads(start: () -> Unit): List<String> {
         val image = File(folder.root, "a.jpg").apply { writeText("a") }.toMediaRef()
@@ -497,7 +508,7 @@ class IndexingWorkTest {
         runBlocking { (app as CribrumApp).index.recordAll(listOf(image, video)) }
         val reads = ConcurrentLinkedQueue<String>()
         val done = CompletableDeferred<Unit>()
-        workerFactory = { ctx, params -> ReadingScan(ctx, params, reads, done, readingVideo, purges) }
+        workerFactory = { ctx, params -> ReadingScan(ctx, params, reads, done, readingVideo, purges, foregrounds, purge) }
         start()
         runBlocking { withTimeout(10_000) { done.await() } }
         return reads.toList()
@@ -565,6 +576,19 @@ class IndexingWorkTest {
 
         assertEquals(emptyList<String>(), reads(::nightPass))
         assertEquals(1, purges.get())
+        assertEquals(0, foregrounds.get())
+        assertNull(appInstance.lastScan.report)
+        assertFalse(appInstance.lastScan.failed)
+    }
+
+    @Test
+    fun `with both switches off a failed purge sets the failed flag, and still records no scan`() {
+        val appInstance = app as CribrumApp
+        appInstance.imageScans.atNight = false
+        purge = { throw IOException("trash unreadable") }
+
+        assertEquals(emptyList<String>(), reads(::nightPass))
+        assertTrue(appInstance.lastScan.failed)
         assertNull(appInstance.lastScan.report)
     }
 
