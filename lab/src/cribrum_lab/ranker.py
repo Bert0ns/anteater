@@ -102,7 +102,8 @@ class Ranker:
         """Candidates under each category they have a reason for, highest score first, each
         score lowered by the candidate's protection. A video's score is also multiplied by its
         size, so of two equal videos the larger comes first, and an image's size plays no part
-        (docs/design.md, 6.6). A sticker is listed under STICKER only."""
+        (docs/design.md, 6.6). A list's order holds only within one media type, since a video's
+        key is in bytes and an image's is not. A sticker is listed under STICKER only."""
         groups = defaultdict(list)
         for candidate in ranked:
             categories = {s.category for s in candidate.reasons}
@@ -115,7 +116,7 @@ class Ranker:
                 key=lambda c: (
                     -c.protection
                     * max(s.score for s in c.reasons if s.category == category)
-                    * _weight(c.image.ref)
+                    * _size_factor(c.image.ref)
                 )
             )
         return dict(groups)
@@ -138,9 +139,10 @@ class Ranker:
         return 1.0 + (signal.score - threshold) / (1.0 - threshold)
 
 
-def _weight(ref: MediaRef) -> float:
-    """The bytes a video frees: a 900 MB video is worth more of a review than a 5 MB clip."""
-    return float(ref.size) if ref.media_type is MediaType.VIDEO else 1.0
+def _size_factor(ref: MediaRef) -> float:
+    """The bytes a video frees: a 900 MB video is worth more of a review than a 5 MB clip. At
+    least 1, so an empty video keeps its score and protection order."""
+    return float(max(ref.size, 1)) if ref.media_type is MediaType.VIDEO else 1.0
 
 
 def _tie_break(path: Path) -> str:

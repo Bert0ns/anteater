@@ -235,6 +235,15 @@ def test_protection_lowers_a_video_by_its_factor_on_the_size():
         assert names(Ranker.by_category(order)[Category.BLURRY]) == expected
 
 
+def test_an_empty_video_keeps_its_score_order():
+    # Size 0 would zero both products and leave the order of rank, where the screenshot puts
+    # "shot" first, though its blur score is the lower.
+    order = rank(sized("blurry", 0, blur(0.9)), sized("shot", 0, blur(0.6), screenshot(1.0)))
+
+    assert names(order) == ["shot", "blurry"]
+    assert names(Ranker.by_category(order)[Category.BLURRY]) == ["blurry", "shot"]
+
+
 def test_an_image_s_size_does_not_change_its_place():
     # The path hash puts "small" first, and an image keeps that order whatever its size.
     order = rank(
