@@ -24,8 +24,11 @@ import io.github.bert0ns.cribrum.compress.Marker
 import io.github.bert0ns.cribrum.compress.Refusal
 import io.github.bert0ns.cribrum.metadata.VideoMetadata
 import io.github.bert0ns.cribrum.model.Category
+import io.github.bert0ns.cribrum.model.GROUP_KEY
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.ReviewState
+import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.pipeline.Failure
 import io.github.bert0ns.cribrum.pipeline.IndexWorker
 import io.github.bert0ns.cribrum.pipeline.Indexing
@@ -132,6 +135,20 @@ private fun Gallery.clipsLibrary() {
         val ref = world.video("WhatsApp/Media/WhatsApp Video", "VID-2026101$index-WA000${index + 3}.mp4", 24_000_000L + index * 61_000_000L, taken(index + 3), world.signal(Category.FORWARDED, 1f, "messaging_folder" to "yes"))
         world.show(ref.path, 18_000L + index * 41_000L, GalleryPictures.scene(7_200 + index))
         lengths[ref.path] = 18_000L + index * 41_000L
+    }
+    // A camera original and WhatsApp's re-encoded copy in Sent: the same length, a tenth of the size.
+    val original = world.video(CAMERA, "VID_20261021_171233.mp4", 310_000_000L, taken(2))
+    val sent = world.video("WhatsApp/Media/WhatsApp Video/Sent", "VID-20261021-WA0011.mp4", 31_000_000L, taken(2), world.signal(Category.FORWARDED, 1f, "messaging_folder" to "yes"))
+    world.group("sent-copy", Category.NEAR_DUPLICATE, original, listOf(sent to 1f))
+    world.show(original.path, 28_400L, GalleryPictures.scene(7_300))
+    world.show(sent.path, 28_400L, GalleryPictures.scene(7_300))
+    lengths[original.path] = 28_400L
+    lengths[sent.path] = 28_400L
+    // Three takes of one moment, filmed one after the other: no best take, so every take scores 1.
+    for (index in 0 until 3) {
+        val take = world.video(CAMERA, "VID_20261018_1932${index}0.mp4", 140_000_000L + index * 45_000_000L, taken(5), world.signal(Category.TAKES, 1f, GROUP_KEY to "takes-1", ROLE_KEY to Role.TAKE.value))
+        world.show(take.path, 21_000L + index * 6_000L, GalleryPictures.scene(7_400 + index))
+        lengths[take.path] = 21_000L + index * 6_000L
     }
     world.commit()
     // The video steps have run: each video has its length, so tiles show it and none waits for a scan.
