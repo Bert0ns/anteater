@@ -126,6 +126,7 @@ fun categoryName(category: Category, mediaType: MediaType = MediaType.IMAGE): St
         Category.FORWARDED -> if (mediaType == MediaType.VIDEO) R.string.category_forwarded_videos else R.string.category_forwarded
         Category.STICKER -> R.string.category_sticker
         Category.TAKES -> R.string.category_takes
+        Category.SHORT_CLIPS -> R.string.category_short_clips
     },
 )
 

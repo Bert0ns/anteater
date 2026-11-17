@@ -9,6 +9,7 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -137,9 +138,12 @@ class ThresholdsScreenTest {
         compose.setContent { ThresholdsScreen(THRESHOLDS, emptyMap(), emptyMap(), { _, _ -> }, {}) }
 
         compose.onNode(hasScrollAction()).performScrollToNode(hasText("Reset to defaults"))
-        compose.onAllNodes(hasContentDescription(", videos", substring = true)).assertCountEquals(2)
+        compose.onAllNodes(hasContentDescription(", videos", substring = true)).assertCountEquals(3)
         compose.onNodeWithContentDescription("Blurry, videos").assertExists()
         compose.onNodeWithContentDescription("Too dark or too bright, videos").assertExists()
+        compose.onNodeWithContentDescription("Short clips, videos").assertExists()
+        // A category of videos only has no slider under Photos: the photos' thresholds do not list it.
+        compose.onAllNodesWithContentDescription("Short clips").assertCountEquals(0)
     }
 
     @Test

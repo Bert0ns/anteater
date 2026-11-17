@@ -14,6 +14,7 @@ import io.github.bert0ns.cribrum.detectors.ForwardedDetector
 import io.github.bert0ns.cribrum.detectors.GroupDetector
 import io.github.bert0ns.cribrum.detectors.MissingEmbedding
 import io.github.bert0ns.cribrum.detectors.NearDuplicateDetector
+import io.github.bert0ns.cribrum.detectors.ShortClipsDetector
 import io.github.bert0ns.cribrum.detectors.TakesDetector
 import io.github.bert0ns.cribrum.folders.isStickerFolder
 import io.github.bert0ns.cribrum.frames.FRAMES_VERSION
@@ -437,6 +438,21 @@ class PipelineTest {
 
         assertEquals(emptyList<Failure>(), stats.failures)
         assertEquals(listOf(setOf("clip.mp4", "later.mp4")), takesGroups())
+    }
+
+    @Test
+    fun `a photo stored beside a clip runs the short clips again`() {
+        videos()
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(ShortClipsDetector()), videoMetadataReader = ::readVideo)
+        fun evidence() = runBlocking {
+            runBlocking { pipeline.run(source, images = false, videos = true) }
+            index.signals(File(root, "DCIM/Camera/clip.mp4").path).single { it.kind == Category.SHORT_CLIPS }.evidence
+        }
+
+        assertFalse("photo_chance" in evidence())
+        runBlocking { index.setMetadata(File(root, "DCIM/Camera/a.png").path, ImageMetadata(64, 48, "image/png", capturedAt = clipMeta.capturedAt)) }
+
+        assertTrue("photo_chance" in evidence())
     }
 
     @Test
@@ -1516,7 +1532,7 @@ class PipelineTest {
             setOf(
                 Category.BLURRY, Category.BAD_EXPOSURE, Category.SCREENSHOT, Category.STICKER,
                 Category.DOCUMENT, Category.FORWARDED,
-                Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE, Category.BURST, Category.TAKES,
+                Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE, Category.BURST, Category.TAKES, Category.SHORT_CLIPS,
             ),
             DETECTOR_CATEGORIES,
         )

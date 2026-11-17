@@ -30,6 +30,7 @@ import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.pipeline.DETECTOR_CATEGORIES
+import io.github.bert0ns.cribrum.pipeline.VIDEO_ONLY_CATEGORIES
 import io.github.bert0ns.cribrum.ranker.THRESHOLDS
 import io.github.bert0ns.cribrum.ranker.VIDEO_THRESHOLDS
 import io.github.bert0ns.cribrum.review.Thresholds
@@ -60,7 +61,7 @@ fun ThresholdsScreen(
             Text(stringResource(R.string.thresholds_direction), Modifier.padding(16.dp))
         }
         item { SectionHeader(stringResource(R.string.tab_photos)) }
-        items(Category.entries.filter { it in DETECTOR_CATEGORIES && it !in Thresholds.FIXED }, key = { it }) { category ->
+        items(Category.entries.filter { it in DETECTOR_CATEGORIES && it !in Thresholds.FIXED && it !in VIDEO_ONLY_CATEGORIES }, key = { it }) { category ->
             ThresholdRow(category, thresholds[category] ?: THRESHOLDS.getValue(category), counts[category] ?: 0, defaultCounts[category], onChange, haptics)
         }
         item { SectionHeader(stringResource(R.string.tab_videos)) }

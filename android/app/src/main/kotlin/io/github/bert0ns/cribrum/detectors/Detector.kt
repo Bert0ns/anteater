@@ -13,6 +13,7 @@ import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.Signal
 import java.io.File
+import java.time.LocalDateTime
 import io.github.bert0ns.cribrum.hashing.contentHash as hashFile
 import io.github.bert0ns.cribrum.hashing.perceptualHash as hashPerceptual
 
@@ -42,8 +43,18 @@ data class AnalysisContext(
     val frames: suspend (MediaRef) -> List<FloatArray> = { emptyList() },
     /** What [io.github.bert0ns.cribrum.frames.measureFrame] kept of the video's sampled frames, in the order of their times: none when it has no frames stored. */
     val frameMeasures: suspend (MediaRef) -> List<FrameMeasures> = { emptyList() },
+    /** The photos in a camera folder with a capture time: none when the run has none to give. */
+    val photos: suspend () -> List<Photo> = { emptyList() },
     /** Known screen resolutions as (short side, long side). */
     val screenSizes: Set<Pair<Int, Int>> = SCREEN_SIZES,
+)
+
+/** A camera photo, as a video detector that looks for a photo beside a clip sees it. */
+data class Photo(
+    /** Local time with no zone, as [VideoMetadata.capturedAt] is, so the two compare as wall clocks. */
+    val capturedAt: LocalDateTime,
+    /** L2-normalized MobileCLIP embedding, null when the photo has none stored. */
+    val embedding: FloatArray?,
 )
 
 /**

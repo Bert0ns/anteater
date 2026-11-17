@@ -38,6 +38,7 @@ val THRESHOLDS: Map<Category, Float> = mapOf(
 val VIDEO_THRESHOLDS: Map<Category, Float> = mapOf(
     Category.BLURRY to 0.15f,
     Category.BAD_EXPOSURE to 0.4f,
+    Category.SHORT_CLIPS to 0.3f,
 )
 
 /** How much a protection signal at score 1 lowers an image's likelihood. */

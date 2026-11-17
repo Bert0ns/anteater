@@ -36,6 +36,7 @@ enum class Category(override val value: String) : Kind {
     FORWARDED("forwarded"),
     STICKER("sticker"),
     TAKES("takes"),
+    SHORT_CLIPS("short_clips"),
 }
 
 /** Hints that an image is a memory. They lower it in the review order, never remove it. */
