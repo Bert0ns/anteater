@@ -1,4 +1,4 @@
-# UI/UX council brief: Cribrum Android app
+# UI/UX council brief: Anteater Android app
 
 <!-- The orchestrator fills in everything in angle brackets and deletes this comment. -->
 
@@ -10,7 +10,7 @@ The goal is a **simpler and more intuitive** app, not a more complex or detailed
 
 ## The app
 
-Cribrum finds the photos a user may want to delete or compress, and lets them review those quickly, all on the device. Read `README.md` and `docs/design.md` §1 to §3, §8 and §9.
+Anteater finds the photos a user may want to delete or compress, and lets them review those quickly, all on the device. Read `README.md` and `docs/design.md` §1 to §3, §8 and §9.
 
 These are product principles. Do not propose breaking them. If one hurts the UX, raise it as an open question:
 - The app suggests, the user decides, and nothing is deleted automatically.
@@ -28,7 +28,7 @@ The maintainer uses the app in Italian on a Galaxy Z Fold7, folded and unfolded.
 
 1. **The gallery** in `<gallery folder>`: <count> PNGs of the app at commit `<commit>`, rendered from the real composables over drawn pictures. `index.md` describes each image, and its notes at the top list what differs from a phone. Those differences are not app problems. File names follow `screen-state_lang_theme_device.png`. Look at the images, at least every Italian phone image and the variants of the main screens.
 2. **The flows** in `<council folder>/flows.md`, with the taps of each step.
-3. **The code**: `android/app/src/main/kotlin/io/github/bert0ns/cribrum/MainActivity.kt`, `.../ui/`, and the strings in `android/app/src/main/res/values/strings.xml` and `values-it/strings.xml`. Use it for what images cannot show, and cite it for any claim about behavior.
+3. **The code**: `android/app/src/main/kotlin/io/github/bert0ns/anteater/MainActivity.kt`, `.../ui/`, and the strings in `android/app/src/main/res/values/strings.xml` and `values-it/strings.xml`. Use it for what images cannot show, and cite it for any claim about behavior.
 
 ## Your report
 
