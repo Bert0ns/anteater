@@ -705,10 +705,12 @@ class VideosScreenTest {
         var items by mutableStateOf(many(20))
         compose.setContent {
             var selected by remember { mutableStateOf(emptySet<String>()) }
-            VideosScreen(items, selected, onToggle = { selected = if (it in selected) selected - it else selected + it }, onApply = { paths, _ ->
-                items = items.filterNot { it.video.path in paths }
-                selected = emptySet()
-            })
+            CompositionLocalProvider(LocalPlayerFactory provides players.factory) {
+                VideosScreen(items, selected, onToggle = { selected = if (it in selected) selected - it else selected + it }, onApply = { paths, _ ->
+                    items = items.filterNot { it.video.path in paths }
+                    selected = emptySet()
+                })
+            }
         }
         compose.onAllNodesWithContentDescription("Next page").onFirst().performClick()
         compose.waitForIdle()
@@ -727,7 +729,7 @@ class VideosScreenTest {
     @Test
     fun `a rotation keeps the scroll of the page where it was`() {
         val restore = StateRestorationTester(compose)
-        restore.setContent { VideosScreen(many(16), emptySet(), onToggle = {}, onApply = { _, _ -> }) }
+        restore.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { VideosScreen(many(16), emptySet(), onToggle = {}, onApply = { _, _ -> }) } }
         compose.onNode(hasScrollAction()).performScrollToIndex(10)
         compose.waitForIdle()
         tile("v1.mp4").assertDoesNotExist()
