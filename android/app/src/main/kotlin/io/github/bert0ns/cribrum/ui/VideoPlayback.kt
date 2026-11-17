@@ -67,10 +67,9 @@ internal const val STRIP_FRAMES = 5
 /** The player of a full size view, made when the first video plays. A test hands in another. */
 internal val LocalPlayerFactory = staticCompositionLocalOf<(Context) -> Player> { ::exoPlayer }
 
-private fun exoPlayer(context: Context): Player = ExoPlayer.Builder(context)
-    .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
-    .setHandleAudioBecomingNoisy(true)
-    .build()
+private fun exoPlayer(context: Context): Player = ExoPlayer.Builder(context).setHandleAudioBecomingNoisy(true).build()
+
+private val MOVIE_SOUND = AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build()
 
 /**
  * The times of the strip's frames: the middle of each of [count] equal parts of the video, so the first is not the black
@@ -122,7 +121,7 @@ internal class VideoPlayback(private val create: () -> Player) {
     fun play(file: File, atMs: Long = 0) {
         val player = player ?: create().also {
             it.addListener(listener)
-            it.volume = if (muted) 0f else 1f
+            it.sound()
             player = it
         }
         failed = null
@@ -164,7 +163,16 @@ internal class VideoPlayback(private val create: () -> Player) {
 
     fun toggleMute() {
         muted = !muted
-        player?.volume = if (muted) 0f else 1f
+        player?.sound()
+    }
+
+    /**
+     * Silent while muted, and then without audio focus too, so a muted video leaves the user's music playing (#418).
+     * Unmuting asks for focus again, as a video with sound should.
+     */
+    private fun Player.sound() {
+        volume = if (muted) 0f else 1f
+        setAudioAttributes(MOVIE_SOUND, !muted)
     }
 
     /** Lets go of the video and keeps the player for the next one. */

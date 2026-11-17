@@ -2,6 +2,7 @@ package io.github.bert0ns.cribrum.ui
 
 import android.content.Context
 import android.os.Looper
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -24,6 +25,10 @@ internal class FakePlayer(private val lengthMs: Long = 61_000) : SimpleBasePlaye
     private var failure: PlaybackException? = null
 
     var released = false
+        private set
+
+    /** Whether it was last told to take audio focus, as ExoPlayer does with it. */
+    var focus = false
         private set
 
     /** The files it holds, as paths. */
@@ -97,6 +102,11 @@ internal class FakePlayer(private val lengthMs: Long = 61_000) : SimpleBasePlaye
     @Suppress("OVERRIDE_DEPRECATION")
     override fun handleSetVolume(volume: Float): ListenableFuture<*> {
         level = volume
+        return Futures.immediateVoidFuture()
+    }
+
+    override fun handleSetAudioAttributes(audioAttributes: AudioAttributes, handleAudioFocus: Boolean): ListenableFuture<*> {
+        focus = handleAudioFocus
         return Futures.immediateVoidFuture()
     }
 
