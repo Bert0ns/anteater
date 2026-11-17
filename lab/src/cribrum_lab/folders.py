@@ -27,12 +27,6 @@ def is_messaging_folder(path: Path) -> bool:
     return any(part.lower() in _MESSAGING_FOLDERS for part in path.parent.parts)
 
 
-def is_sent_folder(path: Path) -> bool:
-    """The "Sent" folder of a messaging app's media folder, such as "WhatsApp Video/Sent": the
-    copies of what the user sent."""
-    return is_messaging_folder(path) and any(part.lower() == "sent" for part in path.parent.parts)
-
-
 def is_sticker_folder(path: Path) -> bool:
     """A messaging app's sticker folder, such as WhatsApp's "WhatsApp Stickers" and "WhatsApp
     Backup Excluded Stickers"."""

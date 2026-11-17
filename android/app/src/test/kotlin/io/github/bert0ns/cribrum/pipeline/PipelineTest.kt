@@ -447,7 +447,7 @@ class PipelineTest {
 
         val signal = runBlocking { index.signals(sent.path) }.single()
         assertEquals(Category.FORWARDED, signal.kind)
-        assertEquals(mapOf("messaging_folder" to "yes", "sent_folder" to "yes"), signal.evidence)
+        assertEquals(mapOf("messaging_folder" to "yes"), signal.evidence)
         assertEquals(emptyList<Any>(), runBlocking { index.signals(clip.path) }) // the camera's copy
         assertEquals(emptyList<Failure>(), stats.failures)
         assertEquals(2, stats.detectorRuns) // the two readable videos, and nothing else: no hash, no embedding

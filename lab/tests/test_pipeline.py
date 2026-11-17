@@ -1004,7 +1004,7 @@ def test_a_run_for_videos_lists_a_video_in_a_messaging_folder_as_forwarded(video
     stats = pipeline.run(videos.parent.parent, index, videos=True, images=False)
 
     [signal] = [s for s in index.signals(sent) if s.category is Category.FORWARDED]
-    assert signal.evidence == {"messaging_folder": "yes", "sent_folder": "yes"}
+    assert signal.evidence == {"messaging_folder": "yes"}
     assert Category.FORWARDED not in categories(index, videos / "clip.mp4")  # the camera's copy
     assert stats.failures == []
 

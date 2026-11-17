@@ -12,14 +12,12 @@ they kept (docs/design.md, 5).
 
 from cribrum_lab import prompts
 from cribrum_lab.detectors.base import AnalysisContext
-from cribrum_lab.folders import is_messaging_folder, is_sent_folder
+from cribrum_lab.folders import is_messaging_folder
 from cribrum_lab.model import Category, MediaRef, MediaType, Signal
 
 ZERO_SHOT_WEIGHT = 0.9
 MESSAGING_FOLDER_WEIGHT = 0.4
 NO_CAMERA_EXIF_WEIGHT = 0.1
-VIDEO_MESSAGING_FOLDER_WEIGHT = 0.6
-VIDEO_SENT_FOLDER_WEIGHT = 0.5
 
 
 class ForwardedDetector:
@@ -51,13 +49,9 @@ class ForwardedDetector:
         return [Signal(self.id, self.version, Category.FORWARDED, 1.0 - miss, evidence)]
 
     def _video(self, video: MediaRef) -> list[Signal]:
-        """Every video in a messaging app's folder is a candidate, the ones in "Sent" more than
-        the others, and no other video gets a signal."""
+        """Every video in a messaging app's folder scores 1, and no other video gets a signal.
+        At 1 no position of the category's slider, which the photos share, hides it."""
         if not is_messaging_folder(video.path):
             return []
-        sent = is_sent_folder(video.path)
-        score = 1.0 - (1.0 - VIDEO_MESSAGING_FOLDER_WEIGHT) * (
-            1.0 - (VIDEO_SENT_FOLDER_WEIGHT if sent else 0.0)
-        )
-        evidence = {"messaging_folder": "yes", "sent_folder": "yes" if sent else "no"}
-        return [Signal(self.id, self.version, Category.FORWARDED, score, evidence)]
+        evidence = {"messaging_folder": "yes"}
+        return [Signal(self.id, self.version, Category.FORWARDED, 1.0, evidence)]

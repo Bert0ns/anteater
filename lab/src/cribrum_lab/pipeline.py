@@ -362,9 +362,10 @@ def _video_steps(
     progress: Progress,
     zone: tzinfo | None,
 ) -> None:
-    """The video steps, which only a run asked for videos takes: the metadata, the frames, then
-    the per-video detectors and the group detectors that accept videos, which may read the
-    frames."""
+    """The video steps, which only a run asked for videos takes: the metadata, the per-video
+    detectors, which read no frame, then the frames and the group detectors that accept videos,
+    which may read them. The detectors go before the frames, the longest step, so a run stopped
+    there still has their signals."""
     pending = [i for i in index.without_metadata() if i.media_type is MediaType.VIDEO]
     for done, video in enumerate(pending, 1):
         try:
@@ -377,9 +378,9 @@ def _video_steps(
         except UnreadableVideo:
             index.set_unreadable(video.path)
         progress("video_metadata", done, len(pending))
+    _video_detectors(found, index, detectors, stats)
     if embedder is not None:
         _embed_frames(embedder, index, jobs, stats, progress)
-    _video_detectors(found, index, detectors, stats)
     _group_steps(MediaType.VIDEO, found, index, group_detectors, (), None, {}, stats, progress)
 
 
