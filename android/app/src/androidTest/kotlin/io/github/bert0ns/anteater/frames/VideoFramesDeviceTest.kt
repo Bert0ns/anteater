@@ -39,7 +39,7 @@ import kotlin.system.measureNanoTime
  * color matrix misses. An HDR frame is only reported, with its brightness and clipped share on both sides: the phone tone
  * maps these small fixtures another way than its camera's clips, which `-e video` compares (§5).
  *
- * It refuses to run in the app Cribrum is installed as, so build it under another id and let that one read shared storage:
+ * It refuses to run in the app Anteater is installed as, so build it under another id and let that one read shared storage:
  *
  *     ./gradlew -PapplicationIdSuffix=.framecheck assembleDebug assembleDebugAndroidTest
  *     adb install -t app/build/outputs/apk/debug/app-debug.apk
@@ -67,7 +67,7 @@ class VideoFramesDeviceTest {
 
     @Before
     fun refuseTheInstalledApp() {
-        check(context.packageName != INSTALLED_APP) { "build with -PapplicationIdSuffix=.framecheck: this test must not replace or uninstall Cribrum" }
+        check(context.packageName != INSTALLED_APP) { "build with -PapplicationIdSuffix=.framecheck: this test must not replace or uninstall Anteater" }
         Log.i(TAG, "Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}")
     }
 

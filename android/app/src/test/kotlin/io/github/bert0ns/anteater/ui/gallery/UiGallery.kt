@@ -39,14 +39,14 @@ import androidx.work.Configuration
 import androidx.work.WorkManager
 import androidx.work.testing.SynchronousExecutor
 import androidx.work.testing.WorkManagerTestInitHelper
-import io.github.bert0ns.anteater.App
 import io.github.bert0ns.anteater.AnteaterApp
+import io.github.bert0ns.anteater.App
 import io.github.bert0ns.anteater.MainActivity
 import io.github.bert0ns.anteater.Permissions
 import io.github.bert0ns.anteater.compress.CompressibleImage
+import io.github.bert0ns.anteater.ui.AnteaterTheme
 import io.github.bert0ns.anteater.ui.CompressBatches
 import io.github.bert0ns.anteater.ui.CompressViewModel
-import io.github.bert0ns.anteater.ui.CribrumTheme
 import io.github.bert0ns.anteater.ui.LocalPlayerFactory
 import io.github.bert0ns.anteater.ui.MAX_COMPARED
 import io.github.bert0ns.anteater.ui.Players
@@ -133,7 +133,7 @@ class UiGallery(private val shot: Shot) {
      * JVM ("Class not found: java/nio/ShortBuffer"). A plain picture first sets them up, so a single image can be rendered alone.
      */
     private fun prime(gallery: Gallery) {
-        gallery.launch { androidx.compose.material3.Text("Cribrum") }
+        gallery.launch { androidx.compose.material3.Text("Anteater") }
         gallery.capture()
         gallery.close()
     }
@@ -204,7 +204,7 @@ class Gallery(val compose: ComposeTestRule, val app: AnteaterApp, val world: Gal
             launched.onActivity { activity ->
                 activity.enableEdgeToEdge()
                 activity.setContent {
-                    CribrumTheme {
+                    AnteaterTheme {
                         CompositionLocalProvider(LocalPlayerFactory provides players.factory) {
                             if (owner == null) content() else CompositionLocalProvider(LocalViewModelStoreOwner provides owner, content = content)
                         }

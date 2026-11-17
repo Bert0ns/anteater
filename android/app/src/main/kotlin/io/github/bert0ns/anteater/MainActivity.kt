@@ -61,6 +61,7 @@ import io.github.bert0ns.anteater.ranker.GROUP_CATEGORIES
 import io.github.bert0ns.anteater.review.Decision
 import io.github.bert0ns.anteater.review.ReviewOrder
 import io.github.bert0ns.anteater.ui.AllFilesAccess
+import io.github.bert0ns.anteater.ui.AnteaterTheme
 import io.github.bert0ns.anteater.ui.AppSnackbarHost
 import io.github.bert0ns.anteater.ui.CategoryList
 import io.github.bert0ns.anteater.ui.CategoryScreen
@@ -68,7 +69,6 @@ import io.github.bert0ns.anteater.ui.CleanTab
 import io.github.bert0ns.anteater.ui.CleanTabs
 import io.github.bert0ns.anteater.ui.CompressScreen
 import io.github.bert0ns.anteater.ui.CompressViewModel
-import io.github.bert0ns.anteater.ui.CribrumTheme
 import io.github.bert0ns.anteater.ui.Destination
 import io.github.bert0ns.anteater.ui.FavoriteRequestHost
 import io.github.bert0ns.anteater.ui.Folder
@@ -130,7 +130,7 @@ class MainActivity : ComponentActivity() {
         }
         enableEdgeToEdge()
         setContent {
-            CribrumTheme {
+            AnteaterTheme {
                 if (hasAllFilesAccess) {
                     App(model = model)
                 } else {

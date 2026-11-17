@@ -97,7 +97,7 @@ private val CASES = listOf(
  * that decode() plus orientation() and readMetadata() give what ImageDecoder shows. A file whose EXIF
  * contradicts its container is reported and not asserted, and a format the device cannot encode is logged.
  *
- * The app under test has the same id as an installed Cribrum, so build it under another id and run it by hand:
+ * The app under test has the same id as an installed Anteater, so build it under another id and run it by hand:
  *
  *     ./gradlew -PapplicationIdSuffix=.heiccheck assembleDebug assembleDebugAndroidTest
  *     adb install -t app/build/outputs/apk/debug/app-debug.apk
@@ -108,7 +108,7 @@ private val CASES = listOf(
  *     adb uninstall io.github.bert0ns.anteater.heiccheck.test
  *     adb uninstall io.github.bert0ns.anteater.heiccheck
  *
- * Do not use connectedDebugAndroidTest: it uninstalls the app when it ends, and without the suffix that is Cribrum.
+ * Do not use connectedDebugAndroidTest: it uninstalls the app when it ends, and without the suffix that is Anteater.
  */
 class HeicRotationDeviceTest {
     private val folder = File(ApplicationProvider.getApplicationContext<Context>().cacheDir, "heic-rotation-test").apply { mkdirs() }

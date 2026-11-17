@@ -1,4 +1,4 @@
-# Cribrum for Android
+# Anteater for Android
 
 Kotlin and Jetpack Compose (`docs/design.md`, D1). Android 11 (API 30) or newer, the first version with the storage rules the design relies on (§4, §9). The code mirrors the [Python lab](../lab/): the same component names and the same types, so a detector moves from one to the other mostly by translation.
 
@@ -27,7 +27,7 @@ Instrumented tests run on a connected phone. The app trash tests move files on i
 ./gradlew connectedDebugAndroidTest
 ```
 
-That task installs the debug app over any installed Cribrum and uninstalls it when it ends. On a phone you use, build with `-PapplicationIdSuffix=.heiccheck`, which installs beside Cribrum, and run the test by hand: `HeicRotationDeviceTest` lists the commands.
+That task installs the debug app over any installed Anteater and uninstalls it when it ends. On a phone you use, build with `-PapplicationIdSuffix=.heiccheck`, which installs beside Anteater, and run the test by hand: `HeicRotationDeviceTest` lists the commands.
 
 ## Install (sideload)
 

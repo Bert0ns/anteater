@@ -137,7 +137,7 @@ class ReadmeScreenshots {
 
     /** Sets up native graphics so dialogs and complex views render safely. */
     private fun prime(gallery: Gallery) {
-        gallery.launch { Text("Cribrum") }
+        gallery.launch { Text("Anteater") }
         gallery.capture()
         gallery.close()
     }

@@ -59,7 +59,7 @@ class AppliedMessageTest {
     fun `a file refused because its folder is on another volume gets its own reason`() {
         assertEquals(
             "1 image stays in the trash: a file now has its name, or its folder is gone. " +
-                "1 file stays in the trash: its folder is on another storage, and Cribrum does not copy files back",
+                "1 file stays in the trash: its folder is on another storage, and Anteater does not copy files back",
             stayedMessage(context, listOf(images[0], clip), listOf(clip)),
         )
     }

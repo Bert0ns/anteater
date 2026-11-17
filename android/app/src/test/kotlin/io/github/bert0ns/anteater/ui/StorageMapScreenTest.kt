@@ -20,8 +20,8 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.WorkManagerTestInitHelper
-import io.github.bert0ns.anteater.App
 import io.github.bert0ns.anteater.AnteaterApp
+import io.github.bert0ns.anteater.App
 import io.github.bert0ns.anteater.model.MediaRef
 import io.github.bert0ns.anteater.model.MediaType
 import io.github.bert0ns.anteater.model.ReviewState

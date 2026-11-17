@@ -61,7 +61,7 @@ class MainActivityTest {
             val activity = controller.get()
             shadowOf(Looper.getMainLooper()).idle()
 
-            compose.onNodeWithText("Cribrum needs All files access").assertIsDisplayed()
+            compose.onNodeWithText("Anteater needs All files access").assertIsDisplayed()
             val grantButton = compose.onNodeWithText("Allow access")
             grantButton.assertIsDisplayed()
             grantButton.performClick()

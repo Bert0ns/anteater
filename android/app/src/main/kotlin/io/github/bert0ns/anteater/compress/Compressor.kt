@@ -44,7 +44,7 @@ enum class Refusal {
     /** Anything else: the file could not be read, written or swapped, or it changed since its scan. */
     FAILED,
 
-    /** The swap failed halfway and the original could not be put back: it is in the Cribrum trash, to restore from there. */
+    /** The swap failed halfway and the original could not be put back: it is in the Anteater trash, to restore from there. */
     LEFT_IN_TRASH,
 }
 

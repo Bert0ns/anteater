@@ -51,7 +51,7 @@ class Shot(val scene: Scene, val variant: Variant) {
 
 /** One line per image, the way index.md lists them. */
 fun indexOf(entries: List<String>): String = buildString {
-    appendLine("# Cribrum UI gallery")
+    appendLine("# Anteater UI gallery")
     appendLine()
     appendLine("${entries.size} images. Each line gives the file, the screen and its state, and what the user can do from there.")
     appendLine()

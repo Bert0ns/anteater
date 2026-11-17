@@ -2,7 +2,7 @@
 # requires-python = ">=3.12"
 # dependencies = ["perfetto"]
 # ///
-"""Prints the times of a Perfetto trace of Cribrum, one line each.
+"""Prints the times of a Perfetto trace of Anteater, one line each.
 
 Usage: uv run android/scripts/trace_times.py [--by-hand] TRACE [PACKAGE]
 

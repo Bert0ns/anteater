@@ -85,7 +85,7 @@ android {
         compose = true
     }
 
-    // Android 13 and later lists English and Italian under Apps, Cribrum, Language.
+    // Android 13 and later lists English and Italian under Apps, Anteater, Language.
     androidResources {
         generateLocaleConfig = true
     }
@@ -122,7 +122,7 @@ android {
         abortOnError = true
         // They say a newer release came out, which changes by the day, not with the code.
         disable += setOf("AndroidGradlePluginVersion", "GradleDependency", "NewerVersionAvailable")
-        // Cribrum is for phones, so the APK leaves out ChromeOS's x86_64 (abiFilters above).
+        // Anteater is for phones, so the APK leaves out ChromeOS's x86_64 (abiFilters above).
         disable += "ChromeOsAbiSupport"
         // A string without its Italian version fails the build (AGENTS.md).
         error += "MissingTranslation"

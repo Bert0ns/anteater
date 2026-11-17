@@ -10,8 +10,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.WorkManagerTestInitHelper
-import io.github.bert0ns.anteater.App
 import io.github.bert0ns.anteater.AnteaterApp
+import io.github.bert0ns.anteater.App
 import io.github.bert0ns.anteater.model.Category
 import org.junit.Before
 import org.junit.Rule

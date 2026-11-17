@@ -32,8 +32,8 @@
         Every plural also needs the "many" form, which lint asks of Italian: the number of millions,
         as in "1.000.000 di immagini".
     -->
-    <string name="access_title">Cribrum ha bisogno dell\'accesso a tutti i file</string>
-    <string name="access_body">Molte immagini si trovano in cartelle che la galleria non mostra, come le foto ricevute su WhatsApp. Per trovarle, Cribrum legge ogni cartella del telefono. Niente esce dal telefono e niente viene eliminato senza la tua conferma.</string>
+    <string name="access_title">Anteater ha bisogno dell\'accesso a tutti i file</string>
+    <string name="access_body">Molte immagini si trovano in cartelle che la galleria non mostra, come le foto ricevute su WhatsApp. Per trovarle, Anteater legge ogni cartella del telefono. Niente esce dal telefono e niente viene eliminato senza la tua conferma.</string>
     <string name="access_grant">Consenti l\'accesso</string>
     <string name="scan_channel">Ricerca di immagini</string>
     <string name="scan_phase_scan">Ricerca di immagini</string>
@@ -56,7 +56,7 @@
     <string name="scan_now">Scansiona ora</string>
     <string name="scan_videos">Scansiona i video</string>
     <string name="scan_stop">Interrompi la scansione</string>
-    <string name="scan_empty">Nessuna immagine trovata finora. Tocca Scansiona ora per cercarle. La prima volta ci vogliono circa 15–20 minuti per 10.000 immagini, e puoi uscire dall\'app. Poi Cribrum ripete la scansione di notte, mentre il telefono si ricarica, se non la disattivi nelle Impostazioni.</string>
+    <string name="scan_empty">Nessuna immagine trovata finora. Tocca Scansiona ora per cercarle. La prima volta ci vogliono circa 15–20 minuti per 10.000 immagini, e puoi uscire dall\'app. Poi Anteater ripete la scansione di notte, mentre il telefono si ricarica, se non la disattivi nelle Impostazioni.</string>
     <string name="scan_last">Ultima scansione: %1$s</string>
     <string name="scan_step_scan">Ricerca delle immagini: finora %1$d</string>
     <string name="scan_step_scan_videos">Foto e video trovati: finora %1$d</string>
@@ -161,9 +161,9 @@
         <item quantity="many">%d di file restano nel cestino: un file ha ora il loro nome, oppure la loro cartella non c\'è più</item>
     </plurals>
     <plurals name="stayed_elsewhere_snackbar">
-        <item quantity="one">%d file resta nel cestino: la sua cartella è su un\'altra memoria, e Cribrum non ricopia i file</item>
-        <item quantity="other">%d file restano nel cestino: la loro cartella è su un\'altra memoria, e Cribrum non ricopia i file</item>
-        <item quantity="many">%d di file restano nel cestino: la loro cartella è su un\'altra memoria, e Cribrum non ricopia i file</item>
+        <item quantity="one">%d file resta nel cestino: la sua cartella è su un\'altra memoria, e Anteater non ricopia i file</item>
+        <item quantity="other">%d file restano nel cestino: la loro cartella è su un\'altra memoria, e Anteater non ricopia i file</item>
+        <item quantity="many">%d di file restano nel cestino: la loro cartella è su un\'altra memoria, e Anteater non ricopia i file</item>
     </plurals>
     <string name="change_failed_snackbar">Non ha funzionato. Riprova.</string>
     <string name="favorite_appeared_snackbar">Un\'immagine è diventata preferita nel frattempo. Controlla la pagina.</string>
@@ -425,7 +425,7 @@
     <string name="settings_no_embeddings">Nessun dato dell\'analisi salvato.</string>
     <string name="settings_delete_embeddings_scanning">Aspetta la fine della scansione.</string>
     <string name="settings_delete_embeddings_title">Eliminare i dati dell\'analisi?</string>
-    <string name="settings_delete_embeddings_confirm">Cribrum salva i dati dell\'analisi di ogni immagine e video per trovare copie, documenti e immagini inoltrate. Le prossime scansioni li calcolano di nuovo, in circa 15–20 minuti per 10.000 immagini e di più per i video. Le tue immagini, i video, il cestino e le tue scelte restano come sono.</string>
+    <string name="settings_delete_embeddings_confirm">Anteater salva i dati dell\'analisi di ogni immagine e video per trovare copie, documenti e immagini inoltrate. Le prossime scansioni li calcolano di nuovo, in circa 15–20 minuti per 10.000 immagini e di più per i video. Le tue immagini, i video, il cestino e le tue scelte restano come sono.</string>
     <string name="exclude_folder">Non suggerire mai questa cartella né le sue sottocartelle</string>
     <!-- Stato della scansione nelle impostazioni -->
     <string name="settings_scan_status_hint">Questi passaggi non hanno ancora analizzato tutte le immagini. La prossima scansione continua da lì.</string>
@@ -508,7 +508,7 @@
     <string name="action_select">Seleziona</string>
     <string name="action_deselect">Deseleziona</string>
     <string name="compress_formats_open">Cosa si può comprimere</string>
-    <string name="compress_sheet_title">Cosa comprime Cribrum</string>
+    <string name="compress_sheet_title">Cosa comprime Anteater</string>
     <string name="compress_sheet_supported">Compresse</string>
     <string name="compress_sheet_jpeg">Le foto JPEG</string>
     <string name="compress_sheet_hdr_yes">Le foto Ultra HDR</string>
@@ -565,9 +565,9 @@
     </plurals>
     <string name="compress_result_saved">Risparmiati %1$s</string>
     <plurals name="compress_result_undo_hint">
-        <item quantity="one">Gli originali restano nel cestino di Cribrum per %d giorno, e Ripristina gli originali li rimette a posto.</item>
-        <item quantity="other">Gli originali restano nel cestino di Cribrum per %d giorni, e Ripristina gli originali li rimette a posto.</item>
-        <item quantity="many">Gli originali restano nel cestino di Cribrum per %d di giorni, e Ripristina gli originali li rimette a posto.</item>
+        <item quantity="one">Gli originali restano nel cestino di Anteater per %d giorno, e Ripristina gli originali li rimette a posto.</item>
+        <item quantity="other">Gli originali restano nel cestino di Anteater per %d giorni, e Ripristina gli originali li rimette a posto.</item>
+        <item quantity="many">Gli originali restano nel cestino di Anteater per %d di giorni, e Ripristina gli originali li rimette a posto.</item>
     </plurals>
     <string name="compress_result_done">Fatto</string>
     <string name="compress_result_undo">Ripristina gli originali</string>
@@ -592,9 +592,9 @@
         <item quantity="many">%d di foto non si sono potute leggere o scrivere, o sono cambiate dopo la scansione, quindi sono rimaste com\'erano</item>
     </plurals>
     <plurals name="compress_refused_in_trash">
-        <item quantity="one">%d originale è nel cestino di Cribrum e non al suo posto: ripristinalo dal cestino</item>
-        <item quantity="other">%d originali sono nel cestino di Cribrum e non al loro posto: ripristinali dal cestino</item>
-        <item quantity="many">%d di originali sono nel cestino di Cribrum e non al loro posto: ripristinali dal cestino</item>
+        <item quantity="one">%d originale è nel cestino di Anteater e non al suo posto: ripristinalo dal cestino</item>
+        <item quantity="other">%d originali sono nel cestino di Anteater e non al loro posto: ripristinali dal cestino</item>
+        <item quantity="many">%d di originali sono nel cestino di Anteater e non al loro posto: ripristinali dal cestino</item>
     </plurals>
     <plurals name="compress_summary_title">
         <item quantity="one">Comprimere %d foto?</item>
@@ -643,9 +643,9 @@
         <item quantity="many">Le credenziali dei contenuti (C2PA), come l\'etichetta \"modificata con IA\", in %d di foto</item>
     </plurals>
     <plurals name="compress_loss_restore">
-        <item quantity="one">Tutto questo torna solo ripristinando l\'originale dal cestino di Cribrum, entro %d giorno.</item>
-        <item quantity="other">Tutto questo torna solo ripristinando l\'originale dal cestino di Cribrum, entro %d giorni.</item>
-        <item quantity="many">Tutto questo torna solo ripristinando l\'originale dal cestino di Cribrum, entro %d di giorni.</item>
+        <item quantity="one">Tutto questo torna solo ripristinando l\'originale dal cestino di Anteater, entro %d giorno.</item>
+        <item quantity="other">Tutto questo torna solo ripristinando l\'originale dal cestino di Anteater, entro %d giorni.</item>
+        <item quantity="many">Tutto questo torna solo ripristinando l\'originale dal cestino di Anteater, entro %d di giorni.</item>
     </plurals>
     <plurals name="compress_not_reached">
         <item quantity="one">%d foto non è stata raggiunta e resta com\'era</item>

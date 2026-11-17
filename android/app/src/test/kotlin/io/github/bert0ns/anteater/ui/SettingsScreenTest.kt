@@ -258,7 +258,7 @@ class SettingsScreenTest {
         compose.onNodeWithText("Delete the analysis data").performClick()
 
         compose.onNodeWithText("Delete the analysis data?").assertIsDisplayed()
-        compose.onNodeWithText("Cribrum keeps analysis data for each image and video to find copies, documents and forwarded images. The next scans compute it again, which takes about 15 to 20 minutes for 10,000 images, and longer for videos. Your images, videos, the trash and your decisions stay as they are.").assertIsDisplayed()
+        compose.onNodeWithText("Anteater keeps analysis data for each image and video to find copies, documents and forwarded images. The next scans compute it again, which takes about 15 to 20 minutes for 10,000 images, and longer for videos. Your images, videos, the trash and your decisions stay as they are.").assertIsDisplayed()
         compose.onNodeWithText("Cancel").performClick()
         assertEquals(0, deleted)
 

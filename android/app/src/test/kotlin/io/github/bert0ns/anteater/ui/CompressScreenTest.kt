@@ -381,7 +381,7 @@ class CompressScreenTest {
         compose.onNodeWithText("• The edits, ratings, keywords, captions and people tags that other apps saved, in 1 photo").assertExists()
         compose.onAllNodesWithText("Re-blurring", substring = true).assertCountEquals(0)
         compose.onAllNodesWithText("Content credentials", substring = true).assertCountEquals(0)
-        compose.onNodeWithText("All of it comes back only by restoring the original from the Cribrum trash, within 30 days.").assertExists()
+        compose.onNodeWithText("All of it comes back only by restoring the original from the Anteater trash, within 30 days.").assertExists()
         // The level and its saving on one line, and the slider to change it.
         compose.onAllNodesWithText("Smallest").assertCountEquals(4) // the name and the slider's end, on the page and in the summary
         compose.onAllNodesWithText("Saves about", substring = true).assertCountEquals(2)
@@ -858,7 +858,7 @@ class CompressScreenTest {
         compose.onNodeWithText("Saved ${size(1_300_000_000)}").assertExists()
         compose.onNodeWithText("2 photos did not get smaller, so they were left as they were").assertExists()
         compose.onNodeWithText("1 photo needed more free memory than the phone had, so it was left as it was").assertExists()
-        compose.onNodeWithText("The originals stay in the Cribrum trash for 30 days, and Restore originals puts them back.").assertExists()
+        compose.onNodeWithText("The originals stay in the Anteater trash for 30 days, and Restore originals puts them back.").assertExists()
         compose.onNodeWithText("Restore originals").performClick()
         awaitText("1 photo, largest first")
         assertEquals(listOf(result), batches.undone)

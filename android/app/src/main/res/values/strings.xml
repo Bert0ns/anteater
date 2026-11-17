@@ -1,7 +1,7 @@
 <resources>
-    <string name="app_name" translatable="false">Cribrum</string>
-    <string name="access_title">Cribrum needs All files access</string>
-    <string name="access_body">Many images live in folders the gallery never shows, such as the photos you sent on WhatsApp. To find them, Cribrum reads every folder on this phone. Nothing leaves the phone, and nothing is deleted without your confirmation.</string>
+    <string name="app_name" translatable="false">Anteater</string>
+    <string name="access_title">Anteater needs All files access</string>
+    <string name="access_body">Many images live in folders the gallery never shows, such as the photos you sent on WhatsApp. To find them, Anteater reads every folder on this phone. Nothing leaves the phone, and nothing is deleted without your confirmation.</string>
     <string name="access_grant">Allow access</string>
     <string name="scan_channel">Looking for images</string>
     <string name="scan_phase_scan">Looking for images</string>
@@ -24,7 +24,7 @@
     <string name="scan_now">Scan now</string>
     <string name="scan_videos">Scan videos</string>
     <string name="scan_stop">Stop scanning</string>
-    <string name="scan_empty">No images found yet. Tap Scan now to look for them. The first time takes about 15 to 20 minutes for 10,000 images, and you can leave the app. Then Cribrum scans again at night while the phone charges, unless you turn that off in Settings.</string>
+    <string name="scan_empty">No images found yet. Tap Scan now to look for them. The first time takes about 15 to 20 minutes for 10,000 images, and you can leave the app. Then Anteater scans again at night while the phone charges, unless you turn that off in Settings.</string>
     <string name="scan_last">Last scan: %1$s</string>
     <string name="scan_step_scan">Finding images: %1$d so far</string>
     <string name="scan_step_scan_videos">Photos and videos found: %1$d so far</string>
@@ -120,8 +120,8 @@
     </plurals>
     <!-- A restore refused because the file's folder is on another storage than the trash it is in, such as a trash folder copied by hand. -->
     <plurals name="stayed_elsewhere_snackbar">
-        <item quantity="one">%d file stays in the trash: its folder is on another storage, and Cribrum does not copy files back</item>
-        <item quantity="other">%d files stay in the trash: their folder is on another storage, and Cribrum does not copy files back</item>
+        <item quantity="one">%d file stays in the trash: its folder is on another storage, and Anteater does not copy files back</item>
+        <item quantity="other">%d files stay in the trash: their folder is on another storage, and Anteater does not copy files back</item>
     </plurals>
     <string name="change_failed_snackbar">That did not work. Try again.</string>
     <string name="favorite_appeared_snackbar">An image became a favourite meanwhile. Check the page.</string>
@@ -369,7 +369,7 @@
     <string name="settings_no_embeddings">No analysis data stored.</string>
     <string name="settings_delete_embeddings_scanning">Wait for the scan to finish.</string>
     <string name="settings_delete_embeddings_title">Delete the analysis data?</string>
-    <string name="settings_delete_embeddings_confirm">Cribrum keeps analysis data for each image and video to find copies, documents and forwarded images. The next scans compute it again, which takes about 15 to 20 minutes for 10,000 images, and longer for videos. Your images, videos, the trash and your decisions stay as they are.</string>
+    <string name="settings_delete_embeddings_confirm">Anteater keeps analysis data for each image and video to find copies, documents and forwarded images. The next scans compute it again, which takes about 15 to 20 minutes for 10,000 images, and longer for videos. Your images, videos, the trash and your decisions stay as they are.</string>
     <string name="exclude_folder">Never suggest this folder or its subfolders</string>
     <!-- Scan status in settings -->
     <string name="settings_scan_status_hint">These steps have not analysed every image yet. The next scan goes on with them.</string>
@@ -447,7 +447,7 @@
     <string name="action_select">Select</string>
     <string name="action_deselect">Deselect</string>
     <string name="compress_formats_open">What can be compressed</string>
-    <string name="compress_sheet_title">What Cribrum compresses</string>
+    <string name="compress_sheet_title">What Anteater compresses</string>
     <string name="compress_sheet_supported">Compressed</string>
     <string name="compress_sheet_jpeg">JPEG photos</string>
     <string name="compress_sheet_hdr_yes">Ultra HDR photos</string>
@@ -500,8 +500,8 @@
     </plurals>
     <string name="compress_result_saved">Saved %1$s</string>
     <plurals name="compress_result_undo_hint">
-        <item quantity="one">The originals stay in the Cribrum trash for %d day, and Restore originals puts them back.</item>
-        <item quantity="other">The originals stay in the Cribrum trash for %d days, and Restore originals puts them back.</item>
+        <item quantity="one">The originals stay in the Anteater trash for %d day, and Restore originals puts them back.</item>
+        <item quantity="other">The originals stay in the Anteater trash for %d days, and Restore originals puts them back.</item>
     </plurals>
     <string name="compress_result_done">Done</string>
     <!-- Not "Undo": in Italian that is "Annulla", which also reads as the summary's Cancel. -->
@@ -523,8 +523,8 @@
         <item quantity="other">%d photos could not be read or written, or changed since the scan, so they were left as they were</item>
     </plurals>
     <plurals name="compress_refused_in_trash">
-        <item quantity="one">%d original is in the Cribrum trash and not at its place: restore it from the trash</item>
-        <item quantity="other">%d originals are in the Cribrum trash and not at their place: restore them from the trash</item>
+        <item quantity="one">%d original is in the Anteater trash and not at its place: restore it from the trash</item>
+        <item quantity="other">%d originals are in the Anteater trash and not at their place: restore them from the trash</item>
     </plurals>
     <plurals name="compress_summary_title">
         <item quantity="one">Compress %d photo?</item>
@@ -567,8 +567,8 @@
         <item quantity="other">Content credentials (C2PA), such as an \"edited with AI\" label, in %d photos</item>
     </plurals>
     <plurals name="compress_loss_restore">
-        <item quantity="one">All of it comes back only by restoring the original from the Cribrum trash, within %d day.</item>
-        <item quantity="other">All of it comes back only by restoring the original from the Cribrum trash, within %d days.</item>
+        <item quantity="one">All of it comes back only by restoring the original from the Anteater trash, within %d day.</item>
+        <item quantity="other">All of it comes back only by restoring the original from the Anteater trash, within %d days.</item>
     </plurals>
     <plurals name="compress_not_reached">
         <item quantity="one">%d photo was not reached and stays as it was</item>

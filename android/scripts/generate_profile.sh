@@ -40,10 +40,10 @@ cp "$here/../baselineprofile/build/outputs/apk/nonMinifiedRelease/baselineprofil
 [[ $(shell dumpsys window) != *isKeyguardShowing=true* ]] || die "unlock the phone first"
 active='DisplayViewport\{[^}]*isActive=true'
 [[ $(shell dumpsys display) =~ $active ]] || die "turn the screen on"
-# Any Cribrum build, which the generator's start from the launcher would send away.
+# Any Anteater build, which the generator's start from the launcher would send away.
 resumed=$(shell dumpsys activity activities | grep 'ResumedActivity' || true)
 [[ -n $resumed ]] || die "no app is in the foreground: turn the screen on"
-[[ $resumed != *io.github.bert0ns.anteater* ]] || die "Cribrum is in the foreground: leave it first"
+[[ $resumed != *io.github.bert0ns.anteater* ]] || die "Anteater is in the foreground: leave it first"
 
 "${adb[@]}" install -r "$local_dir/app.apk"
 "${adb[@]}" install -r -t "$local_dir/generator.apk"

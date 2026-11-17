@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.dp
  * wallpaper, so the marks of the review look the same on every phone.
  */
 @Composable
-fun CribrumTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+fun AnteaterTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalDark provides dark) {
         MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme(), content = content)
     }

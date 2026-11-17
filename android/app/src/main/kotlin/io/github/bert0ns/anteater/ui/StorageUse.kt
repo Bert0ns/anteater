@@ -13,7 +13,7 @@ import kotlinx.coroutines.withContext
 /** How many files of one kind the index holds, and how many bytes they take. */
 data class MediaTotal(val count: Int, val bytes: Long)
 
-/** Bytes Cribrum takes on the phone (docs/design.md §8). [app] and [cache] are null when Android does not say. */
+/** Bytes Anteater takes on the phone (docs/design.md §8). [app] and [cache] are null when Android does not say. */
 data class StorageUse(
     val app: Long?,
     val cache: Long?,

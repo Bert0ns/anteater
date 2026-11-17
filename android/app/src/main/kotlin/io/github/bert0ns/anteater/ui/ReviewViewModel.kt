@@ -131,7 +131,7 @@ data class ReviewState(
     val excludedFolders: List<String> = emptyList(),
     /** Embeddings stored in the index, shown in settings. */
     val embeddingCount: Int = 0,
-    /** What Cribrum takes on the phone, shown in settings. */
+    /** What Anteater takes on the phone, shown in settings. */
     val storage: StorageUse? = null,
     /** What each detector analysed out of the images that need it, and the last finished scan, shown in settings. */
     val coverage: List<Coverage>? = null,
