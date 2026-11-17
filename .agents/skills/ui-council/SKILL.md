@@ -17,7 +17,7 @@ The council cannot use the phone, which holds personal photos. It looks at the *
 
 ```bash
 cd android && ANDROID_HOME=~/android-sdk JAVA_HOME=~/.local/jdks/jdk-21.0.12.1+1 \
-  flock /tmp/anteater-gradle.lock ./gradlew -PuiGallery=/tmp/anteater-ui-gallery-<run> testDebugUnitTest --tests '*UiGallery'
+  flock /tmp/cribrum-gradle.lock ./gradlew -PuiGallery=/tmp/anteater-ui-gallery-<run> testDebugUnitTest --tests '*UiGallery'
 ```
 
 `<run>` is the version, such as `2.0.0`. It takes about ten minutes. Look at a sample: a few phone images in Italian, the dark theme, font 1.5 and the unfolded Fold. A state with no scene is invisible to the council, so add the missing scene first in its own PR. The notes at the top of `index.md` (`NOTES` in `GalleryScenes.kt`) must match the app.
