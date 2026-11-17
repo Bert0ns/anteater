@@ -219,26 +219,38 @@ def frames_expected() -> dict:
 
 
 TAKES = VIDEOS / "takes.json"
+
+
+def _at(clock: str) -> int:
+    """A moment of 2024-05-01 in UTC+2, as epoch milliseconds: what `captured_instant` holds."""
+    return int(datetime.fromisoformat(f"2024-05-01T{clock}+02:00").timestamp() * 1000)
+
+
 TAKE_CLIPS = [
     # A failed start, the take it was for, one exactly the gap after that one ends, the last one.
-    {"path": "DCIM/Camera/a1.mp4", "captured_at": "2024-05-01T10:00:00", "duration_ms": 2000},
-    {"path": "DCIM/Camera/a2.mp4", "captured_at": "2024-05-01T10:00:10", "duration_ms": 30000},
-    {"path": "DCIM/Camera/a3.mp4", "captured_at": "2024-05-01T10:05:40", "duration_ms": 5000},
-    {"path": "DCIM/Camera/a4.mp4", "captured_at": "2024-05-01T10:05:50", "duration_ms": 10000},
+    {"path": "DCIM/Camera/a1.mp4", "captured_instant": _at("10:00:00"), "duration_ms": 2000},
+    {"path": "DCIM/Camera/a2.mp4", "captured_instant": _at("10:00:10"), "duration_ms": 30000},
+    {"path": "DCIM/Camera/a3.mp4", "captured_instant": _at("10:05:40"), "duration_ms": 5000},
+    {"path": "DCIM/Camera/a4.mp4", "captured_instant": _at("10:05:50"), "duration_ms": 10000},
     # A second past the gap after a4 ends: a moment of its own, alone.
-    {"path": "DCIM/Camera/b.mp4", "captured_at": "2024-05-01T10:11:01", "duration_ms": 4000},
+    {"path": "DCIM/Camera/b.mp4", "captured_instant": _at("10:11:01"), "duration_ms": 4000},
     # A sent copy and a clip with no time are no takes.
-    {"path": "WhatsApp/Media/WhatsApp Video/Sent/a2.mp4", "captured_at": "2024-05-01T10:00:10",
+    {"path": "WhatsApp/Media/WhatsApp Video/Sent/a2.mp4", "captured_instant": _at("10:00:10"),
      "duration_ms": 30000},
-    {"path": "DCIM/Camera/no-time.mp4", "captured_at": None, "duration_ms": 30000},
+    {"path": "DCIM/Camera/no-time.mp4", "captured_instant": None, "duration_ms": 30000},
+    # A Galaxy's screen recordings are in DCIM too, and are no takes.
+    {"path": "DCIM/Screen recordings/rec1.mp4", "captured_instant": _at("10:00:20"),
+     "duration_ms": 10000},
+    {"path": "DCIM/Screen recordings/rec2.mp4", "captured_instant": _at("10:00:40"),
+     "duration_ms": 10000},
     # Frames: c2 has one frame like c1's, c3 looks like neither, and c4 has none.
-    {"path": "DCIM/Camera/c1.mp4", "captured_at": "2024-05-01T12:00:00", "duration_ms": 10000,
+    {"path": "DCIM/Camera/c1.mp4", "captured_instant": _at("12:00:00"), "duration_ms": 10000,
      "frames": [[1, 0, 0], [0.6, 0.8, 0]]},
-    {"path": "DCIM/Camera/c2.mp4", "captured_at": "2024-05-01T12:01:00", "duration_ms": 10000,
+    {"path": "DCIM/Camera/c2.mp4", "captured_instant": _at("12:01:00"), "duration_ms": 10000,
      "frames": [[0, 0.8, 0.6]]},
-    {"path": "DCIM/Camera/c3.mp4", "captured_at": "2024-05-01T12:02:00", "duration_ms": None,
+    {"path": "DCIM/Camera/c3.mp4", "captured_instant": _at("12:02:00"), "duration_ms": None,
      "frames": [[1, 0, 0]]},
-    {"path": "DCIM/Camera/c4.mp4", "captured_at": "2024-05-01T12:03:00", "duration_ms": 10000},
+    {"path": "DCIM/Camera/c4.mp4", "captured_instant": _at("12:03:00"), "duration_ms": 10000},
 ]  # fmt: skip
 
 
@@ -248,8 +260,9 @@ def takes_expected() -> dict:
 
     def metadata(video: MediaRef) -> VideoMetadata:
         clip = clips[video]
-        captured = clip["captured_at"] and datetime.fromisoformat(clip["captured_at"])
-        return VideoMetadata(0, 0, clip["duration_ms"], None, None, False, None, False, captured)
+        instant = clip["captured_instant"]
+        length = clip["duration_ms"]
+        return VideoMetadata(0, 0, length, None, None, False, None, False, None, instant)
 
     def frames(video: MediaRef) -> list[np.ndarray]:
         return [np.array(f, dtype=np.float32) for f in clips[video].get("frames", [])]

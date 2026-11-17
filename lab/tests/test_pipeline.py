@@ -1,3 +1,4 @@
+import dataclasses
 import os
 import shutil
 from pathlib import Path
@@ -15,6 +16,7 @@ from cribrum_lab.frames import FRAMES_VERSION
 from cribrum_lab.imaging import load_grayscale
 from cribrum_lab.index import ImageIndex
 from cribrum_lab.model import Category, MediaRef, MediaType, Protection, ReviewState, Signal
+from cribrum_lab.ranker import Ranker
 
 IMAGE_GROUP_DETECTORS = sum(
     MediaType.IMAGE in accepted_media_types(d) for d in pipeline.GROUP_DETECTORS
@@ -1301,3 +1303,51 @@ def test_the_takes_read_the_stored_frames_and_frames_stored_later_run_them_again
     run(MeanColorEmbedder())  # nothing new: no run
 
     assert [s["clip.mp4"] for s in seen] == [0, 5]
+
+
+def test_takes_kept_after_their_first_take_went_to_the_trash_do_not_come_back(videos, index):
+    shutil.copy(VIDEOS / "rotated.mp4", videos / "rotated.mp4")
+    shutil.copy(VIDEOS / "clip.mp4", videos / "clip-again.mp4")  # the same time as clip.mp4
+    root = videos.parent.parent
+
+    def scan():
+        pipeline.run(
+            root, index, detectors=[], group_detectors=[pipeline.TakesDetector()],
+            images=False, videos=True,
+        )  # fmt: skip
+
+    scan()
+    first = videos / "clip-again.mp4"  # the first by instant, then by path
+    assert takes_groups(index) == [{"clip-again.mp4", "clip.mp4", "rotated.mp4"}]
+    index.set_review_state(first, ReviewState.TRASHED)
+    first.rename(root.parent / "trashed.mp4")
+    for name in ("clip.mp4", "rotated.mp4"):
+        index.set_review_state(videos / name, ReviewState.KEPT)
+    scan()
+
+    assert takes_groups(index) == [{"clip.mp4", "rotated.mp4"}]  # under another group id
+    ranked = Ranker().rank(index.indexed_media())
+    assert [c for c in ranked if c.is_candidate] == []
+
+
+def test_a_capture_time_read_again_runs_the_takes_again(videos, index):
+    shutil.copy(VIDEOS / "rotated.mp4", videos / "rotated.mp4")
+    root = videos.parent.parent
+
+    def scan():
+        steps = []
+        pipeline.run(
+            root, index, detectors=[], group_detectors=[pipeline.TakesDetector()],
+            images=False, videos=True, progress=lambda step, done, total: steps.append(step),
+        )  # fmt: skip
+        return steps
+
+    scan()
+    # As an older reader would have stored it: no capture time, and no file changed.
+    stored = index.video_metadata(videos / "rotated.mp4")
+    index.set_video_metadata(
+        videos / "rotated.mp4", dataclasses.replace(stored, captured_at=None, captured_instant=None)
+    )
+
+    assert "video_groups" in scan()
+    assert takes_groups(index) == []

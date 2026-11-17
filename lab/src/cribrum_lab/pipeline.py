@@ -293,6 +293,8 @@ def _group_steps(
     fingerprint: neither runs the other's detectors again. `frames` holds the videos' stored
     frames, in the order of their times."""
     frames = frames or {}
+    # Read once: a query per video would be slow on a large library, as it was for the images.
+    videos = index.all_video_metadata() if media_type is MediaType.VIDEO else {}
     inputs = [i for i in index.images() if i.path in found and i.media_type is media_type]
     # The exact detector skips an image whose content hash fails: the run stores those paths
     # with its fingerprint.
@@ -320,15 +322,17 @@ def _group_steps(
         content_hash=content_hash,
         perceptual_hash=_stored_perceptual_hash(index),
         metadata=_metadata(index),
-        video_metadata=_video_metadata(index),
+        video_metadata=_video_metadata(videos),
         frames=lambda video: frames.get(video.path, []),
         embedding=_stored_embedding(embeddings),
         sharpness=_stored_sharpness(index, blur_detector),
     )
     # Embeddings change what group detectors can see: a run with them is a different run.
     model = f"{embedder.id}:{embedder.version}:{len(embeddings)}" if embedder else ""
-    if media_type is MediaType.VIDEO:  # and so do a video's frames
+    if media_type is MediaType.VIDEO:  # and so do a video's frames and capture times
         model = f"{embedder.id}:{embedder.version}:{FRAMES_VERSION}:{len(frames)}" if frames else ""
+        # A capture time read again, as by a migration, is new input though no file changed.
+        model += f":{sum(m.captured_instant is not None for m in videos.values())}"
     # A hash that failed on an earlier run is a result a group detector lacked.
     hashed = index.hashed_paths()
     # Burst reads blur's stored measure: a new blur version is new input, though no file changed.
@@ -706,9 +710,9 @@ def _metadata(index: ImageIndex) -> Callable[[MediaRef], ImageMetadata]:
     return metadata
 
 
-def _video_metadata(index: ImageIndex) -> Callable[[MediaRef], VideoMetadata]:
+def _video_metadata(videos: dict[Path, VideoMetadata]) -> Callable[[MediaRef], VideoMetadata]:
     def metadata(video: MediaRef) -> VideoMetadata:
-        found = index.video_metadata(video.path)
+        found = videos.get(video.path)
         if found is None:
             raise UnreadableVideo(video.path)
         return found

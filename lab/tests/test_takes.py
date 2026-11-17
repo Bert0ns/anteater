@@ -4,11 +4,14 @@ from pathlib import Path
 import numpy as np
 
 from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, AnalysisContext, Role
-from cribrum_lab.detectors.takes import TAKES_MAX_GAP, TakesDetector
+from cribrum_lab.detectors.takes import TAKES_MAX_GAP_MS, TakesDetector
 from cribrum_lab.metadata import VideoMetadata
-from cribrum_lab.model import Category, MediaRef, MediaType
+from cribrum_lab.model import Category, MediaRef, MediaType, Signal
 
 START = datetime(2024, 5, 1, 10, 0, 0)
+START_MS = 1714550400000
+"""START as an instant, in UTC+2."""
+GAP_S = TAKES_MAX_GAP_MS / 1000
 
 
 class Clips:
@@ -18,11 +21,17 @@ class Clips:
         self.meta = {}
         self.frames = {}
 
-    def add(self, name, seconds, length_s=10, folder="DCIM/Camera", frames=None):
+    def add(self, name, seconds, length_s=10, folder="DCIM/Camera", frames=None, wall_s=None):
+        """`wall_s` puts the local wall clock elsewhere than the instant, as a clock change does."""
         video = MediaRef(Path(f"/phone/{folder}/{name}.mp4"), 1000, 0, MediaType.VIDEO)
-        captured = START + timedelta(seconds=seconds) if seconds is not None else None
+        captured, instant = None, None
+        if seconds is not None:
+            captured = START + timedelta(seconds=seconds if wall_s is None else wall_s)
+            instant = START_MS + int(seconds * 1000)
         duration = None if length_s is None else int(length_s * 1000)
-        self.meta[video] = VideoMetadata(64, 48, duration, 30, None, True, None, False, captured)
+        self.meta[video] = VideoMetadata(
+            64, 48, duration, 30, None, True, None, False, captured, instant
+        )
         if frames is not None:
             self.frames[video] = [np.array(v, dtype=np.float32) / np.linalg.norm(v) for v in frames]
         return video
@@ -45,7 +54,7 @@ def test_a_clip_that_starts_within_the_gap_of_the_end_of_the_last_one_joins_its_
     clips = Clips()
     first = clips.add("1", 0, length_s=60)
     # Starts later than the gap after the first one starts, but within it of its end.
-    second = clips.add("2", 60 + TAKES_MAX_GAP.total_seconds() - 1)
+    second = clips.add("2", 60 + GAP_S - 1)
 
     signals = clips.run()
 
@@ -61,7 +70,7 @@ def test_a_clip_that_starts_within_the_gap_of_the_end_of_the_last_one_joins_its_
 def test_a_clip_past_the_gap_starts_another_moment_and_a_lone_clip_gets_no_signal():
     clips = Clips()
     a, b = clips.add("a", 0), clips.add("b", 30)
-    lone = clips.add("lone", 10 + 30 + TAKES_MAX_GAP.total_seconds() + 1)
+    lone = clips.add("lone", 10 + 30 + GAP_S + 1)
 
     signals = clips.run()
 
@@ -106,9 +115,38 @@ def test_only_camera_videos_with_a_capture_time_are_takes():
 def test_a_clip_with_no_length_ends_where_it_starts():
     clips = Clips()
     a = clips.add("a", 0, length_s=None)
-    b = clips.add("b", TAKES_MAX_GAP.total_seconds())
+    b = clips.add("b", GAP_S)
 
     signals = clips.run()
 
     assert groups(signals) == [{a, b}]
     assert all(s[0].evidence[ROLE_KEY] == Role.TAKE for s in signals.values())
+
+
+def test_a_screen_recording_in_dcim_is_no_take():
+    clips = Clips()
+    a, b = clips.add("a", 0), clips.add("b", 20)
+    clips.add("rec", 10, folder="DCIM/Screen recordings")
+    clips.add("rec2", 30, folder="DCIM/Screen recordings")
+
+    assert groups(clips.run()) == [{a, b}]
+
+
+def test_takes_chain_on_the_instant_not_on_the_wall_clock():
+    clips = Clips()
+    # The clock went back an hour between the two: the wall clock puts b an hour before a.
+    a = clips.add("a", 0, length_s=60)
+    b = clips.add("b", 120, wall_s=120 - 3600)
+
+    signals = clips.run()
+
+    assert groups(signals) == [{a, b}]
+    assert signals[a][0].evidence[GROUP_KEY] == signals[b][0].evidence[GROUP_KEY]
+
+
+def test_a_take_is_the_same_signal_to_the_user_whatever_its_group_and_role():
+    def take(group, role):
+        evidence = {GROUP_KEY: group, ROLE_KEY: role, "takes": "2"}
+        return Signal("takes", 1, Category.TAKES, 1.0, evidence)
+
+    assert take("g1", Role.TAKE).identity == take("g2", Role.SHORT_TAKE).identity

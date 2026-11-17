@@ -1,42 +1,52 @@
 {
  "clips": [
   {
-   "captured_at": "2024-05-01T10:00:00",
+   "captured_instant": 1714550400000,
    "duration_ms": 2000,
    "path": "DCIM/Camera/a1.mp4"
   },
   {
-   "captured_at": "2024-05-01T10:00:10",
+   "captured_instant": 1714550410000,
    "duration_ms": 30000,
    "path": "DCIM/Camera/a2.mp4"
   },
   {
-   "captured_at": "2024-05-01T10:05:40",
+   "captured_instant": 1714550740000,
    "duration_ms": 5000,
    "path": "DCIM/Camera/a3.mp4"
   },
   {
-   "captured_at": "2024-05-01T10:05:50",
+   "captured_instant": 1714550750000,
    "duration_ms": 10000,
    "path": "DCIM/Camera/a4.mp4"
   },
   {
-   "captured_at": "2024-05-01T10:11:01",
+   "captured_instant": 1714551061000,
    "duration_ms": 4000,
    "path": "DCIM/Camera/b.mp4"
   },
   {
-   "captured_at": "2024-05-01T10:00:10",
+   "captured_instant": 1714550410000,
    "duration_ms": 30000,
    "path": "WhatsApp/Media/WhatsApp Video/Sent/a2.mp4"
   },
   {
-   "captured_at": null,
+   "captured_instant": null,
    "duration_ms": 30000,
    "path": "DCIM/Camera/no-time.mp4"
   },
   {
-   "captured_at": "2024-05-01T12:00:00",
+   "captured_instant": 1714550420000,
+   "duration_ms": 10000,
+   "path": "DCIM/Screen recordings/rec1.mp4"
+  },
+  {
+   "captured_instant": 1714550440000,
+   "duration_ms": 10000,
+   "path": "DCIM/Screen recordings/rec2.mp4"
+  },
+  {
+   "captured_instant": 1714557600000,
    "duration_ms": 10000,
    "frames": [
     [
@@ -53,7 +63,7 @@
    "path": "DCIM/Camera/c1.mp4"
   },
   {
-   "captured_at": "2024-05-01T12:01:00",
+   "captured_instant": 1714557660000,
    "duration_ms": 10000,
    "frames": [
     [
@@ -65,7 +75,7 @@
    "path": "DCIM/Camera/c2.mp4"
   },
   {
-   "captured_at": "2024-05-01T12:02:00",
+   "captured_instant": 1714557720000,
    "duration_ms": null,
    "frames": [
     [
@@ -77,7 +87,7 @@
    "path": "DCIM/Camera/c3.mp4"
   },
   {
-   "captured_at": "2024-05-01T12:03:00",
+   "captured_instant": 1714557780000,
    "duration_ms": 10000,
    "path": "DCIM/Camera/c4.mp4"
   }
