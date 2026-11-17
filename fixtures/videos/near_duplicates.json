@@ -50,7 +50,7 @@
   },
   {
    "bitrate": 2000000,
-   "duration_ms": 20250,
+   "duration_ms": 20100,
    "frames": [
     [
      1,
@@ -74,7 +74,7 @@
   },
   {
    "bitrate": 2000000,
-   "duration_ms": 20501,
+   "duration_ms": 20201,
    "frames": [
     [
      1,
@@ -241,15 +241,194 @@
    "height": 848,
    "path": "WhatsApp/Media/WhatsApp Video/Sent/hdr.mp4",
    "width": 480
+  },
+  {
+   "bitrate": 8000000,
+   "duration_ms": 5000,
+   "frames": [
+    [
+     1,
+     0,
+     0
+    ]
+   ],
+   "height": 1920,
+   "path": "DCIM/Camera/bar.mp4",
+   "width": 1080
+  },
+  {
+   "bitrate": 1000000,
+   "duration_ms": 5000,
+   "frames": [
+    [
+     0.81,
+     0.5864,
+     0
+    ]
+   ],
+   "height": 848,
+   "path": "WhatsApp/Media/WhatsApp Video/Sent/bar-over.mp4",
+   "width": 480
+  },
+  {
+   "bitrate": 8000000,
+   "duration_ms": 6000,
+   "frames": [
+    [
+     1,
+     0,
+     0
+    ]
+   ],
+   "height": 1920,
+   "path": "DCIM/Camera/under.mp4",
+   "width": 1080
+  },
+  {
+   "bitrate": 1000000,
+   "duration_ms": 6000,
+   "frames": [
+    [
+     0.79,
+     0.6131,
+     0
+    ]
+   ],
+   "height": 848,
+   "path": "WhatsApp/Media/WhatsApp Video/Sent/bar-under.mp4",
+   "width": 480
+  },
+  {
+   "bitrate": 2000000,
+   "duration_ms": 30000,
+   "frames": [
+    [
+     0,
+     0.6,
+     0.8
+    ]
+   ],
+   "height": 1280,
+   "path": "WhatsApp/Media/WhatsApp Video/Sent/chain-1.mp4",
+   "width": 720
+  },
+  {
+   "bitrate": 1000000,
+   "duration_ms": 30060,
+   "frames": [
+    [
+     0,
+     0.6,
+     0.8
+    ]
+   ],
+   "height": 848,
+   "path": "WhatsApp/Media/WhatsApp Video/Sent/chain-2.mp4",
+   "width": 480
+  },
+  {
+   "bitrate": 900000,
+   "duration_ms": 30120,
+   "frames": [
+    [
+     0,
+     0.6,
+     0.8
+    ]
+   ],
+   "height": 848,
+   "path": "WhatsApp/Media/WhatsApp Video/Sent/chain-3.mp4",
+   "width": 480
+  },
+  {
+   "bitrate": 50000000,
+   "captured_instant": 1714550400000,
+   "duration_ms": 12000,
+   "frames": [
+    [
+     0.8,
+     0,
+     0.6
+    ]
+   ],
+   "height": 3840,
+   "path": "DCIM/Camera/take-1.mp4",
+   "width": 2160
+  },
+  {
+   "bitrate": 50000000,
+   "captured_instant": 1714550460000,
+   "duration_ms": 12000,
+   "frames": [
+    [
+     0.8,
+     0,
+     0.6
+    ]
+   ],
+   "height": 3840,
+   "path": "DCIM/Camera/take-2.mp4",
+   "width": 2160
+  },
+  {
+   "bitrate": 8000000,
+   "captured_instant": 1714550400000,
+   "duration_ms": 12000,
+   "frames": [
+    [
+     0.8,
+     0,
+     0.6
+    ]
+   ],
+   "height": 1920,
+   "path": "DCIM/Camera/take-1-export.mp4",
+   "width": 1080
   }
  ],
  "signals": {
+  "DCIM/Camera/bar.mp4": [
+   {
+    "category": "near_duplicate",
+    "detector": "near_duplicate",
+    "evidence": {
+     "group": "e07026c3b9623d62",
+     "role": "best"
+    },
+    "score": 0.0,
+    "version": 3
+   }
+  ],
   "DCIM/Camera/hdr.mp4": [
    {
     "category": "near_duplicate",
     "detector": "near_duplicate",
     "evidence": {
      "group": "8fae50d7755e7a51",
+     "role": "best"
+    },
+    "score": 0.0,
+    "version": 3
+   }
+  ],
+  "DCIM/Camera/take-1-export.mp4": [
+   {
+    "category": "near_duplicate",
+    "detector": "near_duplicate",
+    "evidence": {
+     "group": "b008d3f5568a299b",
+     "role": "inferior"
+    },
+    "score": 1.0,
+    "version": 3
+   }
+  ],
+  "DCIM/Camera/take-1.mp4": [
+   {
+    "category": "near_duplicate",
+    "detector": "near_duplicate",
+    "evidence": {
+     "group": "b008d3f5568a299b",
      "role": "best"
     },
     "score": 0.0,
@@ -265,6 +444,54 @@
      "role": "best"
     },
     "score": 0.0,
+    "version": 3
+   }
+  ],
+  "WhatsApp/Media/WhatsApp Video/Sent/bar-over.mp4": [
+   {
+    "category": "near_duplicate",
+    "detector": "near_duplicate",
+    "evidence": {
+     "group": "e07026c3b9623d62",
+     "role": "inferior"
+    },
+    "score": 1.0,
+    "version": 3
+   }
+  ],
+  "WhatsApp/Media/WhatsApp Video/Sent/chain-1.mp4": [
+   {
+    "category": "near_duplicate",
+    "detector": "near_duplicate",
+    "evidence": {
+     "group": "232c3fb65f6f8a44",
+     "role": "best"
+    },
+    "score": 0.0,
+    "version": 3
+   }
+  ],
+  "WhatsApp/Media/WhatsApp Video/Sent/chain-2.mp4": [
+   {
+    "category": "near_duplicate",
+    "detector": "near_duplicate",
+    "evidence": {
+     "group": "232c3fb65f6f8a44",
+     "role": "inferior"
+    },
+    "score": 1.0,
+    "version": 3
+   }
+  ],
+  "WhatsApp/Media/WhatsApp Video/Sent/chain-3.mp4": [
+   {
+    "category": "near_duplicate",
+    "detector": "near_duplicate",
+    "evidence": {
+     "group": "232c3fb65f6f8a44",
+     "role": "inferior"
+    },
+    "score": 1.0,
     "version": 3
    }
   ],

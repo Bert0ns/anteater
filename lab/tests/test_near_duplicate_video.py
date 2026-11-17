@@ -23,10 +23,19 @@ class Videos:
         self.meta = {}
         self.frames = {}
 
-    def add(self, name, folder=CAMERA, length_ms=10000, side=1080, bitrate=8_000_000, frames=SCENE):
+    def add(
+        self,
+        name,
+        folder=CAMERA,
+        length_ms=10000,
+        side=1080,
+        bitrate=8_000_000,
+        frames=SCENE,
+        instant=None,
+    ):
         video = MediaRef(Path(f"/phone/{folder}/{name}.mp4"), 1000, 0, MediaType.VIDEO)
         self.meta[video] = VideoMetadata(
-            side, side * 16 // 9, length_ms, 30, bitrate, True, None, False
+            side, side * 16 // 9, length_ms, 30, bitrate, True, None, False, None, instant
         )
         if frames is not None:
             self.frames[video] = [np.array(v, dtype=np.float32) / np.linalg.norm(v) for v in frames]
@@ -148,3 +157,56 @@ def test_an_hdr_original_with_fewer_frames_still_links_to_its_copy():
     )
 
     assert roles(videos.run()) == {"original": Role.BEST, "copy": Role.INFERIOR}
+
+
+def test_camera_videos_captured_at_different_instants_are_takes_and_not_copies():
+    videos = Videos()
+    videos.add("first", instant=1_714_550_400_000)
+    videos.add("second", instant=1_714_550_460_000)
+
+    assert videos.run() == {}
+
+
+def test_a_camera_copy_with_the_same_instant_or_none_is_still_a_copy():
+    videos = Videos()
+    videos.add("original", instant=1_714_550_400_000)
+    videos.add("export", side=720, instant=1_714_550_400_000)
+    videos.add("no-time", side=480)
+
+    assert roles(videos.run()) == {
+        "original": Role.BEST,
+        "export": Role.INFERIOR,
+        "no-time": Role.INFERIOR,
+    }
+
+
+def test_a_sent_copy_links_to_a_camera_video_whatever_their_instants():
+    videos = Videos()
+    videos.add("original", instant=1_714_550_400_000)
+    videos.add("copy", folder=SENT, side=480, instant=1_714_560_000_000)
+
+    assert roles(videos.run()) == {"original": Role.BEST, "copy": Role.INFERIOR}
+
+
+def test_frames_at_the_bar_link_and_just_under_it_do_not():
+    videos = Videos()
+    videos.add("a", length_ms=5000, frames=[[1, 0, 0]])
+    videos.add("b", folder=SENT, length_ms=5000, frames=[[0.81, (1 - 0.81**2) ** 0.5, 0]])
+    videos.add("c", length_ms=9000, frames=[[1, 0, 0]])
+    videos.add("d", folder=SENT, length_ms=9000, frames=[[0.79, (1 - 0.79**2) ** 0.5, 0]])
+
+    assert roles(videos.run()) == {"a": Role.BEST, "b": Role.INFERIOR}
+
+
+def test_copies_further_apart_than_the_gap_link_through_one_between_them():
+    gap = VIDEO_MAX_DURATION_GAP_MS
+    videos = Videos()
+    videos.add("first", length_ms=20000)
+    videos.add("middle", folder=SENT, length_ms=20000 + gap * 6 // 10)
+    videos.add("last", folder=SENT, length_ms=20000 + gap * 12 // 10)
+
+    assert roles(videos.run()) == {
+        "first": Role.BEST,
+        "middle": Role.INFERIOR,
+        "last": Role.INFERIOR,
+    }
