@@ -221,9 +221,9 @@ internal const val SLIDE_MS = 1_000L
 
 /**
  * A tile that would move but has no player (#457): the frames of the full size view's strip, one after another, about one a
- * second, from the same [VideoFrame] requests and Coil cache, so it holds no decoder. It lies over the tile's still frame,
- * which shows until the first is decoded, and each frame stays under the next one until that is decoded, so nothing flashes.
- * A frame that does not decode shows what is under it.
+ * second, from the same [VideoFrame] requests and Coil cache, so it holds no decoder between frames. It lies over the
+ * tile's still frame, which shows until the first is decoded, and each frame stays under the next one until that is
+ * decoded, so nothing flashes. A frame that does not decode shows what is under it.
  */
 @Composable
 internal fun Slideshow(file: File, durationMs: Long, modifier: Modifier) {
