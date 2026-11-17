@@ -12,11 +12,10 @@ import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.Role
 import io.github.bert0ns.cribrum.model.Signal
 import kotlinx.coroutines.CancellationException
-import java.time.Duration
-import java.time.LocalDateTime
+import java.io.File
 
-/** From the end of a take to the start of the next. On the maintainer's phone it groups 95 camera videos in 34 groups, against 53 in 18 at one minute (#172). */
-val TAKES_MAX_GAP: Duration = Duration.ofMinutes(5)
+/** Five minutes, from the end of a take to the start of the next. On the maintainer's phone it groups 95 camera videos in 34 groups, against 53 in 18 at one minute (#172). */
+const val TAKES_MAX_GAP_MS = 300000
 
 /**
  * Two takes whose closest frames are below this are different subjects. Recall first: the halves of one clip, the closest
@@ -28,7 +27,8 @@ const val TAKES_MIN_COSINE = 0.50f
 const val SHORT_TAKE_RATIO = 0.5f
 
 /**
- * A video joins the takes of the one before it when it starts at most [TAKES_MAX_GAP] after that one ends, as long as the
+ * A video joins the takes of the one before it when it starts at most [TAKES_MAX_GAP_MS] after that one ends, by
+ * `capturedInstant`, as long as the
  * two look alike when both have frames. A group of takes has no best copy: which take to keep is not obvious, so every
  * take is a candidate and the review preselects none.
  */
@@ -38,15 +38,15 @@ class TakesDetector : GroupDetector {
     override val category = Category.TAKES
     override val mediaTypes = setOf(MediaType.VIDEO)
 
-    /** Start, length in milliseconds when known, video. */
-    private data class Take(val start: LocalDateTime, val lengthMs: Long?, val video: MediaRef)
+    /** Start as epoch milliseconds, length in milliseconds when known, video. */
+    private data class Take(val start: Long, val lengthMs: Long?, val video: MediaRef)
 
     override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
         val takes = mutableListOf<Take>()
         for (video in images) {
-            if (!isCameraFolder(video.path)) continue // a sent or saved copy is not a take, whatever its time
+            if (!isCameraFolder(video.path) || isScreenRecording(video.path)) continue // a sent or saved copy is no take, whatever its time, nor a recording
             val meta = metadata(video, context) ?: continue
-            takes += Take(meta.capturedAt ?: continue, meta.durationMs, video)
+            takes += Take(meta.capturedInstant ?: continue, meta.durationMs, video)
         }
         takes.sortWith(compareBy({ it.start }, { it.video.path }))
         val result = LinkedHashMap<MediaRef, List<Signal>>()
@@ -85,8 +85,8 @@ class TakesDetector : GroupDetector {
     }
 
     private suspend fun follows(previous: Take, take: Take, context: AnalysisContext): Boolean {
-        val end = previous.start.plus(Duration.ofMillis(previous.lengthMs ?: 0))
-        return Duration.between(end, take.start) <= TAKES_MAX_GAP && alike(previous.video, take.video, context)
+        val end = previous.start + (previous.lengthMs ?: 0)
+        return take.start - end <= TAKES_MAX_GAP_MS && alike(previous.video, take.video, context)
     }
 
     /** Recall first: without the frames of both, time alone decides. */
@@ -96,6 +96,9 @@ class TakesDetector : GroupDetector {
         if (framesA.isEmpty() || framesB.isEmpty()) return true
         return framesA.maxOf { x -> framesB.maxOf { y -> dot(x, y) } } >= TAKES_MIN_COSINE
     }
+
+    /** A Galaxy saves screen recordings to DCIM/Screen recordings. */
+    private fun isScreenRecording(path: String): Boolean = generateSequence(File(path).parentFile) { it.parentFile }.any { it.name.equals("screen recordings", ignoreCase = true) }
 
     private suspend fun metadata(video: MediaRef, context: AnalysisContext): VideoMetadata? = try {
         context.videoMetadata(video)

@@ -158,20 +158,23 @@ class ImageIndex(private val db: IndexDatabase) :
         )
     }
 
-    suspend fun videoMetadata(path: String): VideoMetadata? = dao.videoMetadata(path)?.let { row ->
-        VideoMetadata(
-            row.width,
-            row.height,
-            row.durationMs,
-            row.frameRate,
-            row.bitrate,
-            row.hasAudio == true,
-            row.videoCodec,
-            row.hdr == true,
-            row.capturedAt?.let { LocalDateTime.parse(it) },
-            row.capturedInstant,
-        )
-    }
+    suspend fun videoMetadata(path: String): VideoMetadata? = dao.videoMetadata(path)?.let(::videoMetadata)
+
+    /** The metadata of every video that has it, by path: one query, where a group detector would make one per video. */
+    suspend fun allVideoMetadata(): Map<String, VideoMetadata> = dao.allVideoMetadata().associate { it.path to videoMetadata(it.metadata) }
+
+    private fun videoMetadata(row: StoredVideoMetadata) = VideoMetadata(
+        row.width,
+        row.height,
+        row.durationMs,
+        row.frameRate,
+        row.bitrate,
+        row.hasAudio == true,
+        row.videoCodec,
+        row.hdr == true,
+        row.capturedAt?.let { LocalDateTime.parse(it) },
+        row.capturedInstant,
+    )
 
     /** The metadata of every image that has it, by path: one query, where a group detector would make one per image. */
     suspend fun allMetadata(): Map<String, ImageMetadata> = dao.allMetadata().associate { it.path to metadata(it.metadata) }

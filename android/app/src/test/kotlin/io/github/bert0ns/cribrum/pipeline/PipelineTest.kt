@@ -37,6 +37,7 @@ import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.model.toMediaRef
 import io.github.bert0ns.cribrum.review.Review
+import io.github.bert0ns.cribrum.review.ReviewGroup
 import io.github.bert0ns.cribrum.sources.FilesystemMediaSource
 import io.github.bert0ns.cribrum.sources.MediaSource
 import io.github.bert0ns.cribrum.sources.MergedMediaSource
@@ -201,7 +202,7 @@ class PipelineTest {
         return listOf("clip", "prores", "broken").associateWith { File(root, "DCIM/Camera/$it.mp4").apply { writeBytes(head) } }
     }
 
-    private val clipMeta = VideoMetadata(64, 48, 1000, 30.0, 44_880, true, "video/avc", false, LocalDateTime.of(2024, 5, 1, 12, 20, 30))
+    private val clipMeta = VideoMetadata(64, 48, 1000, 30.0, 44_880, true, "video/avc", false, LocalDateTime.of(2024, 5, 1, 12, 20, 30), 1_714_558_830_000)
 
     private fun readVideo(file: File): VideoMetadata = when (file.nameWithoutExtension) {
         "clip" -> clipMeta
@@ -423,13 +424,53 @@ class PipelineTest {
         videos()
         File(root, "DCIM/Camera/clip.mp4").copyTo(File(root, "DCIM/Camera/later.mp4"))
         // Five seconds after the clip starts, and four after it ends.
-        val reader = { file: File -> if (file.nameWithoutExtension == "later") clipMeta.copy(capturedAt = clipMeta.capturedAt!!.plusSeconds(5)) else readVideo(file) }
+        val reader = { file: File -> if (file.nameWithoutExtension == "later") clipMeta.copy(capturedAt = clipMeta.capturedAt!!.plusSeconds(5), capturedInstant = clipMeta.capturedInstant!! + 5_000) else readVideo(file) }
         val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(TakesDetector()), embedder = MeanColorEmbedder(), videoMetadataReader = reader, frameReader = ::grayFrames)
 
         val stats = runBlocking { pipeline.run(source, images = false, videos = true) }
 
         assertEquals(emptyList<Failure>(), stats.failures)
         assertEquals(listOf(setOf("clip.mp4", "later.mp4")), takesGroups())
+    }
+
+    @Test
+    fun `takes kept after their first take went to the trash do not come back`() {
+        videos()
+        val takes = listOf("clip", "later", "last").map { File(root, "DCIM/Camera/clip.mp4").copyTo(File(root, "DCIM/Camera/$it-take.mp4")) }
+        // Seconds apart, in the order of the list.
+        val reader = { file: File -> takes.indexOf(file).takeIf { it >= 0 }?.let { clipMeta.copy(capturedInstant = clipMeta.capturedInstant!! + it * 5_000L) } ?: readVideo(file) }
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(TakesDetector()), videoMetadataReader = reader)
+        val review = Review(index, AppTrash({ listOf(folder.root) }))
+        fun scan() = runBlocking { pipeline.run(source, images = false, videos = true) }
+
+        scan()
+        assertEquals(1, runBlocking { review.page(Category.TAKES, mediaType = MediaType.VIDEO) }.groups.size)
+        runBlocking { index.setReviewState(takes[0].path, ReviewState.TRASHED) }
+        takes[0].delete()
+        // The rest, the clip of videos() included, which has the first take's time.
+        (takes.drop(1) + File(root, "DCIM/Camera/clip.mp4")).forEach { runBlocking { index.setReviewState(it.path, ReviewState.KEPT) } }
+        scan()
+
+        // The trashed take keeps its old signal in the index, under the old id.
+        assertTrue("the group is there, under another id", setOf("later-take.mp4", "last-take.mp4", "clip.mp4") in takesGroups())
+        assertEquals(emptyList<ReviewGroup>(), runBlocking { review.page(Category.TAKES, mediaType = MediaType.VIDEO) }.groups)
+    }
+
+    @Test
+    fun `a capture time read again runs the takes again`() {
+        val clip = videos().getValue("clip")
+        File(root, "DCIM/Camera/clip.mp4").copyTo(File(root, "DCIM/Camera/later.mp4"))
+        val reader = { file: File -> if (file.nameWithoutExtension == "later") clipMeta.copy(capturedInstant = clipMeta.capturedInstant!! + 5_000) else readVideo(file) }
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(TakesDetector()), videoMetadataReader = reader)
+        runBlocking { pipeline.run(source, images = false, videos = true) }
+        assertEquals(1, takesGroups().size)
+
+        // As an older reader would have stored it: no capture time, and no file changed.
+        runBlocking { index.setVideoMetadata(clip.path, clipMeta.copy(capturedAt = null, capturedInstant = null)) }
+        val stats = runBlocking { pipeline.run(source, images = false, videos = true) }
+
+        assertEquals(listOf("takes:video"), stats.ranGroupDetectors)
+        assertEquals(emptyList<Set<String>>(), takesGroups())
     }
 
     @Test

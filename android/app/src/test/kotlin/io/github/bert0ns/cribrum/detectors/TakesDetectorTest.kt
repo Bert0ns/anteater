@@ -14,13 +14,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.io.File
-import java.time.LocalDateTime
 
 @RunWith(RobolectricTestRunner::class)
 class TakesDetectorTest {
     private val fixture = JSONObject(File("../../fixtures/videos/takes.json").readText())
-
-    private fun JSONObject.text(key: String): String? = if (isNull(key)) null else getString(key)
 
     @Test
     fun `the takes of the lab's made-up clips match exactly`() = runBlocking {
@@ -29,8 +26,8 @@ class TakesDetectorTest {
         val context = AnalysisContext(
             videoMetadata = { video ->
                 val clip = byVideo.getValue(video)
-                val length = if (clip.isNull("duration_ms")) null else clip.getLong("duration_ms")
-                VideoMetadata(0, 0, length, null, null, false, null, false, clip.text("captured_at")?.let(LocalDateTime::parse))
+                fun long(key: String) = if (clip.isNull(key)) null else clip.getLong(key)
+                VideoMetadata(0, 0, long("duration_ms"), null, null, false, null, false, null, long("captured_instant"))
             },
             frames = { video ->
                 val frames = byVideo.getValue(video).optJSONArray("frames") ?: JSONArray()

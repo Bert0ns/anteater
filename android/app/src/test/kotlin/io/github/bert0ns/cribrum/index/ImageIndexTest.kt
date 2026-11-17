@@ -1062,6 +1062,7 @@ class ImageIndexTest {
         "hasVideos" to { hasVideos() },
         "videosWaiting" to { videosWaiting() },
         "capturedAt" to { capturedAt() },
+        "allVideoMetadata" to { allVideoMetadata() },
         "indexedMedia" to { indexedMedia() },
         "getVersion" to { version },
     )

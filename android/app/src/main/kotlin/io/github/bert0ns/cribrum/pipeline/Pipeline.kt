@@ -353,6 +353,7 @@ class Pipeline(
         // Read once: a query per image took seconds on a 10,000-image library.
         val perceptualHashes = index.perceptualHashes()
         val metadata = index.allMetadata()
+        val videoMetadata = if (video) index.allVideoMetadata() else emptyMap()
         val context = AnalysisContext(
             contentHash = {
                 try {
@@ -365,7 +366,7 @@ class Pipeline(
             perceptualHash = { perceptualHashes[it.path] ?: throw NoSuchElementException(it.path) },
             embedding = { embeddings[it.path] ?: throw MissingEmbedding(it) },
             metadata = { metadata[it.path] ?: throw UnreadableImage(File(it.path)) },
-            videoMetadata = { index.videoMetadata(it.path) ?: throw UnreadableVideo(File(it.path)) },
+            videoMetadata = { videoMetadata[it.path] ?: throw UnreadableVideo(File(it.path)) },
             frames = { frames[it.path].orEmpty() },
             // Burst ranks its shots by the measure blur stored, and decodes a shot again only when blur left none.
             sharpness = { storedSharpness(blur, it) ?: BlurDetector.peakVariance(it) },
@@ -382,7 +383,9 @@ class Pipeline(
                 // The images keep the run they had, which a video run must not overwrite.
                 val runId = if (video) "${detector.id}:${mediaType.value}" else detector.id
                 val step = if (video) VIDEO_GROUPS_STEP else detector.id
-                val fingerprint = fingerprint(inputs, "$model:${inputs.count { it.path in hashed }}:$blurInput")
+                // A capture time read again, as by a migration, is new input to the takes though no file changed.
+                val captured = if (video) ":${videoMetadata.values.count { it.capturedInstant != null }}" else ""
+                val fingerprint = fingerprint(inputs, "$model:${inputs.count { it.path in hashed }}:$blurInput$captured")
                 if (upToDate(detector, runId, fingerprint, inputs)) {
                     stats.skippedGroupDetectors += runId
                     continue

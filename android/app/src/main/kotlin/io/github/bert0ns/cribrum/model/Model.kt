@@ -107,9 +107,12 @@ data class Signal(
     /**
      * What the signal says, whatever the detector version and score: kind, group and role.
      * The ranker uses it to tell a new signal from one the user already saw.
+     *
+     * A take's is its kind alone: trashing one take changes the group id and the roles of the others, and a take the
+     * user kept must not come back for that (docs/design.md §6.3).
      */
     val identity: SignalIdentity
-        get() = SignalIdentity(kind, evidence[GROUP_KEY].orEmpty(), evidence[ROLE_KEY].orEmpty())
+        get() = if (kind == Category.TAKES) SignalIdentity(kind, "", "") else SignalIdentity(kind, evidence[GROUP_KEY].orEmpty(), evidence[ROLE_KEY].orEmpty())
 }
 
 data class SignalIdentity(val kind: Kind, val group: String, val role: String)

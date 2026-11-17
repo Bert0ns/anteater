@@ -235,6 +235,8 @@ data class StoredVideoMetadata(
 
 data class StoredPathMetadata(val path: String, @Embedded val metadata: StoredMetadata)
 
+data class StoredPathVideoMetadata(val path: String, @Embedded val metadata: StoredVideoMetadata)
+
 data class StoredPerceptualHash(val path: String, @ColumnInfo(name = "perceptual_hash") val perceptualHash: String)
 
 data class StoredCapture(val path: String, @ColumnInfo(name = "captured_at") val capturedAt: String)
@@ -343,6 +345,12 @@ interface IndexDao {
            captured_instant FROM images WHERE path = :path AND width IS NOT NULL""",
     )
     suspend fun videoMetadata(path: String): StoredVideoMetadata?
+
+    @Query(
+        """SELECT path, width, height, duration_ms, frame_rate, bitrate, has_audio, video_codec, hdr, captured_at,
+           captured_instant FROM images WHERE media_type = 'video' AND width IS NOT NULL""",
+    )
+    suspend fun allVideoMetadata(): List<StoredPathVideoMetadata>
 
     @Query("SELECT path, width, height, mime, camera_make, camera_model, captured_at FROM images WHERE width IS NOT NULL")
     suspend fun allMetadata(): List<StoredPathMetadata>
