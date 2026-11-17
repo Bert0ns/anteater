@@ -151,4 +151,14 @@ class ReasonTest {
     fun `a protection has no reason line`() {
         assertNull(reasonOf(Signal("faces", 1, Protection.FACES, 0.9f)))
     }
+
+    @Test
+    fun `a short clip says the piece that added the most`() {
+        assertEquals("A short clip", line(Category.SHORT_CLIPS, "duration_chance" to "0.400"))
+        assertEquals("A short clip taken within a minute of a photo, like it", line(Category.SHORT_CLIPS, "duration_chance" to "0.360", "photo_chance" to "0.500"))
+        assertEquals("A short take, then a longer one of the same moment", line(Category.SHORT_CLIPS, "duration_chance" to "0.400", "failed_take_chance" to "0.600"))
+        assertEquals("Too dark", line(Category.SHORT_CLIPS, "duration_chance" to "0.280", "mistake" to "dark", "mistake_chance" to "0.800"))
+        assertEquals("Blurry, the subject is out of focus", line(Category.SHORT_CLIPS, "duration_chance" to "0.280", "mistake" to "blurry", "mistake_chance" to "0.640"))
+        assertEquals("A short clip with no sound and a low resolution, like a GIF", line(Category.SHORT_CLIPS, "duration_chance" to "0.280", "gif_chance" to "0.600"))
+    }
 }

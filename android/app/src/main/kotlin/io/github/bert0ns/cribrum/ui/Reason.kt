@@ -97,6 +97,25 @@ fun reasonOf(signal: Signal): Reason? {
                 else -> Reason(R.plurals.reason_take, takes, takes)
             }
         }
+        Category.SHORT_CLIPS -> {
+            // The piece that added the most to the score: the first of equals, as the detector lists them.
+            val contributions = listOf(
+                Reason(R.string.reason_short_clip_photo) to number("photo_chance"),
+                Reason(R.string.reason_short_take) to number("failed_take_chance"),
+                Reason(mistakeReason(evidence["mistake"])) to number("mistake_chance"),
+                Reason(R.string.reason_short_clip_gif) to number("gif_chance"),
+                Reason(R.string.reason_short_clip) to number("duration_chance"),
+            )
+            contributions.maxBy { it.second }.first
+        }
         else -> null
     }
+}
+
+@StringRes
+private fun mistakeReason(case: String?): Int = when (case) {
+    "dark" -> R.string.reason_dark
+    "bright" -> R.string.reason_bright
+    "flat" -> R.string.reason_flat
+    else -> R.string.reason_blurry
 }
