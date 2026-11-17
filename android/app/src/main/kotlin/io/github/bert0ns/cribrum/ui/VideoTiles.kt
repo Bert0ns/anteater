@@ -2,6 +2,7 @@
 package io.github.bert0ns.cribrum.ui
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
 import android.media.MediaMetadataRetriever
 import android.net.Uri
@@ -13,6 +14,7 @@ import android.text.format.Formatter
 import android.util.LruCache
 import android.view.Surface
 import android.view.TextureView
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,13 +32,14 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
@@ -51,11 +54,19 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
+import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
 import coil3.decode.Decoder
+import coil3.request.CachePolicy
 import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import coil3.request.allowHardware
+import coil3.request.bitmapConfig
+import coil3.size.Scale
+import coil3.toBitmap
 import coil3.video.VideoFrameDecoder
 import coil3.video.videoFrameMillis
+import coil3.video.videoFrameOption
 import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.tracing.traced
 import kotlinx.coroutines.Dispatchers
@@ -219,37 +230,49 @@ internal fun LoopingClip(file: File, endMs: Long?, modifier: Modifier, onFailed:
     }
 }
 
-/** How long a slideshow shows each frame. */
-internal const val SLIDE_MS = 1_000L
+/** How many frames a slideshow steps through, and how long it shows each: a cycle of 4 seconds. */
+internal const val SLIDE_FRAMES = 8
+internal const val SLIDE_MS = 500L
 
 /**
- * A tile that would move but has no player (#457): the frames of the full size view's strip, one after another, about one a
- * second, from the same [VideoFrame] requests and Coil cache, so it holds no decoder between frames. It lies over the
- * tile's still frame, which shows until the first is decoded, and each frame stays under the next one until that is
- * decoded, so nothing flashes. A frame that does not decode shows what is under it.
+ * The short side a slideshow's frames decode at: below the tile, about 440 px in 4 columns on an unfolded Fold and 540 px
+ * in 2 folded, and still sharp there once the frame moves every half second.
+ */
+internal const val SLIDE_FRAME_PX = 320
+
+/**
+ * A tile that would move but has no player (#457): [SLIDE_FRAMES] frames from across the video, the middle of each eighth
+ * of its length, one every [SLIDE_MS], over the tile's still frame, which shows until the first is decoded. Each frame is
+ * decoded once, at the closest sync frame and [SLIDE_FRAME_PX] in RGB_565, and kept by the tile while it is on screen,
+ * out of Coil's memory cache, so the slideshows never push the grid's still frames out of it: about 2.9 MB a tile for a
+ * 16:9 video (8 × 569 × 320 × 2 bytes). A frame stays until the next one is decoded, so nothing flashes, and one that does
+ * not decode is skipped. The first waits [SLIDE_MS] too, so a tile a fling only passes through decodes nothing, and a tile
+ * that leaves cancels the decode it waits for.
  */
 @Composable
 internal fun Slideshow(file: File, durationMs: Long, modifier: Modifier) {
     val context = LocalContext.current
-    val times = remember(durationMs) { stripTimes(durationMs) }
-    var steps by remember(times) { mutableIntStateOf(0) }
-    LaunchedEffect(times) {
+    val times = remember(durationMs) { stripTimes(durationMs, SLIDE_FRAMES) }
+    var shown by remember(file, times) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(file, times) {
+        val loader = SingletonImageLoader.get(context)
+        // Null for a frame that did not decode, so it is not tried again.
+        val frames = HashMap<Int, ImageBitmap?>()
+        var step = 0
         while (true) {
             delay(SLIDE_MS)
-            steps++
+            val frame = step++ % times.size
+            if (frame !in frames) frames[frame] = (loader.execute(slideFrameRequest(context, file, times[frame])) as? SuccessResult)?.image?.toBitmap()?.asImageBitmap()
+            frames[frame]?.let { shown = it }
         }
     }
-    Box(modifier.testTag("slideshow")) {
-        for (step in listOfNotNull((steps - 1).takeIf { it >= 0 }, steps)) {
-            val ms = times[step % times.size]
-            // Keyed by the time, so the frame that steps down under the next one keeps what it decoded.
-            key(ms) {
-                val request = remember(file, context) { videoFrameRequest(context, file, "Review.slideshow", ms) }
-                AsyncImage(request, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            }
-        }
-    }
+    Box(modifier.testTag("slideshow")) { shown?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) } }
 }
+
+private fun slideFrameRequest(context: Context, file: File, atMillis: Long) = ImageRequest.Builder(context).data(file).decoderFactory(videoFrames)
+    .videoFrameMillis(atMillis).videoFrameOption(MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+    .size(SLIDE_FRAME_PX).scale(Scale.FILL).bitmapConfig(Bitmap.Config.RGB_565).allowHardware(false)
+    .memoryCachePolicy(CachePolicy.DISABLED).traced("Review.slideshow").build()
 
 /** The tile of a video that cannot be read: a warning and a note, in place of a frame. */
 @Composable

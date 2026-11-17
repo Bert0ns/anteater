@@ -1,5 +1,6 @@
 package io.github.bert0ns.cribrum.ui
 
+import android.media.MediaMetadataRetriever
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -25,7 +26,11 @@ import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.annotation.DelicateCoilApi
 import coil3.intercept.Interceptor
+import coil3.request.CachePolicy
+import coil3.request.ErrorResult
+import coil3.size.Size
 import coil3.video.videoFrameMicros
+import coil3.video.videoFrameOption
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
@@ -67,16 +72,22 @@ class ClipLoopsTest {
         ReviewGroup("g$it", listOf(copy, best))
     }
 
-    /** The frames the tiles asked Coil for at a time, as path and ms: the slideshows'. The still frames ask for no time. */
-    private val frames = ConcurrentLinkedQueue<Pair<String, Long>>()
+    /** A frame a slideshow asked Coil for: where, when in the video, and how it decodes. */
+    private data class Slide(val path: String, val ms: Long, val size: Size, val option: Int, val cache: CachePolicy)
+
+    /** The frames the tiles asked Coil for at a time: the slideshows'. The still frames ask for no time. */
+    private val slides = ConcurrentLinkedQueue<Slide>()
+    private val frames get() = slides.map { it.path to it.ms }
 
     @OptIn(DelicateCoilApi::class)
     @Before
     fun recordFrames() {
+        // Robolectric decodes no video, so a frame with a time fails at once instead of on a thread of Coil's own.
         val record = Interceptor { chain ->
             val micros = chain.request.videoFrameMicros
-            if (micros >= 0) frames += (chain.request.data as File).path to micros / 1000
-            chain.proceed()
+            if (micros < 0) return@Interceptor chain.proceed()
+            slides += Slide((chain.request.data as File).path, micros / 1000, chain.size, chain.request.videoFrameOption, chain.request.memoryCachePolicy)
+            ErrorResult(null, chain.request, IllegalStateException("no video decoder"))
         }
         SingletonImageLoader.setUnsafe(ImageLoader.Builder(ApplicationProvider.getApplicationContext()).components { add(record) }.build())
     }
@@ -120,6 +131,12 @@ class ClipLoopsTest {
     private val slideshows get() = compose.onAllNodesWithTag("slideshow", useUnmergedTree = true).fetchSemanticsNodes().size
     private fun framesOf(path: String) = frames.filter { it.first == path }.map { it.second }
 
+    /** Lets the slideshows show their first frame, which waits one step. */
+    private fun firstSlide() {
+        compose.mainClock.advanceTimeBy(SLIDE_MS)
+        compose.waitForIdle()
+    }
+
     @Test
     fun `the first tiles on screen play their clip muted and in a loop, on players that live on their own thread`() {
         show(page(clips(8)))
@@ -139,21 +156,37 @@ class ClipLoopsTest {
     }
 
     @Test
-    fun `the other clips on screen show the slideshow, which steps through the strip's five times about once a second`() {
+    fun `the other clips on screen show the slideshow, which steps through eight frames across the clip, two a second`() {
         show(page(clips(8)))
         val third = "/sdcard/DCIM/Camera/clip3.mp4"
         assertTrue(slideshows > 0)
         assertEquals(compose.onAllNodesWithContentDescription("clip", substring = true).fetchSemanticsNodes().size - LOOPING_CLIPS, slideshows)
-        assertEquals(listOf(300L), framesOf(third))
+        assertTrue(framesOf(third).isEmpty()) // the first frame waits a step, so a tile a fling passes through decodes none
 
-        repeat(STRIP_FRAMES) {
+        repeat(SLIDE_FRAMES) {
             compose.mainClock.advanceTimeBy(SLIDE_MS)
             compose.waitForIdle()
         }
 
-        assertEquals(stripTimes(3_000), framesOf(third).distinct())
-        assertEquals(300L, framesOf(third).last()) // and round again
+        assertEquals(listOf(187L, 562L, 937L, 1_312L, 1_687L, 2_062L, 2_437L, 2_812L), framesOf(third))
         assertTrue(framesOf("/sdcard/DCIM/Camera/clip1.mp4").isEmpty()) // a playing tile shows no slideshow
+    }
+
+    @Test
+    fun `a slideshow decodes each frame once, small, at the closest sync frame and out of the shared memory cache`() {
+        show(page(clips(8)))
+        val third = "/sdcard/DCIM/Camera/clip3.mp4"
+
+        repeat(3 * SLIDE_FRAMES) {
+            compose.mainClock.advanceTimeBy(SLIDE_MS)
+            compose.waitForIdle()
+        }
+
+        val asked = slides.filter { it.path == third }
+        assertEquals(SLIDE_FRAMES, asked.size) // kept, or known not to decode, after the first round
+        assertTrue(asked.all { it.size == Size(SLIDE_FRAME_PX, SLIDE_FRAME_PX) })
+        assertTrue(asked.all { it.option == MediaMetadataRetriever.OPTION_CLOSEST_SYNC })
+        assertTrue(asked.all { it.cache == CachePolicy.DISABLED }) // the grid's still frames stay in the cache
     }
 
     @Test
@@ -188,7 +221,8 @@ class ClipLoopsTest {
         assertTrue(failed.released)
         assertEquals((2..LOOPING_CLIPS + 1).map { "/sdcard/DCIM/Camera/clip$it.mp4" }, running.flatMap { it.paths })
         compose.onAllNodesWithTag("clipLoop").assertCountEquals(LOOPING_CLIPS)
-        assertEquals(listOf(300L), framesOf("/sdcard/DCIM/Camera/clip1.mp4"))
+        firstSlide()
+        assertEquals(listOf(187L), framesOf("/sdcard/DCIM/Camera/clip1.mp4"))
     }
 
     @Test
@@ -253,7 +287,8 @@ class ClipLoopsTest {
 
         assertTrue(players.made.isEmpty())
         assertEquals(compose.onAllNodesWithContentDescription("clip", substring = true).fetchSemanticsNodes().size, slideshows)
-        assertEquals(listOf(300L), framesOf("/sdcard/DCIM/Camera/clip1.mp4"))
+        firstSlide()
+        assertEquals(listOf(187L), framesOf("/sdcard/DCIM/Camera/clip1.mp4"))
     }
 
     @Test
@@ -286,7 +321,8 @@ class ClipLoopsTest {
 
         assertEquals(listOf("/sdcard/DCIM/Camera/best1.mp4", "/sdcard/DCIM/Camera/best2.mp4"), players.made.flatMap { it.paths })
         assertTrue(players.made.all { it.endMs == 10_000L && it.repeating })
-        assertEquals(listOf(6_100L), framesOf("/sdcard/DCIM/Camera/best3.mp4"))
+        firstSlide()
+        assertEquals(listOf(3_812L), framesOf("/sdcard/DCIM/Camera/best3.mp4"))
         assertTrue(frames.none { it.first.contains("copy") })
     }
 
@@ -305,7 +341,8 @@ class ClipLoopsTest {
 
         assertEquals(listOf("/sdcard/DCIM/Camera/take1-2.mp4", "/sdcard/DCIM/Camera/take2-2.mp4"), players.made.flatMap { it.paths })
         assertTrue(players.made.all { it.endMs == C.TIME_END_OF_SOURCE })
-        assertEquals(listOf(900L), framesOf("/sdcard/DCIM/Camera/take3-2.mp4"))
+        firstSlide()
+        assertEquals(listOf(562L), framesOf("/sdcard/DCIM/Camera/take3-2.mp4"))
         assertTrue(frames.none { it.first.endsWith("-1.mp4") || it.first.endsWith("-3.mp4") })
     }
 
