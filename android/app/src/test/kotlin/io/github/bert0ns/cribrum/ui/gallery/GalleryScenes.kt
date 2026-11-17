@@ -22,8 +22,8 @@ import io.github.bert0ns.cribrum.compress.JpegStatus
 import io.github.bert0ns.cribrum.compress.Losses
 import io.github.bert0ns.cribrum.compress.Marker
 import io.github.bert0ns.cribrum.compress.Refusal
-import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.metadata.VideoMetadata
+import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.pipeline.Failure
@@ -129,7 +129,7 @@ private fun Gallery.clipsLibrary() {
         lengths[ref.path] = millis
     }
     for (index in 0 until 3) {
-        val ref = world.video("WhatsApp/Media/WhatsApp Video", "VID-2026101${index}-WA000${index + 3}.mp4", 24_000_000L + index * 61_000_000L, taken(index + 3), world.signal(Category.FORWARDED, 1f, "messaging_folder" to "yes"))
+        val ref = world.video("WhatsApp/Media/WhatsApp Video", "VID-2026101$index-WA000${index + 3}.mp4", 24_000_000L + index * 61_000_000L, taken(index + 3), world.signal(Category.FORWARDED, 1f, "messaging_folder" to "yes"))
         world.show(ref.path, 18_000L + index * 41_000L, GalleryPictures.scene(7_200 + index))
         lengths[ref.path] = 18_000L + index * 41_000L
     }
