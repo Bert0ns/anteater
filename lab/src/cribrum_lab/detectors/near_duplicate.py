@@ -4,6 +4,9 @@ Two images are linked when their perceptual hashes are within a Hamming distance
 catches resized and recompressed copies such as WhatsApp's, or when their embeddings are
 close, which also catches crops and edits. Linked images form a group. Recall first: both
 thresholds start loose.
+
+Two videos are linked when their lengths match and their frames look alike: a copy WhatsApp
+re-encoded, such as the one in `Sent`, never matches its original by content hash (#396).
 """
 
 from collections.abc import Iterable, Sequence
@@ -14,7 +17,8 @@ import xxhash
 from cribrum_lab.detectors.base import AnalysisContext, Role
 from cribrum_lab.folders import is_camera_folder, is_messaging_folder
 from cribrum_lab.hashing import is_flat_hash
-from cribrum_lab.model import GROUP_KEY, ROLE_KEY, Category, MediaRef, Signal
+from cribrum_lab.metadata import VideoMetadata
+from cribrum_lab.model import GROUP_KEY, ROLE_KEY, Category, MediaRef, MediaType, Signal
 
 MAX_DISTANCE = 10
 """Hamming distance between 64-bit pHashes that still links two images."""
@@ -22,6 +26,12 @@ NEAR_DUPLICATE_MIN_COSINE = 0.90
 """Embedding similarity that still links two images. A 75% crop of a photo scores about
 0.90 with MobileCLIP-S0; different photos of the same party stay under 0.8. MobileCLIP2-S0
 links about as many pairs at this threshold (docs/design.md, section 5)."""
+VIDEO_MAX_DURATION_GAP_MS = 250
+"""Two videos further apart in length are not compared. A WhatsApp copy and its original had the
+same length on the labeled videos (docs/design.md, section 5)."""
+VIDEO_MIN_FRAME_COSINE = 0.80
+"""Frame similarity that still links two videos of about one length. On the labeled videos the two
+copies scored 0.887 and 0.980, and no other pair within the length gap above 0.6."""
 _CHUNK = 1024
 
 
@@ -29,10 +39,13 @@ class NearDuplicateDetector:
     id = "near_duplicate"
     version = 3
     category = Category.NEAR_DUPLICATE
+    media_types = frozenset({MediaType.IMAGE, MediaType.VIDEO})
 
     def analyze(
         self, images: Sequence[MediaRef], context: AnalysisContext
     ) -> dict[MediaRef, list[Signal]]:
+        if images and images[0].media_type is MediaType.VIDEO:  # a group run has one media type
+            return self._videos(images, context)
         members, hashes, vectors = [], [], []
         for image in images:
             try:
@@ -52,6 +65,36 @@ class NearDuplicateDetector:
             for i in component:
                 signal = self._signal(i, best, group_id, hashes, vectors)
                 result[members[i]] = [signal]
+        return result
+
+    def _videos(
+        self, videos: Sequence[MediaRef], context: AnalysisContext
+    ) -> dict[MediaRef, list[Signal]]:
+        """A video with no length or no frames is linked to none: a length alone is no evidence,
+        since many clips share one."""
+        members = []
+        for video in videos:
+            meta = _video_metadata(video, context)
+            frames = context.frames(video)
+            if meta is not None and meta.duration_ms is not None and len(frames) > 0:
+                members.append((meta.duration_ms, video, meta, np.stack(frames)))
+        members.sort(key=lambda m: (m[0], str(m[1].path)))
+        links = []
+        for i, (length, _, _, frames) in enumerate(members):
+            for j in range(i + 1, len(members)):
+                if members[j][0] - length > VIDEO_MAX_DURATION_GAP_MS:
+                    break
+                if _frame_similarity(frames, members[j][3]) >= VIDEO_MIN_FRAME_COSINE:
+                    links.append((i, j))
+        result = {}
+        for component in _components(len(members), links):
+            best = min(component, key=lambda i: _video_preference(members[i][1], members[i][2]))
+            group_id = xxhash.xxh3_64(str(members[best][1].path).encode()).hexdigest()
+            for i in component:
+                role, score = (Role.BEST, 0.0) if i == best else (Role.INFERIOR, 1.0)
+                evidence = {GROUP_KEY: group_id, ROLE_KEY: role}
+                signal = Signal(self.id, self.version, Category.NEAR_DUPLICATE, score, evidence)
+                result[members[i][1]] = [signal]
         return result
 
     def _signal(
@@ -124,5 +167,30 @@ def _preference(image: MediaRef, context: AnalysisContext) -> tuple:
     """The copy to keep: highest resolution, least compression, camera EXIF, then folder."""
     meta = context.metadata(image)
     pixels = meta.width * meta.height
-    folder = 2 if is_messaging_folder(image.path) else 0 if is_camera_folder(image.path) else 1
-    return -pixels, -image.size / pixels, not meta.has_camera_exif, folder, str(image.path)
+    return -pixels, -image.size / pixels, not meta.has_camera_exif, _folder(image), str(image.path)
+
+
+def _frame_similarity(a: np.ndarray, b: np.ndarray) -> float:
+    """The mean, over the frames of both videos, of each frame's closest cosine in the other one.
+    Closest and not same-time frames, since an HDR video's frames are keyframes, fewer and up to
+    half a second off the times a copy's exact frames are at."""
+    cosines = a @ b.T
+    return float((cosines.max(axis=1).sum() + cosines.max(axis=0).sum()) / (len(a) + len(b)))
+
+
+def _video_preference(video: MediaRef, meta: VideoMetadata) -> tuple:
+    """The copy to keep: camera folder first, messaging folders last, then the highest resolution
+    and bitrate."""
+    return _folder(video), -meta.width * meta.height, -(meta.bitrate or 0), str(video.path)
+
+
+def _folder(media: MediaRef) -> int:
+    """A copy in the camera folder is kept first and one in a messaging folder last."""
+    return 2 if is_messaging_folder(media.path) else 0 if is_camera_folder(media.path) else 1
+
+
+def _video_metadata(video: MediaRef, context: AnalysisContext) -> VideoMetadata | None:
+    try:
+        return context.video_metadata(video)
+    except Exception:  # unreadable header: no length to compare
+        return None

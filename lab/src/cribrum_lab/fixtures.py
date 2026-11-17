@@ -4,7 +4,9 @@ Synthetic images only, never personal photos, generated from fixed seeds into
 fixtures/golden/ at the repository root, together with expected.json: what the lab's
 detectors say about them, and fixtures/videos/frames.json: the embeddings of the frames the lab
 samples from the synthetic videos there, and fixtures/videos/takes.json: capture times, lengths
-and frames of made-up videos and the takes the lab chains them into. The Android tests run their
+and frames of made-up videos and the takes the lab chains them into, and
+fixtures/videos/near_duplicates.json: lengths, sizes and frames of made-up videos and the copies the
+lab links. The Android tests run their
 port on the same files and compare. Regenerate after a detector change, and commit them:
 
     uv run python -m cribrum_lab.fixtures
@@ -22,6 +24,7 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from cribrum_lab import frames, hashing, mobileclip
 from cribrum_lab.detectors import AnalysisContext
+from cribrum_lab.detectors.near_duplicate import NearDuplicateDetector
 from cribrum_lab.detectors.takes import TakesDetector
 from cribrum_lab.metadata import VideoMetadata, read_metadata
 from cribrum_lab.model import MediaRef, MediaType
@@ -256,21 +259,76 @@ TAKE_CLIPS = [
 
 def takes_expected() -> dict:
     """The made-up clips of TAKE_CLIPS and the signals TAKES gives them."""
-    clips = {MediaRef(Path(c["path"]), 0, 0, MediaType.VIDEO): c for c in TAKE_CLIPS}
+    return _video_group_expected(TAKE_CLIPS, TakesDetector())
+
+
+def write_takes() -> None:
+    TAKES.write_text(json.dumps(takes_expected(), indent=1, sort_keys=True) + "\n")
+
+
+NEAR_DUPLICATES = VIDEOS / "near_duplicates.json"
+_SENT = "WhatsApp/Media/WhatsApp Video/Sent"
+NEAR_DUPLICATE_CLIPS = [
+    # A camera original, its WhatsApp copy, a copy exactly the length gap longer, and one past it.
+    {"path": "DCIM/Camera/trip.mp4", "duration_ms": 20000, "width": 2160, "height": 3840,
+     "bitrate": 50000000, "frames": [[1, 0, 0], [0.8, 0.6, 0], [0.6, 0.8, 0]]},
+    {"path": f"{_SENT}/trip-sd.mp4", "duration_ms": 20000, "width": 480, "height": 848,
+     "bitrate": 1200000, "frames": [[0.99, 0.1, 0], [0.8, 0.6, 0.05], [0.6, 0.8, 0]]},
+    {"path": f"{_SENT}/trip-hd.mp4", "duration_ms": 20250, "width": 720, "height": 1280,
+     "bitrate": 2000000, "frames": [[1, 0, 0], [0.8, 0.6, 0], [0.6, 0.8, 0]]},
+    {"path": f"{_SENT}/trip-late.mp4", "duration_ms": 20501, "width": 720, "height": 1280,
+     "bitrate": 2000000, "frames": [[1, 0, 0], [0.8, 0.6, 0], [0.6, 0.8, 0]]},
+    # The same length, but other frames, no frames or no length: linked to none.
+    {"path": f"{_SENT}/other.mp4", "duration_ms": 20000, "width": 480, "height": 848,
+     "bitrate": 1200000, "frames": [[0, 0, 1], [0, 0.6, 0.8], [0, 0.8, 0.6]]},
+    {"path": f"{_SENT}/no-frames.mp4", "duration_ms": 20000, "width": 480, "height": 848,
+     "bitrate": 1200000},
+    {"path": f"{_SENT}/no-length.mp4", "duration_ms": None, "width": 480, "height": 848,
+     "bitrate": 1200000, "frames": [[1, 0, 0], [0.8, 0.6, 0], [0.6, 0.8, 0]]},
+    # A video sent twice, its original gone: of one resolution, the higher bitrate is kept.
+    {"path": f"{_SENT}/party-1.mp4", "duration_ms": 8000, "width": 720, "height": 1280,
+     "bitrate": 1500000, "frames": [[0, 1, 0], [0, 0.6, 0.8]]},
+    {"path": f"{_SENT}/party-2.mp4", "duration_ms": 8000, "width": 720, "height": 1280,
+     "bitrate": 2000000, "frames": [[0, 1, 0], [0, 0.6, 0.8]]},
+    # An HDR original gives fewer frames, keyframes, than its copy.
+    {"path": "DCIM/Camera/hdr.mp4", "duration_ms": 3000, "width": 2160, "height": 3840,
+     "bitrate": 40000000, "frames": [[0.5, 0, 0.87], [0, 0.5, 0.87]]},
+    {"path": f"{_SENT}/hdr.mp4", "duration_ms": 3000, "width": 480, "height": 848,
+     "bitrate": 1000000,
+     "frames": [[0.5, 0, 0.87], [0.4, 0.1, 0.9], [0.25, 0.25, 0.93], [0.1, 0.4, 0.9],
+                [0, 0.5, 0.87]]},
+]  # fmt: skip
+
+
+def near_duplicates_expected() -> dict:
+    """The made-up clips of NEAR_DUPLICATE_CLIPS and the signals NEAR_DUPLICATE gives them."""
+    return _video_group_expected(NEAR_DUPLICATE_CLIPS, NearDuplicateDetector())
+
+
+def write_near_duplicates() -> None:
+    text = json.dumps(near_duplicates_expected(), indent=1, sort_keys=True) + "\n"
+    NEAR_DUPLICATES.write_text(text)
+
+
+def _video_group_expected(made_up: list[dict], detector) -> dict:
+    """Runs a video group detector on made-up clips, each with no file behind it."""
+    clips = {MediaRef(Path(c["path"]), 0, 0, MediaType.VIDEO): c for c in made_up}
 
     def metadata(video: MediaRef) -> VideoMetadata:
         clip = clips[video]
-        instant = clip["captured_instant"]
-        length = clip["duration_ms"]
-        return VideoMetadata(0, 0, length, None, None, False, None, False, None, instant)
+        width, height, length = clip.get("width", 0), clip.get("height", 0), clip["duration_ms"]
+        bitrate, instant = clip.get("bitrate"), clip.get("captured_instant")
+        return VideoMetadata(
+            width, height, length, None, bitrate, False, None, False, None, instant
+        )
 
     def frames(video: MediaRef) -> list[np.ndarray]:
         return [np.array(f, dtype=np.float32) for f in clips[video].get("frames", [])]
 
     context = AnalysisContext(video_metadata=metadata, frames=frames)
-    found = TakesDetector().analyze(list(clips), context)
+    found = detector.analyze(list(clips), context)
     return {
-        "clips": TAKE_CLIPS,
+        "clips": made_up,
         "signals": {
             str(video.path): [
                 {"detector": s.detector_id, "version": s.detector_version,
@@ -280,10 +338,6 @@ def takes_expected() -> dict:
             for video, signals in sorted(found.items(), key=lambda item: str(item[0].path))
         },
     }  # fmt: skip
-
-
-def write_takes() -> None:
-    TAKES.write_text(json.dumps(takes_expected(), indent=1, sort_keys=True) + "\n")
 
 
 def encode_vector(vector: np.ndarray) -> str:
@@ -304,6 +358,7 @@ def main() -> None:
     frames_json = json.dumps(frames_expected(), indent=1, sort_keys=True) + "\n"
     (VIDEOS / "frames.json").write_text(frames_json)
     write_takes()
+    write_near_duplicates()
     print(f"wrote {ROOT} and {VIDEOS / 'frames.json'}")
 
 

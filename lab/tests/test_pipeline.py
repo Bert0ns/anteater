@@ -1330,6 +1330,28 @@ def test_takes_kept_after_their_first_take_went_to_the_trash_do_not_come_back(vi
     assert [c for c in ranked if c.is_candidate] == []
 
 
+def test_a_video_run_links_a_sent_copy_to_its_original_once_both_have_frames(videos, index):
+    sent = videos.parent.parent / "WhatsApp/Media/WhatsApp Video/Sent"
+    sent.mkdir(parents=True)
+    shutil.copy(VIDEOS / "rotated.mp4", sent / "copy.mp4")  # as long as clip.mp4
+    near = [pipeline.NearDuplicateDetector()]
+
+    def roles(embedder):
+        pipeline.run(
+            videos.parent.parent, index, detectors=[], group_detectors=near,
+            embedder=embedder, images=False, videos=True,
+        )  # fmt: skip
+        return {
+            image.path.name: signal.evidence["role"]
+            for image in index.images()
+            for signal in index.signals(image.path)
+            if signal.category is Category.NEAR_DUPLICATE and image.media_type is MediaType.VIDEO
+        }
+
+    assert roles(None) == {}  # no frames, no link
+    assert roles(MeanColorEmbedder()) == {"clip.mp4": "best", "copy.mp4": "inferior"}
+
+
 def test_a_capture_time_read_again_runs_the_takes_again(videos, index):
     shutil.copy(VIDEOS / "rotated.mp4", videos / "rotated.mp4")
     root = videos.parent.parent
