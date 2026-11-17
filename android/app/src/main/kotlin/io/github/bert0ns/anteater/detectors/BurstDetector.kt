@@ -1,0 +1,139 @@
+// BURST: shots of the same moment, taken seconds apart (docs/design.md §5). Mirrors
+// lab/src/anteater_lab/detectors/burst.py.
+package io.github.bert0ns.anteater.detectors
+
+import io.github.bert0ns.anteater.model.Category
+import io.github.bert0ns.anteater.model.GROUP_KEY
+import io.github.bert0ns.anteater.model.MediaRef
+import io.github.bert0ns.anteater.model.ROLE_KEY
+import io.github.bert0ns.anteater.model.Role
+import io.github.bert0ns.anteater.model.Signal
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import java.time.Duration
+import java.time.LocalDateTime
+import java.util.Locale
+
+/** EXIF capture times have 1 s resolution; manual bursts are often 1-2 s apart. */
+val MAX_GAP: Duration = Duration.ofSeconds(3)
+
+/** Consecutive shots below this similarity are different subjects, whatever the time. */
+const val BURST_MIN_COSINE = 0.80f
+
+/**
+ * Photos from the same camera whose capture times are at most MAX_GAP apart are chained
+ * into a burst, as long as consecutive shots also look alike when both have an embedding.
+ * The sharpest shot, by the BLURRY measure to one decimal as blur stores it, is the one to keep.
+ *
+ * shortcut: sharpness only; add "eyes open" once a face detector exists.
+ */
+class BurstDetector : GroupDetector {
+    override val id = "burst"
+    override val version = 3
+    override val category = Category.BURST
+
+    override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
+        val byCamera = LinkedHashMap<Pair<String?, String?>, MutableList<Pair<LocalDateTime, MediaRef>>>()
+        for (image in images) {
+            val meta = try {
+                context.metadata(image)
+            } catch (error: Exception) { // unreadable header: no capture time to cluster on
+                if (error is CancellationException) throw error
+                null
+            }
+            val capturedAt = meta?.capturedAt ?: continue
+            byCamera.getOrPut(meta.cameraMake to meta.cameraModel) { mutableListOf() }
+                .add(capturedAt to image)
+        }
+
+        val result = LinkedHashMap<MediaRef, List<Signal>>()
+        for (shots in byCamera.values) {
+            shots.sortWith(compareBy({ it.first }, { it.second.path }))
+            for (burst in bursts(shots, context)) {
+                currentCoroutineContext().ensureActive() // a shot blur did not measure is decoded
+                // Rounded as blur stores it: a stored measure and a decoded one rank shots the same.
+                val sharpness = burst.associateWith { "%.1f".format(Locale.ROOT, context.sharpness(it)).toDouble() }
+                result.putAll(signals(burst, sharpness))
+            }
+        }
+        return result
+    }
+
+    /**
+     * Chains shots into bursts. A shot that does not follow the last shot of the burst starts a
+     * new one, but if the next shot follows the last shot of the burst instead, the shot between
+     * was one different frame and is dropped, so a single other subject does not split a burst.
+     */
+    private suspend fun bursts(
+        shots: List<Pair<LocalDateTime, MediaRef>>,
+        context: AnalysisContext,
+    ): List<List<MediaRef>> {
+        suspend fun follows(previous: Pair<LocalDateTime, MediaRef>, shot: Pair<LocalDateTime, MediaRef>) = Duration.between(previous.first, shot.first) <= MAX_GAP && alike(previous.second, shot.second, context)
+
+        val bursts = mutableListOf<List<Pair<LocalDateTime, MediaRef>>>()
+        var current = mutableListOf(shots[0])
+        var pending: Pair<LocalDateTime, MediaRef>? = null
+        for (shot in shots.drop(1)) {
+            val skipped = pending
+            if (skipped != null && follows(skipped, shot)) {
+                bursts += current
+                current = mutableListOf(skipped, shot)
+                pending = null
+            } else if (follows(current.last(), shot)) {
+                current += shot
+                pending = null
+            } else if (skipped == null) {
+                pending = shot
+            } else {
+                bursts += current
+                current = mutableListOf(shot)
+                pending = null
+            }
+        }
+        bursts += current
+        return bursts.filter { it.size > 1 }.map { burst -> burst.map { it.second } }
+    }
+
+    /** Recall first: without both embeddings, time alone decides. */
+    private suspend fun alike(a: MediaRef, b: MediaRef, context: AnalysisContext): Boolean {
+        val va = try {
+            context.embedding(a)
+        } catch (_: MissingEmbedding) {
+            return true
+        }
+        val vb = try {
+            context.embedding(b)
+        } catch (_: MissingEmbedding) {
+            return true
+        }
+        return dot(va, vb) >= BURST_MIN_COSINE
+    }
+
+    private fun signals(burst: List<MediaRef>, sharpness: Map<MediaRef, Double>): Map<MediaRef, List<Signal>> {
+        val best = burst.maxBy { sharpness.getValue(it) }
+        val groupId = groupId(burst[0].path)
+        val bestSharpness = sharpness.getValue(best)
+
+        val result = LinkedHashMap<MediaRef, List<Signal>>()
+        for (image in burst) {
+            val isBest = image == best
+            val role = if (isBest) Role.BEST else Role.INFERIOR
+            val score = if (isBest) {
+                0.0f
+            } else {
+                // 0.5 when as sharp as the best shot, up to 1 when it has no detail at all.
+                val ratio = if (bestSharpness > 0.0) sharpness.getValue(image) / bestSharpness else 1.0
+                (1.0 - 0.5 * minOf(1.0, ratio)).toFloat()
+            }
+            val evidence = mapOf(
+                GROUP_KEY to groupId,
+                ROLE_KEY to role.value,
+                "sharpness" to "%.1f".format(Locale.ROOT, sharpness.getValue(image)),
+                "shots" to burst.size.toString(),
+            )
+            result[image] = listOf(Signal(id, version, Category.BURST, score, evidence))
+        }
+        return result
+    }
+}

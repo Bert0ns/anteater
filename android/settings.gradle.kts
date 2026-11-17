@@ -14,6 +14,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "cribrum"
+rootProject.name = "anteater"
 include(":app")
 include(":baselineprofile")

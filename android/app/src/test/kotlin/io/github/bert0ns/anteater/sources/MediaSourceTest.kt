@@ -1,0 +1,753 @@
+// The lab's tests/test_sources.py, translated, plus what only the phone has.
+package io.github.bert0ns.anteater.sources
+
+import android.content.ContentProvider
+import android.content.ContentValues
+import android.content.Context
+import android.database.Cursor
+import android.database.MatrixCursor
+import android.net.Uri
+import android.provider.MediaStore
+import androidx.test.core.app.ApplicationProvider
+import io.github.bert0ns.anteater.model.MediaRef
+import io.github.bert0ns.anteater.model.MediaType
+import io.github.bert0ns.anteater.model.toMediaRef
+import io.github.bert0ns.anteater.trash.TRASH_FOLDER
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assume.assumeTrue
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import org.junit.runner.RunWith
+import org.robolectric.Robolectric
+import org.robolectric.RobolectricTestRunner
+import java.io.File
+import java.nio.file.Files
+
+private fun bytes(vararg values: Int) = ByteArray(values.size) { values[it].toByte() }
+private fun ascii(text: String) = text.toByteArray(Charsets.ISO_8859_1)
+private val ZEROS = ByteArray(16)
+
+private val JPEG = bytes(0xff, 0xd8, 0xff, 0xe0) + ZEROS
+private val PNG = bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a) + ZEROS
+private val GIF = ascii("GIF89a") + ZEROS
+private val WEBP = ascii("RIFF") + ByteArray(4) + ascii("WEBPVP8 ") + ByteArray(8)
+private val HEIC = bytes(0, 0, 0, 0x18) + ascii("ftypheic") + ByteArray(12)
+
+/** MIAF profile: the HEIF brand appears only among the compatible brands. */
+private val MIAF_HEIC = bytes(0, 0, 0, 0x1c) + ascii("ftypmiaf") + ByteArray(4) + ascii("mif1heic") + ByteArray(8)
+private val AVIF = bytes(0, 0, 0, 0x1c) + ascii("ftypavif") + ByteArray(4) + ascii("mif1miaf") + ByteArray(8)
+private val MP4 = bytes(0, 0, 0, 0x18) + ascii("ftypisom") + ByteArray(12)
+
+/** The head of an ISO base media file: its ftyp box, then the start of the next box. */
+private fun ftyp(major: String, vararg compatible: String): ByteArray {
+    val body = ascii(major) + bytes(0, 0, 2, 0) + ascii(compatible.joinToString(""))
+    return bytes(0, 0, 0, 8 + body.size) + ascii("ftyp") + body + bytes(0, 0, 0, 8) + ascii("free")
+}
+
+// The EBML header, then the DocType element of each.
+private val MKV = bytes(0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81, 0x01, 0x42, 0xf7, 0x81, 0x01, 0x42, 0x82, 0x88) + ascii("matroska")
+private val WEBM = bytes(0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81, 0x01, 0x42, 0xf7, 0x81, 0x01, 0x42, 0x82, 0x84) + ascii("webm")
+
+// Robolectric: the walk and the trash trace their calls, and a plain JVM test has no android.os.Trace.
+@RunWith(RobolectricTestRunner::class)
+class MediaSourceTest {
+    @get:Rule
+    val folder = TemporaryFolder()
+
+    private val root by lazy { folder.root }
+
+    private fun write(path: String, content: ByteArray): File = File(root, path).apply {
+        parentFile!!.mkdirs()
+        writeBytes(content)
+    }
+
+    private fun scanned(): List<String> = runBlocking { FilesystemMediaSource(root).scan().toList() }.map { File(it.path).relativeTo(root).path }
+
+    @Test
+    fun `finds every supported format`() {
+        listOf("a.jpg" to JPEG, "b.png" to PNG, "c.gif" to GIF, "d.webp" to WEBP, "e.heic" to HEIC)
+            .forEach { (name, content) -> write(name, content) }
+
+        assertEquals(listOf("a.jpg", "b.png", "c.gif", "d.webp", "e.heic"), scanned())
+    }
+
+    @Test
+    fun `finds heif declared by a compatible brand`() {
+        write("a.heic", MIAF_HEIC)
+        write("b.avif", AVIF)
+
+        assertEquals(listOf("a.heic", "b.avif"), scanned())
+    }
+
+    @Test
+    fun `includes nomedia and hidden folders`() {
+        write("WhatsApp Images/Sent/.nomedia", ByteArray(0))
+        write("WhatsApp Images/Sent/IMG-1.jpg", JPEG)
+        write(".thumbnails/t.jpg", JPEG)
+
+        assertEquals(setOf("WhatsApp Images/Sent/IMG-1.jpg", ".thumbnails/t.jpg"), scanned().toSet())
+    }
+
+    @Test
+    fun `detects images by content not extension`() {
+        write("no_extension", JPEG)
+        write("photo.jpg", PNG)
+        write("fake.jpg", ascii("not an image"))
+        write("clip.jpg", MP4)
+        write("empty.jpg", ByteArray(0))
+        write("short.heic", bytes(0, 0, 0, 0x0a) + ascii("ftyp"))
+
+        assertEquals(listOf("clip.jpg", "no_extension", "photo.jpg"), scanned())
+    }
+
+    private fun typeOf(content: ByteArray): MediaType? {
+        File(root, "file").writeBytes(content)
+        return runBlocking { FilesystemMediaSource(root).scan().toList() }.singleOrNull()?.mediaType
+    }
+
+    @Test
+    fun `finds a video by its head and says it is one`() {
+        val videos = mapOf(
+            "MP4" to ftyp("isom", "isom", "iso2", "avc1", "mp41"),
+            "MP4 v2" to ftyp("mp42", "isom", "mp42"),
+            "MOV" to ftyp("qt  ", "qt  "),
+            "3GP" to ftyp("3gp4", "isom", "3gp4"),
+            "M4V" to ftyp("M4V ", "M4V ", "M4A ", "mp42", "isom"),
+            "Matroska" to MKV,
+            "WebM" to WEBM,
+        )
+
+        assertEquals(videos.keys.associateWith { MediaType.VIDEO }, videos.mapValues { typeOf(it.value) })
+    }
+
+    @Test
+    fun `an image with an ftyp box stays an image`() {
+        val images = mapOf("HEIC" to HEIC, "MIAF HEIC" to MIAF_HEIC, "AVIF" to AVIF, "HEIF that also names isom" to ftyp("mif1", "mif1", "heic", "isom"))
+
+        assertEquals(images.keys.associateWith { MediaType.IMAGE }, images.mapValues { typeOf(it.value) })
+    }
+
+    @Test
+    fun `audio, AVI and other containers are not videos`() {
+        val others = mapOf(
+            "M4A" to ftyp("M4A ", "M4A ", "mp42", "isom"),
+            "M4B" to ftyp("M4B ", "M4B ", "mp42", "isom"),
+            "CR3" to ftyp("crx ", "crx ", "isom"), // a Canon raw photo, which no head check reads
+            "AVI" to ascii("RIFF") + ByteArray(4) + ascii("AVI LIST") + ByteArray(8),
+            "other EBML" to bytes(0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x82, 0x84) + ascii("none"),
+        )
+
+        assertEquals(others.keys.associateWith { null }, others.mapValues { typeOf(it.value) })
+    }
+
+    @Test
+    fun `image ref identifies the file`() {
+        val file = write("a.jpg", JPEG)
+
+        assertEquals(listOf(file.toMediaRef()), runBlocking { FilesystemMediaSource(root).scan().toList() })
+    }
+
+    @Test
+    fun `skips symlinks to files and folders`() {
+        val target = write("a/a.jpg", JPEG)
+        Files.createSymbolicLink(File(root, "link.jpg").toPath(), target.toPath())
+        Files.createSymbolicLink(File(root, "linked-folder").toPath(), target.parentFile!!.toPath())
+
+        assertEquals(listOf("a/a.jpg"), scanned())
+    }
+
+    @Test
+    fun `skips special and unreadable files`() {
+        ProcessBuilder("mkfifo", File(root, "pipe.jpg").path).start().waitFor() // reading would block forever
+        write("locked.jpg", JPEG).setReadable(false)
+        write("ok.jpg", JPEG)
+
+        assertEquals(listOf("ok.jpg"), scanned())
+    }
+
+    @Test
+    fun `scan order is deterministic`() {
+        listOf("b/2.jpg", "b/1.jpg", "a/9.jpg", "c.jpg").forEach { write(it, JPEG) }
+
+        assertEquals(listOf("c.jpg", "a/9.jpg", "b/1.jpg", "b/2.jpg"), scanned())
+    }
+
+    @Test
+    fun `skips the system trash, pending files and the app trash`() {
+        write("DCIM/Camera/.trashed-1760000000-IMG_1.jpg", JPEG)
+        write("DCIM/Camera/.pending-1760000000-IMG_2.jpg", JPEG)
+        write("$TRASH_FOLDER/0b1c/IMG_3.jpg", JPEG)
+        write("DCIM/Camera/IMG_4.jpg", JPEG)
+
+        assertEquals(listOf("DCIM/Camera/IMG_4.jpg"), scanned())
+    }
+
+    @Test
+    fun `skips the app-private folders Android keeps from every app`() {
+        write("Android/data/com.example/cache/a.jpg", JPEG)
+        write("Android/obb/com.example/b.jpg", JPEG)
+        write("Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images/c.jpg", JPEG)
+
+        assertEquals(listOf("Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images/c.jpg"), scanned())
+    }
+
+    @Test
+    fun `skips a skipped folder wherever it is, and everything below it`() {
+        write("DCIM/$TRASH_FOLDER/0b1c/a.jpg", JPEG)
+        write("$TRASH_FOLDER/Android/data/b.jpg", JPEG)
+        write("Android/data/com.example/$TRASH_FOLDER/c.jpg", JPEG)
+        write("Android/.Trash/Android/obb/d.jpg", JPEG)
+        write("Android/media/e.jpg", JPEG)
+
+        assertEquals(listOf("Android/media/e.jpg"), scanned())
+    }
+
+    @Test
+    fun `keeps the folders that only look like a skipped one`() {
+        write("DCIM/Android/data/a.jpg", JPEG)
+        write("Pictures/Android/obb/b.jpg", JPEG)
+        write("Android/dataset/c.jpg", JPEG)
+
+        assertEquals(listOf("Android/dataset/c.jpg", "DCIM/Android/data/a.jpg", "Pictures/Android/obb/b.jpg"), scanned())
+    }
+
+    @Test
+    fun `skips prefixed names in nested folders, and walks a prefixed folder`() {
+        write("a/b/.trashed-1760000000-IMG_1.jpg", JPEG)
+        write("a/b/.pending-1760000000-IMG_2.jpg", JPEG)
+        write("a/b/IMG_3.jpg", JPEG)
+        write("a/.trashed-folder/IMG_4.jpg", JPEG) // only file names carry the prefixes
+
+        assertEquals(listOf("a/.trashed-folder/IMG_4.jpg", "a/b/IMG_3.jpg"), scanned())
+    }
+
+    @Test
+    fun `skips the Samsung Gallery recycle bin at the root only`() {
+        write("Android/.Trash/com.sec.android.gallery3d/a.jpg", JPEG)
+        write("DCIM/Android/.Trash/b.jpg", JPEG)
+
+        assertEquals(listOf("DCIM/Android/.Trash/b.jpg"), scanned())
+    }
+
+    private fun scannedKnowing(vararg known: MediaRef): List<String> = runBlocking { FilesystemMediaSource(root) { known.toList() }.scan().toList() }.map { File(it.path).relativeTo(root).path }
+
+    @Test
+    fun `takes a file the index has with the same size and mtime as an image without reading it`() {
+        val fake = write("fake.jpg", ascii("not an image")) // the head would say no
+
+        assertEquals(listOf("fake.jpg"), scannedKnowing(fake.toMediaRef()))
+    }
+
+    @Test
+    fun `yields a known file as the index has it, media type included`() {
+        val clip = write("clip.mp4", ascii("not read")).toMediaRef(MediaType.VIDEO)
+
+        assertEquals(listOf(clip), runBlocking { FilesystemMediaSource(root) { listOf(clip) }.scan().toList() })
+    }
+
+    @Test
+    fun `sniffs a known file again when its size or mtime changed`() {
+        val sized = write("sized.jpg", ascii("not an image"))
+        val touched = write("touched.jpg", ascii("not an image"))
+        val edited = write("edited.jpg", JPEG)
+        val before = listOf(sized, touched, edited).map { it.toMediaRef() }
+
+        sized.appendText("!")
+        touched.setLastModified(touched.lastModified() + 5_000)
+        edited.appendBytes(ZEROS)
+
+        assertEquals(listOf("edited.jpg"), scannedKnowing(*before.toTypedArray()))
+    }
+
+    @Test
+    fun `reads the known files once per scan, not once per file`() {
+        listOf("a.jpg", "b.jpg", "c.jpg").forEach { write(it, JPEG) }
+        var reads = 0
+        val source = FilesystemMediaSource(root) {
+            reads++
+            emptyList()
+        }
+
+        runBlocking { source.scan().toList() }
+
+        assertEquals(1, reads)
+    }
+
+    private class MemoryNotImages(vararg initial: MediaRef) : NotImages {
+        val stored = initial.associateByTo(linkedMapOf()) { it.path }
+        var reads = 0
+        val batches = mutableListOf<Int>()
+
+        override suspend fun notImages(): Collection<MediaRef> {
+            reads++
+            return stored.values.toList()
+        }
+
+        override suspend fun addNotImages(files: List<MediaRef>) {
+            batches += files.size
+            files.forEach { stored[it.path] = it }
+        }
+
+        override suspend fun forgetNotImages(paths: Collection<String>) {
+            paths.forEach(stored::remove)
+        }
+    }
+
+    private fun scannedRemembering(store: NotImages, folder: File = root): List<String> = runBlocking { FilesystemMediaSource(folder, notImages = store).scan().toList() }.map { File(it.path).relativeTo(root).path }
+
+    /** Overwrites [file] with [content] of the same length, and puts its mtime back. */
+    private fun rewriteQuietly(file: File, content: ByteArray) {
+        val mtime = Files.getLastModifiedTime(file.toPath()) // File.lastModified would cut it to milliseconds
+        file.writeBytes(content)
+        Files.setLastModifiedTime(file.toPath(), mtime)
+    }
+
+    @Test
+    fun `remembers a file that is not an image and does not sniff it on the next scan`() {
+        val store = MemoryNotImages()
+        val text = write("notes.txt", ByteArray(JPEG.size) { 'x'.code.toByte() })
+        write("a.jpg", JPEG)
+
+        assertEquals(listOf("a.jpg"), scannedRemembering(store))
+        assertEquals(listOf(text.toMediaRef()), store.stored.values.toList())
+
+        // The head would now say image, so a found file here proves the head was not read.
+        rewriteQuietly(text, JPEG)
+        assertEquals(listOf("a.jpg"), scannedRemembering(store))
+    }
+
+    @Test
+    fun `sniffs a remembered file again when its size or mtime changed`() {
+        val store = MemoryNotImages()
+        val sized = write("sized.txt", ascii("not an image"))
+        val touched = write("touched.txt", ascii("not an image"))
+        scannedRemembering(store)
+
+        sized.writeBytes(JPEG)
+        val mtime = touched.lastModified()
+        touched.writeBytes(bytes(0xff, 0xd8, 0xff, 0xe0) + ByteArray(8)) // as long as before
+        touched.setLastModified(mtime + 5_000)
+
+        assertEquals(listOf("sized.txt", "touched.txt"), scannedRemembering(store))
+        assertEquals(emptyMap<String, MediaRef>(), store.stored) // they are images now
+    }
+
+    @Test
+    fun `a file that is not an image after a change is remembered with its new size`() {
+        val store = MemoryNotImages()
+        val text = write("notes.txt", ascii("not an image"))
+        scannedRemembering(store)
+
+        text.appendText("!")
+        scannedRemembering(store)
+
+        assertEquals(listOf(text.toMediaRef()), store.stored.values.toList())
+    }
+
+    @Test
+    fun `forgets a remembered file the walk no longer finds`() {
+        val store = MemoryNotImages()
+        write("keep.txt", ascii("not an image"))
+        val gone = write("gone.txt", ascii("not an image"))
+        scannedRemembering(store)
+
+        gone.delete()
+        scannedRemembering(store)
+
+        assertEquals(listOf(File(root, "keep.txt").path), store.stored.keys.toList())
+    }
+
+    @Test
+    fun `leaves the remembered files of another root alone`() {
+        val elsewhere = MediaRef("/card/notes.txt", 5, 5)
+        val store = MemoryNotImages(elsewhere)
+        write("a/notes.txt", ascii("not an image"))
+
+        scannedRemembering(store, File(root, "a"))
+
+        assertEquals(elsewhere, store.stored[elsewhere.path])
+    }
+
+    @Test
+    fun `keeps the remembered files of a root it could not list in full`() {
+        write("a/notes.txt", ascii("not an image"))
+        val deep = write("a/b/more.txt", ascii("not an image"))
+        write("c.txt", ascii("not an image"))
+        val store = MemoryNotImages()
+        scannedRemembering(store)
+        val locked = File(root, "a").apply { setReadable(false) }
+        assumeTrue("the folder is still listable (running as root?)", locked.listFiles() == null)
+
+        try {
+            scannedRemembering(store)
+        } finally {
+            locked.setReadable(true)
+        }
+
+        assertEquals(setOf(File(root, "a/notes.txt").path, deep.path, File(root, "c.txt").path), store.stored.keys)
+    }
+
+    @Test
+    fun `reads the remembered files once per scan, not once per file`() {
+        listOf("a.txt", "b.txt", "c.txt").forEach { write(it, ascii("not an image")) }
+        val store = MemoryNotImages()
+
+        scannedRemembering(store)
+
+        assertEquals(1, store.reads)
+    }
+
+    @Test
+    fun `writes the sniffed non-images in batches of 300 and the leftover at the end`() {
+        val store = MemoryNotImages()
+        repeat(301) { write("n$it.txt", ascii("not an image")) }
+
+        scannedRemembering(store)
+
+        assertEquals(listOf(300, 1), store.batches)
+        assertEquals(301, store.stored.size)
+    }
+
+    @Test
+    fun `yields a file that is both indexed and remembered, and drops its row`() {
+        val fake = write("fake.jpg", ascii("not an image"))
+        val ref = fake.toMediaRef()
+        val store = MemoryNotImages(ref)
+
+        val found = runBlocking { FilesystemMediaSource(root, notImages = store) { listOf(ref) }.scan().toList() }
+
+        assertEquals(listOf(ref), found)
+        assertEquals(emptyMap<String, MediaRef>(), store.stored)
+    }
+
+    @Test
+    fun `a merged source still yields a file MediaStore lists that the walk remembers as a non-image`() {
+        val text = write("notes.jpg", ascii("not an image")) // MediaStore trusts the extension
+        val store = MemoryNotImages()
+        scannedRemembering(store)
+        val mediaStore = object : MediaSource {
+            override val walkedRoots = emptyList<File>()
+            override fun scan(): Flow<MediaRef> = flowOf(text.toMediaRef())
+        }
+
+        val merged = MergedMediaSource(listOf(FilesystemMediaSource(root, notImages = store), mediaStore))
+
+        assertEquals(listOf(text.toMediaRef()), runBlocking { merged.scan().toList() })
+    }
+
+    @Test
+    fun `counts the folders and entries it lists and the files whose head it reads`() {
+        write("a/b.jpg", JPEG)
+        write("a/notes.txt", ascii("not an image"))
+        write("c.png", PNG)
+        val source = FilesystemMediaSource(root)
+
+        runBlocking { source.scan().toList() }
+
+        assertEquals(mapOf("folders" to 2, "entries" to 4, "sniffed" to 3, "unknownContainers" to 0), source.counts)
+    }
+
+    @Test
+    fun `counts the containers it turns away by an unknown brand, each brand apart`() {
+        write("a.mp4", ftyp("dash", "iso6"))
+        write("b.mp4", ftyp("dash"))
+        write("c.f4v", ftyp("f4v ", "isom"))
+        write("d.mka", bytes(0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x82, 0x84) + ascii("none"))
+        // Known brands of what is not a video, and files with no container, are not counted.
+        write("e.m4a", ftyp("M4A ", "M4A ", "mp42", "isom"))
+        write("f.cr3", ftyp("crx ", "crx ", "isom"))
+        write("i.f4a", ftyp("F4A ", "F4A ", "mp42", "isom"))
+        write("g.mp4", MP4)
+        write("h.txt", ascii("not media"))
+        val source = FilesystemMediaSource(root, notImages = MemoryNotImages())
+
+        runBlocking { source.scan().toList() }
+
+        val unknown = mapOf("unknownContainers" to 4, "unknownBrand 'dash'" to 2, "unknownBrand 'f4v '" to 1, "unknownBrand 'ebml/none'" to 1)
+        assertEquals(unknown, source.counts.filterKeys { it.startsWith("unknown") })
+        runBlocking { source.scan().toList() } // a file the walk remembers is not sniffed again, so not counted again
+        assertEquals(mapOf("unknownContainers" to 0), source.counts.filterKeys { it.startsWith("unknown") })
+    }
+
+    @Test
+    fun `reports its root as walked once the whole tree is listed`() {
+        write("a/b.jpg", JPEG)
+        val source = FilesystemMediaSource(root)
+
+        runBlocking { source.scan().toList() }
+
+        assertEquals(listOf(root), source.walkedRoots)
+    }
+
+    @Test
+    fun `reports no walked root when a folder cannot be listed`() {
+        write("a/b.jpg", JPEG)
+        write("c.jpg", JPEG)
+        val locked = File(root, "a").apply { setReadable(false) }
+        assumeTrue("the folder is still listable (running as root?)", locked.listFiles() == null)
+        val source = FilesystemMediaSource(root)
+
+        val found = try {
+            runBlocking { source.scan().toList() }
+        } finally {
+            locked.setReadable(true)
+        }
+
+        assertEquals(listOf(File(root, "c.jpg").path), found.map { it.path })
+        assertEquals(emptyList<File>(), source.walkedRoots)
+    }
+
+    @Test
+    fun `reports no walked root when the root is missing`() {
+        val source = FilesystemMediaSource(File(root, "gone"))
+
+        runBlocking { source.scan().toList() }
+
+        assertEquals(emptyList<File>(), source.walkedRoots)
+    }
+
+    @Test
+    fun `merged sources report the roots of the sources that walked`() {
+        write("a/x.jpg", JPEG)
+        val present = FilesystemMediaSource(File(root, "a"))
+        val missing = FilesystemMediaSource(File(root, "card"))
+        val merged = MergedMediaSource(listOf(present, missing))
+
+        runBlocking { merged.scan().toList() }
+
+        assertEquals(listOf(File(root, "a")), merged.walkedRoots)
+    }
+
+    @Test
+    fun `merged sources yield each path once, in source order`() {
+        fun source(vararg paths: String) = object : MediaSource {
+            override val walkedRoots = emptyList<File>()
+            override fun scan(): Flow<MediaRef> = flowOf(*paths.map { MediaRef(it, 1, 1) }.toTypedArray())
+        }
+
+        val merged = MergedMediaSource(listOf(source("/a.jpg", "/b.jpg"), source("/b.jpg", "/sd/c.jpg")))
+
+        assertEquals(listOf("/a.jpg", "/b.jpg", "/sd/c.jpg"), runBlocking { merged.scan().toList() }.map { it.path })
+    }
+
+    @Test
+    fun `merged sources give a later source the paths the earlier ones yielded`() {
+        val given = mutableListOf<Set<String>>()
+        fun source(vararg paths: String) = object : MediaSource {
+            override val walkedRoots = emptyList<File>()
+            override fun scan(): Flow<MediaRef> = scan(emptySet())
+            override fun scan(known: Set<String>): Flow<MediaRef> = flowOf(*paths.map { MediaRef(it, 1, 1) }.toTypedArray()).also { given += known }
+        }
+
+        runBlocking { MergedMediaSource(listOf(source("/a.jpg", "/b.jpg"), source("/b.jpg", "/sd/c.jpg"))).scan().toList() }
+
+        assertEquals(listOf(emptySet(), setOf("/a.jpg", "/b.jpg")), given)
+    }
+
+    @Test
+    fun `merged sources add up their counts and count the files a later source found again`() {
+        fun source(count: Int, vararg paths: String) = object : MediaSource {
+            override val walkedRoots = emptyList<File>()
+            override val counts = mapOf("folders" to count)
+            override fun scan(): Flow<MediaRef> = flowOf(*paths.map { MediaRef(it, 1, 1) }.toTypedArray())
+        }
+
+        val merged = MergedMediaSource(listOf(source(2, "/a.jpg", "/b.jpg"), source(3, "/b.jpg", "/sd/c.jpg")))
+        runBlocking { merged.scan().toList() }
+
+        assertEquals(mapOf("folders" to 5, "duplicates" to 1), merged.counts)
+    }
+}
+
+/** A MediaStore that answers every query for images with the same [paths], and for videos with the same [videos]. */
+class FakeMedia : ContentProvider() {
+    companion object {
+        var paths: List<String?> = emptyList()
+
+        /** Paths with the MIME type MediaStore gave each. */
+        var videos: List<Pair<String?, String?>> = emptyList()
+    }
+
+    override fun onCreate() = true
+    override fun query(uri: Uri, projection: Array<String>?, selection: String?, args: Array<String>?, order: String?): Cursor = if ("video" in uri.pathSegments) {
+        MatrixCursor(arrayOf(MediaStore.Video.Media.DATA, MediaStore.Video.Media.MIME_TYPE)).apply { videos.forEach { addRow(arrayOf(it.first, it.second)) } }
+    } else {
+        MatrixCursor(arrayOf(MediaStore.Images.Media.DATA)).apply { paths.forEach { addRow(arrayOf(it)) } }
+    }
+    override fun getType(uri: Uri): String? = null
+    override fun insert(uri: Uri, values: ContentValues?): Uri? = null
+    override fun delete(uri: Uri, selection: String?, args: Array<String>?) = 0
+    override fun update(uri: Uri, values: ContentValues?, selection: String?, args: Array<String>?) = 0
+}
+
+@RunWith(RobolectricTestRunner::class)
+class MediaStoreSourceTest {
+    @get:Rule
+    val folder = TemporaryFolder()
+
+    private val root by lazy { folder.root }
+
+    @Before
+    fun noVideos() {
+        FakeMedia.videos = emptyList()
+    }
+
+    private fun write(path: String): String = File(root, path).apply {
+        parentFile!!.mkdirs()
+        writeBytes(JPEG)
+    }.path
+
+    private fun scanned(vararg paths: String?): List<String> {
+        FakeMedia.paths = paths.toList()
+        Robolectric.setupContentProvider(FakeMedia::class.java, MediaStore.AUTHORITY)
+        val resolver = ApplicationProvider.getApplicationContext<Context>().contentResolver
+        return runBlocking { MediaStoreSource(resolver, listOf(root)).scan().toList() }.map { it.path }
+    }
+
+    @Test
+    fun `yields what MediaStore lists, in path order`() {
+        val b = write("DCIM/b.jpg")
+        val a = write("DCIM/a.jpg")
+
+        assertEquals(listOf(a, b), scanned(b, a))
+    }
+
+    @Test
+    fun `yields the videos MediaStore lists in a container the scan takes, as videos, in path order with the images`() {
+        val photo = write("DCIM/b.jpg")
+        val mp4 = write("DCIM/a.mp4")
+        val mov = write("DCIM/c.mov")
+        val gp = write("DCIM/d.3gp")
+        val m4v = write("DCIM/e.m4v")
+        val mkv = write("Movies/f.mkv")
+        val webm = write("Movies/g.webm")
+        val avi = write("Movies/h.avi")
+        val wmv = write("Movies/i.wmv")
+        FakeMedia.videos = listOf(
+            mp4 to "video/mp4", mov to "video/quicktime", gp to "video/3gpp", m4v to "video/x-m4v", mkv to "video/x-matroska",
+            webm to "video/webm", avi to "video/avi", wmv to "video/x-ms-wmv", File(root, "gone.mp4").path to "video/mp4", null to "video/mp4",
+        )
+        FakeMedia.paths = listOf(photo)
+        Robolectric.setupContentProvider(FakeMedia::class.java, MediaStore.AUTHORITY)
+        val resolver = ApplicationProvider.getApplicationContext<Context>().contentResolver
+
+        val found = runBlocking { MediaStoreSource(resolver, listOf(root)).scan().toList() }
+
+        val expected = listOf(mp4, photo, mov, gp, m4v, mkv, webm).associateWith { if (it == photo) MediaType.IMAGE else MediaType.VIDEO }
+        assertEquals(expected.toList(), found.map { it.path to it.mediaType })
+    }
+
+    @Test
+    fun `counts the rows MediaStore listed, the skipped ones included`() {
+        val kept = write("DCIM/Camera/IMG_4.jpg")
+        val trashed = write("$TRASH_FOLDER/0b1c/IMG_1.jpg")
+        FakeMedia.paths = listOf(kept, trashed)
+        Robolectric.setupContentProvider(FakeMedia::class.java, MediaStore.AUTHORITY)
+        val source = MediaStoreSource(ApplicationProvider.getApplicationContext<Context>().contentResolver, listOf(root))
+
+        runBlocking { source.scan().toList() }
+
+        assertEquals(mapOf("mediaStoreRows" to 2, "duplicates" to 0), source.counts)
+    }
+
+    @Test
+    fun `leaves out a known path before it looks at the file, and counts it`() {
+        val found = write("DCIM/Camera/IMG_1.jpg")
+        val other = write("DCIM/Camera/IMG_2.jpg")
+        val gone = File(root, "DCIM/Camera/IMG_3.jpg").path // a stat would drop it without counting it
+        FakeMedia.paths = listOf(found, other, gone)
+        Robolectric.setupContentProvider(FakeMedia::class.java, MediaStore.AUTHORITY)
+        val source = MediaStoreSource(ApplicationProvider.getApplicationContext<Context>().contentResolver, listOf(root))
+
+        val images = runBlocking { source.scan(setOf(found, gone)).toList() }
+
+        assertEquals(listOf(other), images.map { it.path })
+        assertEquals(mapOf("mediaStoreRows" to 3, "duplicates" to 2), source.counts)
+    }
+
+    private class MemoryStore(var remembered: Collection<MediaRef> = emptyList()) : NotImages {
+        override suspend fun notImages(): Collection<MediaRef> = remembered
+
+        override suspend fun addNotImages(files: List<MediaRef>) {
+            remembered = remembered + files
+        }
+
+        override suspend fun forgetNotImages(paths: Collection<String>) = Unit
+    }
+
+    private fun ftyp(brand: String) = byteArrayOf(0, 0, 0, 0x18) + "ftyp$brand".toByteArray() + ByteArray(12)
+
+    private fun writeBytes(path: String, bytes: ByteArray): String = File(root, path).apply {
+        parentFile!!.mkdirs()
+        writeBytes(bytes)
+    }.path
+
+    @Test
+    fun `skips a video with an audio brand that not_images holds with the same size and mtime, and takes it again once it changes`() {
+        val audioOnly = writeBytes("Movies/audio.mp4", ftyp("M4A "))
+        val changed = writeBytes("Movies/changed.mp4", ftyp("M4B "))
+        val fresh = writeBytes("Movies/fresh.mp4", ftyp("M4A "))
+        FakeMedia.videos = listOf(audioOnly to "video/mp4", changed to "video/mp4", fresh to "video/mp4")
+        FakeMedia.paths = emptyList()
+        Robolectric.setupContentProvider(FakeMedia::class.java, MediaStore.AUTHORITY)
+        val store = MemoryStore(listOf(File(audioOnly).toMediaRef(), File(changed).toMediaRef().let { it.copy(mtimeNs = it.mtimeNs - 1) }))
+        val resolver = ApplicationProvider.getApplicationContext<Context>().contentResolver
+
+        val found = runBlocking { MediaStoreSource(resolver, listOf(root), store).scan().toList() }
+
+        assertEquals(listOf(changed, fresh), found.map { it.path })
+    }
+
+    @Test
+    fun `with the walk and MediaStore together a DNG and a video with an unknown brand come out, and an audio-only MP4 does not`() {
+        val dng = writeBytes("DCIM/Camera/IMG_0001.dng", byteArrayOf(0x49, 0x49, 0x2a, 0) + ByteArray(60))
+        val audioOnly = writeBytes("Movies/audio.mp4", ftyp("M4A "))
+        val unknown = writeBytes("Movies/clip.mp4", ftyp("zzzz"))
+        val real = writeBytes("Movies/real.mp4", ftyp("isom"))
+        FakeMedia.paths = listOf(dng)
+        FakeMedia.videos = listOf(audioOnly to "video/mp4", unknown to "video/mp4", real to "video/mp4")
+        Robolectric.setupContentProvider(FakeMedia::class.java, MediaStore.AUTHORITY)
+        val store = MemoryStore()
+        val resolver = ApplicationProvider.getApplicationContext<Context>().contentResolver
+        val merged = MergedMediaSource(listOf(FilesystemMediaSource(root, notImages = store), MediaStoreSource(resolver, listOf(root), store)))
+
+        val found = runBlocking { merged.scan().toList() }
+
+        // The walk sniffed all four into not_images, and found the real one a video.
+        assertEquals(listOf(real, dng, unknown), found.map { it.path })
+        assertEquals(listOf(MediaType.VIDEO, MediaType.IMAGE, MediaType.VIDEO), found.map { it.mediaType })
+        assertEquals(setOf(dng, audioOnly, unknown), store.remembered.map { it.path }.toSet())
+    }
+
+    @Test
+    fun `skips the app trash, the system trash and pending files`() {
+        val trashed = write("$TRASH_FOLDER/0b1c/IMG_1.jpg")
+        val systemTrash = write("DCIM/Camera/.trashed-1760000000-IMG_2.jpg")
+        val pending = write("DCIM/Camera/.pending-1760000000-IMG_3.jpg")
+        val kept = write("DCIM/Camera/IMG_4.jpg")
+
+        assertEquals(listOf(kept), scanned(trashed, systemTrash, pending, kept))
+    }
+
+    @Test
+    fun `skips the folders the deep scan skips, at the root of a volume only`() {
+        val recycle = write("Android/.Trash/com.sec.android.gallery3d/a.jpg")
+        val private = write("Android/data/com.example/files/b.jpg")
+        val nested = write("DCIM/Android/.Trash/c.jpg")
+
+        assertEquals(listOf(nested), scanned(recycle, private, nested))
+    }
+
+    @Test
+    fun `ignores rows without a path or a file`() {
+        val ok = write("a.jpg")
+
+        assertEquals(listOf(ok), scanned(null, File(root, "missing.jpg").path, ok))
+    }
+}

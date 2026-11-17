@@ -24,11 +24,11 @@ val gitVersionName: String =
         .ifEmpty { "0.1.0" }
 
 android {
-    namespace = "io.github.bert0ns.cribrum"
+    namespace = "io.github.bert0ns.anteater"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "io.github.bert0ns.cribrum"
+        applicationId = "io.github.bert0ns.anteater"
         // -PapplicationIdSuffix=.heiccheck installs beside the app on the phone, for the device tests run by hand.
         applicationIdSuffix = providers.gradleProperty("applicationIdSuffix").orNull
         minSdk = 30 // Android 11: scoped storage rules and MANAGE_EXTERNAL_STORAGE (design §4, §9)
@@ -44,12 +44,12 @@ android {
     signingConfigs {
         // The release key, which the release workflow writes from repository secrets. Without it a
         // release build comes out unsigned, and Android refuses to install it.
-        providers.environmentVariable("CRIBRUM_KEYSTORE").orNull?.let { keystore ->
+        providers.environmentVariable("ANTEATER_KEYSTORE").orNull?.let { keystore ->
             create("release") {
                 storeFile = file(keystore)
-                storePassword = providers.environmentVariable("CRIBRUM_KEYSTORE_PASSWORD").get()
-                keyAlias = providers.environmentVariable("CRIBRUM_KEY_ALIAS").get()
-                keyPassword = providers.environmentVariable("CRIBRUM_KEYSTORE_PASSWORD").get()
+                storePassword = providers.environmentVariable("ANTEATER_KEYSTORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("ANTEATER_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("ANTEATER_KEYSTORE_PASSWORD").get()
             }
         }
     }
@@ -85,7 +85,7 @@ android {
         compose = true
     }
 
-    // Android 13 and later lists English and Italian under Apps, Cribrum, Language.
+    // Android 13 and later lists English and Italian under Apps, Anteater, Language.
     androidResources {
         generateLocaleConfig = true
     }
@@ -98,18 +98,18 @@ android {
             // -PreadmeScreenshots makes ReadmeScreenshots write docs/screenshots and site/screenshots (android/README.md).
             if (providers.gradleProperty("readmeScreenshots").isPresent) {
                 it.systemProperty(
-                    "cribrum.screenshots.dirs",
+                    "anteater.screenshots.dirs",
                     "${rootProject.file("../docs/screenshots").path},${rootProject.file("../site/screenshots").path}",
                 )
                 it.outputs.upToDateWhen { false }
             } else {
                 it.exclude("**/ReadmeScreenshots*")
             }
-            // -PuiGallery makes UiGallery write its images and index.md to /tmp/cribrum-ui-gallery, or to the folder
+            // -PuiGallery makes UiGallery write its images and index.md to /tmp/anteater-ui-gallery, or to the folder
             // given as -PuiGallery=<folder> (android/README.md).
             val gallery = providers.gradleProperty("uiGallery")
             if (gallery.isPresent) {
-                it.systemProperty("cribrum.gallery.dir", gallery.get().ifBlank { "/tmp/cribrum-ui-gallery" })
+                it.systemProperty("anteater.gallery.dir", gallery.get().ifBlank { "/tmp/anteater-ui-gallery" })
                 it.outputs.upToDateWhen { false }
             } else {
                 it.exclude("**/UiGallery*")
@@ -122,7 +122,7 @@ android {
         abortOnError = true
         // They say a newer release came out, which changes by the day, not with the code.
         disable += setOf("AndroidGradlePluginVersion", "GradleDependency", "NewerVersionAvailable")
-        // Cribrum is for phones, so the APK leaves out ChromeOS's x86_64 (abiFilters above).
+        // Anteater is for phones, so the APK leaves out ChromeOS's x86_64 (abiFilters above).
         disable += "ChromeOsAbiSupport"
         // A string without its Italian version fails the build (AGENTS.md).
         error += "MissingTranslation"
@@ -155,7 +155,7 @@ baselineProfile {
     automaticGenerationDuringBuild = false
 }
 
-/** Downloads pinned files and checks their SHA-256, as lab/src/cribrum_lab/models.py does. */
+/** Downloads pinned files and checks their SHA-256, as lab/src/anteater_lab/models.py does. */
 abstract class DownloadModel : DefaultTask() {
     /** File name to "url sha256". */
     @get:Input
@@ -227,7 +227,7 @@ val copyYuNet = tasks.register<CopyFiles>("copyYuNet") {
 }
 
 // The MobileCLIP2-S0 image encoder, from the same revision and with the same SHA-256 as
-// lab/src/cribrum_lab/mobileclip.py, with its license. Packed in the APK, never committed.
+// lab/src/anteater_lab/mobileclip.py, with its license. Packed in the APK, never committed.
 val downloadMobileClip = tasks.register<DownloadModel>("downloadMobileClip") {
     files.put(
         "mobileclip2_s0/vision_model.onnx",
@@ -243,7 +243,7 @@ val downloadMobileClip = tasks.register<DownloadModel>("downloadMobileClip") {
 }
 
 // PP-OCRv4 text detection, from the same revision and with the same SHA-256 as
-// lab/src/cribrum_lab/text.py. Packed in the APK as a resource, never committed.
+// lab/src/anteater_lab/text.py. Packed in the APK as a resource, never committed.
 val downloadPpocr = tasks.register<DownloadModel>("downloadPpocr") {
     files.put(
         "ppocr/ch_PP-OCRv4_det_infer.onnx",
@@ -256,7 +256,7 @@ val downloadPpocr = tasks.register<DownloadModel>("downloadPpocr") {
 androidComponents {
     onVariants { variant ->
         // The baselineprofile plugin's build types go on a phone beside the real app, never over it.
-        if (variant.name !in setOf("debug", "release", "benchmark")) variant.applicationId.set("io.github.bert0ns.cribrum.profile")
+        if (variant.name !in setOf("debug", "release", "benchmark")) variant.applicationId.set("io.github.bert0ns.anteater.profile")
         // The plugin points the source set of its build type at release's manifest, so this one has to be added here.
         if (variant.name == "nonMinifiedRelease") variant.sources.manifests.addStaticManifestFile("src/nonMinifiedRelease/AndroidManifest.xml")
         variant.sources.assets?.addGeneratedSourceDirectory(downloadMobileClip, DownloadModel::outputDirectory)

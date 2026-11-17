@@ -1,0 +1,680 @@
+package io.github.bert0ns.anteater.ui
+
+import android.app.Application
+import android.util.Log
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import io.github.bert0ns.anteater.AnteaterApp
+import io.github.bert0ns.anteater.model.Category
+import io.github.bert0ns.anteater.model.MediaRef
+import io.github.bert0ns.anteater.model.MediaType
+import io.github.bert0ns.anteater.pipeline.Coverage
+import io.github.bert0ns.anteater.pipeline.ScanReport
+import io.github.bert0ns.anteater.pipeline.coverage
+import io.github.bert0ns.anteater.ranker.THRESHOLDS
+import io.github.bert0ns.anteater.ranker.VIDEO_THRESHOLDS
+import io.github.bert0ns.anteater.review.CategorySummary
+import io.github.bert0ns.anteater.review.Decision
+import io.github.bert0ns.anteater.review.Overview
+import io.github.bert0ns.anteater.review.Page
+import io.github.bert0ns.anteater.review.Review
+import io.github.bert0ns.anteater.review.ReviewGroup
+import io.github.bert0ns.anteater.review.ReviewOrder
+import io.github.bert0ns.anteater.review.VideoItem
+import io.github.bert0ns.anteater.sources.FavoriteRequests
+import io.github.bert0ns.anteater.sources.favoritePaths
+import io.github.bert0ns.anteater.tracing.traceSuspend
+import io.github.bert0ns.anteater.trash.TrashRetention
+import io.github.bert0ns.anteater.trash.TrashedImage
+import io.github.bert0ns.anteater.trash.awayFromItsVolume
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import java.time.Duration
+import java.time.temporal.WeekFields
+
+private const val TAG = "review"
+
+/** The top-level places of the navigation bar, in the order it shows them. */
+enum class Destination { Clean, Compress, Settings }
+
+sealed interface Screen {
+    data object Home : Screen
+    data object Compress : Screen
+
+    /** The review of one category, over the photos (the Photos tab) or the videos (the Videos tab). */
+    data class Category(val category: io.github.bert0ns.anteater.model.Category, val mediaType: MediaType = MediaType.IMAGE) : Screen
+
+    /** The trash belongs to the destination it was opened [from], which Back returns to. */
+    data class Trash(val from: Destination) : Screen
+    data object Settings : Screen
+    data object StorageMap : Screen
+    data object Thresholds : Screen
+
+    /** "Largest videos" (docs/design.md §6.5, §8), opened from the Videos tab of Clean. */
+    data object Videos : Screen
+}
+
+/** The destination of the bar that this screen belongs to, and the one it goes back to. */
+val Screen.destination: Destination
+    get() = when (this) {
+        Screen.Home, is Screen.Category, Screen.Videos -> Destination.Clean
+        is Screen.Trash -> from
+        Screen.Compress -> Destination.Compress
+        Screen.Settings, Screen.Thresholds, Screen.StorageMap -> Destination.Settings
+    }
+
+/** A full screen view covers the navigation bar. */
+val Screen.coversNavigation: Boolean get() = this is Screen.Category || this == Screen.Videos || this is Screen.Trash || this == Screen.Thresholds || this == Screen.StorageMap
+
+/** What the "Free now" dialog deletes: the trash items [decision] made that are still in the trash. */
+data class FreeNow(val decision: Decision, val items: List<TrashedImage>)
+
+/** A lower retention that would purge [expiring] trashed images at the next scan, waiting for the user's confirmation. */
+data class RetentionChange(val days: Int, val expiring: Int)
+
+data class ReviewState(
+    val screen: Screen = Screen.Home,
+    val categories: List<CategorySummary> = emptyList(),
+    /** What all the candidates can free, each image counted once. */
+    val freeableBytes: Long = 0,
+    /** Nothing is indexed yet, so the home screen points to "Scan now". */
+    val indexEmpty: Boolean = false,
+    /** The tab of Clean the home shows, the one used last. */
+    val cleanTab: CleanTab = CleanTab.PHOTOS,
+    /** "Largest videos": every video not reviewed, largest first. Read with the home and again when the page opens. */
+    val videos: List<VideoItem> = emptyList(),
+    /** The categories with a video detector and their figures, the rows of the Videos tab. */
+    val videoCategories: List<CategorySummary> = emptyList(),
+    /** "Scan videos" has started once, so a category of the Videos tab that is empty is empty and does not wait for it. */
+    val videoScanRan: Boolean = false,
+    /** The index holds a video, reviewed or not: before that, the Videos tab says videos appear after the next scan. */
+    val videosIndexed: Boolean = false,
+    /** The videos the video steps have not read yet, which the Videos tab says wait for "Scan videos". */
+    val videosWaiting: Int = 0,
+    /** Paths of the videos selected on "Largest videos". Nothing is selected for the user. */
+    val videoSelected: Set<String> = emptySet(),
+    val page: List<ReviewGroup> = emptyList(),
+    /** Candidates the open category has left, the page included. */
+    val remaining: Int = 0,
+    /** Paths marked for the trash on the current page. */
+    val marked: Set<String> = emptySet(),
+    val trashed: List<TrashedImage> = emptyList(),
+    /** Trash items selected on the trash screen, by their file in the trash: an original and its compressed copy share a path. */
+    val selected: Set<String> = emptySet(),
+    /** The last applied page, until the user undoes it or moves on. */
+    val lastDecision: Decision? = null,
+    /** The "Free now" dialog of [lastDecision], with the trash items of that page still in the trash, while it asks. */
+    val freeNow: FreeNow? = null,
+    /** Ids of the groups skipped in the open category. They stay unreviewed and return when it is reopened. */
+    val skipped: Set<String> = emptySet(),
+    val loading: Boolean = false,
+    val storageMap: List<Folder> = emptyList(),
+    val retentionDays: Int = TrashRetention.DEFAULT_DAYS,
+    val pendingRetention: RetentionChange? = null,
+    val hapticsEnabled: Boolean = true,
+    /** The switch in Settings that lets the night pass analyse images. */
+    val imagesAtNight: Boolean = true,
+    /** The switch in Settings that lets the night pass analyse videos once "Scan videos" has run. */
+    val videosAtNight: Boolean = true,
+    /** How the open category is grouped by date or sorted by size. Off until the user picks one. */
+    val reviewOrder: ReviewOrder = ReviewOrder.OFF,
+    /** Folders the user asked never to be suggested again, shown in settings. */
+    val excludedFolders: List<String> = emptyList(),
+    /** Embeddings stored in the index, shown in settings. */
+    val embeddingCount: Int = 0,
+    /** What Anteater takes on the phone, shown in settings. */
+    val storage: StorageUse? = null,
+    /** What each detector analysed out of the images that need it, and the last finished scan, shown in settings. */
+    val coverage: List<Coverage>? = null,
+    val lastScan: ScanReport? = null,
+    val lastScanFailed: Boolean = false,
+    /** The thresholds in use, and how many candidates each category lists at them and at the defaults. */
+    val thresholds: Map<Category, Float> = THRESHOLDS,
+    val thresholdCounts: Map<Category, Int> = emptyMap(),
+    val defaultCounts: Map<Category, Int> = emptyMap(),
+    /** The same for the videos, in the "Videos" section of the thresholds screen: only the categories whose video score is graded. */
+    val videoThresholds: Map<Category, Float> = VIDEO_THRESHOLDS,
+    val videoThresholdCounts: Map<Category, Int> = emptyMap(),
+    val videoDefaultCounts: Map<Category, Int> = emptyMap(),
+    /** The folder the user just excluded, until they undo it or move on. */
+    val lastExclusion: String? = null,
+    /** Images a restore or an undo left in the trash because a file has their path, until the snackbar goes. */
+    val stayedInTrash: List<MediaRef> = emptyList(),
+    /** Those of [stayedInTrash] the trash refused because their path is on another volume than its own, which needs its own reason. */
+    val stayedElsewhere: List<MediaRef> = emptyList(),
+    /** The last change failed and the screen is as it was, until the snackbar goes. */
+    val changeFailed: Boolean = false,
+    /** An apply showed the page again because an image on it became a favourite meanwhile, until the snackbar goes. */
+    val favoriteAppeared: Boolean = false,
+)
+
+class ReviewViewModel @JvmOverloads constructor(
+    application: Application,
+    private val review: Review = (application as AnteaterApp).let {
+        Review(
+            it.index,
+            it.trash,
+            thresholds = { it.thresholds.values },
+            videoThresholds = { it.thresholds.videoValues },
+            favorites = { favoritePaths(it.contentResolver) },
+            // The locale the screen formats its date labels with (LocalConfiguration), so a week and its label agree.
+            firstDayOfWeek = { WeekFields.of(it.resources.configuration.locales[0]).firstDayOfWeek },
+        )
+    },
+    /** Asks the user to mark the image at the path as a favourite, or to take the mark off. True once they agreed. */
+    private val askFavorite: suspend (path: String, favorite: Boolean) -> Boolean = { path, favorite ->
+        FavoriteRequests.set(application.contentResolver, path, favorite)
+    },
+) : AndroidViewModel(application) {
+    private val app = application as AnteaterApp
+    private val mutableState = MutableStateFlow(ReviewState())
+    private val changes = Mutex()
+    val state: StateFlow<ReviewState> = mutableState.asStateFlow()
+
+    init {
+        // The first read of the preferences can block, so it stays off the main thread.
+        load {
+            withContext(Dispatchers.IO) { it.copy(retentionDays = app.trashRetention.days, hapticsEnabled = app.haptics.enabled, imagesAtNight = app.imageScans.atNight, videosAtNight = app.videoScans.atNight, cleanTab = app.cleanTab.tab) }
+        }
+    }
+
+    /**
+     * A newer refresh replaces an older one that still waits. One that already runs cannot stop inside
+     * the ranking: it finishes and its result is dropped, so only the latest read of the index counts.
+     */
+    fun refresh() {
+        refreshJob?.cancel()
+        refreshJob = load {
+            val lastScan = withContext(Dispatchers.IO) { app.lastScan.report }
+            it.copy(indexEmpty = photosUnscanned(lastScan), lastScan = lastScan).withOverviews(review.overviews()).withVideos()
+        }
+    }
+
+    private var refreshJob: Job? = null
+
+    /** The home loads itself when it comes up, which is what granting access does, so only another screen needs this. */
+    fun refreshAfterAccessGranted() {
+        if (state.value.screen != Screen.Home) refresh()
+    }
+
+    fun open(category: Category, mediaType: MediaType = MediaType.IMAGE) = load {
+        val grouping = app.reviewOrder[category]
+        it.copy(screen = Screen.Category(category, mediaType), lastDecision = null, lastExclusion = null, skipped = emptySet(), reviewOrder = grouping)
+            .showing(pageFor(category, it, skipped = emptySet(), grouping = grouping, mediaType = mediaType))
+    }
+
+    /** The tab Clean opens on from now on, and shows now. */
+    fun selectCleanTab(tab: CleanTab) {
+        app.cleanTab.tab = tab
+        queue { it.copy(cleanTab = tab) }
+    }
+
+    /** Opens "Largest videos", read again: the videos change with each scan and each trash. Nothing is selected for the user. */
+    fun openVideos() = load {
+        it.copy(screen = Screen.Videos, lastDecision = null, lastExclusion = null, videoSelected = emptySet()).withVideos()
+    }
+
+    /** A video that left the list while the tap waited for a change has no selection to flip. */
+    fun toggleVideo(path: String) = queue {
+        if (it.videos.none { item -> item.video.path == path }) return@queue it
+        it.copy(videoSelected = if (path in it.videoSelected) it.videoSelected - path else it.videoSelected + path)
+    }
+
+    /**
+     * Trashes the videos in [paths], or keeps them: the selection the user saw, so a confirmation of one that is no longer on
+     * screen does nothing. A favourite is not trashed unless the dialog asked about it (§6.2): one the gallery marked since
+     * shows the list again with the new heart and the selection, and trashes nothing.
+     */
+    fun applyVideos(paths: Set<String>, trash: Boolean) = load { state ->
+        if (state.screen != Screen.Videos || paths.isEmpty() || paths != state.videoSelected) return@load state
+        val chosen = state.videos.filter { it.video.path in paths }.map { it.video }
+        if (trash) {
+            val confirmed = state.videos.filter { it.isFavorite }.map { it.video.path }
+            if (!confirmed.containsAll(review.favoritesAmong(chosen))) return@load state.withVideos().copy(favoriteAppeared = true)
+        }
+        val decision = if (trash) review.apply(chosen, emptyList()) else review.apply(emptyList(), chosen)
+        state.copy(lastDecision = decision, videoSelected = emptySet()).withVideos()
+    }
+
+    /** Remembered for the category, and applied to the page at once. The user's marks on images that stay on the page stay. */
+    fun setReviewOrder(grouping: ReviewOrder) = load { state ->
+        val category = (state.screen as? Screen.Category)?.category ?: return@load state
+        if (grouping !in ReviewOrder.optionsFor(category)) return@load state
+        app.reviewOrder[category] = grouping
+        state.copy(reviewOrder = grouping).showing(pageFor(category, state, grouping = grouping), keepMarksOf = state)
+    }
+
+    /**
+     * The screen comes up at once, empty and loading, and fills when the list is read: a big trash takes a second.
+     * A read that fails puts back the screen the user was on, as any failed change leaves it.
+     */
+    fun openTrash() = load { before ->
+        val opened = before.copy(screen = Screen.Trash(before.screen.destination), trashed = emptyList(), selected = emptySet())
+        mutableState.value = opened.copy(loading = true)
+        val trashed = try {
+            traceSuspend("Trash.list") { review.trashed() }
+        } catch (e: Exception) {
+            if (e !is CancellationException) mutableState.value = before.copy(loading = true)
+            throw e
+        }
+        opened.copy(trashed = trashed)
+    }
+
+    /** Only the embeddings go: the next scan computes them again. */
+    fun deleteEmbeddings() {
+        val deleted = load { state ->
+            app.index.deleteEmbeddings()
+            state.copy(embeddingCount = app.index.embeddingCount())
+        }
+        refreshStorage(after = deleted)
+    }
+
+    /** Measures the sizes each time it opens, after the screen is up: the trash and the index change elsewhere and in scans. */
+    fun openSettings() = showSettings(onlyIfOpen = false)
+
+    /** Reads settings again after a scan changed something. Does nothing once the user has left it, even if this was queued before. */
+    fun reloadSettings() = showSettings(onlyIfOpen = true)
+
+    private fun showSettings(onlyIfOpen: Boolean) {
+        load {
+            if (onlyIfOpen && it.screen != Screen.Settings) return@load it
+            it.copy(
+                screen = Screen.Settings,
+                excludedFolders = app.index.excludedFolders(),
+                embeddingCount = app.index.embeddingCount(),
+                storage = if (it.screen == Screen.Settings) it.storage else null, // a scan re-opens it: keep the old sizes meanwhile
+            )
+        }
+        refreshStorage()
+        refreshScanStatus()
+    }
+
+    /** Counts outside the lock of [load] too, and under the same rule as [refreshStorage]. */
+    private fun refreshScanStatus() {
+        scanStatusJob?.cancel() // a slower, older read must not overwrite a newer one
+        scanStatusJob = viewModelScope.launch { readScanStatus() }
+    }
+
+    private var scanStatusJob: Job? = null
+
+    private suspend fun readScanStatus() {
+        val coverage = withContext(Dispatchers.Default) { app.index.coverage() }
+        val lastScan = withContext(Dispatchers.IO) { app.lastScan.report }
+        val lastScanFailed = withContext(Dispatchers.IO) { app.lastScan.failed }
+        load { if (it.screen == Screen.Settings) it.copy(coverage = coverage, lastScan = lastScan, lastScanFailed = lastScanFailed) else it }
+    }
+
+    /**
+     * Measures outside the lock of [load]: it only reads, so Back and other changes need not wait for a big trash.
+     * The sizes are kept only if settings is still open, and are written in the order of the loads before them.
+     */
+    private fun refreshStorage(after: Job? = null) = viewModelScope.launch {
+        after?.join()
+        val storage = measureStorage(app, review)
+        load { if (it.screen == Screen.Settings) it.copy(storage = storage) else it }
+    }
+
+    /** Hides the image's folder, subfolders included, and shows the page again without it. */
+    fun excludeFolder(image: MediaRef) = load { state ->
+        val category = (state.screen as? Screen.Category)?.category ?: return@load state
+        val folder = review.excludeFolderOf(image)
+        state.showing(pageFor(category, state), keepMarksOf = state).copy(lastExclusion = folder)
+    }
+
+    /** Hides the folder from the storage map and from the review, subfolders included. The map starts again from its root. */
+    fun excludeFolder(folder: String) = load { state ->
+        review.excludeFolder(folder)
+        state.copy(storageMap = storageMapRoot(), lastExclusion = folder)
+    }
+
+    fun undoExclusion() = load { state ->
+        val folder = state.lastExclusion ?: return@load state
+        review.removeExcludedFolder(folder)
+        val undone = state.copy(lastExclusion = null)
+        when (val screen = state.screen) {
+            is Screen.Category -> undone.showing(pageFor(screen.category, state), keepMarksOf = state)
+            Screen.StorageMap -> undone.copy(storageMap = storageMapRoot())
+            Screen.Settings -> undone.copy(excludedFolders = app.index.excludedFolders())
+            else -> undone
+        }
+    }
+
+    /** Dismisses [folder], the exclusion the snackbar shows, and only while it is still the last one. */
+    fun dismissExclusion(folder: String) = queue { if (it.lastExclusion == folder) it.copy(lastExclusion = null) else it }
+
+    fun removeExcludedFolder(folder: String) = load { state ->
+        review.removeExcludedFolder(folder)
+        state.copy(excludedFolders = app.index.excludedFolders())
+    }
+
+    /** Asks first when the new retention would purge trashed images at the next scan: that cannot be undone. */
+    fun chooseRetention(days: Int) = load { state ->
+        val expiring = if (days < state.retentionDays) review.expiring(Duration.ofDays(days.toLong())) else 0
+        if (expiring > 0) state.copy(pendingRetention = RetentionChange(days, expiring)) else state.withRetention(days)
+    }
+
+    fun confirmRetention() = load { state -> state.pendingRetention?.let { state.withRetention(it.days) } ?: state }
+
+    fun setHaptics(enabled: Boolean) {
+        app.haptics.enabled = enabled
+        queue { it.copy(hapticsEnabled = enabled) }
+    }
+
+    fun setImagesAtNight(enabled: Boolean) {
+        app.imageScans.atNight = enabled
+        queue { it.copy(imagesAtNight = enabled) }
+    }
+
+    fun setVideosAtNight(enabled: Boolean) {
+        app.videoScans.atNight = enabled
+        queue { it.copy(videosAtNight = enabled) }
+    }
+
+    fun cancelRetention() = queue { it.copy(pendingRetention = null) }
+
+    private fun ReviewState.withRetention(days: Int): ReviewState {
+        app.trashRetention.days = days
+        return copy(retentionDays = days, pendingRetention = null)
+    }
+
+    /** Reads counts for the defaults and current thresholds; reloaded when opened and when a scan progresses. */
+    fun openThresholds() = showThresholds(onlyIfOpen = false)
+
+    /** Reads the counts again after a scan changed something. Does nothing once the user has left the screen, even if this was queued before. */
+    fun reloadThresholds() = showThresholds(onlyIfOpen = true)
+
+    private fun showThresholds(onlyIfOpen: Boolean) = load {
+        if (onlyIfOpen && it.screen != Screen.Thresholds) return@load it
+        it.copy(screen = Screen.Thresholds, defaultCounts = review.counts(THRESHOLDS), videoDefaultCounts = review.counts(THRESHOLDS, VIDEO_THRESHOLDS, MediaType.VIDEO)).withThresholds()
+    }
+
+    /** Applies at once: the signals are in the index, so the lists only need ranking again. */
+    fun setThreshold(category: Category, value: Float) = load {
+        app.thresholds[category] = value
+        it.withThresholds()
+    }
+
+    /** The same for a video's threshold, which only the categories with a graded video score have. */
+    fun setVideoThreshold(category: Category, value: Float) = load {
+        app.thresholds.setVideo(category, value)
+        it.withThresholds()
+    }
+
+    fun resetThresholds() = load {
+        app.thresholds.reset()
+        it.withThresholds()
+    }
+
+    /** "Largest videos" read again, with whether the index holds any video at all and how many wait for "Scan videos". The selection keeps the videos still listed. */
+    private suspend fun ReviewState.withVideos(): ReviewState {
+        val videos = review.largestVideos()
+        return copy(videoScanRan = withContext(Dispatchers.IO) { app.videoScans.ran }, videos = videos, videosIndexed = videos.isNotEmpty() || app.index.hasVideos(), videosWaiting = app.index.videosWaiting(), videoSelected = videoSelected intersect videos.mapTo(HashSet()) { it.video.path })
+    }
+
+    private fun ReviewState.withOverviews(overviews: Map<MediaType, Overview>): ReviewState {
+        val photos = overviews.getValue(MediaType.IMAGE)
+        return copy(categories = photos.categories, freeableBytes = photos.freeableBytes, videoCategories = overviews.getValue(MediaType.VIDEO).categories)
+    }
+
+    private suspend fun ReviewState.withThresholds(): ReviewState {
+        val thresholds = app.thresholds.values
+        val videoThresholds = app.thresholds.videoValues
+        return copy(
+            thresholds = thresholds,
+            thresholdCounts = review.counts(thresholds, videoThresholds),
+            videoThresholds = videoThresholds,
+            videoThresholdCounts = review.counts(thresholds, videoThresholds, MediaType.VIDEO),
+        )
+    }
+
+    /** Opens the destination of the navigation bar, keeping what the user left in it. */
+    fun selectDestination(destination: Destination) {
+        when (destination) {
+            Destination.Clean -> showHome()
+            Destination.Compress -> load { it.copy(screen = Screen.Compress) }
+            Destination.Settings -> openSettings()
+        }
+    }
+
+    /** The map is read again, as the index changes elsewhere, and keeps the folder the user had zoomed into when it is still there. */
+    fun openStorageMap() = load { state ->
+        val trail = storageMapRoot().toMutableList()
+        for (folder in state.storageMap.drop(1)) {
+            trail += trail.last().children.firstOrNull { it.path == folder.path } ?: break
+        }
+        state.copy(screen = Screen.StorageMap, storageMap = trail)
+    }
+
+    private suspend fun storageMapRoot() = traceSuspend("StorageMap.build") { listOf(buildFolderTree(review.notTrashedMedia())) }
+
+    fun zoomStorageMap(folder: Folder) = load { state ->
+        state.copy(storageMap = state.storageMap + folder)
+    }
+
+    fun back() {
+        val from = state.value
+        load { state ->
+            when {
+                state.screen == Screen.StorageMap && state.storageMap.size > 1 ->
+                    state.copy(storageMap = state.storageMap.dropLast(1))
+                // The map and the thresholds open from Settings, and go back to it.
+                state.screen == Screen.Thresholds || state.screen == Screen.StorageMap -> state.copy(screen = Screen.Settings)
+                // The trash opens from the top bar of every destination, and goes back to it.
+                state.screen == Screen.Trash(Destination.Compress) -> state.copy(screen = Screen.Compress)
+                state.screen == Screen.Trash(Destination.Settings) -> state.copy(screen = Screen.Settings)
+                else -> state.home()
+            }
+        }
+        // Settings comes back read again, as when it opens: a scan, an exclusion or a purge may have changed it meanwhile.
+        val toSettings = from.screen == Screen.Thresholds || (from.screen == Screen.StorageMap && from.storageMap.size <= 1) || from.screen == Screen.Trash(Destination.Settings)
+        if (toSettings) showSettings(onlyIfOpen = true)
+    }
+
+    private fun showHome() = load { it.home() }
+
+    /**
+     * The home read again, with what [refresh] reads: a scan reloads the home only while it shows (HomeReloads), so one that
+     * moved on or ended while another screen showed has left the empty index and the last scan to read here.
+     */
+    private suspend fun ReviewState.home(): ReviewState {
+        val lastScan = withContext(Dispatchers.IO) { app.lastScan.report }
+        return copy(screen = Screen.Home, page = emptyList(), videoSelected = emptySet(), lastDecision = null, lastExclusion = null, skipped = emptySet(), indexEmpty = photosUnscanned(lastScan), lastScan = lastScan)
+            .withOverviews(review.overviews()).withVideos()
+    }
+
+    /**
+     * The Photos tab's first-scan state: no image indexed, or only "Scan videos" has run, which records the images it walks
+     * past and analyses none. A report from a build before it reads as a photo scan, and an install that never started
+     * "Scan videos" goes by the index alone.
+     */
+    private suspend fun photosUnscanned(lastScan: ScanReport?): Boolean = app.index.imageCount() == 0 || lastScan?.imagesAt == null && withContext(Dispatchers.IO) { app.videoScans.ran }
+
+    /** An image that left the page while the tap waited for a change has no mark to flip. */
+    fun toggle(image: MediaRef) = queue {
+        if (it.page.none { group -> group.images.any { item -> item.image.path == image.path } }) return@queue it
+        it.copy(marked = if (image.path in it.marked) it.marked - image.path else it.marked + image.path)
+    }
+
+    /**
+     * Makes [image], a photo or a video, a gallery favourite, or takes the mark off, once the user agreed to the system dialog.
+     * One marked for the trash on a page, or selected on "Largest videos", is left alone, as the screen offers no heart for it:
+     * the marks of the screen that shows count, not those another screen left behind. The page or the list on screen is not
+     * read again: it keeps its items and marks, and only the heart changes. A ranking built later reads the favourites again by itself.
+     */
+    fun setFavorite(image: MediaRef, favorite: Boolean) {
+        viewModelScope.launch {
+            val shown = state.value
+            if (image.path in (if (shown.screen == Screen.Videos) shown.videoSelected else shown.marked)) return@launch
+            val granted = try {
+                askFavorite(image.path, favorite)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not ask for the favourite", e)
+                false
+            }
+            if (granted) queue { it.copy(page = it.page.withFavorite(image.path, favorite), videos = it.videos.map { item -> if (item.video.path == image.path) item.copy(isFavorite = favorite) else item }) }
+        }
+    }
+
+    private fun List<ReviewGroup>.withFavorite(path: String, favorite: Boolean) = map { group ->
+        group.copy(images = group.images.map { if (it.image.path == path) it.copy(isFavorite = favorite) else it })
+    }
+
+    /**
+     * Trashes [toTrash], keeps [toKeep] and shows the next page. They are what the user confirmed, so a
+     * confirmation of a page that is no longer on screen, like a second tap during an apply, does nothing.
+     */
+    fun applyPage(toTrash: Set<String>, toKeep: Set<String>) = load { state ->
+        val category = (state.screen as? Screen.Category)?.category ?: return@load state
+        val shown = state.page.flatMap { group -> group.images.map { it.image.path } }.toSet()
+        if (toTrash != state.marked || toTrash + toKeep != shown) return@load state
+        // The dialog asked about the favourites the page showed. One the gallery marked since is a favourite
+        // nobody confirmed: show the page again, with its hearts and marks, and trash nothing.
+        val items = state.page.flatMap { group -> group.images }
+        val confirmed = items.filter { it.isFavorite }.map { it.image.path }
+        if (!confirmed.containsAll(review.favoritesAmong(items.filter { it.image.path in toTrash }.map { it.image }))) {
+            return@load state.showing(pageFor(category, state), keepMarksOf = state).copy(favoriteAppeared = true)
+        }
+        val decision = review.applyPage(state.page, toTrash)
+        state.showing(pageFor(category, state)).copy(lastDecision = decision)
+    }
+
+    /** Leaves the groups [ids] for later without deciding anything: their images stay unreviewed. */
+    fun skip(ids: Set<String>) = load { state ->
+        val category = (state.screen as? Screen.Category)?.category ?: return@load state
+        val skipped = state.skipped + ids
+        state.showing(pageFor(category, state, skipped)).copy(skipped = skipped)
+    }
+
+    /** Undoes [decision], the one the snackbar shows, and only while it is still the last one: an older Undo must not undo a newer page. */
+    fun undo(decision: Decision) = load { state ->
+        if (state.lastDecision != decision) return@load state
+        val stayed = review.undo(decision)
+        val elsewhere = elsewhere(decision.items, stayed)
+        val undone = state.copy(lastDecision = null, stayedInTrash = stayed, stayedElsewhere = elsewhere)
+        if (state.screen == Screen.Videos) return@load undone.withVideos()
+        val category = (state.screen as? Screen.Category)?.category ?: return@load undone
+        undone.showing(pageFor(category, state))
+    }
+
+    /**
+     * Opens the "Free now" dialog of [decision], the page the snackbar shows, with what that page still has in the trash:
+     * a restore or a delete on the trash screen may have taken some. With nothing left, or for an older page, it opens nothing.
+     */
+    fun askFreeNow(decision: Decision) = load { state ->
+        if (state.lastDecision != decision) return@load state
+        val left = review.stillTrashed(decision.items)
+        state.copy(freeNow = if (left.isEmpty()) null else FreeNow(decision, left))
+    }
+
+    fun cancelFreeNow() = queue { it.copy(freeNow = null) }
+
+    /**
+     * Deletes for good the trash items the dialog listed, and no other item, once the user confirmed it (D6). The
+     * files are gone, so the page's Undo is too. A second confirm finds no dialog and does nothing.
+     */
+    fun confirmFreeNow() = load { state ->
+        val asked = state.freeNow ?: return@load state
+        review.purgeItems(asked.items)
+        state.copy(
+            freeNow = null,
+            lastDecision = state.lastDecision.takeUnless { it == asked.decision },
+            trashed = if (state.screen is Screen.Trash) review.trashed() else state.trashed,
+            selected = state.selected - asked.items.map { it.file.path }.toSet(),
+        )
+    }
+
+    /** Dismisses [decision], the one the snackbar shows, and only while it is still the last one: a late dismiss must not drop the Undo of the next apply. */
+    fun dismissUndo(decision: Decision) = queue { if (it.lastDecision == decision) it.copy(lastDecision = null) else it }
+
+    /** Dismisses [images], the ones the snackbar shows, and only while they are still the last. */
+    fun dismissStayedInTrash(images: List<MediaRef>) = queue { if (it.stayedInTrash == images) it.copy(stayedInTrash = emptyList(), stayedElsewhere = emptyList()) else it }
+
+    /** Which of [stayed] the trash refused because their item is away from its volume, from [items], the trash items asked for. */
+    private fun elsewhere(items: List<TrashedImage>, stayed: List<MediaRef>): List<MediaRef> = items.filter { it.original in stayed && it.awayFromItsVolume }.map { it.original }
+
+    fun dismissChangeFailed() = queue { it.copy(changeFailed = false) }
+
+    fun dismissFavoriteAppeared() = queue { it.copy(favoriteAppeared = false) }
+
+    fun select(item: TrashedImage) = queue {
+        val path = item.file.path
+        it.copy(selected = if (path in it.selected) it.selected - path else it.selected + path)
+    }
+
+    fun selectAll(items: List<TrashedImage>, select: Boolean) = queue {
+        val paths = items.map { item -> item.file.path }.toSet()
+        it.copy(selected = if (select) it.selected + paths else it.selected - paths)
+    }
+
+    fun restoreSelected() = load { state ->
+        val items = state.trashed.filter { it.file.path in state.selected }
+        val asked = items.map { it.original }
+        val stayed = asked - review.restore(asked).toSet()
+        val trashed = review.trashed()
+        state.copy(trashed = trashed, selected = trashed.filter { it.original in stayed }.map { it.file.path }.toSet(), stayedInTrash = stayed, stayedElsewhere = elsewhere(items, stayed))
+    }
+
+    /**
+     * Deletes for good the trash items whose files are [files], the ones the user confirmed: the selection, or the whole
+     * trash. The trash deletes one item for each, and the others stay, even one with the same original path.
+     */
+    fun deleteFromTrash(files: Set<String>) = load { state ->
+        review.purge(state.trashed.filter { it.file.path in files }.map { it.original })
+        state.copy(trashed = review.trashed(), selected = state.selected - files)
+    }
+
+    /** The one way to read a page, so none forgets the skipped groups or the review order of the open category. */
+    private suspend fun pageFor(
+        category: Category,
+        state: ReviewState,
+        skipped: Set<String> = state.skipped,
+        grouping: ReviewOrder = state.reviewOrder,
+        mediaType: MediaType = (state.screen as? Screen.Category)?.mediaType ?: MediaType.IMAGE,
+    ) = review.page(category, skipped, grouping, mediaType)
+
+    /**
+     * Candidates start marked, except gallery favourites, which start kept. With [keepMarksOf], images that were
+     * already on its page keep the user's marks.
+     */
+    private fun ReviewState.showing(page: Page, keepMarksOf: ReviewState? = null): ReviewState {
+        val before = keepMarksOf?.page.orEmpty().flatMap { group -> group.images.map { it.image.path } }.toSet()
+        val marked = page.groups.flatMap { it.images }
+            .filter { if (keepMarksOf != null && it.image.path in before) it.image.path in keepMarksOf.marked else it.suggestTrash && !it.isFavorite }
+            .map { it.image.path }.toSet()
+        return copy(page = page.groups, remaining = page.remaining, marked = marked)
+    }
+
+    /** A change that needs no loading, in the same line as [load]: it never lands between a load's read and its write. */
+    private fun queue(change: (ReviewState) -> ReviewState) = viewModelScope.launch {
+        changes.withLock { mutableState.update(change) }
+    }
+
+    /**
+     * One change at a time: the index and the trash see decisions in the order they were made. A change
+     * that fails leaves the state as it was and reports it, so one bad row or volume cannot kill the process.
+     */
+    private fun load(change: suspend (ReviewState) -> ReviewState) = viewModelScope.launch {
+        changes.withLock {
+            mutableState.update { it.copy(loading = true) }
+            try {
+                mutableState.value = change(mutableState.value).copy(loading = false)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Change failed", e)
+                mutableState.update { it.copy(loading = false, changeFailed = true) }
+            }
+        }
+    }
+}

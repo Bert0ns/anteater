@@ -1,0 +1,71 @@
+// The golden fixtures the lab exports (fixtures/README.md): synthetic images and what the lab's
+// detectors say about them.
+package io.github.bert0ns.anteater.golden
+
+import io.github.bert0ns.anteater.model.MediaRef
+import io.github.bert0ns.anteater.model.toMediaRef
+import org.json.JSONObject
+import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.Base64
+
+val GOLDEN_ROOT = File("../../fixtures/golden").canonicalFile
+
+data class ExpectedSignal(val detector: String, val version: Int, val category: String, val score: Float, val evidence: Map<String, String>)
+
+data class ExpectedImage(
+    val relative: String,
+    val image: MediaRef,
+    val width: Int,
+    val height: Int,
+    val hasCameraExif: Boolean,
+    val contentHash: String,
+    val perceptualHash: String,
+    /** The lab's L2-normalized embedding. */
+    val embedding: FloatArray,
+    val signals: List<ExpectedSignal>,
+) {
+    fun signal(detector: String): ExpectedSignal? = signals.singleOrNull { it.detector == detector }
+}
+
+object Golden {
+    private val json = JSONObject(File(GOLDEN_ROOT, "expected.json").readText())
+
+    /** How far a score may be from the lab's: decoders and resamplers differ between Pillow and Android. */
+    val scoreTolerance: Float = json.getJSONObject("tolerance").getDouble("score").toFloat()
+
+    val images: List<ExpectedImage> = json.getJSONObject("images").let { images ->
+        images.keys().asSequence().sorted().map { relative ->
+            val entry = images.getJSONObject(relative)
+            val signals = entry.getJSONArray("signals")
+            ExpectedImage(
+                relative = relative,
+                image = File(GOLDEN_ROOT, relative).toMediaRef(),
+                width = entry.getInt("width"),
+                height = entry.getInt("height"),
+                hasCameraExif = entry.getBoolean("has_camera_exif"),
+                contentHash = entry.getString("content_hash"),
+                perceptualHash = entry.getString("perceptual_hash"),
+                embedding = floats(entry.getString("embedding")),
+                signals = (0 until signals.length()).map { i ->
+                    val signal = signals.getJSONObject(i)
+                    val evidence = signal.getJSONObject("evidence")
+                    ExpectedSignal(
+                        signal.getString("detector"),
+                        signal.getInt("version"),
+                        signal.getString("category"),
+                        signal.getDouble("score").toFloat(),
+                        evidence.keys().asSequence().associateWith(evidence::getString),
+                    )
+                },
+            )
+        }.toList()
+    }
+}
+
+/** Base64 of little-endian float32, as fixtures.py writes embeddings. */
+private fun floats(base64: String): FloatArray {
+    val buffer = ByteBuffer.wrap(Base64.getDecoder().decode(base64)).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
+    return FloatArray(buffer.remaining()).also { buffer.get(it) }
+}

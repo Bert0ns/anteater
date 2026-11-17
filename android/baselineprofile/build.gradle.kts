@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "io.github.bert0ns.cribrum.baselineprofile"
+    namespace = "io.github.bert0ns.anteater.baselineprofile"
     compileSdk = 37
 
     defaultConfig {

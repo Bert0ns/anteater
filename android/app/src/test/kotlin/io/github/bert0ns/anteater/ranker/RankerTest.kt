@@ -1,0 +1,407 @@
+// The lab's tests/test_ranker.py, translated.
+package io.github.bert0ns.anteater.ranker
+
+import io.github.bert0ns.anteater.detectors.groupId
+import io.github.bert0ns.anteater.model.Category
+import io.github.bert0ns.anteater.model.GROUP_KEY
+import io.github.bert0ns.anteater.model.IndexedMedia
+import io.github.bert0ns.anteater.model.MediaRef
+import io.github.bert0ns.anteater.model.MediaType
+import io.github.bert0ns.anteater.model.Protection
+import io.github.bert0ns.anteater.model.ROLE_KEY
+import io.github.bert0ns.anteater.model.ReviewState
+import io.github.bert0ns.anteater.model.Role
+import io.github.bert0ns.anteater.model.Signal
+import io.github.bert0ns.anteater.model.SignalIdentity
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+private val TEST_THRESHOLDS =
+    mapOf(Category.BLURRY to 0.5f, Category.SCREENSHOT to 0.8f, Category.EXACT_DUPLICATE to 0.5f)
+
+private fun image(
+    name: String,
+    vararg signals: Signal,
+    state: ReviewState = ReviewState.UNREVIEWED,
+    seenWhenKept: Set<SignalIdentity> = emptySet(),
+) = IndexedMedia(MediaRef(name, 0, 0), state, signals.toList(), seenWhenKept)
+
+private fun sized(name: String, size: Long, vararg signals: Signal, mediaType: MediaType = MediaType.VIDEO) = IndexedMedia(MediaRef(name, size, 0, mediaType), ReviewState.UNREVIEWED, signals.toList(), emptySet())
+
+private fun blur(score: Float, version: Int = 1) = Signal("blur", version, Category.BLURRY, score)
+
+private fun screenshot(score: Float) = Signal("screenshot", 1, Category.SCREENSHOT, score)
+
+private fun duplicate(group: String, role: Role): Signal {
+    val score = if (role == Role.BEST) 0f else 1f
+    val evidence = mapOf(GROUP_KEY to group, ROLE_KEY to role.value)
+    return Signal("exact_duplicate", 1, Category.EXACT_DUPLICATE, score, evidence)
+}
+
+private fun faces(score: Float = 1f) = Signal("faces", 1, Protection.FACES, score, mapOf("faces" to "2"))
+
+private fun favorite(score: Float = 1f) = Signal("favorite", 1, Protection.FAVORITE, score)
+
+private fun album(score: Float = 1f) = Signal("album", 1, Protection.ALBUM, score)
+
+private fun rank(vararg images: IndexedMedia) = Ranker(TEST_THRESHOLDS).rank(images.toList())
+
+private fun names(candidates: List<Candidate>) = candidates.map { it.image.ref.path }
+
+class RankerTest {
+    @Test
+    fun `ties go by the hex of the path digest, whatever the top bit`() {
+        val paths = (0 until 200).map { "/pics/img_$it.jpg" }
+        val expected = paths.sortedBy { groupId(it) }
+        // a signed compare of the digests would put the top-bit-set ones first
+        assertTrue(expected.first().let { groupId(it)[0] } < '8' && expected.any { groupId(it)[0] >= '8' })
+
+        val order = rank(*paths.map { image(it, blur(0.9f)) }.toTypedArray())
+
+        assertEquals(expected, names(order))
+    }
+
+    @Test
+    fun `images in an excluded folder are never listed, whatever their signals`() {
+        val order = Ranker(TEST_THRESHOLDS).rank(
+            listOf(image("/pics/family/a.jpg", blur(0.9f)), image("/pics/family/2020/b.jpg"), image("/pics/other/c.jpg", blur(0.9f))),
+            excludedFolders = listOf("/pics/family"),
+        )
+
+        assertEquals(listOf("/pics/other/c.jpg"), names(order))
+    }
+
+    @Test
+    fun `any signal past its threshold makes a candidate`() {
+        val blurry = image("blurry", blur(0.6f), screenshot(0.1f))
+        val screen = image("screen", blur(0.1f), screenshot(0.9f))
+        val neither = image("neither", blur(0.4f), screenshot(0.7f))
+
+        val candidates = rank(blurry, screen, neither).associateBy { it.image.ref.path }
+
+        assertEquals(listOf(blur(0.6f)), candidates.getValue("blurry").reasons)
+        assertEquals(listOf(screenshot(0.9f)), candidates.getValue("screen").reasons)
+        assertFalse(candidates.getValue("neither").isCandidate)
+    }
+
+    @Test
+    fun `signal exactly at the threshold passes`() {
+        assertTrue(rank(image("a", blur(0.5f))).single().isCandidate)
+    }
+
+    @Test
+    fun `category without a threshold never passes`() {
+        val signal = Signal("document", 1, Category.DOCUMENT, 1f)
+
+        assertFalse(rank(image("a", signal)).single().isCandidate)
+    }
+
+    @Test
+    fun `review everything lists every unreviewed image candidates first`() {
+        val order = rank(
+            image("unflagged", blur(0.45f)),
+            image("barely", blur(0.55f)),
+            image("clean"),
+            image("sure", blur(0.95f)),
+            image("trashed", blur(0.9f), state = ReviewState.TRASHED),
+        )
+
+        assertEquals(listOf("sure", "barely", "unflagged", "clean"), names(order))
+    }
+
+    @Test
+    fun `order compares categories by their margin over the threshold`() {
+        // 0.85 is barely past the screenshot threshold, 0.7 well past the blur one.
+        val order = rank(image("screen", screenshot(0.85f)), image("blurry", blur(0.7f)))
+
+        assertEquals(listOf("blurry", "screen"), names(order))
+    }
+
+    @Test
+    fun `by category sorts each category by score`() {
+        val order = rank(
+            image("a", blur(0.6f)),
+            image("b", blur(0.9f), screenshot(0.95f)),
+            image("c", screenshot(0.85f)),
+            image("d", blur(0.1f)),
+        )
+
+        val groups = Ranker.byCategory(order).mapValues { names(it.value) }
+
+        assertEquals(mapOf(Category.BLURRY to listOf("b", "a"), Category.SCREENSHOT to listOf("b", "c")), groups)
+    }
+
+    @Test
+    fun `best copy of a group is not a candidate`() {
+        val order = rank(image("best", duplicate("g", Role.BEST)), image("copy", duplicate("g", Role.INFERIOR)))
+
+        assertEquals(listOf(true, false), order.map { it.isCandidate })
+    }
+
+    @Test
+    fun `kept image is not suggested again for the same signals`() {
+        val kept = image(
+            "kept",
+            blur(0.9f),
+            duplicate("g", Role.INFERIOR),
+            state = ReviewState.KEPT,
+            seenWhenKept = setOf(blur(0.9f).identity, duplicate("g", Role.INFERIOR).identity),
+        )
+
+        assertEquals(emptyList<Candidate>(), rank(kept))
+    }
+
+    @Test
+    fun `new detector version or score is not a new signal`() {
+        val kept = image(
+            "kept",
+            blur(0.95f, version = 2),
+            state = ReviewState.KEPT,
+            seenWhenKept = setOf(blur(0.2f).identity),
+        )
+
+        assertEquals(emptyList<Candidate>(), rank(kept))
+    }
+
+    @Test
+    fun `kept image comes back for a new signal only`() {
+        val kept = image(
+            "kept",
+            blur(0.9f),
+            duplicate("new-group", Role.INFERIOR),
+            state = ReviewState.KEPT,
+            seenWhenKept = setOf(blur(0.9f).identity),
+        )
+
+        assertEquals(listOf(duplicate("new-group", Role.INFERIOR)), rank(kept).single().reasons)
+    }
+
+    @Test
+    fun `kept best copy comes back when it becomes the inferior one`() {
+        // A higher-resolution copy showed up after the user kept this one.
+        val kept = image(
+            "kept",
+            duplicate("g", Role.INFERIOR),
+            state = ReviewState.KEPT,
+            seenWhenKept = setOf(duplicate("g", Role.BEST).identity),
+        )
+
+        assertEquals(listOf("kept"), names(rank(kept)))
+    }
+
+    @Test
+    fun `kept image with a new signal below threshold stays hidden`() {
+        assertEquals(emptyList<Candidate>(), rank(image("kept", screenshot(0.5f), state = ReviewState.KEPT)))
+    }
+
+    @Test
+    fun `threshold of one passes only a perfect score`() {
+        val ranked = Ranker(mapOf(Category.BLURRY to 1f)).rank(listOf(image("a", blur(1f)), image("b", blur(0.9f))))
+
+        assertEquals(listOf(true, false), ranked.map { it.isCandidate })
+    }
+
+    @Test
+    fun `protection lowers an image but keeps it a candidate`() {
+        val order = rank(image("people", blur(0.9f), faces()), image("wall", blur(0.8f)))
+
+        assertEquals(listOf("wall", "people"), names(order))
+        assertTrue(order.all { it.isCandidate })
+        assertEquals(listOf(blur(0.9f)), order[1].reasons)
+    }
+
+    @Test
+    fun `protected candidate still comes before every non-candidate`() {
+        val order = rank(
+            image("people", blur(0.5f), faces(), Signal("x", 1, Protection.FAVORITE, 1f)),
+            image("unflagged", blur(0.49f)),
+        )
+
+        assertEquals(listOf("people", "unflagged"), names(order))
+    }
+
+    @Test
+    fun `each protection lowers the likelihood by its weight`() {
+        // In a group, so the uniqueness factor does not apply.
+        val group = duplicate("g", Role.INFERIOR)
+        val factors = listOf(faces(), favorite(), album(), favorite(0.5f), faces(0f)).map {
+            rank(image("a", group, it)).single().protection
+        }
+
+        listOf(0.5f, 0.2f, 0.4f, 0.6f, 1f).forEachIndexed { i, expected -> assertEquals(expected, factors[i], 1e-6f) }
+    }
+
+    @Test
+    fun `protections multiply`() {
+        val group = duplicate("g", Role.INFERIOR)
+
+        val both = rank(image("a", group, faces(), favorite())).single()
+        val all = rank(image("a", group, faces(), favorite(), album())).single()
+
+        assertEquals(0.1f, both.protection, 1e-6f)
+        assertEquals(0.04f, all.protection, 1e-6f)
+        assertEquals(all.protection * 2f, all.likelihood, 1e-6f) // a duplicate scores 1, likelihood 2
+        assertTrue(all.isCandidate)
+    }
+
+    @Test
+    fun `a favorite or an album lowers an image below an unprotected one`() {
+        val group = duplicate("g", Role.INFERIOR)
+
+        val order = rank(image("fav", group, favorite()), image("plain", group), image("album", group, album()))
+
+        assertEquals(listOf("plain", "album", "fav"), names(order))
+    }
+
+    @Test
+    fun `protection signal alone never makes a candidate`() {
+        assertFalse(rank(image("people", faces())).single().isCandidate)
+    }
+
+    @Test
+    fun `unique image ranks below an equally scored duplicate`() {
+        val order = rank(
+            image("unique", blur(0.9f)),
+            image("copy", blur(0.9f), duplicate("g", Role.INFERIOR)),
+            image("best", blur(0.9f), duplicate("g", Role.BEST)),
+        )
+
+        assertEquals("unique", names(order).last())
+        assertTrue(order.last().protection < 1f)
+    }
+
+    @Test
+    fun `by category applies protection too`() {
+        val order = rank(image("people", blur(0.9f), faces()), image("wall", blur(0.8f)))
+
+        assertEquals(listOf("wall", "people"), names(Ranker.byCategory(order).getValue(Category.BLURRY)))
+    }
+
+    @Test
+    fun `by category lists the larger of two equal videos first`() {
+        // The path hash alone would put "small" first.
+        val order = rank(sized("small", 1_000_000, blur(0.9f)), sized("large", 900_000_000, blur(0.9f)))
+
+        assertEquals(listOf("large", "small"), names(Ranker.byCategory(order).getValue(Category.BLURRY)))
+    }
+
+    @Test
+    fun `protection lowers a video by its factor on the size`() {
+        // Faces halve the people video: 1000 MB counts as 500, ahead of 400 MB and behind 600 MB.
+        val people = sized("people", 1_000_000_000, blur(0.9f), faces())
+
+        for ((size, expected) in listOf(400_000_000L to listOf("people", "plain"), 600_000_000L to listOf("plain", "people"))) {
+            val order = rank(people, sized("plain", size, blur(0.9f)))
+            assertEquals(expected, names(Ranker.byCategory(order).getValue(Category.BLURRY)))
+        }
+    }
+
+    @Test
+    fun `an empty video keeps its score order`() {
+        // Size 0 would zero both products and leave the order of rank, where the screenshot puts
+        // "shot" first, though its blur score is the lower.
+        val order = rank(sized("blurry", 0, blur(0.9f)), sized("shot", 0, blur(0.6f), screenshot(1f)))
+
+        assertEquals(listOf("shot", "blurry"), names(order))
+        assertEquals(listOf("blurry", "shot"), names(Ranker.byCategory(order).getValue(Category.BLURRY)))
+    }
+
+    @Test
+    fun `an image's size does not change its place`() {
+        // The path hash puts "small" first, and an image keeps that order whatever its size.
+        val order = rank(
+            sized("small", 1_000_000, blur(0.9f), mediaType = MediaType.IMAGE),
+            sized("large", 900_000_000, blur(0.9f), mediaType = MediaType.IMAGE),
+        )
+
+        assertEquals(listOf("small", "large"), names(Ranker.byCategory(order).getValue(Category.BLURRY)))
+    }
+
+    @Test
+    fun `a sticker is listed only as a sticker`() {
+        val sticker = Signal("sticker", 1, Category.STICKER, 1f)
+        val order = Ranker(TEST_THRESHOLDS + (Category.STICKER to 0.5f))
+            .rank(listOf(image("sticker", blur(0.9f), sticker), image("photo", blur(0.8f))))
+
+        val groups = Ranker.byCategory(order).mapValues { names(it.value) }
+
+        assertEquals(mapOf(Category.BLURRY to listOf("photo"), Category.STICKER to listOf("sticker")), groups)
+        assertTrue(order.all { it.isCandidate }) // still a candidate, in the same order
+        assertEquals(listOf("sticker", "photo"), names(order))
+    }
+
+    @Test
+    fun `equal likelihoods are not ordered by the date in the file name`() {
+        val dated = listOf("20190101", "20210615", "20240101", "20250301").map { "/DCIM/Camera/IMG_${it}_100000.jpg" }
+
+        val forward = names(rank(*dated.map { image(it, blur(0.9f)) }.toTypedArray()))
+        val backward = names(rank(*dated.reversed().map { image(it, blur(0.9f)) }.toTypedArray()))
+
+        // Ordered by a hash of the path (xxh3), so neither oldest first nor newest first.
+        assertEquals(listOf(dated[1], dated[2], dated[3], dated[0]), forward)
+        assertEquals(forward, backward)
+    }
+
+    @Test
+    fun `thresholds are the lab's`() {
+        val lab = java.io.File("../../lab/src/cribrum_lab/ranker.py").readText()
+        for ((category, threshold) in THRESHOLDS) {
+            assertTrue("$category", "Category.${category.name}: $threshold," in lab)
+        }
+    }
+
+    private fun video(name: String, vararg signals: Signal) = IndexedMedia(MediaRef(name, 0, 0, MediaType.VIDEO), signals = signals.toList())
+
+    @Test
+    fun `a video has the threshold of its own where the category has one`() {
+        val ranker = Ranker(TEST_THRESHOLDS, mapOf(Category.BLURRY to 0.15f))
+
+        val ranked = ranker.rank(listOf(video("clip", blur(0.2f)), image("photo", blur(0.2f))))
+
+        assertEquals(listOf("clip" to true, "photo" to false), ranked.map { it.image.ref.path to it.isCandidate })
+    }
+
+    @Test
+    fun `the photos' threshold cannot hide a video`() {
+        val ranker = Ranker(TEST_THRESHOLDS + (Category.BLURRY to 1f), mapOf(Category.BLURRY to 0.15f))
+
+        assertTrue(ranker.rank(listOf(video("clip", blur(0.2f)))).single().isCandidate)
+    }
+
+    @Test
+    fun `a video shares the threshold of a category with no video threshold`() {
+        val ranker = Ranker(TEST_THRESHOLDS, mapOf(Category.BLURRY to 0.15f))
+
+        assertFalse(ranker.rank(listOf(video("clip", screenshot(0.7f)))).single().isCandidate)
+        assertTrue(ranker.rank(listOf(video("clip", screenshot(0.9f)))).single().isCandidate)
+    }
+
+    private fun shortClip(score: Float, vararg evidence: Pair<String, String>) = Signal("short_clips", 1, Category.SHORT_CLIPS, score, mapOf(*evidence))
+
+    @Test
+    fun `a short clip is a candidate from its own threshold and faces only lower it`() {
+        assertFalse("a video category: photos have no slider for it", Category.SHORT_CLIPS in THRESHOLDS)
+
+        val (at, below) = Ranker().rank(listOf(video("below", shortClip(0.29f)), video("at", shortClip(0.3f)))).sortedBy { it.image.ref.path }
+        assertFalse(below.isCandidate)
+        assertTrue(at.isCandidate)
+
+        val people = video("people", shortClip(0.8f), faces())
+        val plain = video("plain", shortClip(0.8f))
+        val order = Ranker().rank(listOf(people, plain))
+        assertEquals(listOf("plain", "people"), order.map { it.image.ref.path })
+        assertTrue(order.all { it.isCandidate })
+    }
+
+    @Test
+    fun `a kept short clip stays kept when a photo or a mistake raises its score`() {
+        val kept = shortClip(0.4f, "duration_chance" to "0.400")
+        val stronger = shortClip(0.9f, "duration_chance" to "0.400", "photo_chance" to "0.500", "mistake" to "dark")
+        val clip = IndexedMedia(MediaRef("clip", 0, 0, MediaType.VIDEO), ReviewState.KEPT, listOf(stronger), setOf(kept.identity))
+
+        assertEquals(kept.identity, stronger.identity)
+        assertEquals(emptyList<Candidate>(), Ranker().rank(listOf(clip)))
+    }
+}

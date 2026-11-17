@@ -1,0 +1,2601 @@
+// The lab's tests/test_pipeline.py, translated.
+package io.github.bert0ns.anteater.pipeline
+
+import android.graphics.Bitmap
+import io.github.bert0ns.anteater.compress.readJpeg
+import io.github.bert0ns.anteater.detectors.AnalysisContext
+import io.github.bert0ns.anteater.detectors.BlurDetector
+import io.github.bert0ns.anteater.detectors.BurstDetector
+import io.github.bert0ns.anteater.detectors.Detector
+import io.github.bert0ns.anteater.detectors.ExactDuplicateDetector
+import io.github.bert0ns.anteater.detectors.ExposureDetector
+import io.github.bert0ns.anteater.detectors.FaceDetector
+import io.github.bert0ns.anteater.detectors.ForwardedDetector
+import io.github.bert0ns.anteater.detectors.GroupDetector
+import io.github.bert0ns.anteater.detectors.MissingEmbedding
+import io.github.bert0ns.anteater.detectors.NearDuplicateDetector
+import io.github.bert0ns.anteater.detectors.ShortClipsDetector
+import io.github.bert0ns.anteater.detectors.TakesDetector
+import io.github.bert0ns.anteater.folders.isStickerFolder
+import io.github.bert0ns.anteater.frames.FRAMES_VERSION
+import io.github.bert0ns.anteater.frames.SampledFrame
+import io.github.bert0ns.anteater.hashing.PHASH_DECODE_SIDE
+import io.github.bert0ns.anteater.hashing.contentHash
+import io.github.bert0ns.anteater.hashing.perceptualHash
+import io.github.bert0ns.anteater.imaging.Pixels
+import io.github.bert0ns.anteater.imaging.TestImage
+import io.github.bert0ns.anteater.index.ImageIndex
+import io.github.bert0ns.anteater.index.memoryIndex
+import io.github.bert0ns.anteater.metadata.ImageMetadata
+import io.github.bert0ns.anteater.metadata.UnreadableImage
+import io.github.bert0ns.anteater.metadata.UnreadableVideo
+import io.github.bert0ns.anteater.metadata.VideoMetadata
+import io.github.bert0ns.anteater.metadata.readMetadata
+import io.github.bert0ns.anteater.mobileclip.preprocess
+import io.github.bert0ns.anteater.model.Category
+import io.github.bert0ns.anteater.model.FrameMeasures
+import io.github.bert0ns.anteater.model.GROUP_KEY
+import io.github.bert0ns.anteater.model.Kind
+import io.github.bert0ns.anteater.model.MediaRef
+import io.github.bert0ns.anteater.model.MediaType
+import io.github.bert0ns.anteater.model.Protection
+import io.github.bert0ns.anteater.model.ROLE_KEY
+import io.github.bert0ns.anteater.model.ReviewState
+import io.github.bert0ns.anteater.model.Signal
+import io.github.bert0ns.anteater.model.toMediaRef
+import io.github.bert0ns.anteater.review.Review
+import io.github.bert0ns.anteater.review.ReviewGroup
+import io.github.bert0ns.anteater.sources.FilesystemMediaSource
+import io.github.bert0ns.anteater.sources.MediaSource
+import io.github.bert0ns.anteater.sources.MergedMediaSource
+import io.github.bert0ns.anteater.trash.AppTrash
+import io.github.bert0ns.anteater.trash.Swap
+import io.github.bert0ns.anteater.trash.Trash
+import io.github.bert0ns.anteater.trash.TrashedImage
+import io.github.bert0ns.anteater.trash.copyFileFor
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.GraphicsMode
+import java.io.File
+import java.io.FileNotFoundException
+import java.io.IOException
+import java.nio.file.Files
+import java.time.LocalDateTime
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class PipelineTest {
+    @get:Rule
+    val folder = TemporaryFolder()
+
+    private val index = memoryIndex()
+    private val root by lazy { File(folder.root, "device") }
+    private val source by lazy { FilesystemMediaSource(root) }
+
+    @After
+    fun close() = index.close()
+
+    private fun save(path: String, seed: Int = 0): File = TestImage.texture(64, 48, seed).save(File(root, path).apply { parentFile!!.mkdirs() })
+
+    private fun photos() {
+        save("DCIM/Camera/a.png")
+        File(root, "DCIM/Camera/a.png").copyTo(File(root, "WhatsApp/Media/a-copy.png").apply { parentFile!!.mkdirs() })
+        save("Pictures/Screenshots/Screenshot_1.png", seed = 1)
+    }
+
+    private fun run(pipeline: Pipeline = Pipeline(index)) = runBlocking { pipeline.run(source) }
+
+    /** The group detectors a scan of the images runs: the takes look at videos only. */
+    private val imageGroupDetectors = GROUP_DETECTORS.count { MediaType.IMAGE in it.mediaTypes }
+
+    private fun kinds(path: String): Set<Kind> = runBlocking { index.signals(File(root, path).path) }.map { it.kind }.toSet()
+
+    @Test
+    fun `a walk longer than the record batch records every file and counts the new and changed ones`() {
+        val files = (0 until 5).map { save("DCIM/Camera/$it.png", seed = it) }
+        fun batched() = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), recordBatch = 2)
+
+        assertEquals(5, run(batched()).newOrChanged)
+        assertEquals(files.map { it.path }.toSet(), runBlocking { index.images() }.map { it.path }.toSet())
+
+        assertEquals(0, run(batched()).newOrChanged)
+        files[3].setLastModified(files[3].lastModified() + 5_000)
+        assertEquals(1, run(batched()).newOrChanged)
+    }
+
+    @Test
+    fun `first run stores metadata and signals of every detector`() {
+        photos()
+
+        val stats = run()
+
+        assertEquals(3, stats.images)
+        assertEquals(emptyList<Failure>(), stats.failures)
+        val screenshot = File(root, "Pictures/Screenshots/Screenshot_1.png").path
+        assertEquals(64, runBlocking { index.metadata(screenshot) }!!.width)
+        assertNotNull(runBlocking { index.perceptualHash(screenshot) })
+        assertEquals(setOf(Category.BLURRY, Category.BAD_EXPOSURE, Category.SCREENSHOT, Protection.FACES, Category.STICKER), kinds("Pictures/Screenshots/Screenshot_1.png"))
+        assertTrue(Category.EXACT_DUPLICATE in kinds("WhatsApp/Media/a-copy.png"))
+    }
+
+    /** A per-image detector that records the paths it was given. */
+    private class SeenDetector(override val id: String, private val seen: MutableCollection<Pair<String, String>>, override val usesEmbeddings: Boolean = false) : Detector {
+        override val version = 1
+
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
+            seen += id to image.path
+            return emptyList()
+        }
+    }
+
+    /** A group detector that records the paths it was given. */
+    private class SeenGroup(private val seen: MutableCollection<Pair<String, String>>) : GroupDetector {
+        override val id = "seen_group"
+        override val version = 1
+
+        override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
+            images.forEach { seen += id to it.path }
+            return emptyMap()
+        }
+    }
+
+    @Test
+    fun `no image step receives a video, whatever the index holds for it`() {
+        photos()
+        TestImage.texture(64, 48, 2).save(File(root, "DCIM/Camera/b.jpg"), Bitmap.CompressFormat.JPEG)
+        val size = File(root, "DCIM/Camera/a.png").length().toInt() // the exact duplicates hash the files that share a size
+        val clip = File(root, "DCIM/Camera/clip.mp4").apply { writeBytes(ByteArray(size)) }
+        // As if a header read had taken it for a JPEG: the steps after the metadata must not read it either.
+        val read = File(root, "WhatsApp/Media/read.mp4").apply { writeBytes(ByteArray(size)) }
+        val videos = listOf(clip, read).map { it.toMediaRef(MediaType.VIDEO) }
+        runBlocking {
+            index.recordAll(videos)
+            index.setMetadata(read.path, ImageMetadata(64, 48, "image/jpeg"))
+        }
+        val seen = ConcurrentLinkedQueue<Pair<String, String>>()
+        fun <T> spy(step: String, read: (File) -> T): (File) -> T = { file -> read(file).also { seen += step to file.path } }
+        val pipeline = Pipeline(
+            index,
+            detectors = listOf(SeenDetector("detector", seen), SeenDetector("embedded detector", seen, usesEmbeddings = true)),
+            groupDetectors = listOf(ExactDuplicateDetector(), SeenGroup(seen)),
+            embedder = MeanColorEmbedder(),
+            preprocessing = spy("embedding", ::preprocess),
+            metadataReader = spy("metadata", ::readMetadata),
+            jpegReader = spy("jpeg headers", ::readJpeg),
+            perceptualHasher = { image, pixels -> perceptualHash(pixels.gray(PHASH_DECODE_SIDE)).also { seen += "perceptual hash" to image.path } },
+            contentHasher = { image -> contentHash(image).also { seen += "content hash" to image.path } },
+        )
+
+        val stats = runBlocking { pipeline.run(FilesystemMediaSource(root) { index.images() }) }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals("the scan log's image count leaves the videos out", 4, stats.images)
+        val steps = setOf("metadata", "jpeg headers", "perceptual hash", "embedding", "detector", "embedded detector", "content hash", "seen_group")
+        assertEquals("every step ran on the images", steps, seen.map { it.first }.toSet())
+        assertEquals(emptyList<Pair<String, String>>(), seen.filter { it.second in setOf(clip.path, read.path) })
+        assertEquals(videos, runBlocking { index.images() }.filter { it.mediaType == MediaType.VIDEO })
+    }
+
+    /** Three videos beside the photos, and a reader that tells them apart by name, since Robolectric has no media parser. */
+    private fun videos(): Map<String, File> {
+        photos()
+        val head = byteArrayOf(0, 0, 0, 0x18) + "ftypisom".toByteArray() + ByteArray(12)
+        return listOf("clip", "prores", "broken").associateWith { File(root, "DCIM/Camera/$it.mp4").apply { writeBytes(head) } }
+    }
+
+    private val clipMeta = VideoMetadata(64, 48, 1000, 30.0, 44_880, true, "video/avc", false, LocalDateTime.of(2024, 5, 1, 12, 20, 30), 1_714_558_830_000)
+
+    private fun readVideo(file: File): VideoMetadata = when (file.nameWithoutExtension) {
+        "clip" -> clipMeta
+        else -> throw UnreadableVideo(file)
+    }
+
+    @Test
+    fun `a normal run reads no video`() {
+        videos()
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), videoMetadataReader = { throw AssertionError("read ${it.name}") })
+
+        val stats = run(pipeline)
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(3, runBlocking { index.images() }.count { it.mediaType == MediaType.VIDEO })
+        assertFalse("videoMetadata" in stats.phaseMs)
+    }
+
+    @Test
+    fun `a run asked for videos reads their metadata after the images`() {
+        val clip = videos().getValue("clip")
+        val order = ConcurrentLinkedQueue<String>()
+        val pipeline = Pipeline(
+            index,
+            detectors = emptyList(),
+            groupDetectors = emptyList(),
+            metadataReader = { readMetadata(it).also { order += "image" } },
+            videoMetadataReader = { readVideo(it).also { order += "video" } },
+        )
+
+        val stats = runBlocking { pipeline.run(source, videos = true) }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(clipMeta, runBlocking { index.videoMetadata(clip.path) })
+        assertEquals(List(3) { "image" } + "video", order.toList())
+    }
+
+    @Test
+    fun `a normal scan never opens a video, even one whose file fails on open`() {
+        photos()
+        // The size of an image, so the exact duplicates would hash it if they took videos.
+        val clip = File(root, "DCIM/Camera/clip.mp4").apply { writeBytes(ByteArray(File(root, "DCIM/Camera/a.png").length().toInt())) }
+        val video = clip.toMediaRef(MediaType.VIDEO)
+        runBlocking { index.record(video) } // as an earlier walk left it: this one does not sniff it again
+        assumeTrue("the file still opens (running as root?)", clip.setReadable(false) && !clip.canRead())
+        val hashed = ConcurrentLinkedQueue<String>()
+        val pipeline = Pipeline(index, embedder = MeanColorEmbedder(), contentHasher = { contentHash(it).also { _ -> hashed += it.path } })
+
+        val stats = try {
+            runBlocking { pipeline.run(FilesystemMediaSource(root) { index.images() }) }
+        } finally {
+            clip.setReadable(true)
+        }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertFalse(clip.path in stats.unreadablePaths)
+        assertFalse(clip.path in hashed)
+        assertEquals(1, stats.videos)
+        assertEquals(video, runBlocking { index.images() }.single { it.mediaType == MediaType.VIDEO })
+    }
+
+    @Test
+    fun `a run asked for both takes the videos after every image step`() {
+        videos()
+        val steps = mutableListOf<String>()
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(ExactDuplicateDetector()), videoMetadataReader = ::readVideo)
+
+        runBlocking { pipeline.run(source, videos = true) { step, _, _ -> steps += step } }
+
+        assertTrue(steps.indexOf(VIDEO_METADATA_STEP) > steps.lastIndexOf("exact_duplicate"))
+    }
+
+    @Test
+    fun `every step of the video part has its own phase in the video scan's list`() {
+        videos()
+        fun steps(images: Boolean): List<String> {
+            val steps = mutableListOf<String>()
+            val fresh = memoryIndex()
+            try {
+                val pipeline = Pipeline(
+                    fresh,
+                    detectors = emptyList(),
+                    groupDetectors = listOf(ExactDuplicateDetector()),
+                    embedder = MeanColorEmbedder(),
+                    videoMetadataReader = ::readVideo,
+                    frameReader = ::grayFrames,
+                )
+                runBlocking { pipeline.run(source, images = images, videos = true) { step, _, _ -> steps += step } }
+            } finally {
+                fresh.close()
+            }
+            return steps
+        }
+        val alone = steps(images = false)
+        val both = steps(images = true)
+
+        assertTrue(alone.isNotEmpty())
+        assertEquals(emptyList<String>(), alone.filter { it != "scan" && it !in Indexing.VIDEO_STEPS })
+        // In a pass that does both, everything from the first video step on is the video part.
+        val videoPart = both.drop(both.indexOfFirst { it in Indexing.VIDEO_STEPS })
+        assertTrue(videoPart.isNotEmpty())
+        assertEquals(emptyList<String>(), videoPart.filter { it !in Indexing.VIDEO_STEPS })
+    }
+
+    /** Frames as the model takes them, a flat gray each, since Robolectric decodes no video. */
+    private fun grayFrames(file: File, times: List<Long>): Map<Long, SampledFrame> = times.associateWith { SampledFrame(FloatArray(3 * 256 * 256) { 0.5f }, GRAY) }
+
+    private fun videoScan(frameReader: (File, List<Long>) -> Map<Long, SampledFrame> = ::grayFrames, embedder: Embedder? = MeanColorEmbedder()) = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), embedder = embedder, videoMetadataReader = ::readVideo, frameReader = frameReader)
+
+    private fun frameTimesStored(embedder: Embedder = MeanColorEmbedder(), framesVersion: Int = FRAMES_VERSION) = runBlocking { index.sampledTimes(embedder.id, embedder.version, framesVersion) }
+
+    @Test
+    fun `a video run with the model embeds the frames of each readable video after its metadata`() {
+        val clip = videos().getValue("clip")
+        val steps = mutableListOf<String>()
+
+        val stats = runBlocking { videoScan().run(source, images = false, videos = true) { step, _, _ -> steps += step } }
+
+        // The others are unreadable: nothing to sample.
+        assertEquals(mapOf(clip.path to listOf(300L, 400, 500, 600, 700)), frameTimesStored())
+        assertTrue(steps.indexOf(VIDEO_FRAMES_STEP) > steps.lastIndexOf(VIDEO_METADATA_STEP))
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(5, stats.counts["$VIDEO_FRAMES_STEP frames"])
+        assertTrue("videoFrames" in stats.phaseMs)
+    }
+
+    @Test
+    fun `frames stored at the times wanted are not read again, and frames at other times are`() {
+        val clip = videos().getValue("clip")
+        runBlocking { videoScan().run(source, images = false, videos = true) }
+
+        val again = runBlocking { videoScan(frameReader = { file, _ -> throw AssertionError("read ${file.name} again") }).run(source, images = false, videos = true) }
+        runBlocking { index.setFrameEmbeddings(clip.path, "mean_color", 1, FRAMES_VERSION, mapOf(0L to FloatArray(512))) }
+        runBlocking { videoScan().run(source, images = false, videos = true) }
+
+        assertEquals(emptyList<Failure>(), again.failures)
+        assertEquals(listOf(300L, 400, 500, 600, 700), frameTimesStored()[clip.path])
+    }
+
+    @Test
+    fun `an HDR video that keeps one frame a keyframe is not read again`() {
+        val clip = videos().getValue("clip")
+        runBlocking { videoScan(frameReader = { file, times -> grayFrames(file, times.take(1)) }).run(source, images = false, videos = true) }
+
+        val again = runBlocking { videoScan(frameReader = { file, _ -> throw AssertionError("read ${file.name} again") }).run(source, images = false, videos = true) }
+
+        assertEquals(emptyList<Failure>(), again.failures)
+        assertEquals(listOf(300L), frameTimesStored()[clip.path])
+    }
+
+    @Test
+    fun `frames stored at another frame version are taken again`() {
+        val clip = videos().getValue("clip")
+        runBlocking { videoScan().run(source, images = false, videos = true) }
+        runBlocking { index.setFrameEmbeddings(clip.path, "mean_color", 1, FRAMES_VERSION - 1, mapOf(300L to FloatArray(512))) }
+
+        runBlocking { videoScan().run(source, images = false, videos = true) }
+
+        assertEquals(mapOf(clip.path to listOf(300L, 400, 500, 600, 700)), frameTimesStored())
+        assertEquals(emptyMap<String, List<Long>>(), frameTimesStored(framesVersion = FRAMES_VERSION - 1))
+    }
+
+    @Test
+    fun `a video whose frames fail is a failure, and the next scan tries it again`() {
+        val clip = videos().getValue("clip")
+
+        val failed = runBlocking { videoScan(frameReader = { _, _ -> throw OutOfMemoryError("4K frame") }).run(source, images = false, videos = true) }
+        runBlocking { videoScan().run(source, images = false, videos = true) }
+
+        assertEquals(listOf(clip.path to VIDEO_FRAMES_STEP), failed.failures.map { it.path to it.step })
+        assertEquals(setOf(clip.path), frameTimesStored().keys)
+    }
+
+    @Test
+    fun `a video whose frames do not read is not decoded again until it changes`() {
+        val clip = videos().getValue("clip")
+
+        val first = runBlocking { videoScan(frameReader = { file, _ -> throw UnreadableVideo(file) }).run(source, images = false, videos = true) }
+        val again = runBlocking { videoScan(frameReader = { file, _ -> throw AssertionError("decoded ${file.name} again") }).run(source, images = false, videos = true) }
+        clip.setLastModified(clip.lastModified() + 60_000)
+        runBlocking { videoScan().run(source, images = false, videos = true) }
+
+        // Like an unreadable image, it is counted and not a failure, since the next scan cannot help.
+        assertEquals(emptyList<Failure>() to 1, first.failures to first.counts["$VIDEO_FRAMES_STEP unreadable"])
+        assertEquals(emptyList<Failure>() to 0, again.failures to again.counts["$VIDEO_FRAMES_STEP tasks"])
+        assertEquals(setOf(clip.path), frameTimesStored().keys)
+    }
+
+    @Test
+    fun `a stop loses at most the video it was on`() {
+        val videos = videos()
+        val (clip, prores) = videos.getValue("clip") to videos.getValue("prores")
+        lateinit var scan: Job
+        val pipeline = Pipeline(
+            index,
+            detectors = emptyList(),
+            groupDetectors = emptyList(),
+            embedder = MeanColorEmbedder(),
+            videoMetadataReader = { if (it.nameWithoutExtension == "broken") throw UnreadableVideo(it) else clipMeta },
+            frameReader = { file, times -> grayFrames(file, times).also { if (file == prores) scan.cancel() } },
+        )
+
+        runBlocking {
+            scan = launch { pipeline.run(source, images = false, videos = true) }
+            scan.join()
+        }
+
+        assertTrue(scan.isCancelled)
+        assertEquals(setOf(clip.path), frameTimesStored().keys)
+    }
+
+    private fun takesGroups(): List<Set<String>> = runBlocking {
+        index.images().flatMap { image -> index.signals(image.path).filter { it.kind == Category.TAKES }.map { it.evidence.getValue(GROUP_KEY) to File(image.path).name } }
+            .groupBy({ it.first }, { it.second }).values.map { it.toSet() }
+    }
+
+    @Test
+    fun `a video run chains the takes of a moment from the stored metadata`() {
+        videos()
+        File(root, "DCIM/Camera/clip.mp4").copyTo(File(root, "DCIM/Camera/later.mp4"))
+        // Five seconds after the clip starts, and four after it ends.
+        val reader = { file: File -> if (file.nameWithoutExtension == "later") clipMeta.copy(capturedAt = clipMeta.capturedAt!!.plusSeconds(5), capturedInstant = clipMeta.capturedInstant!! + 5_000) else readVideo(file) }
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(TakesDetector()), embedder = MeanColorEmbedder(), videoMetadataReader = reader, frameReader = ::grayFrames)
+
+        val stats = runBlocking { pipeline.run(source, images = false, videos = true) }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(listOf(setOf("clip.mp4", "later.mp4")), takesGroups())
+    }
+
+    private fun clipRun(vararg detectors: GroupDetector): Stats {
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = detectors.toList(), videoMetadataReader = ::readVideo)
+        return runBlocking { pipeline.run(source, images = false, videos = true) }
+    }
+
+    private fun clipEvidence() = runBlocking { index.signals(File(root, "DCIM/Camera/clip.mp4").path).single { it.kind == Category.SHORT_CLIPS }.evidence }
+
+    private fun photoBesideClip(path: String = "DCIM/Camera/a.png") = runBlocking { index.setMetadata(File(root, path).path, ImageMetadata(64, 48, "image/png", capturedAt = clipMeta.capturedAt)) }
+
+    @Test
+    fun `a photo stored beside a clip runs the short clips again`() {
+        videos()
+        clipRun(ShortClipsDetector())
+        assertFalse("photo_chance" in clipEvidence())
+
+        photoBesideClip()
+        clipRun(ShortClipsDetector())
+
+        assertTrue("photo_chance" in clipEvidence())
+    }
+
+    @Test
+    fun `a new photo runs the short clips and no other group detector`() {
+        videos()
+        val detectors = arrayOf(NearDuplicateDetector(), ShortClipsDetector())
+        assertEquals(listOf("near_duplicate:video", "short_clips:video"), clipRun(*detectors).ranGroupDetectors.sorted())
+
+        photoBesideClip()
+        val again = clipRun(*detectors)
+
+        assertEquals(listOf("short_clips:video"), again.ranGroupDetectors)
+        assertEquals(listOf("near_duplicate:video"), again.skippedGroupDetectors)
+        assertEquals(emptyList<String>(), clipRun(*detectors).ranGroupDetectors)
+    }
+
+    @Test
+    fun `a screenshot in DCIM is no photo beside a clip`() {
+        videos()
+        save("DCIM/Screenshots/shot.png", seed = 7)
+        clipRun(ShortClipsDetector()) // records the file
+        photoBesideClip("DCIM/Screenshots/shot.png")
+
+        clipRun(ShortClipsDetector())
+
+        assertFalse("photo_chance" in clipEvidence())
+    }
+
+    @Test
+    fun `takes kept after their first take went to the trash do not come back`() {
+        videos()
+        val takes = listOf("clip", "later", "last").map { File(root, "DCIM/Camera/clip.mp4").copyTo(File(root, "DCIM/Camera/$it-take.mp4")) }
+        // Seconds apart, in the order of the list.
+        val reader = { file: File -> takes.indexOf(file).takeIf { it >= 0 }?.let { clipMeta.copy(capturedInstant = clipMeta.capturedInstant!! + it * 5_000L) } ?: readVideo(file) }
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(TakesDetector()), videoMetadataReader = reader)
+        val review = Review(index, AppTrash({ listOf(folder.root) }))
+        fun scan() = runBlocking { pipeline.run(source, images = false, videos = true) }
+
+        scan()
+        assertEquals(1, runBlocking { review.page(Category.TAKES, mediaType = MediaType.VIDEO) }.groups.size)
+        runBlocking { index.setReviewState(takes[0].path, ReviewState.TRASHED) }
+        takes[0].delete()
+        // The rest, the clip of videos() included, which has the first take's time.
+        (takes.drop(1) + File(root, "DCIM/Camera/clip.mp4")).forEach { runBlocking { index.setReviewState(it.path, ReviewState.KEPT) } }
+        scan()
+
+        // The trashed take keeps its old signal in the index, under the old id.
+        assertTrue("the group is there, under another id", setOf("later-take.mp4", "last-take.mp4", "clip.mp4") in takesGroups())
+        assertEquals(emptyList<ReviewGroup>(), runBlocking { review.page(Category.TAKES, mediaType = MediaType.VIDEO) }.groups)
+    }
+
+    @Test
+    fun `a capture time read again runs the takes again`() {
+        val clip = videos().getValue("clip")
+        File(root, "DCIM/Camera/clip.mp4").copyTo(File(root, "DCIM/Camera/later.mp4"))
+        val reader = { file: File -> if (file.nameWithoutExtension == "later") clipMeta.copy(capturedInstant = clipMeta.capturedInstant!! + 5_000) else readVideo(file) }
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(TakesDetector()), videoMetadataReader = reader)
+        runBlocking { pipeline.run(source, images = false, videos = true) }
+        assertEquals(1, takesGroups().size)
+
+        // As an older reader would have stored it: no capture time, and no file changed.
+        runBlocking { index.setVideoMetadata(clip.path, clipMeta.copy(capturedAt = null, capturedInstant = null)) }
+        val stats = runBlocking { pipeline.run(source, images = false, videos = true) }
+
+        assertEquals(listOf("takes:video"), stats.ranGroupDetectors)
+        assertEquals(emptyList<Set<String>>(), takesGroups())
+    }
+
+    @Test
+    fun `the takes read the stored frames, and frames stored later run them again`() {
+        val clip = videos().getValue("clip")
+        val seen = mutableListOf<Int>()
+        val frames = object : GroupDetector {
+            override val id = "frames_seen"
+            override val version = 1
+            override val mediaTypes = setOf(MediaType.VIDEO)
+
+            override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
+                seen += context.frames(images.single { it.path == clip.path }).size
+                return emptyMap()
+            }
+        }
+        fun scan(embedder: Embedder?) = runBlocking {
+            Pipeline(index, detectors = emptyList(), groupDetectors = listOf(frames), embedder = embedder, videoMetadataReader = ::readVideo, frameReader = ::grayFrames).run(source, images = false, videos = true)
+        }
+
+        scan(null)
+        scan(MeanColorEmbedder())
+        scan(MeanColorEmbedder()) // nothing new: no run
+
+        assertEquals(listOf(0, 5), seen)
+    }
+
+    @Test
+    fun `the frames come before the video group detectors`() {
+        videos()
+        val steps = mutableListOf<String>()
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(ExactDuplicateDetector()), embedder = MeanColorEmbedder(), videoMetadataReader = ::readVideo, frameReader = ::grayFrames)
+
+        runBlocking { pipeline.run(source, images = false, videos = true) { step, _, _ -> steps += step } }
+
+        // A video group detector may read the frames (#396).
+        assertTrue(steps.indexOf(VIDEO_METADATA_STEP) < steps.indexOf(VIDEO_FRAMES_STEP))
+        assertTrue(steps.indexOf(VIDEO_FRAMES_STEP) < steps.indexOf(VIDEO_GROUPS_STEP))
+    }
+
+    /** The three detectors that read a video's frames, as the app runs them, with the pipeline's own frame reader replaced. */
+    private fun frameScan(embedder: Embedder? = MeanColorEmbedder(), detectors: List<Detector> = listOf(BlurDetector(), ExposureDetector(), FaceDetector())) = Pipeline(index, detectors = detectors, groupDetectors = emptyList(), embedder = embedder, videoMetadataReader = ::readVideo, frameReader = ::grayFrames)
+
+    @Test
+    fun `a video run measures the frames it embeds and runs the detectors that read them after the frames`() {
+        val clip = videos().getValue("clip")
+        val seen = mutableListOf<Boolean>()
+        val probe = object : Detector {
+            override val id = "probe"
+            override val version = 1
+            override val mediaTypes = setOf(MediaType.VIDEO)
+            override val usesFrames = true
+
+            override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
+                seen += context.frameMeasures(image).size == 5 && index.frameMeasures(FRAMES_VERSION).containsKey(image.path)
+                return emptyList()
+            }
+        }
+
+        val stats = runBlocking { frameScan(detectors = listOf(BlurDetector(), ExposureDetector(), FaceDetector(), probe)).run(source, images = false, videos = true) }
+
+        assertEquals(5, runBlocking { index.frameMeasures(FRAMES_VERSION) }.getValue(clip.path).size)
+        assertEquals(setOf(Category.BLURRY, Category.BAD_EXPOSURE, Protection.FACES), kinds("DCIM/Camera/clip.mp4"))
+        assertEquals(emptySet<Kind>(), kinds("DCIM/Camera/broken.mp4")) // unreadable: no measures, no result
+        assertEquals(listOf(true), seen) // the frames were stored when it ran, and it ran once
+        assertEquals(emptyList<Failure>(), stats.failures)
+    }
+
+    @Test
+    fun `a video run without the model has no frame to analyze and stores nothing`() {
+        val clip = videos().getValue("clip")
+
+        val stats = runBlocking { frameScan(embedder = null).run(source, images = false, videos = true) }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(emptyMap<String, List<FrameMeasures>>(), runBlocking { index.frameMeasures(FRAMES_VERSION) })
+        assertEquals(emptySet<Kind>(), kinds("DCIM/Camera/clip.mp4"))
+        assertEquals(emptyList<String>(), runBlocking { index.analyzedPaths("blur", BlurDetector().version) }.filter { it == clip.path })
+    }
+
+    @Test
+    fun `frames sampled again make the detectors that read them run again`() {
+        val clip = videos().getValue("clip")
+        runBlocking { frameScan().run(source, images = false, videos = true) }
+        assertEquals(0, runBlocking { frameScan().run(source, images = false, videos = true) }.detectorRuns)
+        // Frames of another version, as a new FRAMES_VERSION leaves them: the step takes the video's frames again.
+        runBlocking { index.setFrameEmbeddings(clip.path, "mean_color", 1, FRAMES_VERSION - 1, mapOf(300L to FloatArray(512)), mapOf(300L to GRAY)) }
+
+        val stats = runBlocking { frameScan().run(source, images = false, videos = true) }
+
+        assertEquals(5 + 3, stats.detectorRuns) // the five frames, and the three detectors again
+    }
+
+    @Test
+    fun `a video run without the model reads no frame`() {
+        videos()
+
+        val stats = runBlocking { videoScan(frameReader = { file, _ -> throw AssertionError("read ${file.name}") }, embedder = null).run(source, images = false, videos = true) }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertFalse("videoFrames" in stats.phaseMs)
+    }
+
+    @Test
+    fun `a video run links a sent copy to its original once both have frames`() {
+        val clip = videos().getValue("clip")
+        val sent = File(root, "WhatsApp/Media/WhatsApp Video/Sent/clip.mp4").apply { parentFile!!.mkdirs() }
+        clip.copyTo(sent)
+        fun roles(embedder: Embedder?): Map<String, String> = runBlocking {
+            Pipeline(index, detectors = emptyList(), groupDetectors = listOf(NearDuplicateDetector()), embedder = embedder, videoMetadataReader = ::readVideo, frameReader = ::grayFrames)
+                .run(source, images = false, videos = true)
+            listOf(clip, sent).flatMap { file -> index.signals(file.path).filter { it.kind == Category.NEAR_DUPLICATE }.map { file.path to it.evidence.getValue(ROLE_KEY) } }.toMap()
+        }
+
+        assertEquals(emptyMap<String, String>(), roles(null)) // no frames, no link
+        assertEquals(mapOf(clip.path to "best", sent.path to "inferior"), roles(MeanColorEmbedder()))
+    }
+
+    @Test
+    fun `a video run lists a video in a messaging folder as forwarded and no other`() {
+        val clip = videos().getValue("clip")
+        val sent = File(root, "WhatsApp/Media/WhatsApp Video/Sent/clip.mp4").apply { parentFile!!.mkdirs() }
+        clip.copyTo(sent)
+        fun scan(images: Boolean, videos: Boolean) = runBlocking {
+            Pipeline(index, detectors = listOf(ForwardedDetector()), groupDetectors = emptyList(), videoMetadataReader = ::readVideo).run(source, images = images, videos = videos)
+        }
+
+        scan(images = true, videos = false)
+        assertEquals(emptyList<Any>(), runBlocking { index.signals(sent.path) })
+        val stats = scan(images = false, videos = true)
+
+        val signal = runBlocking { index.signals(sent.path) }.single()
+        assertEquals(Category.FORWARDED, signal.kind)
+        assertEquals(mapOf("messaging_folder" to "yes"), signal.evidence)
+        assertEquals(emptyList<Any>(), runBlocking { index.signals(clip.path) }) // the camera's copy
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(2, stats.detectorRuns) // the two readable videos, and nothing else: no hash, no embedding
+        assertEquals(0, scan(images = false, videos = true).detectorRuns) // stored: not run again
+    }
+
+    @Test
+    fun `a run for videos alone walks, reads the videos and runs no image step`() {
+        val clip = videos().getValue("clip")
+        val seen = ConcurrentLinkedQueue<Pair<String, String>>()
+        val pipeline = Pipeline(
+            index,
+            detectors = listOf(SeenDetector("detector", seen)),
+            groupDetectors = listOf(SeenGroup(seen)),
+            metadataReader = { throw AssertionError("read ${it.name}") },
+            jpegReader = { throw AssertionError("read ${it.name}") },
+            videoMetadataReader = ::readVideo,
+        )
+
+        val stats = runBlocking { pipeline.run(source, images = false, videos = true) }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(emptyList<Pair<String, String>>(), seen.toList())
+        assertEquals(clipMeta, runBlocking { index.videoMetadata(clip.path) })
+        assertEquals(3 to 3, stats.images to stats.videos)
+        assertEquals("the images wait for a normal scan", 3, runBlocking { index.withoutMetadata() }.size)
+        assertEquals(listOf("walk", "videoMetadata", "videoGroups"), stats.phaseMs.keys.toList())
+    }
+
+    /** Two videos with the same bytes, and a third of their size with other bytes. */
+    private fun twinVideos(): Pair<File, File> {
+        photos()
+        val head = byteArrayOf(0, 0, 0, 0x18) + "ftypisom".toByteArray() + ByteArray(12)
+        File(root, "DCIM/Camera/other.mp4").apply { parentFile!!.mkdirs() }.writeBytes(head.copyOf().also { it[it.size - 1] = 1 })
+        val clip = File(root, "DCIM/Camera/clip.mp4").apply { writeBytes(head) }
+        return clip to File(root, "WhatsApp/Media/WhatsApp Video/Sent/clip-copy.mp4").apply { parentFile!!.mkdirs() }.also { clip.copyTo(it) }
+    }
+
+    private fun exactGroups(): List<Set<String>> = runBlocking {
+        index.images().flatMap { image -> index.signals(image.path).filter { it.kind == Category.EXACT_DUPLICATE }.map { it.evidence.getValue(GROUP_KEY) to image.path } }
+            .groupBy({ it.first }, { it.second }).values.map { it.toSet() }
+    }
+
+    @Test
+    fun `a run for videos alone groups identical videos after their metadata and leaves the images alone`() {
+        val (clip, copy) = twinVideos()
+        val steps = mutableListOf<String>()
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(ExactDuplicateDetector()), videoMetadataReader = ::readVideo)
+
+        val stats = runBlocking { pipeline.run(source, images = false, videos = true) { step, _, _ -> steps += step } }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(listOf(setOf(clip.path, copy.path)), exactGroups())
+        assertTrue(steps.indexOf(VIDEO_GROUPS_STEP) > steps.indexOf(VIDEO_METADATA_STEP))
+        assertEquals(listOf("walk", "videoMetadata", "videoGroups"), stats.phaseMs.keys.toList())
+    }
+
+    @Test
+    fun `a normal run hashes no video, and a video run hashes no image`() {
+        twinVideos()
+        val hashed = ConcurrentLinkedQueue<MediaType>()
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(ExactDuplicateDetector()), videoMetadataReader = ::readVideo, contentHasher = { contentHash(it).also { _ -> hashed += it.mediaType } })
+
+        run(pipeline)
+        assertEquals(setOf(MediaType.IMAGE), hashed.toSet())
+        hashed.clear()
+        runBlocking { pipeline.run(source, images = false, videos = true) }
+
+        assertEquals(setOf(MediaType.VIDEO), hashed.toSet())
+        assertEquals("the images' group and the videos' are both there", 2, exactGroups().size)
+    }
+
+    @Test
+    fun `the image run and the video run of a group detector do not run each other again`() {
+        twinVideos()
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(ExactDuplicateDetector()), videoMetadataReader = ::readVideo)
+        run(pipeline)
+        runBlocking { pipeline.run(source, images = false, videos = true) }
+
+        val again = run(pipeline)
+        val againVideos = runBlocking { pipeline.run(source, images = false, videos = true) }
+
+        assertEquals(listOf("exact_duplicate"), again.skippedGroupDetectors)
+        assertEquals(emptyList<String>(), again.ranGroupDetectors)
+        assertEquals("the log tells the video run from the image run", listOf("exact_duplicate:video"), againVideos.skippedGroupDetectors)
+        assertEquals(emptyList<String>(), againVideos.ranGroupDetectors)
+    }
+
+    @Test
+    fun `a new copy of a video is grouped at the next video run and not by a normal one`() {
+        val (clip, twin) = twinVideos()
+        twin.delete()
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(ExactDuplicateDetector()), videoMetadataReader = ::readVideo)
+        runBlocking { pipeline.run(source, images = false, videos = true) }
+        val copy = clip.copyTo(File(root, "Movies/copy.mp4").apply { parentFile!!.mkdirs() })
+
+        run(pipeline)
+        assertFalse(exactGroups().any { copy.path in it })
+        runBlocking { pipeline.run(source, images = false, videos = true) }
+
+        assertTrue(exactGroups().any { copy.path in it && clip.path in it })
+    }
+
+    @Test
+    fun `a video scan stopped in the middle of a batch keeps the batches before it, and the next one reads the rest`() {
+        repeat(7) { File(root, "DCIM/Camera/$it.mp4").apply { parentFile!!.mkdirs() }.writeBytes(byteArrayOf(0, 0, 0, 0x18) + "ftypisom".toByteArray() + ByteArray(12)) }
+        val reads = AtomicInteger()
+        lateinit var scan: Job
+        val reader = { file: File ->
+            if (reads.incrementAndGet() == 6) {
+                // One reader and batches of two: the first four are stored, and the fifth waits in the batch this read would fill.
+                runBlocking { withTimeout(10_000) { while (index.withoutMetadata().size > 3) delay(10) } }
+                scan.cancel()
+            }
+            clipMeta
+        }
+        fun videoScan(read: (File) -> VideoMetadata) = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), videoMetadataReader = read, storeBatch = 2, readers = 1)
+
+        runBlocking {
+            scan = launch(Dispatchers.Default) { videoScan(reader).run(source, images = false, videos = true) }
+            scan.join()
+        }
+
+        assertEquals(3, runBlocking { index.withoutMetadata() }.size)
+        val read = ConcurrentLinkedQueue<File>()
+        val stats = runBlocking { videoScan { clipMeta.also { _ -> read += it } }.run(source, images = false, videos = true) }
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals("only what the stop left", 3, read.size)
+        assertEquals(emptyList<MediaRef>(), runBlocking { index.withoutMetadata() })
+    }
+
+    @Test
+    fun `a video whose header does not read stays in the index, unreadable`() {
+        val videos = videos()
+        val broken = videos.getValue("broken")
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), videoMetadataReader = ::readVideo)
+
+        val stats = runBlocking { pipeline.run(source, videos = true) }
+
+        assertEquals(listOf(broken.path, videos.getValue("prores").path).sorted(), stats.unreadablePaths.sorted())
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(emptyList<MediaRef>(), runBlocking { index.withoutMetadata() })
+    }
+
+    @Test
+    fun `a video whose read fails some other way is a failure and is read again at the next scan`() {
+        val clip = videos().getValue("clip")
+        var fail = true
+        val pipeline = Pipeline(
+            index,
+            detectors = emptyList(),
+            groupDetectors = emptyList(),
+            videoMetadataReader = { if (fail && it == clip) throw IllegalStateException("media server died") else readVideo(it) },
+        )
+
+        val first = runBlocking { pipeline.run(source, videos = true) }
+        fail = false
+        runBlocking { pipeline.run(source, videos = true) }
+
+        assertEquals(listOf(Failure(clip.path, "metadata", "IllegalStateException: media server died")), first.failures)
+        assertFalse(clip.path in first.unreadablePaths)
+        assertEquals(clipMeta, runBlocking { index.videoMetadata(clip.path) })
+    }
+
+    @Test
+    fun `a video whose track the phone does not see keeps its row through the next scan`() {
+        val prores = videos().getValue("prores") // the reader marks it unreadable, as the retriever does a codec it lacks
+        val walk = FilesystemMediaSource(root, notImages = index) { index.images() }
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), videoMetadataReader = ::readVideo)
+
+        val stats = runBlocking { pipeline.run(walk, videos = true) }
+        runBlocking { pipeline.run(walk, videos = true) }
+
+        assertEquals(0, stats.forgotten)
+        assertEquals(prores.toMediaRef(MediaType.VIDEO), runBlocking { index.images() }.single { it.path == prores.path })
+        assertTrue(prores.path in runBlocking { index.unreadable() })
+        assertEquals(emptyList<MediaRef>(), runBlocking { index.notImages() }.toList())
+    }
+
+    @Test
+    fun `a run times each phase on the clock it is given`() {
+        photos()
+        var now = 0L
+        val clock = { now.also { now += 10 } }
+
+        val stats = run(Pipeline(index, embedder = MeanColorEmbedder(), clock = clock))
+
+        val phases = listOf("walk", "metadata", "jpegHeaders", "detectors", "embeddings", "embeddedDetectors", "groupDetectors")
+        assertEquals(phases.associateWith { 10L }, stats.phaseMs)
+        assertEquals(phases, stats.phaseMs.keys.toList())
+    }
+
+    @Test
+    fun `a run counts the walk, the tasks of each phase and the stickers, and reads the thermal status once at each phase start`() {
+        photos()
+        save("WhatsApp/Media/WhatsApp Stickers/s.png", seed = 2)
+        var reads = 0
+
+        val stats = run(Pipeline(index, embedder = MeanColorEmbedder(), thermalStatus = { reads++ }))
+
+        val tree = root.walkTopDown().toList()
+        assertEquals(tree.count { it.isDirectory }, stats.counts["walk folders"])
+        assertEquals(tree.size - 1, stats.counts["walk entries"])
+        assertEquals(tree.count { it.isFile }, stats.counts["walk sniffed"])
+        assertEquals(4, stats.counts["detectors tasks"])
+        assertEquals(1, stats.counts["detectors sticker tasks"])
+        assertEquals(1, stats.counts["stickers"])
+        assertEquals(3, stats.counts["embeddings tasks"])
+        assertEquals(3, stats.counts["embedded_detectors tasks"])
+        assertEquals(0, stats.counts["embedded_detectors sticker tasks"])
+        assertEquals(listOf("walk", "metadata", "jpegHeaders", "detectors", "embeddings", "embeddedDetectors", "groupDetectors"), stats.thermal.keys.toList())
+        assertEquals((0..6).toList(), stats.thermal.values.toList())
+    }
+
+    @Test
+    fun `a run without an embedder still times every phase, the embeddings one included`() {
+        photos()
+
+        val stats = run(Pipeline(index, clock = { 0 }))
+
+        assertEquals(listOf("walk", "metadata", "jpegHeaders", "detectors", "embeddings", "embeddedDetectors", "groupDetectors"), stats.phaseMs.keys.toList())
+    }
+
+    @Test
+    fun `a scan reads the JPEG headers once, and again when the file changes`() {
+        val jpeg = TestImage.texture(64, 48).save(File(root, "DCIM/Camera/a.jpg").apply { parentFile!!.mkdirs() }, Bitmap.CompressFormat.JPEG)
+        save("DCIM/Camera/b.png")
+        val reads = mutableListOf<String>()
+        fun pipeline() = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), jpegReader = {
+            reads += it.name
+            readJpeg(it)
+        })
+
+        run(pipeline())
+        assertEquals(listOf("a.jpg"), reads)
+        assertEquals(listOf(95), runBlocking { index.compressible(34) }.map { it.info.quality })
+        run(pipeline())
+        assertEquals(listOf("a.jpg"), reads)
+        jpeg.setLastModified(jpeg.lastModified() + 5_000)
+        run(pipeline())
+        assertEquals(listOf("a.jpg", "a.jpg"), reads)
+    }
+
+    @Test
+    fun `a JPEG whose headers fail to read is a metadata failure, and is read again on the next scan`() {
+        TestImage.texture(64, 48).save(File(root, "DCIM/Camera/a.jpg").apply { parentFile!!.mkdirs() }, Bitmap.CompressFormat.JPEG)
+        var fail = true
+        fun pipeline() = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), jpegReader = { if (fail) throw java.io.IOException("busy") else readJpeg(it) })
+
+        assertEquals(listOf("metadata"), run(pipeline()).failures.map { it.step })
+        fail = false
+        assertEquals(emptyList<Failure>(), run(pipeline()).failures)
+        assertEquals(1, runBlocking { index.compressible(34) }.size)
+    }
+
+    @Test
+    fun `second run on unchanged data does no detector work`() {
+        photos()
+        // A sticker too: a detector it skips must not be queued, run and forgotten at every scan.
+        save("WhatsApp/Media/WhatsApp Stickers/s.png", seed = 3)
+        run()
+
+        val stats = run()
+
+        assertEquals(0, stats.newOrChanged)
+        assertEquals(0, stats.detectorRuns)
+        assertEquals(0, stats.counts["detectors tasks"])
+    }
+
+    @Test
+    fun `a scan that changes nothing keeps the index version, so the review keeps its ranking`() {
+        photos()
+        save("WhatsApp/Media/WhatsApp Stickers/s.png", seed = 2)
+        fun pipeline() = Pipeline(index, embedder = MeanColorEmbedder())
+        run(pipeline())
+        val before = index.version
+
+        run(pipeline())
+        assertEquals(before, index.version)
+
+        save("DCIM/Camera/b.png", seed = 3)
+        run(pipeline())
+        assertNotEquals(before, index.version)
+    }
+
+    @Test
+    fun `two scans of the same library run each group detector once`() {
+        photos()
+        val ids = listOf("exact_duplicate", "near_duplicate", "burst")
+
+        val first = run(Pipeline(index, embedder = MeanColorEmbedder()))
+        val second = run(Pipeline(index, embedder = MeanColorEmbedder()))
+
+        assertEquals(ids to emptyList<String>(), first.ranGroupDetectors to first.skippedGroupDetectors)
+        assertEquals(emptyList<String>() to ids, second.ranGroupDetectors to second.skippedGroupDetectors)
+    }
+
+    @Test
+    fun `changed image is analyzed again and groups are recomputed`() {
+        photos()
+        run(Pipeline(index, embedder = MeanColorEmbedder()))
+        save("DCIM/Camera/a.png", seed = 2).setLastModified(1000)
+
+        val stats = run(Pipeline(index, embedder = MeanColorEmbedder()))
+
+        assertEquals(1, stats.newOrChanged)
+        assertEquals(DETECTORS.size + 2 + imageGroupDetectors, stats.detectorRuns) // + hash, embedding
+        assertFalse(Category.EXACT_DUPLICATE in kinds("WhatsApp/Media/a-copy.png"))
+    }
+
+    @Test
+    fun `removed image leaves the index`() {
+        photos()
+        run()
+        File(root, "DCIM/Camera/a.png").delete()
+
+        val stats = run()
+
+        assertEquals(1, stats.forgotten)
+        assertEquals(2, runBlocking { index.images() }.size)
+    }
+
+    @Test
+    fun `a row whose file is still on disk is not forgotten, though the walk missed it`() {
+        photos()
+        run()
+        val missed = refOf("DCIM/Camera/a.png").path
+        val blind = object : MediaSource {
+            override val walkedRoots get() = source.walkedRoots
+
+            override fun scan() = source.scan().filter { it.path != missed } // moved away and back while the walk was in its folder
+        }
+
+        val stats = runBlocking { Pipeline(index).run(blind) }
+
+        assertEquals(0, stats.forgotten)
+        assertEquals(3, runBlocking { index.images() }.size)
+    }
+
+    @Test
+    fun `a volume the scan did not walk keeps its rows and their state`() {
+        val card = File(folder.root, "card")
+        save("DCIM/Camera/a.png")
+        TestImage.texture(64, 48, 1).save(File(card, "DCIM/b.png").apply { parentFile!!.mkdirs() })
+        val both = MergedMediaSource(listOf(FilesystemMediaSource(root), FilesystemMediaSource(card)))
+        runBlocking { Pipeline(index).run(both) }
+        val onCard = File(card, "DCIM/b.png").path
+        runBlocking { index.setReviewState(onCard, ReviewState.KEPT) }
+        card.deleteRecursively() // the card is out
+
+        val stats = runBlocking { Pipeline(index).run(both) }
+
+        assertEquals(0, stats.forgotten)
+        assertEquals(ReviewState.KEPT, runBlocking { index.reviewState(onCard) })
+        assertEquals(2, runBlocking { index.images() }.size)
+    }
+
+    @Test
+    fun `a volume the scan walked still forgets its removed images`() {
+        val card = File(folder.root, "card")
+        save("DCIM/Camera/a.png")
+        TestImage.texture(64, 48, 1).save(File(card, "DCIM/b.png").apply { parentFile!!.mkdirs() })
+        val both = MergedMediaSource(listOf(FilesystemMediaSource(root), FilesystemMediaSource(card)))
+        runBlocking { Pipeline(index).run(both) }
+        File(card, "DCIM/b.png").delete()
+
+        val stats = runBlocking { Pipeline(index).run(both) }
+
+        assertEquals(1, stats.forgotten)
+    }
+
+    @Test
+    fun `a folder whose listing fails keeps its rows`() {
+        photos()
+        run()
+        val path = File(root, "DCIM/Camera/a.png").path
+        runBlocking { index.setReviewState(path, ReviewState.KEPT) }
+        val locked = File(root, "DCIM/Camera").apply { setReadable(false) }
+        assumeTrue("the folder is still listable (running as root?)", locked.listFiles() == null)
+
+        val stats = try {
+            run()
+        } finally {
+            locked.setReadable(true)
+        }
+
+        assertEquals(0, stats.forgotten)
+        assertEquals(ReviewState.KEPT, runBlocking { index.reviewState(path) })
+        assertEquals(3, runBlocking { index.images() }.size)
+    }
+
+    @Test
+    fun `trashed image stays in the index while it is in the trash`() {
+        photos()
+        run()
+        val path = File(root, "DCIM/Camera/a.png").path
+        runBlocking { index.setReviewState(path, ReviewState.TRASHED) }
+        File(path).delete()
+
+        val stats = run()
+
+        assertEquals(0, stats.forgotten)
+        assertEquals(ReviewState.TRASHED, runBlocking { index.reviewState(path) })
+        assertTrue(Category.BLURRY in kinds("DCIM/Camera/a.png"))
+    }
+
+    private val trash by lazy { AppTrash({ listOf(root) }) }
+
+    private fun refOf(path: String) = File(root, path).toMediaRef()
+
+    /** The trash holds [path]'s file and the index says so, as after an apply. */
+    private fun trashed(path: String): MediaRef {
+        val ref = refOf(path)
+        runBlocking {
+            assertEquals(listOf(ref), trash.moveToTrash(listOf(ref)).map { it.original })
+            index.setReviewState(ref.path, ReviewState.TRASHED)
+        }
+        return ref
+    }
+
+    /** A source that runs [action] once the walk is over, like a review action that comes after the scan passed the folder. */
+    private fun afterWalk(action: suspend () -> Unit) = object : MediaSource {
+        override val walkedRoots get() = source.walkedRoots
+
+        override fun scan() = flow {
+            emitAll(source.scan())
+            action()
+        }
+    }
+
+    @Test
+    fun `a trashed row whose file is back on disk with no trash item becomes unreviewed`() {
+        photos()
+        run()
+        val image = trashed("DCIM/Camera/a.png")
+        val item = runBlocking { trash.trashed() }.single()
+        Files.move(item.file.toPath(), File(image.path).toPath()) // put back by hand
+        item.file.parentFile!!.deleteRecursively()
+
+        run(Pipeline(index, trash = trash))
+
+        assertEquals(ReviewState.UNREVIEWED, runBlocking { index.reviewState(image.path) })
+    }
+
+    @Test
+    fun `a trashed row stays while its item is in the trash, and goes when it is neither on disk nor in the trash`() {
+        photos()
+        run()
+        val kept = trashed("DCIM/Camera/a.png")
+        val lost = trashed("WhatsApp/Media/a-copy.png")
+        runBlocking { trash.trashed() }.single { it.original == lost }.file.parentFile!!.deleteRecursively()
+
+        val stats = run(Pipeline(index, trash = trash))
+
+        assertEquals(1, stats.forgotten)
+        assertEquals(ReviewState.TRASHED, runBlocking { index.reviewState(kept.path) })
+        assertEquals(setOf(kept.path, refOf("Pictures/Screenshots/Screenshot_1.png").path), runBlocking { index.images() }.map { it.path }.toSet())
+    }
+
+    @Test
+    fun `a trashed row on a volume the scan did not walk is kept even if the trash lost its item`() {
+        val card = File(folder.root, "card")
+        TestImage.texture(64, 48, 1).save(File(card, "DCIM/b.png").apply { parentFile!!.mkdirs() })
+        val both = MergedMediaSource(listOf(FilesystemMediaSource(root), FilesystemMediaSource(card)))
+        save("DCIM/Camera/a.png")
+        runBlocking { Pipeline(index).run(both) }
+        val onCard = File(card, "DCIM/b.png").toMediaRef()
+        runBlocking { index.setReviewState(onCard.path, ReviewState.TRASHED) }
+        card.deleteRecursively() // the card is out, and so is its trash
+
+        val stats = runBlocking { Pipeline(index, trash = trash).run(both) }
+
+        assertEquals(0, stats.forgotten)
+        assertEquals(ReviewState.TRASHED, runBlocking { index.reviewState(onCard.path) })
+    }
+
+    @Test
+    fun `a trash that cannot be listed is a failure of the scan, not its end, and leaves TRASHED rows alone`() {
+        photos()
+        run()
+        val image = trashed("DCIM/Camera/a.png")
+        val unlistable = object : Trash by trash {
+            override suspend fun trashed(): List<TrashedImage> = throw IOException("volume gone")
+        }
+
+        val stats = run(Pipeline(index, trash = unlistable))
+
+        assertEquals(listOf("trash"), stats.failures.map { it.step })
+        assertEquals("", stats.failures.single().path)
+        assertEquals(0, stats.forgotten)
+        assertEquals(ReviewState.TRASHED, runBlocking { index.reviewState(image.path) })
+        assertEquals(2, stats.images) // the scan went on over what is on disk
+    }
+
+    @Test
+    fun `a row whose original waits in the trash for its compressed copy is kept, so a restore finds it`() {
+        photos()
+        run()
+        val image = refOf("DCIM/Camera/a.png")
+        val other = refOf("WhatsApp/Media/a-copy.png")
+        runBlocking { index.setReviewState(image.path, ReviewState.KEPT) }
+        // As a process killed after the original went to the trash and before the copy took its path.
+        val copy = copyFileFor(File(image.path)).apply { writeText("small") }
+        trash.mover = { _, _ -> throw IOException("killed") }
+        assertEquals(Swap.LeftInTrash, runBlocking { trash.replaceWithCopy(image, copy) })
+        trash.mover = { from, to -> Files.move(from.toPath(), to.toPath()) }
+        File(other.path).delete()
+
+        val stats = run(Pipeline(index, trash = trash))
+
+        assertEquals(1, stats.forgotten)
+        assertEquals(ReviewState.KEPT, runBlocking { index.reviewState(image.path) })
+        assertEquals(listOf(image), runBlocking { Review(index, trash).restore(listOf(image)) })
+        assertEquals(ReviewState.KEPT, runBlocking { index.reviewState(image.path) })
+    }
+
+    @Test
+    fun `a compressed copy deleted outside the app is forgotten, though its original is in the trash`() {
+        photos()
+        run()
+        val image = refOf("DCIM/Camera/a.png")
+        val copy = copyFileFor(File(image.path)).apply { writeText("small") }
+        val swapped = (runBlocking { trash.replaceWithCopy(image, copy) } as Swap.Swapped).copy
+        runBlocking { index.record(swapped) }
+        File(image.path).delete() // by another gallery app
+
+        val stats = run(Pipeline(index, trash = trash))
+
+        assertEquals(1, stats.forgotten)
+        assertFalse(image.path in runBlocking { index.images() }.map { it.path })
+    }
+
+    @Test
+    fun `a trash that cannot be listed forgets no row, since any could be a compression left halfway`() {
+        photos()
+        run()
+        val gone = refOf("WhatsApp/Media/a-copy.png")
+        File(gone.path).delete()
+        val unlistable = object : Trash by trash {
+            override suspend fun trashed(): List<TrashedImage> = throw IOException("volume gone")
+        }
+
+        val stats = run(Pipeline(index, trash = unlistable))
+
+        assertEquals(0, stats.forgotten)
+        assertTrue(gone.path in runBlocking { index.images() }.map { it.path })
+    }
+
+    @Test
+    fun `an image restored after the walk passed its folder keeps the KEPT row the restore wrote`() {
+        photos()
+        run()
+        val image = trashed("DCIM/Camera/a.png")
+        val review = Review(index, trash)
+
+        val stats = runBlocking { Pipeline(index, trash = trash).run(afterWalk { review.restore(listOf(image)) }) }
+
+        assertEquals(0, stats.forgotten)
+        assertEquals(ReviewState.KEPT, runBlocking { index.reviewState(image.path) })
+    }
+
+    /** On [target], does what a review action does while a scan runs, then ends as [then] says. */
+    private inner class Interrupting(private val target: String, private val purge: Boolean, private val then: () -> Unit = {}) : Detector {
+        override val id = "interrupting"
+        override val version = 1
+
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
+            if (image.path == target) {
+                val review = Review(index, trash)
+                review.apply(listOf(image), emptyList())
+                if (purge) review.purge(listOf(image))
+                then()
+            }
+            return listOf(Signal(id, version, Category.BLURRY, 0.5f))
+        }
+    }
+
+    @Test
+    fun `emptying the trash while a scan analyzes an image does not end the scan`() {
+        photos()
+        val target = refOf("DCIM/Camera/a.png").path
+
+        val stats = run(Pipeline(index, listOf(Interrupting(target, purge = true)), emptyList(), trash = trash))
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(setOf(refOf("WhatsApp/Media/a-copy.png").path, refOf("Pictures/Screenshots/Screenshot_1.png").path), runBlocking { index.images() }.map { it.path }.toSet())
+    }
+
+    @Test
+    fun `a failure on an image trashed since the walk is not listed`() {
+        photos()
+        val target = refOf("DCIM/Camera/a.png").path
+
+        val stats = run(Pipeline(index, listOf(Interrupting(target, purge = false) { throw FileNotFoundException(target) }), emptyList(), trash = trash))
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(ReviewState.TRASHED, runBlocking { index.reviewState(target) })
+    }
+
+    @Test
+    fun `an image trashed after the walk is not marked unreadable, so a restore brings it back analyzed`() {
+        photos()
+        val image = refOf("DCIM/Camera/a.png")
+        runBlocking { index.record(image) } // a scan that stopped before the metadata step: the user can only act on an indexed image
+        val review = Review(index, trash)
+
+        val stats = runBlocking { Pipeline(index, trash = trash).run(afterWalk { review.apply(listOf(image), emptyList()) }) }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(emptyList<String>(), runBlocking { index.unreadable() })
+        runBlocking { review.restore(listOf(image)) }
+        run(Pipeline(index, trash = trash))
+        assertNotNull(runBlocking { index.metadata(image.path) })
+        assertTrue(Category.BLURRY in kinds("DCIM/Camera/a.png"))
+    }
+
+    @Test
+    fun `a metadata read that fails once leaves the image readable on the next scan`() {
+        photos()
+        val flaky = refOf("DCIM/Camera/a.png").path
+        var failing = true
+        val reader = { file: File -> if (failing && file.path == flaky) throw IOException("read error") else readMetadata(file) }
+
+        val first = run(Pipeline(index, metadataReader = reader))
+
+        assertEquals(listOf(flaky), first.failures.filter { it.step == "metadata" }.map { it.path })
+        assertEquals(0, first.unreadable)
+        assertEquals(emptyList<String>(), runBlocking { index.unreadable() })
+        failing = false
+        val second = run(Pipeline(index, metadataReader = reader))
+        assertEquals(emptyList<Failure>(), second.failures)
+        assertNotNull(runBlocking { index.metadata(flaky) })
+        assertTrue(Category.BLURRY in kinds("DCIM/Camera/a.png"))
+    }
+
+    @Test
+    fun `a metadata read that runs out of memory fails that image only`() {
+        photos()
+        val big = refOf("DCIM/Camera/a.png").path
+        val reader = { file: File -> if (file.path == big) throw OutOfMemoryError("heap") else readMetadata(file) }
+
+        val stats = run(Pipeline(index, metadataReader = reader))
+
+        assertEquals(listOf(Failure(big, "metadata", "OutOfMemoryError: heap")), stats.failures)
+        assertEquals(emptyList<String>(), runBlocking { index.unreadable() })
+        assertNotNull(runBlocking { index.metadata(refOf("WhatsApp/Media/a-copy.png").path) })
+    }
+
+    @Test
+    fun `only an UnreadableImage marks a file unreadable`() {
+        photos()
+        val broken = refOf("DCIM/Camera/a.png").path
+        val reader = { file: File -> if (file.path == broken) throw UnreadableImage(file) else readMetadata(file) }
+
+        val stats = run(Pipeline(index, metadataReader = reader))
+
+        assertEquals(listOf(broken), runBlocking { index.unreadable() })
+        assertEquals(1, stats.unreadable)
+        assertEquals(emptyList<Failure>(), stats.failures)
+    }
+
+    @Test
+    fun `a row forgotten while its metadata is read does not end the scan`() {
+        photos()
+        val target = refOf("DCIM/Camera/a.png").path
+        val reader = { file: File ->
+            if (file.path == target) runBlocking { index.forget(listOf(target)) }
+            readMetadata(file)
+        }
+
+        val stats = run(Pipeline(index, metadataReader = reader))
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(2, runBlocking { index.images() }.size)
+    }
+
+    @Test
+    fun `a row forgotten while its file fails to read does not end the scan`() {
+        photos()
+        val target = refOf("DCIM/Camera/a.png").path
+        val reader = { file: File ->
+            if (file.path == target) runBlocking { index.forget(listOf(target)) }
+            readMetadata(file).takeIf { file.path != target } ?: throw IOException("broken")
+        }
+
+        val stats = run(Pipeline(index, metadataReader = reader))
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(2, runBlocking { index.images() }.size)
+    }
+
+    @Test
+    fun `unreadable image gets no per-image analysis`() {
+        photos()
+        val broken = File(root, "Download/broken.jpg").apply {
+            parentFile!!.mkdirs()
+            writeBytes(byteArrayOf(-1, -40, -1, -32) + ByteArray(16))
+        }
+
+        val stats = run()
+
+        assertEquals(1, stats.unreadable)
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(emptyList<Signal>(), runBlocking { index.signals(broken.path) })
+    }
+
+    private class Failing(val fixed: Boolean) : Detector {
+        override val id = "failing"
+        override val version = 1
+
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
+            if (!fixed) throw IOException("truncated")
+            return listOf(Signal(id, version, Category.BLURRY, 0.5f))
+        }
+    }
+
+    /** Logs, for each image, the detectors in the order they ran and the pixels each one got. */
+    private class Decoding(override val id: String, override val decodeSide: Int?, val log: Map<String, MutableList<Pair<String, Pixels>>>) : Detector {
+        override val version = 1
+
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
+            log.getValue(image.path) += id to context.pixels(image)
+            return emptyList()
+        }
+    }
+
+    @Test
+    fun `an image's detectors and its hash share one decode memo, from the largest draft side down`() {
+        photos()
+        val paths = listOf("DCIM/Camera/a.png", "WhatsApp/Media/a-copy.png", "Pictures/Screenshots/Screenshot_1.png").map { File(root, it).path }
+        // Each image's list is written by the one worker that runs its task.
+        val log = paths.associateWith { mutableListOf<Pair<String, Pixels>>() }
+        val detectors = listOf(Decoding("small", 256, log), Decoding("none", null, log), Decoding("large", 640, log), Decoding("middle", 512, log))
+        val hasher = { image: MediaRef, pixels: Pixels ->
+            log.getValue(image.path) += "hash" to pixels
+            0uL
+        }
+
+        run(Pipeline(index, detectors, emptyList(), perceptualHasher = hasher))
+
+        for (path in paths) {
+            val steps = log.getValue(path)
+            assertEquals(path, listOf("large", "middle", "small", "none", "hash"), steps.map { it.first })
+            assertTrue(path, steps.all { it.second === steps.first().second })
+            assertEquals(path, File(path), steps.first().second.file)
+        }
+        assertEquals(paths.size, log.values.map { System.identityHashCode(it.first().second) }.toSet().size)
+    }
+
+    @Test
+    fun `failed analysis is reported and retried on the next run`() {
+        photos()
+
+        var stats = run(Pipeline(index, listOf(Failing(fixed = false)), emptyList()))
+
+        assertEquals(3, stats.failures.size)
+        assertTrue(stats.failures[0].toString(), "IOException: truncated" in stats.failures[0].toString())
+
+        stats = run(Pipeline(index, listOf(Failing(fixed = true)), emptyList()))
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(3, stats.detectorRuns)
+    }
+
+    @Test
+    fun `a perceptual hash that failed once and works now gets its image grouped again`() {
+        photos()
+        val copy = File(root, "WhatsApp/Media/a-copy.png").path
+
+        var stats = run(Pipeline(index, perceptualHasher = { image, _ -> if (image.path == copy) throw IOException("busy") else perceptualHash(image) }))
+
+        assertEquals(1, stats.failures.size)
+        assertFalse(Category.NEAR_DUPLICATE in kinds("WhatsApp/Media/a-copy.png"))
+
+        stats = run()
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertTrue(Category.NEAR_DUPLICATE in kinds("WhatsApp/Media/a-copy.png"))
+    }
+
+    @Test
+    fun `a content hash that failed once and works now gets its image grouped again`() {
+        photos()
+        val copy = File(root, "WhatsApp/Media/a-copy.png").path
+
+        run(Pipeline(index, contentHasher = { if (it.path == copy) throw IOException("busy") else contentHash(it) }))
+
+        assertFalse(Category.EXACT_DUPLICATE in kinds("WhatsApp/Media/a-copy.png"))
+
+        run()
+
+        assertTrue(Category.EXACT_DUPLICATE in kinds("WhatsApp/Media/a-copy.png"))
+    }
+
+    @Test
+    fun `a content hash that fails on every scan does not run the exact detector on every scan, and it runs once the file reads`() {
+        photos()
+        val copy = File(root, "WhatsApp/Media/a-copy.png").path
+        val failing = Pipeline(index, contentHasher = { if (it.path == copy) throw IOException("busy") else contentHash(it) })
+        run(failing)
+
+        val again = run(failing)
+
+        assertEquals(emptyList<String>(), again.ranGroupDetectors)
+
+        val readable = run()
+
+        assertEquals(listOf("exact_duplicate"), readable.ranGroupDetectors)
+        assertTrue(Category.EXACT_DUPLICATE in kinds("WhatsApp/Media/a-copy.png"))
+        assertEquals(emptyList<String>(), run().ranGroupDetectors)
+    }
+
+    /** Stores a BLURRY signal with the given peak variance for the files it names, and none for the others. */
+    private class StoredBlur(private val peaks: Map<String, String>, override val version: Int = 1) : Detector {
+        override val id = "blur"
+        override val category = Category.BLURRY
+
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> = peaks[File(image.path).name]?.let { listOf(Signal(id, version, Category.BLURRY, 0.5f, mapOf("peak_variance" to it))) }.orEmpty()
+    }
+
+    @Test
+    fun `burst reads the sharpness blur stored, and measures a shot blur left without one`() {
+        val shots = (1..3).map { save("DCIM/Camera/$it.png", seed = it) }
+        val start = LocalDateTime.of(2024, 5, 1, 10, 0, 0)
+        val reader = { file: File -> readMetadata(file).copy(cameraMake = "Google", cameraModel = "Pixel 8", capturedAt = start.plusSeconds(file.nameWithoutExtension.toLong())) }
+        val blur = StoredBlur(mapOf("1.png" to "12.3", "2.png" to "45.6"))
+
+        run(Pipeline(index, listOf(blur), listOf(BurstDetector()), metadataReader = reader))
+
+        val sharpness = shots.map { shot -> runBlocking { index.signals(shot.path) }.single { it.kind == Category.BURST }.evidence["sharpness"] }
+        val measured = runBlocking { BlurDetector().analyze(shots[2].toMediaRef(), AnalysisContext()) }.single().evidence["peak_variance"]
+        assertEquals(listOf("12.3", "45.6", measured), sharpness)
+    }
+
+    @Test
+    fun `a new blur version reruns burst on an unchanged library`() {
+        photos()
+        fun withBlur(version: Int) = Pipeline(index, listOf(StoredBlur(emptyMap(), version)), listOf(BurstDetector()))
+        run(withBlur(1))
+
+        assertEquals(emptyList<String>(), run(withBlur(1)).ranGroupDetectors)
+        assertEquals(listOf("burst"), run(withBlur(2)).ranGroupDetectors)
+    }
+
+    private class Probe : Detector {
+        override val id = "probe"
+        override val version = 1
+        val seen = ConcurrentLinkedQueue<String>()
+
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
+            seen += image.path
+            return listOf(Signal(id, version, Category.BLURRY, 0.5f))
+        }
+    }
+
+    @Test
+    fun `a run analyzes the new, the forgotten and the changed, and nothing else, trashed images included`() {
+        photos()
+        val probe = Probe()
+        run(Pipeline(index, listOf(probe), emptyList()))
+        val paths = listOf("DCIM/Camera/a.png", "WhatsApp/Media/a-copy.png", "Pictures/Screenshots/Screenshot_1.png").map { File(root, it).path }
+        runBlocking {
+            index.setReviewState(paths[0], ReviewState.TRASHED)
+            index.forgetAnalyses(listOf(paths[0]), listOf("probe")) // trashed, no analysis: analyzed again
+        }
+        val added = save("DCIM/Camera/new.png", seed = 3).path
+        probe.seen.clear()
+
+        val stats = run(Pipeline(index, listOf(probe), emptyList()))
+
+        assertEquals(setOf(paths[0], added), probe.seen.toSet())
+        assertEquals(2, probe.seen.size)
+        assertEquals(3, stats.detectorRuns) // two analyses and the new image's hash
+        assertNotNull(runBlocking { index.perceptualHash(added) })
+    }
+
+    @Test
+    fun `progress reports how many images the pass has to analyze before it analyzes the first`() {
+        photos()
+        val calls = mutableListOf<Triple<String, Int, Int>>()
+
+        runBlocking { Pipeline(index, listOf(Probe()), emptyList()).run(source) { step, done, total -> calls += Triple(step, done, total) } }
+
+        assertEquals(Triple("detectors", 0, 3), calls.first { it.first == "detectors" })
+    }
+
+    @Test
+    fun `one image at a time gives the same signals as many`() {
+        photos()
+        run(Pipeline(index, parallelism = 1))
+        val serial = runBlocking { index.indexedMedia() }.associate { it.ref.path to it.signals.toSet() }
+        val other = memoryIndex()
+
+        runBlocking { Pipeline(other, parallelism = 8).run(source) }
+
+        assertEquals(serial, runBlocking { other.indexedMedia() }.associate { it.ref.path to it.signals.toSet() })
+        other.close()
+    }
+
+    @Test
+    fun `detector categories are derived from the detector lists`() {
+        assertEquals(
+            setOf(
+                Category.BLURRY, Category.BAD_EXPOSURE, Category.SCREENSHOT, Category.STICKER,
+                Category.DOCUMENT, Category.FORWARDED,
+                Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE, Category.BURST, Category.TAKES, Category.SHORT_CLIPS,
+            ),
+            DETECTOR_CATEGORIES,
+        )
+    }
+
+    /** Embeds an image as its mean color, padded to MobileCLIP's 512 values. */
+    private class MeanColorEmbedder(override val version: Int = 1, private val scale: Float = 1f) : Embedder {
+        override val id = "mean_color"
+
+        override fun embedPixels(pixels: List<FloatArray>): List<FloatArray> = pixels.map { image ->
+            val plane = image.size / 3
+            val vector = FloatArray(512) { 1f }
+            for (c in 0 until 3) vector[c] = scale * (0 until plane).sumOf { image[c * plane + it].toDouble() }.toFloat() / plane
+            val norm = kotlin.math.sqrt(vector.sumOf { it.toDouble() * it }).toFloat()
+            FloatArray(512) { vector[it] / norm }
+        }
+    }
+
+    /** Group detector that records the embeddings it can look up. */
+    private class EmbeddingReader : GroupDetector {
+        override val id = "embedding_reader"
+        override val version = 1
+        var seen = mapOf<String, FloatArray>()
+
+        override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
+            seen = images.associate { File(it.path).name to context.embedding(it) }
+            return emptyMap()
+        }
+    }
+
+    @Test
+    fun `embeddings are computed once and reach group detectors`() {
+        photos()
+        val reader = EmbeddingReader()
+
+        val first = run(Pipeline(index, groupDetectors = listOf(reader), embedder = MeanColorEmbedder()))
+        val second = run(Pipeline(index, groupDetectors = emptyList(), embedder = MeanColorEmbedder()))
+
+        assertEquals(3 * DETECTORS.size + 3 * 2 + 1, first.detectorRuns) // + hashes, embeddings
+        assertEquals(0, second.detectorRuns)
+        assertEquals(setOf("a.png", "a-copy.png", "Screenshot_1.png"), reader.seen.keys)
+        assertEquals(3, runBlocking { index.embeddings("mean_color", 1) }.size)
+    }
+
+    @Test
+    fun `without an embedder the lookup throws`() {
+        photos()
+
+        assertThrows(MissingEmbedding::class.java) { run(Pipeline(index, groupDetectors = listOf(EmbeddingReader()))) }
+    }
+
+    private class EmbeddingDetector : Detector {
+        override val id = "embedding_user"
+        override val version = 1
+        override val usesEmbeddings = true
+
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext) = listOf(Signal(id, version, Category.DOCUMENT, context.embedding(image)[0]))
+    }
+
+    @Test
+    fun `detector needing embeddings waits for a run with them`() {
+        photos()
+
+        var stats = run(Pipeline(index, detectors = listOf(EmbeddingDetector()), groupDetectors = emptyList()))
+
+        assertEquals(3, stats.skipped)
+        assertEquals(emptyList<Failure>(), stats.failures)
+
+        stats = run(Pipeline(index, detectors = listOf(EmbeddingDetector()), groupDetectors = emptyList(), embedder = MeanColorEmbedder()))
+
+        assertEquals(0, stats.skipped)
+        assertEquals(3 + 3, stats.detectorRuns) // embeddings, then the detector
+    }
+
+    @Test
+    fun `the next run after deleting the embeddings computes them again and reruns the detectors reading them`() {
+        photos()
+        val pipeline = { Pipeline(index, detectors = listOf(EmbeddingDetector()), groupDetectors = emptyList(), embedder = MeanColorEmbedder()) }
+        run(pipeline())
+        val before = runBlocking { index.signals(File(root, "DCIM/Camera/a.png").path) }
+
+        runBlocking { index.deleteEmbeddings() }
+
+        // The candidates stay until a scan replaces them.
+        assertEquals(before, runBlocking { index.signals(File(root, "DCIM/Camera/a.png").path) })
+
+        val stats = run(pipeline())
+
+        assertEquals(3 + 3, stats.detectorRuns) // embeddings, then the detector
+        assertEquals(3, runBlocking { index.embeddings("mean_color", 1) }.size)
+        assertEquals(before, runBlocking { index.signals(File(root, "DCIM/Camera/a.png").path) })
+    }
+
+    private fun everySignal() = runBlocking { index.images().associate { it.path to index.signals(it.path).sortedBy { s -> s.detectorId } } }
+
+    @Test
+    fun `after deleting the embeddings the detectors reading them run again and the group detectors, with the same vectors, do not`() {
+        photos()
+        run(Pipeline(index, embedder = MeanColorEmbedder()))
+        val before = everySignal()
+
+        runBlocking { index.deleteEmbeddings() }
+        val stats = run(Pipeline(index, embedder = MeanColorEmbedder()))
+
+        val readers = DETECTORS.count { it.usesEmbeddings }
+        assertEquals(3 + 3 * readers, stats.detectorRuns) // embeddings, then document and forwarded; no group run
+        assertEquals(before, everySignal())
+    }
+
+    @Test
+    fun `a new embedder version reruns the detectors reading embeddings and the group detectors`() {
+        photos()
+        run(Pipeline(index, embedder = MeanColorEmbedder()))
+
+        val stats = run(Pipeline(index, embedder = MeanColorEmbedder(version = 2)))
+
+        val readers = DETECTORS.count { it.usesEmbeddings }
+        assertEquals(3 + 3 * readers + imageGroupDetectors, stats.detectorRuns)
+    }
+
+    @Test
+    fun `a detector's signal follows the embedding it read`() {
+        photos()
+        val detectors = listOf(EmbeddingDetector())
+        run(Pipeline(index, detectors = detectors, groupDetectors = emptyList(), embedder = MeanColorEmbedder()))
+        val path = File(root, "DCIM/Camera/a.png").path
+        val before = runBlocking { index.signals(path) }.single().score
+
+        run(Pipeline(index, detectors = detectors, groupDetectors = emptyList(), embedder = MeanColorEmbedder(version = 2, scale = 4f)))
+
+        val after = runBlocking { index.signals(path) }.single().score
+        assertEquals(runBlocking { index.embeddings("mean_color", 2) }.getValue(path)[0], after, 0f)
+        assertNotEquals(before, after)
+    }
+
+    @Test
+    fun `only the document and forwarded detectors read embeddings`() {
+        assertEquals(listOf("document", "forwarded"), DETECTORS.filter { it.usesEmbeddings }.map { it.id })
+    }
+
+    @Test
+    fun `the detectors that read no embedding store their signals before the first embedding is computed`() {
+        photos()
+        val screenshot = "Pictures/Screenshots/Screenshot_1.png"
+        var before = emptySet<Kind>()
+        val embedder = object : Embedder {
+            private val inner = MeanColorEmbedder()
+            override val id = inner.id
+            override val version = inner.version
+
+            override fun embedPixels(pixels: List<FloatArray>): List<FloatArray> {
+                if (before.isEmpty()) before = kinds(screenshot)
+                return inner.embedPixels(pixels)
+            }
+        }
+
+        run(Pipeline(index, embedder = embedder))
+
+        assertEquals(setOf(Category.BLURRY, Category.BAD_EXPOSURE, Category.SCREENSHOT, Protection.FACES, Category.STICKER), before)
+    }
+
+    private class UnflaggedEmbeddingDetector : Detector {
+        override val id = "unflagged"
+        override val version = 1
+
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext) = listOf(Signal(id, version, Category.DOCUMENT, context.embedding(image)[0]))
+    }
+
+    @Test
+    fun `a detector that reads an embedding without saying so fails on every run`() {
+        photos()
+        val pipeline = { Pipeline(index, detectors = listOf(UnflaggedEmbeddingDetector()), groupDetectors = emptyList(), embedder = MeanColorEmbedder()) }
+
+        val first = run(pipeline())
+        val second = run(pipeline())
+
+        assertEquals(0, first.skipped)
+        assertEquals(3, first.failures.size)
+        assertTrue(first.failures.all { "without usesEmbeddings" in it.error })
+        assertEquals(3, second.failures.size)
+    }
+
+    @Test
+    fun `a run stopped after the fast detectors resumes with the embeddings and does not repeat them`() {
+        photos()
+        val stopped = object : Embedder {
+            override val id = "mean_color"
+            override val version = 1
+
+            override fun embedPixels(pixels: List<FloatArray>): List<FloatArray> = throw kotlinx.coroutines.CancellationException("stopped")
+        }
+        assertThrows(kotlinx.coroutines.CancellationException::class.java) { run(Pipeline(index, embedder = stopped)) }
+        assertEquals(setOf(Category.BLURRY, Category.BAD_EXPOSURE, Category.SCREENSHOT, Protection.FACES, Category.STICKER), kinds("Pictures/Screenshots/Screenshot_1.png"))
+
+        val stats = run(Pipeline(index, embedder = MeanColorEmbedder()))
+
+        val readers = DETECTORS.count { it.usesEmbeddings }
+        assertEquals(3 + 3 * readers + imageGroupDetectors, stats.detectorRuns) // embeddings, then the readers; no fast detector, no hash
+    }
+
+    @Test
+    fun `the steps run in order, the embeddings and the detectors that read them as one step`() {
+        photos()
+        val steps = mutableListOf<String>()
+
+        runBlocking { Pipeline(index, embedder = MeanColorEmbedder()).run(source) { step, _, _ -> if (steps.lastOrNull() != step) steps += step } }
+
+        assertEquals(listOf("metadata", "detectors", "embedded_detectors", "exact_duplicate", "near_duplicate", "burst"), steps)
+    }
+
+    /** [EmbeddingDetector], calling [analyzed] after each image. */
+    private class WatchedEmbeddingDetector(private val analyzed: () -> Unit = {}) : Detector {
+        private val inner = EmbeddingDetector()
+        override val id = inner.id
+        override val version = inner.version
+        override val usesEmbeddings = true
+
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext) = inner.analyze(image, context).also { analyzed() }
+    }
+
+    /** Every image's results, by detector: the analyses, then the signals, with no row id. */
+    private fun analysesAndSignals(index: ImageIndex) = runBlocking {
+        val versions = (DETECTORS.map { it.id to it.version } + GROUP_DETECTORS.map { it.id to it.version } + ("embedding_user" to 1)).toMap()
+        index.analyzedPaths(versions) to storedResults(index)
+    }
+
+    @Test
+    fun `the detectors that read the embeddings run on a batch while the next one is embedded`() {
+        repeat(EMBEDDING_BATCH + 2) { save("DCIM/Camera/shot-$it.png", seed = it) }
+        val firstResult = CountDownLatch(1)
+        val inner = MeanColorEmbedder()
+        val calls = AtomicInteger()
+        var sawResult = false
+        val embedder = object : Embedder by inner {
+            override fun embedPixels(pixels: List<FloatArray>): List<FloatArray> {
+                if (calls.incrementAndGet() == 2) sawResult = firstResult.await(5, TimeUnit.SECONDS)
+                return inner.embedPixels(pixels)
+            }
+        }
+
+        val stats = run(Pipeline(index, detectors = listOf(WatchedEmbeddingDetector { firstResult.countDown() }), groupDetectors = emptyList(), embedder = embedder))
+
+        assertTrue(sawResult)
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(EMBEDDING_BATCH + 2, stats.counts["embedded_detectors tasks"])
+    }
+
+    @Test
+    fun `the embeddings and the detectors that read them store the same results at once as one after the other`() {
+        repeat(EMBEDDING_BATCH) { save("DCIM/Camera/shot-$it.png", seed = it) }
+        photos()
+        save("WhatsApp/Media/WhatsApp Images/meme.png", seed = 3)
+        val other = memoryIndex()
+        // One after the other: a run without the detectors that read embeddings, then one that finds every embedding stored.
+        runBlocking { Pipeline(other, detectors = DETECTORS.filter { !it.usesEmbeddings }, embedder = MeanColorEmbedder()).run(source) }
+        val after = runBlocking { Pipeline(other, embedder = MeanColorEmbedder()).run(source) }
+        assertEquals(0, after.counts["embeddings tasks"])
+
+        val stats = run(Pipeline(index, embedder = MeanColorEmbedder()))
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(EMBEDDING_BATCH + 4, stats.counts["embedded_detectors tasks"])
+        assertEquals(analysesAndSignals(other), analysesAndSignals(index))
+        other.close()
+    }
+
+    @Test
+    fun `a stop while both run keeps every result with the embedding it read, and the next run finishes the same as one run`() {
+        repeat(3 * EMBEDDING_BATCH) { save("DCIM/Camera/shot-$it.png", seed = it) }
+        val firstResult = CountDownLatch(1)
+        val modelRunning = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val inner = MeanColorEmbedder()
+        val calls = AtomicInteger()
+        val gated = object : Embedder by inner {
+            override fun embedPixels(pixels: List<FloatArray>): List<FloatArray> {
+                if (calls.incrementAndGet() == 2) {
+                    modelRunning.countDown()
+                    release.await(5, TimeUnit.SECONDS)
+                }
+                return inner.embedPixels(pixels)
+            }
+        }
+        val detectors = listOf(WatchedEmbeddingDetector { firstResult.countDown() })
+        suspend fun kept() = index.images().count { image -> index.signals(image.path).any { it.detectorId == "embedding_user" } }
+
+        runBlocking {
+            // One result per transaction, so the results the stop keeps are there to check.
+            val scan = launch(Dispatchers.Default) { Pipeline(index, detectors = detectors, groupDetectors = emptyList(), embedder = gated, storeBatch = 1).run(source) }
+            assertTrue(modelRunning.await(5, TimeUnit.SECONDS))
+            assertTrue(firstResult.await(5, TimeUnit.SECONDS))
+            withTimeout(5_000) { while (kept() == 0) delay(10) }
+            scan.cancel()
+            release.countDown()
+            withTimeout(5_000) { scan.join() }
+        }
+
+        // The first batch is stored, the one the model ran on when the stop came is not, and no result lacks its embedding.
+        val embeddings = runBlocking { index.embeddings(inner.id, inner.version) }
+        assertEquals(EMBEDDING_BATCH, embeddings.size)
+        assertTrue(runBlocking { kept() } > 0)
+        for (image in runBlocking { index.images() }) {
+            val signal = runBlocking { index.signals(image.path) }.singleOrNull { it.detectorId == "embedding_user" } ?: continue
+            assertEquals(image.path, embeddings.getValue(image.path)[0], signal.score, 0f)
+        }
+
+        val stats = run(Pipeline(index, detectors = detectors, groupDetectors = emptyList(), embedder = MeanColorEmbedder()))
+        val other = memoryIndex()
+        runBlocking { Pipeline(other, detectors = detectors, groupDetectors = emptyList(), embedder = MeanColorEmbedder()).run(source) }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(2 * EMBEDDING_BATCH, stats.counts["embeddings tasks"])
+        assertEquals(analysesAndSignals(other), analysesAndSignals(index))
+        other.close()
+    }
+
+    @Test
+    fun `a model that does not load still lets the detectors that read embeddings run on the stored ones`() {
+        photos()
+        val detectors = listOf(EmbeddingDetector())
+        run(Pipeline(index, detectors = detectors, groupDetectors = emptyList(), embedder = MeanColorEmbedder()))
+        runBlocking { index.forgetAnalyses(index.images().map { it.path }, listOf("embedding_user")) }
+        save("DCIM/Camera/new.png", seed = 5)
+        val broken = object : Embedder by MeanColorEmbedder() {
+            override fun load() = throw IllegalStateException("model damaged")
+        }
+
+        val stats = run(Pipeline(index, detectors = detectors, groupDetectors = emptyList(), embedder = broken))
+
+        assertEquals(listOf(Failure("", EMBEDDING_STEP, "IllegalStateException: model damaged")), stats.failures)
+        assertEquals(1, stats.skipped) // the new image waits for a run that embeds it
+        val analyzed = runBlocking { index.images().filter { index.isAnalyzed(it.path, "embedding_user", 1) } }.map { File(it.path).name }
+        assertEquals(setOf("a.png", "a-copy.png", "Screenshot_1.png"), analyzed.toSet())
+    }
+
+    private val stickerFolder = "WhatsApp/Media/WhatsApp Stickers"
+
+    @Test
+    fun `a sticker is not embedded and the detectors reading embeddings leave it alone, but it stays a candidate`() {
+        photos()
+        save("$stickerFolder/s.png", seed = 3)
+
+        val stats = run(Pipeline(index, embedder = MeanColorEmbedder()))
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(0, stats.skipped)
+        assertEquals(3, runBlocking { index.embeddings("mean_color", 1) }.size)
+        val signals = runBlocking { index.signals(File(root, "$stickerFolder/s.png").path) }
+        assertEquals(setOf(Category.SCREENSHOT, Category.STICKER), signals.map { it.kind }.toSet())
+        assertEquals(1f, signals.single { it.kind == Category.STICKER }.score, 0f)
+        assertTrue(kinds("DCIM/Camera/a.png").containsAll(setOf(Category.BLURRY, Category.BAD_EXPOSURE, Category.SCREENSHOT, Protection.FACES, Category.STICKER)))
+    }
+
+    /** Records the images it ran on, under the id of a real detector. */
+    private class Seeing(override val id: String) : Detector {
+        override val version = 1
+        val seen = ConcurrentLinkedQueue<String>()
+
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
+            seen += File(image.path).name
+            return emptyList()
+        }
+    }
+
+    @Test
+    fun `a sticker runs only the perceptual hash, screenshot and sticker, and a real image runs every detector`() {
+        save("DCIM/Camera/a.png", seed = 1)
+        save("$stickerFolder/s.png", seed = 3)
+        val detectors = listOf("blur", "exposure", "screenshot", "faces", "sticker").map(::Seeing)
+
+        val stats = run(Pipeline(index, detectors = detectors, groupDetectors = emptyList()))
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(
+            mapOf("blur" to setOf("a.png"), "exposure" to setOf("a.png"), "screenshot" to setOf("a.png", "s.png"), "faces" to setOf("a.png"), "sticker" to setOf("a.png", "s.png")),
+            detectors.associate { it.id to it.seen.toSet() },
+        )
+        assertNotNull(runBlocking { index.perceptualHash(File(root, "$stickerFolder/s.png").path) })
+    }
+
+    @Test
+    fun `a sticker scanned before the rules loses its document, forwarded, faces, blur and exposure signals, and a real image keeps them`() {
+        save("DCIM/Camera/a.png", seed = 1)
+        save("$stickerFolder/s.png", seed = 3)
+        val path = File(root, "$stickerFolder/s.png").path
+        val photo = File(root, "DCIM/Camera/a.png").path
+        run(Pipeline(index, embedder = MeanColorEmbedder()))
+        val before = runBlocking { index.signals(photo) }
+        val old = DETECTORS.filter { it.id in SKIPPED_ON_STICKERS || it.usesEmbeddings }
+        runBlocking { old.forEach { index.setSignals(path, it.id, it.version, listOf(Signal(it.id, it.version, it.category ?: Protection.FACES, 0.9f))) } }
+
+        run(Pipeline(index, embedder = MeanColorEmbedder()))
+
+        assertEquals(setOf(Category.SCREENSHOT, Category.STICKER), runBlocking { index.signals(path) }.map { it.kind }.toSet())
+        assertFalse(runBlocking { old.any { index.isAnalyzed(path, it.id, it.version) } })
+        assertEquals(before, runBlocking { index.signals(photo) })
+    }
+
+    @Test
+    fun `a sticker with no embedding is still in a near duplicate group, through its perceptual hash`() {
+        save("$stickerFolder/s.png", seed = 3)
+        File(root, "$stickerFolder/s.png").copyTo(File(root, "$stickerFolder/s-copy.png"))
+
+        run(Pipeline(index, embedder = MeanColorEmbedder()))
+
+        assertTrue(Category.NEAR_DUPLICATE in kinds("$stickerFolder/s-copy.png"))
+    }
+
+    @Test
+    fun `an embedding a sticker got from an earlier scan is not used`() {
+        save("$stickerFolder/s.png", seed = 3)
+        val path = File(root, "$stickerFolder/s.png").path
+        run(Pipeline(index, detectors = emptyList(), groupDetectors = emptyList()))
+        runBlocking { index.setEmbeddings("mean_color", 1, mapOf(path to FloatArray(512) { 1f })) }
+        var seen = true
+        val probe = object : GroupDetector {
+            override val id = "probe"
+            override val version = 1
+
+            override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
+                seen = runCatching { context.embedding(images.single()) }.isSuccess
+                return emptyMap()
+            }
+        }
+
+        run(Pipeline(index, detectors = emptyList(), groupDetectors = listOf(probe), embedder = MeanColorEmbedder()))
+
+        assertFalse(seen)
+    }
+
+    /** In index order the stickers fall between the real images, so an order by path alone fails the tests below. */
+    private fun stickersAmongPhotos() {
+        save("DCIM/Camera/a.png")
+        save("$stickerFolder/s1.png", seed = 3)
+        save("$stickerFolder/s2.png", seed = 4)
+        save("WhatsApp/Media/x.png", seed = 5)
+        save("Zoo/z.png", seed = 6)
+    }
+
+    private val realImagesThenStickers = listOf("a.png", "x.png", "z.png", "s1.png", "s2.png")
+
+    /** The order in which the scan stores the images' metadata, from a trigger on the index's own table. */
+    private fun metadataStoreOrder(): () -> List<String> {
+        val db = index.database.openHelper.writableDatabase
+        db.execSQL("CREATE TABLE stored_metadata (path TEXT NOT NULL)")
+        db.execSQL("CREATE TRIGGER log_metadata AFTER UPDATE OF width ON images WHEN new.width IS NOT NULL BEGIN INSERT INTO stored_metadata VALUES (new.path); END")
+        return { db.query("SELECT path FROM stored_metadata ORDER BY rowid").use { cursor -> List(cursor.count) { cursor.moveToNext().let { File(cursor.getString(0)).name } } } }
+    }
+
+    @Test
+    fun `the metadata step stores every real image before the stickers, though it reads them at once, and stores every sticker`() {
+        stickersAmongPhotos()
+        val stored = metadataStoreOrder()
+        val read = ConcurrentLinkedQueue<String>()
+        // The real images read slowly, so the stickers' reads end first.
+        val reader = { file: File ->
+            if (!isStickerFolder(file.path)) Thread.sleep(100)
+            readMetadata(file).also { read += file.name }
+        }
+
+        run(Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), metadataReader = reader, storeBatch = 2, readers = 4))
+
+        assertNotEquals(realImagesThenStickers, read.toList())
+        assertEquals(realImagesThenStickers, stored())
+    }
+
+    @Test
+    fun `the metadata, JPEG and detector phases end their progress on the total, across batches`() {
+        stickersAmongPhotos()
+        TestImage.texture(64, 48, 7).save(File(root, "DCIM/Camera/b.jpg"), Bitmap.CompressFormat.JPEG)
+        val last = mutableMapOf<String, Pair<Int, Int>>()
+
+        runBlocking { Pipeline(index, listOf(Probe()), emptyList(), storeBatch = 2).run(source) { step, done, total -> last[step] = done to total } }
+
+        assertEquals(6 to 6, last["metadata"])
+        assertEquals(1 to 1, last[JPEG_STEP])
+        assertEquals(6 to 6, last["detectors"])
+    }
+
+    @Test
+    fun `the classification ends its progress on the total, across batches`() {
+        repeat(5) { save("DCIM/Camera/c-$it.png", seed = it) }
+        val last = mutableMapOf<String, Pair<Int, Int>>()
+
+        runBlocking {
+            Pipeline(index, detectors = listOf(WatchedEmbeddingDetector()), groupDetectors = emptyList(), embedder = MeanColorEmbedder(), storeBatch = 2)
+                .run(source) { step, done, total -> last[step] = done to total }
+        }
+
+        assertEquals(5 to 5, last[CLASSIFY_STEP])
+    }
+
+    @Test
+    fun `a scan stopped in the middle of a metadata batch keeps the batches before it, and the next scan reads the rest`() {
+        repeat(7) { save("DCIM/Camera/$it.png", seed = it) }
+        val reads = AtomicInteger()
+        lateinit var scan: Job
+        val reader = { file: File ->
+            if (reads.incrementAndGet() == 6) {
+                // One reader and batches of two: the first four are stored, and the fifth waits in the batch this read would fill.
+                runBlocking { withTimeout(10_000) { while (index.withoutMetadata().size > 3) delay(10) } }
+                scan.cancel()
+            }
+            readMetadata(file)
+        }
+
+        runBlocking {
+            scan = launch(Dispatchers.Default) { Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), metadataReader = reader, storeBatch = 2, readers = 1).run(source) }
+            scan.join()
+        }
+
+        assertEquals(3, runBlocking { index.withoutMetadata() }.size)
+        val stats = run(Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), storeBatch = 2))
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(emptyList<MediaRef>(), runBlocking { index.withoutMetadata() })
+    }
+
+    @Test
+    fun `a scan stopped in the middle of a detector batch keeps the batches before it, and the next scan stores what a whole scan does`() {
+        repeat(7) { save("DCIM/Camera/$it.png", seed = it) }
+        val analyzed = AtomicInteger()
+        lateinit var scan: Job
+        val stopping = object : Detector {
+            override val id = "probe"
+            override val version = 1
+
+            override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
+                if (analyzed.incrementAndGet() == 6) {
+                    // One worker and batches of two: four images are stored, and the fifth waits in the collector's batch.
+                    withTimeout(10_000) { while (index.analyzedPaths("probe", 1).size < 4) delay(10) }
+                    scan.cancel()
+                }
+                return listOf(Signal(id, version, Category.BLURRY, 0.5f)) // as [Probe]'s
+            }
+        }
+
+        runBlocking {
+            scan = launch(Dispatchers.Default) { Pipeline(index, listOf(stopping), emptyList(), parallelism = 1, storeBatch = 2).run(source) }
+            scan.join()
+        }
+
+        assertEquals(4, runBlocking { index.analyzedPaths("probe", 1) }.size)
+        assertEquals(4, runBlocking { index.hashedPaths() }.size)
+        val stats = run(Pipeline(index, listOf(Probe()), emptyList(), storeBatch = 2))
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(3 + 3, stats.detectorRuns) // the three left, each with its hash
+        val whole = memoryIndex()
+        try {
+            runBlocking { Pipeline(whole, listOf(Probe()), emptyList()).run(source) }
+            assertEquals(storedResults(whole), storedResults(index))
+        } finally {
+            whole.close()
+        }
+    }
+
+    @Test
+    fun `the detectors step analyzes every real image before the stickers, and analyzes every sticker`() {
+        stickersAmongPhotos()
+        val probe = Probe()
+
+        run(Pipeline(index, listOf(probe), emptyList(), parallelism = 1)) // one worker: with more, the two ends of the queue overlap
+
+        assertEquals(realImagesThenStickers, probe.seen.map { File(it).name })
+    }
+
+    @Test
+    fun `the group detectors still get the images in index order`() {
+        stickersAmongPhotos()
+        var seen = emptyList<String>()
+        val probe = object : GroupDetector {
+            override val id = "probe"
+            override val version = 1
+
+            override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
+                seen = images.map { File(it.path).name }
+                return emptyMap()
+            }
+        }
+
+        run(Pipeline(index, detectors = emptyList(), groupDetectors = listOf(probe)))
+
+        assertEquals(listOf("a.png", "s1.png", "s2.png", "x.png", "z.png"), seen)
+    }
+
+    private fun storedResults(index: ImageIndex) = runBlocking {
+        listOf(
+            index.indexedMedia().associate { it.ref.path to it.signals.toSet() },
+            index.allMetadata(),
+            index.perceptualHashes(),
+            index.embeddings("mean_color", 1).mapValues { it.value.toList() },
+        )
+    }
+
+    @Test
+    fun `stickers analyzed before the real images leave the same stored results as stickers analyzed after them`() {
+        stickersAmongPhotos()
+        File(root, "$stickerFolder/s1.png").copyTo(File(root, "WhatsApp/Media/s1-copy.png")) // a group across the two
+        val onlyStickers = object : MediaSource {
+            override val walkedRoots get() = source.walkedRoots
+
+            override fun scan() = source.scan().filter { isStickerFolder(it.path) }
+        }
+        val other = memoryIndex()
+
+        // Two scans: the first takes the stickers through every step, so the second reaches the real images after them.
+        val stickersFirst = runBlocking {
+            Pipeline(other, embedder = MeanColorEmbedder()).run(onlyStickers).failures + Pipeline(other, embedder = MeanColorEmbedder()).run(source).failures
+        }
+        val stats = run(Pipeline(index, embedder = MeanColorEmbedder()))
+
+        assertEquals(emptyList<Failure>(), stickersFirst)
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(6, stats.images)
+        assertEquals(storedResults(other), storedResults(index))
+        other.close()
+    }
+
+    /** Runs out of memory whenever the image at [poison] is in the batch, as a very large decode would. */
+    private inner class OutOfMemoryEmbedder(poison: String) : Embedder {
+        private val inner = MeanColorEmbedder()
+        private val poisoned = preprocess(File(root, poison))
+        var batches = 0
+
+        override val id = inner.id
+        override val version = inner.version
+
+        override fun embedPixels(pixels: List<FloatArray>): List<FloatArray> {
+            batches++
+            if (pixels.any { it.contentEquals(poisoned) }) throw OutOfMemoryError("Failed to allocate")
+            return inner.embedPixels(pixels)
+        }
+    }
+
+    private val poison = "Pictures/Screenshots/Screenshot_1.png"
+
+    @Test
+    fun `an image that runs out of memory does not take its batch or the scan with it`() {
+        photos()
+
+        val stats = run(Pipeline(index, detectors = listOf(EmbeddingDetector()), groupDetectors = emptyList(), embedder = OutOfMemoryEmbedder(poison)))
+
+        assertEquals(1, stats.failures.size)
+        assertTrue(stats.failures[0].toString(), stats.failures[0].path == File(root, poison).path && "OutOfMemoryError" in stats.failures[0].error)
+        assertEquals(setOf("a.png", "a-copy.png"), runBlocking { index.embeddings("mean_color", 1) }.keys.map { File(it).name }.toSet())
+        assertEquals(setOf("embedding_user"), runBlocking { index.signals(File(root, "DCIM/Camera/a.png").path) }.map { it.detectorId }.toSet())
+        assertEquals(1, stats.skipped) // the unembedded image waits for a run that embeds it
+    }
+
+    @Test
+    fun `after deleting the embeddings an image that runs out of memory leaves the others their detectors`() {
+        photos()
+        val detectors = listOf(EmbeddingDetector())
+        run(Pipeline(index, detectors = detectors, groupDetectors = emptyList(), embedder = MeanColorEmbedder()))
+        runBlocking { index.deleteEmbeddings() }
+
+        val stats = run(Pipeline(index, detectors = detectors, groupDetectors = emptyList(), embedder = OutOfMemoryEmbedder(poison)))
+
+        assertEquals(1, stats.failures.size)
+        assertEquals(2 + 2, stats.detectorRuns) // two embeddings, then the detector on those two
+        for (name in listOf("DCIM/Camera/a.png", "WhatsApp/Media/a-copy.png")) {
+            assertTrue(name, runBlocking { index.isAnalyzed(File(root, name).path, "embedding_user", 1) })
+        }
+    }
+
+    @Test
+    fun `an image that runs out of memory while decoding gets one more try alone, after its batch`() {
+        photos()
+        val attempts = ConcurrentLinkedQueue<String>()
+        val decoder = { file: File ->
+            attempts += file.name
+            if (file.name == "Screenshot_1.png" && attempts.count { it == file.name } == 1) throw OutOfMemoryError("Failed to allocate")
+            preprocess(file)
+        }
+
+        val stats = run(Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), embedder = MeanColorEmbedder(), preprocessing = decoder))
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(2, attempts.count { it == "Screenshot_1.png" })
+        assertEquals(3, runBlocking { index.embeddings("mean_color", 1) }.size)
+    }
+
+    @Test
+    fun `a decode retry after running out of memory runs alone, before any decode of the next batch`() {
+        repeat(EMBEDDING_BATCH + 1) { save("DCIM/Camera/shot-$it.png", seed = it) }
+        val victim = java.util.concurrent.atomic.AtomicReference<String>() // the first image decoded, so one of the first batch
+        val started = AtomicInteger()
+        val inFlight = AtomicInteger()
+        var retry: Pair<Int, Int>? = null // decodes started, and decodes running, as the victim's retry ended
+        val decoder = { file: File ->
+            started.incrementAndGet()
+            inFlight.incrementAndGet()
+            try {
+                if (victim.compareAndSet(null, file.name)) throw OutOfMemoryError("Failed to allocate")
+                if (file.name == victim.get()) {
+                    // Long enough for a decode of the next batch to start, if one could run beside the retry.
+                    Thread.sleep(300)
+                    retry = started.get() to inFlight.get()
+                }
+                preprocess(file)
+            } finally {
+                inFlight.decrementAndGet()
+            }
+        }
+
+        val stats = run(Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), embedder = MeanColorEmbedder(), preprocessing = decoder))
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        // The first batch's decodes, then the retry alone: the next batch's one image has not started yet.
+        assertEquals(EMBEDDING_BATCH + 1 to 1, retry)
+        assertEquals(EMBEDDING_BATCH + 2, started.get())
+        assertEquals(EMBEDDING_BATCH + 1, runBlocking { index.embeddings("mean_color", 1) }.size)
+    }
+
+    @Test
+    fun `an image that always runs out of memory while decoding fails alone`() {
+        photos()
+        val decoder = { file: File -> if (file.name == "Screenshot_1.png") throw OutOfMemoryError("Failed to allocate") else preprocess(file) }
+
+        val stats = run(Pipeline(index, detectors = listOf(EmbeddingDetector()), groupDetectors = emptyList(), embedder = MeanColorEmbedder(), preprocessing = decoder))
+
+        assertEquals(1, stats.failures.size)
+        assertTrue(stats.failures[0].toString(), "Screenshot_1.png: embedding: OutOfMemoryError" in stats.failures[0].toString())
+        assertEquals(2, runBlocking { index.embeddings("mean_color", 1) }.size)
+        assertEquals(2, runBlocking { index.images() }.count { runBlocking { index.isAnalyzed(it.path, "embedding_user", 1) } })
+    }
+
+    /** Runs out of memory on [victims]' first attempt, as a healthy image does when another worker took the memory. */
+    private class OutOfMemoryDetector(private val victims: Set<String>, private val always: Set<String> = emptySet()) : Detector {
+        override val id = "oom_detector"
+        override val version = 1
+        private val inFlight = java.util.concurrent.atomic.AtomicInteger()
+        private val attempts = java.util.concurrent.ConcurrentHashMap<String, Int>()
+        val alone = ConcurrentLinkedQueue<String>()
+
+        override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
+            val name = File(image.path).name
+            val concurrent = inFlight.incrementAndGet()
+            try {
+                val attempt = attempts.merge(name, 1, Int::plus)!!
+                if (attempt > 1 && concurrent == 1) alone += name
+                if (name in always || (name in victims && attempt == 1)) throw OutOfMemoryError("Failed to allocate")
+                return listOf(Signal(id, version, Category.BLURRY, 0.5f))
+            } finally {
+                inFlight.decrementAndGet()
+            }
+        }
+    }
+
+    @Test
+    fun `an image that ran out of memory in a detector is not failed, it runs again alone after the others`() {
+        photos()
+        val detector = OutOfMemoryDetector(victims = setOf("a.png", "Screenshot_1.png"))
+
+        val stats = run(Pipeline(index, detectors = listOf(detector), groupDetectors = emptyList()))
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(setOf("a.png", "Screenshot_1.png"), detector.alone.toSet())
+        for (name in listOf("DCIM/Camera/a.png", "WhatsApp/Media/a-copy.png", "Pictures/Screenshots/Screenshot_1.png")) {
+            assertTrue(name, runBlocking { index.isAnalyzed(File(root, name).path, "oom_detector", 1) })
+        }
+    }
+
+    @Test
+    fun `an image that always runs out of memory in a detector fails alone`() {
+        photos()
+        val detector = OutOfMemoryDetector(victims = setOf("a.png"), always = setOf("Screenshot_1.png"))
+
+        val stats = run(Pipeline(index, detectors = listOf(detector), groupDetectors = emptyList()))
+
+        assertEquals(1, stats.failures.size)
+        assertTrue(stats.failures[0].toString(), "Screenshot_1.png: oom_detector: OutOfMemoryError" in stats.failures[0].toString())
+        assertEquals(2, runBlocking { index.images() }.count { runBlocking { index.isAnalyzed(it.path, "oom_detector", 1) } })
+    }
+
+    @Test
+    fun `a group detector that throws an exception records a failure and does not abort other group detectors`() {
+        photos()
+        val throwingDetector = object : GroupDetector {
+            override val id = "throwing_group"
+            override val version = 1
+            override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> = throw IllegalStateException("detector exploded")
+        }
+        var nextRan = false
+        val followingDetector = object : GroupDetector {
+            override val id = "following_group"
+            override val version = 1
+            override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
+                nextRan = true
+                return emptyMap()
+            }
+        }
+
+        val stats = run(Pipeline(index, detectors = emptyList(), groupDetectors = listOf(throwingDetector, followingDetector)))
+
+        assertTrue(nextRan)
+        assertEquals(1, stats.failures.size)
+        assertEquals(Failure("", "throwing_group", "IllegalStateException: detector exploded"), stats.failures[0])
+    }
+
+    @Test
+    fun `a group detector that throws CancellationException is not caught`() {
+        photos()
+        val cancellingDetector = object : GroupDetector {
+            override val id = "cancelling_group"
+            override val version = 1
+            override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> = throw kotlinx.coroutines.CancellationException("job cancelled")
+        }
+
+        assertThrows(kotlinx.coroutines.CancellationException::class.java) {
+            run(Pipeline(index, detectors = emptyList(), groupDetectors = listOf(cancellingDetector)))
+        }
+    }
+
+    /** Group detector that says when it starts and then waits for [gate]. */
+    private class GatedGroupDetector(private val started: CompletableDeferred<Unit>, private val gate: CompletableDeferred<Unit>) : GroupDetector {
+        override val id = "gated_group"
+        override val version = 1
+
+        override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
+            started.complete(Unit)
+            gate.await()
+            return emptyMap()
+        }
+    }
+
+    @Test
+    fun `a stop during a group detector ends the run promptly, and the next run does only the group detector`() {
+        photos()
+        val started = CompletableDeferred<Unit>()
+        val gated = GatedGroupDetector(started, CompletableDeferred())
+
+        runBlocking {
+            val job = launch { Pipeline(index, detectors = emptyList(), groupDetectors = listOf(gated)).run(source) }
+            withTimeout(10_000) { started.await() }
+            job.cancel()
+            withTimeout(5_000) { job.join() }
+            assertTrue(job.isCancelled)
+        }
+        assertNull(runBlocking { index.groupFingerprint(gated.id, gated.version) })
+
+        val open = GatedGroupDetector(CompletableDeferred(), CompletableDeferred<Unit>().apply { complete(Unit) })
+        val stats = run(Pipeline(index, detectors = emptyList(), groupDetectors = listOf(open)))
+
+        assertEquals(1, stats.detectorRuns) // the hashes were stored by the stopped run
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertNotNull(runBlocking { index.groupFingerprint(open.id, open.version) })
+    }
+
+    /** An embedder whose model does not load. */
+    private class BrokenModelEmbedder : Embedder {
+        override val id = "broken"
+        override val version = 1
+        var loads = 0
+        var embedded = 0
+
+        override fun load() {
+            loads++
+            throw IllegalStateException("model damaged")
+        }
+
+        override fun embedPixels(pixels: List<FloatArray>): List<FloatArray> {
+            embedded++
+            return pixels.map { FloatArray(512) }
+        }
+    }
+
+    @Test
+    fun `a model that does not load is one failure of the embedding step, with no attempt per image`() {
+        photos()
+        val embedder = BrokenModelEmbedder()
+
+        val stats = run(Pipeline(index, embedder = embedder))
+
+        assertEquals(1, embedder.loads)
+        assertEquals(0, embedder.embedded)
+        assertEquals(listOf(Failure("", EMBEDDING_STEP, "IllegalStateException: model damaged")), stats.failures)
+        assertEquals(3, stats.images)
+        assertTrue(Category.EXACT_DUPLICATE in kinds("WhatsApp/Media/a-copy.png"))
+        assertEquals(0, runBlocking { index.embeddings(embedder.id, embedder.version) }.size)
+    }
+
+    @Test
+    fun `the model loads once for a run, not once per batch`() {
+        repeat(EMBEDDING_BATCH + 4) { save("DCIM/Camera/shot-$it.png", seed = it) } // more than one batch
+        var loads = 0
+        val inner = MeanColorEmbedder()
+        val embedder = object : Embedder by inner {
+            override fun load() {
+                loads++
+            }
+        }
+
+        run(Pipeline(index, embedder = embedder))
+
+        assertEquals(EMBEDDING_BATCH + 4, runBlocking { index.embeddings(embedder.id, embedder.version) }.size)
+        assertEquals(1, loads)
+    }
+
+    @Test
+    fun `a run with every embedding stored does not load the model`() {
+        photos()
+        run(Pipeline(index, embedder = MeanColorEmbedder()))
+        val embedder = BrokenModelEmbedder()
+        val stored = object : Embedder by MeanColorEmbedder() {
+            override fun load() = embedder.load()
+        }
+
+        val stats = run(Pipeline(index, embedder = stored))
+
+        assertEquals(0, embedder.loads)
+        assertEquals(emptyList<Failure>(), stats.failures)
+    }
+
+    @Test
+    fun `the next batch decodes while the model runs on the current one`() {
+        repeat(2 * EMBEDDING_BATCH) { save("DCIM/Camera/shot-$it.png", seed = it) } // a whole batch ahead, more decodes than most machines have cores
+        val decodes = AtomicInteger()
+        val nextBatchDecoding = CountDownLatch(1)
+        val modelRunning = CountDownLatch(1)
+        val decodesSawModel = ConcurrentLinkedQueue<Boolean>()
+        val decoder = { file: File ->
+            if (decodes.incrementAndGet() > EMBEDDING_BATCH) {
+                nextBatchDecoding.countDown()
+                decodesSawModel += modelRunning.await(5, TimeUnit.SECONDS)
+            }
+            preprocess(file)
+        }
+        val inner = MeanColorEmbedder()
+        val modelSawDecode = mutableListOf<Boolean>()
+        val embedder = object : Embedder by inner {
+            override fun embedPixels(pixels: List<FloatArray>): List<FloatArray> {
+                if (modelSawDecode.isEmpty()) {
+                    modelRunning.countDown()
+                    modelSawDecode += nextBatchDecoding.await(5, TimeUnit.SECONDS)
+                }
+                return inner.embedPixels(pixels)
+            }
+        }
+
+        run(Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), embedder = embedder, preprocessing = decoder))
+
+        assertEquals(listOf(true), modelSawDecode)
+        assertEquals(List(EMBEDDING_BATCH) { true }, decodesSawModel.toList())
+        assertEquals(2 * EMBEDDING_BATCH, runBlocking { index.embeddings(embedder.id, embedder.version) }.size)
+    }
+
+    @Test
+    fun `decoding a batch ahead gives each image the embedding and signal it gets alone, in batches in index order`() {
+        repeat(2 * EMBEDDING_BATCH + 4) { save("DCIM/Camera/shot-$it.png", seed = it) }
+        val decodedFrom = java.util.Collections.synchronizedMap(java.util.IdentityHashMap<FloatArray, String>())
+        val decoder = { file: File -> preprocess(file).also { decodedFrom[it] = file.path } }
+        val inner = MeanColorEmbedder()
+        val batches = mutableListOf<List<String>>()
+        val embedder = object : Embedder by inner {
+            override fun embedPixels(pixels: List<FloatArray>): List<FloatArray> {
+                batches += pixels.map { decodedFrom.getValue(it) }
+                return inner.embedPixels(pixels)
+            }
+        }
+
+        val stats = run(Pipeline(index, detectors = listOf(EmbeddingDetector()), groupDetectors = emptyList(), embedder = embedder, preprocessing = decoder))
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        val paths = runBlocking { index.images() }.map { it.path }
+        assertEquals(paths.chunked(EMBEDDING_BATCH), batches)
+        val stored = runBlocking { index.embeddings(embedder.id, embedder.version) }
+        for (path in paths) {
+            val alone = MeanColorEmbedder().embedPixels(listOf(preprocess(File(path)))).single()
+            assertTrue(path, alone.contentEquals(stored.getValue(path)))
+            assertEquals(listOf(alone[0]), runBlocking { index.signals(path) }.filter { it.detectorId == "embedding_user" }.map { it.score })
+        }
+    }
+
+    @Test
+    fun `a decode that fails in the batch ahead is a failure of that image only`() {
+        repeat(2 * EMBEDDING_BATCH) { save("DCIM/Camera/shot-$it.png", seed = it) }
+        val decodes = AtomicInteger()
+        val broken = ConcurrentLinkedQueue<String>()
+        val decoder = { file: File ->
+            // the first decode of the second batch, which runs while the model embeds the first
+            if (decodes.incrementAndGet() == EMBEDDING_BATCH + 1) {
+                broken += file.path
+                throw IOException("truncated")
+            }
+            preprocess(file)
+        }
+
+        val stats = run(Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), embedder = MeanColorEmbedder(), preprocessing = decoder))
+
+        assertEquals(listOf(Failure(broken.single(), EMBEDDING_STEP, "IOException: truncated")), stats.failures)
+        val stored = runBlocking { index.embeddings("mean_color", 1) }
+        assertEquals(2 * EMBEDDING_BATCH - 1, stored.size)
+        assertFalse(broken.single() in stored)
+    }
+
+    @Test
+    fun `a stop while the model runs stops the decoding ahead and the model`() {
+        repeat(3 * EMBEDDING_BATCH) { save("DCIM/Camera/shot-$it.png", seed = it) }
+        val modelRunning = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val decodes = AtomicInteger()
+        val decoder = { file: File ->
+            if (decodes.incrementAndGet() > EMBEDDING_BATCH) release.await(5, TimeUnit.SECONDS)
+            preprocess(file)
+        }
+        val inner = MeanColorEmbedder()
+        val runs = AtomicInteger()
+        val embedder = object : Embedder by inner {
+            override fun embedPixels(pixels: List<FloatArray>): List<FloatArray> {
+                runs.incrementAndGet()
+                modelRunning.countDown()
+                release.await(5, TimeUnit.SECONDS)
+                return inner.embedPixels(pixels)
+            }
+        }
+
+        runBlocking {
+            val scan = launch(Dispatchers.Default) {
+                Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), embedder = embedder, preprocessing = decoder).run(source)
+            }
+            assertTrue(modelRunning.await(5, TimeUnit.SECONDS))
+            scan.cancel()
+            release.countDown()
+            withTimeout(5_000) { scan.join() }
+        }
+
+        assertEquals(1, runs.get())
+        assertTrue("${decodes.get()} decodes", decodes.get() <= 2 * EMBEDDING_BATCH) // the batch after the one ahead never starts
+        assertEquals(0, runBlocking { index.embeddings(embedder.id, embedder.version) }.size)
+    }
+}
+
+/** What a flat gray frame measures: no detail, a flat luminance and no face. */
+private val GRAY = FrameMeasures(0.0, 128.0, 128.0, 128.0, 128.0)

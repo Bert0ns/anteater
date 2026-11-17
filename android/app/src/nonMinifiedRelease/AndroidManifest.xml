@@ -14,7 +14,7 @@
             android:exported="false"
             tools:node="merge">
             <meta-data
-                android:name="io.github.bert0ns.cribrum.profile.ProfileSeed"
+                android:name="io.github.bert0ns.anteater.profile.ProfileSeed"
                 android:value="androidx.startup" />
         </provider>
     </application>
