@@ -121,8 +121,9 @@ data class ReviewState(
     val retentionDays: Int = TrashRetention.DEFAULT_DAYS,
     val pendingRetention: RetentionChange? = null,
     val hapticsEnabled: Boolean = true,
-    /** The switch in Settings that lets the night pass analyse videos once "Scan videos" has run. */
+    /** The switch in Settings that lets the night pass analyse images. */
     val imagesAtNight: Boolean = true,
+    /** The switch in Settings that lets the night pass analyse videos once "Scan videos" has run. */
     val videosAtNight: Boolean = true,
     /** How the open category is grouped by date or sorted by size. Off until the user picks one. */
     val reviewOrder: ReviewOrder = ReviewOrder.OFF,
