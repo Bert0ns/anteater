@@ -499,13 +499,14 @@ class ReviewViewModel @JvmOverloads constructor(
 
     /**
      * Makes [image], a photo or a video, a gallery favourite, or takes the mark off, once the user agreed to the system dialog.
-     * One marked for the trash, or selected on "Largest videos", is left alone, as the screen offers no heart for it. The page
-     * or the list on screen is not read again: it keeps its items and marks, and only the heart changes. A ranking built later
-     * reads the favourites again by itself.
+     * One marked for the trash on a page, or selected on "Largest videos", is left alone, as the screen offers no heart for it:
+     * the marks of the screen that shows count, not those another screen left behind. The page or the list on screen is not
+     * read again: it keeps its items and marks, and only the heart changes. A ranking built later reads the favourites again by itself.
      */
     fun setFavorite(image: MediaRef, favorite: Boolean) {
         viewModelScope.launch {
-            if (image.path in state.value.marked || image.path in state.value.videoSelected) return@launch
+            val shown = state.value
+            if (image.path in (if (shown.screen == Screen.Videos) shown.videoSelected else shown.marked)) return@launch
             val granted = try {
                 askFavorite(image.path, favorite)
             } catch (e: CancellationException) {
