@@ -8,6 +8,7 @@ import io.github.bert0ns.cribrum.detectors.BlurDetector
 import io.github.bert0ns.cribrum.detectors.BurstDetector
 import io.github.bert0ns.cribrum.detectors.Detector
 import io.github.bert0ns.cribrum.detectors.ExactDuplicateDetector
+import io.github.bert0ns.cribrum.detectors.ForwardedDetector
 import io.github.bert0ns.cribrum.detectors.GroupDetector
 import io.github.bert0ns.cribrum.detectors.MissingEmbedding
 import io.github.bert0ns.cribrum.folders.isStickerFolder
@@ -429,6 +430,28 @@ class PipelineTest {
 
         assertEquals(emptyList<Failure>(), stats.failures)
         assertFalse("videoFrames" in stats.phaseMs)
+    }
+
+    @Test
+    fun `a video run lists a video in a messaging folder as forwarded and no other`() {
+        val clip = videos().getValue("clip")
+        val sent = File(root, "WhatsApp/Media/WhatsApp Video/Sent/clip.mp4").apply { parentFile!!.mkdirs() }
+        clip.copyTo(sent)
+        fun scan(images: Boolean, videos: Boolean) = runBlocking {
+            Pipeline(index, detectors = listOf(ForwardedDetector()), groupDetectors = emptyList(), videoMetadataReader = ::readVideo).run(source, images = images, videos = videos)
+        }
+
+        scan(images = true, videos = false)
+        assertEquals(emptyList<Any>(), runBlocking { index.signals(sent.path) })
+        val stats = scan(images = false, videos = true)
+
+        val signal = runBlocking { index.signals(sent.path) }.single()
+        assertEquals(Category.FORWARDED, signal.kind)
+        assertEquals(mapOf("messaging_folder" to "yes", "sent_folder" to "yes"), signal.evidence)
+        assertEquals(emptyList<Any>(), runBlocking { index.signals(clip.path) }) // the camera's copy
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(2, stats.detectorRuns) // the two readable videos, and nothing else: no hash, no embedding
+        assertEquals(0, scan(images = false, videos = true).detectorRuns) // stored: not run again
     }
 
     @Test

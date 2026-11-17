@@ -17,6 +17,15 @@ class FoldersTest {
     }
 
     @Test
+    fun `only a messaging app's sent folder is a sent folder`() {
+        assertTrue(isSentFolder("/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video/Sent/a.mp4"))
+        assertTrue(isSentFolder("/sdcard/WhatsApp/Media/WhatsApp Video/sent/a.mp4"))
+        assertFalse(isSentFolder("/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video/a.mp4"))
+        assertFalse(isSentFolder("/sdcard/Movies/Sent/a.mp4"))
+        assertFalse(isSentFolder("/sdcard/WhatsApp/Media/WhatsApp Video/Sent")) // a file called Sent
+    }
+
+    @Test
     fun `an excluded folder covers its subfolders but not a sibling that shares its name`() {
         val excluded = listOf("/storage/emulated/0/Pictures/Family")
 

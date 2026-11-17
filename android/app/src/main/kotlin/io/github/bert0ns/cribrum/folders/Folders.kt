@@ -17,6 +17,9 @@ fun isCameraFolder(path: String): Boolean = "dcim" in folders(path)
 
 fun isMessagingFolder(path: String): Boolean = folders(path).any { it in MESSAGING_FOLDERS }
 
+/** The "Sent" folder of a messaging app's media folder, such as WhatsApp's "WhatsApp Video/Sent": the copies of what the user sent. */
+fun isSentFolder(path: String): Boolean = isMessagingFolder(path) && "sent" in folders(path)
+
 /**
  * A messaging app's sticker folder, such as WhatsApp's "WhatsApp Stickers" and "WhatsApp Backup
  * Excluded Stickers".
