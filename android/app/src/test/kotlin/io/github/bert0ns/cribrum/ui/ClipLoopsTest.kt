@@ -34,6 +34,7 @@ import coil3.video.videoFrameOption
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
+import io.github.bert0ns.cribrum.ranker.GROUP_CATEGORIES
 import io.github.bert0ns.cribrum.review.ReviewGroup
 import io.github.bert0ns.cribrum.review.ReviewItem
 import kotlinx.coroutines.awaitCancellation
@@ -116,7 +117,7 @@ class ClipLoopsTest {
         compose.setContent {
             val locals = listOfNotNull(LocalPlayerFactory provides players.factory, owner?.let { LocalLifecycleOwner provides it })
             CompositionLocalProvider(*locals.toTypedArray()) {
-                CategoryScreen(page, page.size, emptySet(), category != Category.SHORT_CLIPS, {}, { _, _ -> }, {}, mediaType = MediaType.VIDEO, category = category, canPlay = canPlay)
+                CategoryScreen(page, page.size, emptySet(), category in GROUP_CATEGORIES, {}, { _, _ -> }, {}, mediaType = MediaType.VIDEO, category = category, canPlay = canPlay)
             }
         }
         settle()
@@ -437,5 +438,31 @@ class ClipLoopsTest {
         show(page(clips(8)))
 
         assertEquals(4, columns())
+    }
+
+    @Test
+    @Config(qualifiers = "w500dp-h900dp")
+    fun `forwarded videos have 2 columns on a compact width, as short clips do`() {
+        show(page(clips(8)), category = Category.FORWARDED)
+
+        assertEquals(2, columns())
+    }
+
+    @Test
+    @Config(qualifiers = "w800dp-h1280dp")
+    fun `blurry videos have 4 columns on a medium width, as short clips do`() {
+        show(page(clips(8)), category = Category.BLURRY)
+
+        assertEquals(4, columns())
+    }
+
+    @Test
+    @Config(qualifiers = "w800dp-h1280dp")
+    fun `video copies keep their columns of at least 110 dp`() {
+        show(copies(8), category = Category.EXACT_DUPLICATE)
+
+        // 800 dp in 7 columns of at least 110 dp, where 4 columns would be 200 dp wide. The test screen is at 1 px a dp.
+        val width = compose.onNodeWithContentDescription("best1.mp4", substring = true).fetchSemanticsNode().boundsInRoot.width
+        assertTrue("$width", width in 110f..120f)
     }
 }

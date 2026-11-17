@@ -62,7 +62,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -103,7 +102,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.window.core.layout.WindowSizeClass
 import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
@@ -112,6 +110,7 @@ import io.github.bert0ns.cribrum.review.CategorySummary
 import io.github.bert0ns.cribrum.review.ReviewGroup
 import io.github.bert0ns.cribrum.review.ReviewItem
 import io.github.bert0ns.cribrum.review.ReviewOrder
+import io.github.bert0ns.cribrum.review.SINGLE_VIDEO_CATEGORIES
 import io.github.bert0ns.cribrum.trash.TrashRetention
 import kotlinx.coroutines.flow.drop
 import java.io.File
@@ -397,11 +396,7 @@ fun CategoryScreen(
         val movers = remember(page, category, videos) { if (videos && category != null) movingTiles(category, page) else emptySet() }
         val motion = rememberTileMotion(grid, movers, fullSize != null, canPlay)
         val loopEndMs = if (category == Category.EXACT_DUPLICATE || category == Category.NEAR_DUPLICATE) COPY_LOOP_MS else null
-        val columns = if (videos && category == Category.SHORT_CLIPS) {
-            GridCells.Fixed(if (currentWindowAdaptiveInfo().windowSizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)) 4 else 2)
-        } else {
-            GridCells.Adaptive(110.dp)
-        }
+        val columns = if (videos && category in SINGLE_VIDEO_CATEGORIES) videoColumns() else GridCells.Adaptive(110.dp)
         LazyVerticalGrid(columns, Modifier.weight(1f), grid) {
             for ((position, group) in page.withIndex()) {
                 if (group.date != null && group.date != page.getOrNull(position - 1)?.date) {

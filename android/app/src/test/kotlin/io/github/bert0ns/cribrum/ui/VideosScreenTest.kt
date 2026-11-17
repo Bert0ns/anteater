@@ -665,4 +665,50 @@ class VideosScreenTest {
 
         assertEquals(CleanTab.VIDEOS, tab)
     }
+
+    private fun many(count: Int) = (1..count).map { clip("v$it.mp4", 2_000_000_000L - it) }
+
+    private fun columns(): Int {
+        val tops = compose.onAllNodesWithContentDescription(".mp4", substring = true).fetchSemanticsNodes().map { it.boundsInRoot.top }
+        return tops.count { it == tops.min() }
+    }
+
+    @Test
+    fun `largest videos shows 16 a page, and the next page keeps the selection`() {
+        show(many(20))
+        compose.onAllNodesWithText("1 to 16 of 20").onFirst().assertExists()
+        tile("v17.mp4").assertDoesNotExist()
+        tile("v1.mp4").performClick()
+
+        compose.onAllNodesWithContentDescription("Next page").onFirst().performClick()
+        compose.waitForIdle()
+
+        compose.onAllNodesWithText("17 to 20 of 20").onFirst().assertExists()
+        tile("v17.mp4").assertExists()
+        tile("v1.mp4").assertDoesNotExist()
+        compose.onNodeWithText("Trash 1 video", substring = true).assertExists()
+    }
+
+    @Test
+    fun `a list that fits one page has no page controls`() {
+        show(many(16))
+
+        compose.onAllNodesWithContentDescription("Next page").assertCountEquals(0)
+    }
+
+    @Test
+    @Config(qualifiers = "w500dp-h900dp")
+    fun `largest videos has 2 columns on a compact width`() {
+        show(many(8))
+
+        assertEquals(2, columns())
+    }
+
+    @Test
+    @Config(qualifiers = "w800dp-h1280dp")
+    fun `largest videos has 4 columns on a medium width`() {
+        show(many(8))
+
+        assertEquals(4, columns())
+    }
 }

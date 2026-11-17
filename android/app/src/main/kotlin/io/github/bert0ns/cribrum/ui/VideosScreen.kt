@@ -16,9 +16,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
@@ -38,8 +39,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +67,7 @@ import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.review.CategorySummary
+import io.github.bert0ns.cribrum.review.VIDEO_PAGE_SIZE
 import io.github.bert0ns.cribrum.review.VideoItem
 import io.github.bert0ns.cribrum.trash.TrashRetention
 import java.io.File
@@ -151,9 +155,10 @@ fun VideosTab(
 }
 
 /**
- * "Largest videos": a grid of tiles, largest first. A tap selects, a long press opens the video full size, and nothing is
- * selected for the user, since these are videos they keep. The main button trashes the selection and says what it holds;
- * "Keep" marks it kept. A favourite among the selection asks first (D6, §6.2).
+ * "Largest videos": a grid of tiles, largest first, [VIDEO_PAGE_SIZE] a page with the Compress page's controls once there
+ * are more. A tap selects, a long press opens the video full size, and nothing is selected for the user, since these are
+ * videos they keep. The main button trashes the selection, on every page, and says what it holds; "Keep" marks it kept.
+ * A favourite among the selection asks first (D6, §6.2).
  */
 @Composable
 fun VideosScreen(
@@ -174,6 +179,12 @@ fun VideosScreen(
     val haptics = LocalHapticFeedback.current
     var askFavorites by remember { mutableStateOf(false) }
     var fullSize by remember { mutableStateOf<VideoItem?>(null) }
+    var page by rememberSaveable { mutableIntStateOf(0) }
+    // A trash or a keep can empty the last page.
+    val shownPage = page.coerceAtMost((videos.size - 1).coerceAtLeast(0) / VIDEO_PAGE_SIZE)
+    val shown = videos.drop(shownPage * VIDEO_PAGE_SIZE).take(VIDEO_PAGE_SIZE)
+    val grid = rememberLazyGridState()
+    LaunchedEffect(shownPage) { grid.scrollToItem(0) }
     val chosen = videos.filter { it.video.path in selected }
     val favorites = chosen.count { it.isFavorite }
     val size = Formatter.formatShortFileSize(LocalContext.current, chosen.sumOf { it.video.size }).replace(' ', ' ')
@@ -194,13 +205,17 @@ fun VideosScreen(
                 Text(stringResource(R.string.videos_hint), style = MaterialTheme.typography.bodySmall)
             }
         }
-        LazyVerticalGrid(GridCells.Adaptive(110.dp), Modifier.weight(1f)) {
-            items(videos, key = { it.video.path }) { item ->
+        LazyVerticalGrid(videoColumns(), Modifier.weight(1f), grid) {
+            val paged = videos.size > VIDEO_PAGE_SIZE
+            val controls: @Composable () -> Unit = { PageControls(shownPage, videos.size, { page = it }, VIDEO_PAGE_SIZE) }
+            if (paged) item(span = { GridItemSpan(maxLineSpan) }, key = "pages-top") { controls() }
+            items(shown, key = { it.video.path }) { item ->
                 VideoTile(item, item.video.path in selected, onHold = { fullSize = item }) {
                     haptics.performHapticFeedback(Haptic.TICK.type)
                     onToggle(item.video.path)
                 }
             }
+            if (paged) item(span = { GridItemSpan(maxLineSpan) }, key = "pages-bottom") { controls() }
         }
         AppSnackbarHost(snackbar)
         if (chosen.isNotEmpty()) {
@@ -237,11 +252,11 @@ fun VideosScreen(
         )
     }
     // A trash, a keep or a scan can take the video off the list while it is open.
-    LaunchedEffect(videos, fullSize) {
-        if (fullSize != null && videos.none { it.video.path == fullSize?.video?.path }) fullSize = null
+    LaunchedEffect(shown, fullSize) {
+        if (fullSize != null && shown.none { it.video.path == fullSize?.video?.path }) fullSize = null
     }
     fullSize?.let { start ->
-        FullSize(videos, start, selected, onToggle, onFavorite) { fullSize = null }
+        FullSize(shown, start, selected, onToggle, onFavorite) { fullSize = null }
     }
 }
 

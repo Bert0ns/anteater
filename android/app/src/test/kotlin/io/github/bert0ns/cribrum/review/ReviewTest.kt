@@ -1386,11 +1386,19 @@ class ReviewTest {
     }
 
     @Test
-    fun `a page of short clips holds 16 clips`() = test {
-        repeat(30) { video("DCIM/Camera/clip$it.mp4", 300).also { v -> runBlocking { index.setSignals(v.path, "short_clips", 1, listOf(Signal("short_clips", 1, Category.SHORT_CLIPS, 0.9f))) } } }
+    fun `a page of short clips, blurry, badly exposed or forwarded videos holds 16 videos`() = test {
+        val signals = listOf(
+            Signal("short_clips", 1, Category.SHORT_CLIPS, 0.9f),
+            Signal("blur", 1, Category.BLURRY, 1f),
+            Signal("exposure", 1, Category.BAD_EXPOSURE, 1f),
+            Signal("forwarded", 2, Category.FORWARDED, 1f),
+        )
+        repeat(30) { i -> video("DCIM/Camera/clip$i.mp4", 300).also { v -> runBlocking { signals.forEach { index.setSignals(v.path, it.detectorId, it.detectorVersion, listOf(it)) } } } }
 
-        assertEquals(16, page(Category.SHORT_CLIPS, mediaType = MediaType.VIDEO).groups.size)
-        assertEquals(30, page(Category.SHORT_CLIPS, mediaType = MediaType.VIDEO).remaining)
+        for (category in listOf(Category.SHORT_CLIPS, Category.BLURRY, Category.BAD_EXPOSURE, Category.FORWARDED)) {
+            assertEquals(category.name, 16, page(category, mediaType = MediaType.VIDEO).groups.size)
+            assertEquals(category.name, 30, page(category, mediaType = MediaType.VIDEO).remaining)
+        }
     }
 
     @Test

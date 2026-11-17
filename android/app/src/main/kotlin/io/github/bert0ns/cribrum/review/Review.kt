@@ -48,14 +48,20 @@ private val FAVORITE_SIGNAL = Signal("favorite", 1, Protection.FAVORITE, 1f)
 /** Images shown at once: a few screens of thumbnails, reviewed and applied together. */
 const val PAGE_SIZE = 48
 
+/** Videos shown at once in a review of single videos and in "Largest videos" (docs/design.md §8, #457): a screen or two of tiles. */
+const val VIDEO_PAGE_SIZE = 16
+
+/** The video reviews laid out as "Short clips" is: one video a group, [VIDEO_PAGE_SIZE] a page, in 2 or 4 columns. */
+val SINGLE_VIDEO_CATEGORIES = setOf(Category.SHORT_CLIPS, Category.BLURRY, Category.BAD_EXPOSURE, Category.FORWARDED)
+
 /**
  * Groups shown at once in a review whose video tiles move (docs/design.md §8, #457), in place of [PAGE_SIZE] images: 15
- * groups of video copies and 16 short clips, a screen or two of tiles.
+ * groups of video copies and [VIDEO_PAGE_SIZE] single videos. The takes keep the photos' page.
  */
 private fun videoGroupsPerPage(category: Category, mediaType: MediaType): Int? = when {
     mediaType != MediaType.VIDEO -> null
     category == Category.EXACT_DUPLICATE || category == Category.NEAR_DUPLICATE -> 15
-    category == Category.SHORT_CLIPS -> 16
+    category in SINGLE_VIDEO_CATEGORIES -> VIDEO_PAGE_SIZE
     else -> null
 }
 

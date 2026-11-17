@@ -23,12 +23,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -61,6 +63,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
+import androidx.window.core.layout.WindowSizeClass
 import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
 import coil3.decode.Decoder
@@ -241,6 +244,13 @@ internal fun LoopingClip(file: File, endMs: Long?, startMs: Long, modifier: Modi
         )
     }
 }
+
+/**
+ * The columns of a grid of videos laid out as "Short clips" is (#457): 2 on a compact width and 4 on a medium or expanded
+ * one, by the window size class and not by fold detection, so a tablet, landscape and split screen behave the same.
+ */
+@Composable
+internal fun videoColumns(): GridCells = GridCells.Fixed(if (currentWindowAdaptiveInfo().windowSizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)) 4 else 2)
 
 /**
  * Which video tiles on screen move (docs/design.md §8, #457), by key: the ones in [loops] play their clip and the ones in
