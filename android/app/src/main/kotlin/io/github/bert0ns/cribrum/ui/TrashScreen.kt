@@ -160,7 +160,7 @@ fun TrashScreen(
                 }
             }
         }
-        FullSizeViewer(paths, start.file.path, onClose = close, image = image, onPage = { playback.stop() }) { page ->
+        FullSizeViewer(paths, start.file.path, onClose = close, image = image, onPage = { if (playback.loaded != paths.getOrNull(it)) playback.stop() }) { page ->
             val item = trashed.getOrNull(page) ?: return@FullSizeViewer
             FullSizeToggle(item.file.path in selected, stringResource(R.string.tile_selected), MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary) { onSelect(item) }
             FullSizeBar(item.original.path, item.favorite) {

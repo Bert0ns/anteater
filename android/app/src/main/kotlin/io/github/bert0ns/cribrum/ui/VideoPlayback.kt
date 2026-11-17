@@ -86,10 +86,12 @@ internal fun stripTimes(durationMs: Long, count: Int = STRIP_FRAMES): List<Long>
  * The one player of a full size view, and what the controls show of it. It makes the player when a video first plays, plays
  * one video at a time, and [release]s it when the view closes, so no player outlives the view and there is never a second.
  * A [loop], a short clip's tile (docs/design.md §8), is muted from its first frame, decodes no sound at all and plays its
- * video again and again.
+ * video again and again. A view starts muted too ([startMuted], #440): its video autoplays, and the user's music keeps playing
+ * until they unmute, which turns the sound on and only then takes audio focus. The mute state is the view's, so the videos after
+ * an unmute play with sound, and a view that opens again starts muted again.
  * Everything runs on the main thread, as Media3 asks.
  */
-internal class VideoPlayback(private val loop: Boolean = false, private val create: () -> Player) {
+internal class VideoPlayback(private val loop: Boolean = false, startMuted: Boolean = loop, private val create: () -> Player) {
     private var player: Player? = null
 
     /** The path of the video the player holds, playing or paused, or null when it holds none. */
@@ -107,7 +109,7 @@ internal class VideoPlayback(private val loop: Boolean = false, private val crea
         private set
     var videoSize by mutableStateOf<VideoSize?>(null)
         private set
-    var muted by mutableStateOf(loop)
+    var muted by mutableStateOf(startMuted)
         private set
 
     /** The video whose last play failed. A video that does not play is a line of text, never a crash. */
@@ -242,10 +244,10 @@ internal class VideoPlayback(private val loop: Boolean = false, private val crea
  * the screen a video pauses, and a [loop] lets go of its player, so its codecs are free while the app is in the background.
  */
 @Composable
-internal fun rememberVideoPlayback(loop: Boolean = false): VideoPlayback {
+internal fun rememberVideoPlayback(loop: Boolean = false, startMuted: Boolean = true): VideoPlayback {
     val context = LocalContext.current.applicationContext
     val factory = LocalPlayerFactory.current
-    val playback = remember(context, factory, loop) { VideoPlayback(loop) { factory(context) } }
+    val playback = remember(context, factory, loop, startMuted) { VideoPlayback(loop, startMuted) { factory(context) } }
     DisposableEffect(playback) { onDispose { playback.release() } }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { if (loop) playback.release() else playback.pause() }
     return playback
@@ -261,8 +263,10 @@ internal fun rememberVideoPlayback(loop: Boolean = false): VideoPlayback {
 internal fun VideoPage(file: File, section: String, playback: VideoPlayback, unreadable: Boolean, onClose: () -> Unit, autoplay: Boolean = true) {
     val showing = playback.loaded == file.path
     val settled = LocalPageSettled.current
-    // Only when the video is not loaded, so a pause stays a pause when a swipe comes back to the same page.
-    LaunchedEffect(settled, unreadable, autoplay) { if (settled && autoplay && !unreadable && playback.loaded != file.path) playback.play(file) }
+    // Only when the video is not loaded, so a pause stays a pause, and not after a failure, so a drag does not retry it: the play button does.
+    LaunchedEffect(settled, unreadable, autoplay) {
+        if (settled && autoplay && !unreadable && playback.loaded != file.path && playback.failed != file.path) playback.play(file)
+    }
     val tap = stringResource(
         if (unreadable) {
             R.string.close
