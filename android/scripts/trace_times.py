@@ -225,7 +225,7 @@ def main() -> None:
     by_hand = "--by-hand" in args
     args = [a for a in args if a != "--by-hand"]
     trace = args[0]
-    package = args[1] if len(args) > 1 else "io.github.bert0ns.cribrum"
+    package = args[1] if len(args) > 1 else "io.github.bert0ns.anteater"
     with TraceProcessor(trace=trace) as tp:
         row = next(iter(tp.query(HOME_QUERY.format(package=package))))
         sections = [

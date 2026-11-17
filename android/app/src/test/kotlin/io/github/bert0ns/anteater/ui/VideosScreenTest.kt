@@ -1,0 +1,813 @@
+package io.github.bert0ns.anteater.ui
+
+import android.os.Handler
+import android.os.Looper
+import android.view.SurfaceView
+import android.view.View
+import android.view.ViewGroup
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.junit4.StateRestorationTester
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
+import androidx.core.view.children
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import io.github.bert0ns.anteater.model.Category
+import io.github.bert0ns.anteater.model.MediaRef
+import io.github.bert0ns.anteater.model.MediaType
+import io.github.bert0ns.anteater.review.CategorySummary
+import io.github.bert0ns.anteater.review.VideoItem
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowDialog
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [36]) // Compose tests reach InputManager.getInstance, which SDK 37 removed
+class VideosScreenTest {
+    @get:Rule
+    val compose = createComposeRule()
+
+    private fun clip(name: String, size: Long, durationMs: Long? = 61_000, unreadable: Boolean = false, favorite: Boolean = false) = VideoItem(MediaRef("/sdcard/Movies/$name", size, 0, MediaType.VIDEO), durationMs, unreadable, favorite)
+
+    private val videos = listOf(clip("big.mp4", 1_500_000_000), clip("middle.mp4", 800_000_000), clip("small.mp4", 90_000_000))
+
+    /** The screen with a selection of its own, and what it was asked to apply. */
+    private class Applied(var paths: Set<String>? = null, var trash: Boolean? = null)
+
+    private var players = Players()
+
+    /** The players of the full size view, made on the main thread, and not the tiles' loops, made on theirs. */
+    private val viewPlayers get() = players.made.filter { it.builtOn == Looper.getMainLooper().thread }
+
+    private fun show(items: List<VideoItem>, applied: Applied = Applied(), owner: LifecycleOwner? = null) {
+        compose.setContent {
+            var selected by remember { mutableStateOf(emptySet<String>()) }
+            val locals = listOfNotNull(LocalPlayerFactory provides players.factory, owner?.let { LocalLifecycleOwner provides it })
+            CompositionLocalProvider(*locals.toTypedArray()) {
+                VideosScreen(items, selected, onToggle = { selected = if (it in selected) selected - it else selected + it }, onApply = { paths, trash ->
+                    applied.paths = paths
+                    applied.trash = trash
+                })
+            }
+        }
+    }
+
+    private fun tile(name: String) = compose.onNodeWithContentDescription(name, substring = true)
+
+    @Test
+    fun `a tile says its name, length and size, and nothing is selected to begin with`() {
+        show(videos)
+
+        compose.onNodeWithText("3 videos · 2.4 GB").assertExists()
+        tile("big.mp4").assertIsNotSelected()
+        compose.onNodeWithContentDescription("big.mp4. Video, 01:01, 1.5 GB. Not selected").assertExists()
+        compose.onNodeWithText("Trash", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `a tap selects, and the main button says how many videos and how many GB it moves`() {
+        val applied = Applied()
+        show(videos, applied)
+
+        tile("big.mp4").performClick()
+        tile("middle.mp4").performClick()
+
+        tile("big.mp4").assertIsSelected()
+        compose.onNodeWithText("Trash 2 videos, 2.3 GB").performClick()
+        assertEquals(setOf("/sdcard/Movies/big.mp4", "/sdcard/Movies/middle.mp4"), applied.paths)
+        assertEquals(true, applied.trash)
+    }
+
+    @Test
+    fun `Keep applies the selection as a keep`() {
+        val applied = Applied()
+        show(videos, applied)
+
+        tile("small.mp4").performClick()
+        compose.onNodeWithText("Keep").performClick()
+
+        assertEquals(setOf("/sdcard/Movies/small.mp4"), applied.paths)
+        assertEquals(false, applied.trash)
+    }
+
+    @Test
+    fun `a long press opens the video full size, with its size`() {
+        show(videos)
+
+        tile("middle.mp4").performTouchInput { longClick() }
+
+        compose.onNodeWithTag("fullSize").assertExists()
+        compose.onNodeWithText("Video, 01:01, 800 MB").assertExists()
+    }
+
+    private fun openFullSize(name: String) {
+        tile(name).performTouchInput { longClick() }
+        compose.onNodeWithTag("fullSize").assertExists()
+    }
+
+    @Test
+    fun `opening a video plays it without a tap, and the controls say where it is`() {
+        show(videos)
+        openFullSize("middle.mp4")
+        compose.waitForIdle()
+
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), viewPlayers.single().paths)
+        assertTrue(viewPlayers.single().playing)
+        compose.onNodeWithText("00:00 / 01:01").assertExists()
+        compose.onNodeWithContentDescription("Pause video").assertExists()
+        compose.onNodeWithContentDescription("Position in the video").assertExists()
+    }
+
+    @Test
+    fun `a tap on the picture pauses the video and plays it again, and does not close the view`() {
+        show(videos)
+        openFullSize("middle.mp4")
+        compose.waitForIdle()
+
+        compose.onNodeWithTag("fullSize").performTouchInput { click() }
+        compose.waitForIdle()
+
+        assertFalse(viewPlayers.single().playing)
+        compose.onNodeWithTag("fullSize").assertExists()
+        compose.onAllNodesWithContentDescription("Play video").assertCountEquals(2) // the page's and the bar's
+
+        compose.onNodeWithTag("fullSize").performTouchInput { click() }
+        compose.waitForIdle()
+
+        assertTrue(viewPlayers.single().playing)
+    }
+
+    @Test
+    fun `a tap on the placeholder of a video that cannot be read closes the view`() {
+        show(listOf(clip("broken.mp4", 700_000_000, durationMs = null, unreadable = true)))
+        openFullSize("broken.mp4")
+
+        compose.onNode(tapSays("Close")).assertExists()
+        compose.onNodeWithTag("fullSize").performTouchInput { click() }
+        compose.waitForIdle()
+
+        compose.onNodeWithTag("fullSize").assertDoesNotExist()
+    }
+
+    /** The surface the video draws on, which lives in the full size dialog's window. */
+    private fun surface(): SurfaceView? {
+        fun find(view: View): SurfaceView? = if (view is SurfaceView) view else (view as? ViewGroup)?.children?.firstNotNullOfOrNull(::find)
+        return ShadowDialog.getLatestDialog()?.window?.decorView?.let(::find)
+    }
+
+    @Test
+    fun `the screen stays on while the video plays, and not while it is paused or has ended`() {
+        show(videos)
+        openFullSize("middle.mp4")
+        compose.waitForIdle()
+        assertTrue(surface()!!.keepScreenOn)
+
+        compose.onNodeWithContentDescription("Pause video").performClick()
+        compose.waitForIdle()
+        assertFalse(surface()!!.keepScreenOn)
+
+        compose.onAllNodesWithContentDescription("Play video").onFirst().performClick()
+        compose.waitForIdle()
+        assertTrue(surface()!!.keepScreenOn)
+
+        viewPlayers.single().ended()
+        compose.waitForIdle()
+        assertFalse(surface()!!.keepScreenOn)
+    }
+
+    @Test
+    fun `the strip has five frames across the length, and a tap on one plays from there`() {
+        show(videos)
+        openFullSize("middle.mp4")
+
+        compose.onAllNodesWithContentDescription("Go to", substring = true).assertCountEquals(5)
+        compose.onNodeWithContentDescription("Go to 00:30").performClick()
+        compose.waitForIdle()
+
+        assertEquals(30_500, viewPlayers.single().positionMs)
+        assertTrue(viewPlayers.single().playing)
+    }
+
+    private fun tapSays(label: String) = SemanticsMatcher("a tap that says $label") { it.config.getOrNull(SemanticsActions.OnClick)?.label == label }
+
+    @Test
+    fun `the tap on the picture says what it does, and the strip's frames are buttons`() {
+        show(videos)
+        openFullSize("middle.mp4")
+
+        compose.waitForIdle()
+        compose.onNode(tapSays("Pause video")).assertExists()
+        compose.onAllNodesWithContentDescription("Go to", substring = true).onFirst().assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+
+        compose.onNodeWithTag("fullSize").performTouchInput { click() }
+        compose.waitForIdle()
+        compose.onNode(tapSays("Play video")).assertExists()
+    }
+
+    @Test
+    fun `the strip keeps its frames when the player reads another length than the index did`() {
+        players = Players(lengthMs = 59_000) // the index says 61,000
+        show(videos)
+        openFullSize("middle.mp4")
+        fun labels() = compose.onAllNodesWithContentDescription("Go to", substring = true).fetchSemanticsNodes().map { it.config.getOrNull(SemanticsProperties.ContentDescription)?.single() }
+        val before = labels()
+        compose.waitForIdle() // the video starts, and the player reads its own length
+
+        assertEquals(listOf("Go to 00:06", "Go to 00:18", "Go to 00:30", "Go to 00:42", "Go to 00:54"), before)
+        assertEquals(before, labels())
+        compose.onNodeWithText("00:00 / 00:59").assertExists() // the seek bar has the player's length
+    }
+
+    @Test
+    fun `a video starts muted without audio focus, and the sound button brings the sound and the focus`() {
+        show(videos)
+        openFullSize("middle.mp4")
+        compose.waitForIdle()
+        assertTrue(viewPlayers.single().playing)
+        assertEquals(0f, viewPlayers.single().volume, 0f)
+        assertFalse(viewPlayers.single().focus) // the user's music plays on
+
+        compose.onNodeWithContentDescription("Unmute").performClick()
+        compose.waitForIdle()
+        assertEquals(1f, viewPlayers.single().volume, 0f)
+        assertTrue(viewPlayers.single().focus)
+
+        compose.onNodeWithContentDescription("Mute").performClick()
+        compose.waitForIdle()
+        assertEquals(0f, viewPlayers.single().volume, 0f)
+        assertFalse(viewPlayers.single().focus)
+    }
+
+    @Test
+    fun `after an unmute the next videos of the view have sound, and a view that opens again starts muted`() {
+        show(videos)
+        openFullSize("big.mp4")
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Unmute").performClick()
+        compose.waitForIdle()
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), viewPlayers.single().paths)
+        assertEquals(1f, viewPlayers.single().volume, 0f)
+        assertTrue(viewPlayers.single().focus)
+
+        compose.onNodeWithContentDescription("Close").performClick()
+        compose.waitForIdle()
+        openFullSize("big.mp4")
+        compose.waitForIdle()
+
+        assertEquals(2, viewPlayers.size)
+        assertEquals(0f, viewPlayers.last().volume, 0f)
+        assertFalse(viewPlayers.last().focus)
+    }
+
+    @Test
+    fun `a swipe to the next video stops the one that plays and plays that one, with the same player`() {
+        show(videos)
+        openFullSize("big.mp4")
+        compose.waitForIdle()
+        assertEquals(listOf("/sdcard/Movies/big.mp4"), viewPlayers.single().paths)
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+
+        assertEquals(1, viewPlayers.size)
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), viewPlayers.single().paths)
+        assertTrue(viewPlayers.single().playing)
+        assertFalse(viewPlayers.single().released)
+        compose.onNodeWithText("Video, 01:01, 800 MB").assertExists()
+        compose.onNodeWithText("00:00 / 01:01").assertExists()
+    }
+
+    @Test
+    fun `a swipe onto a video that cannot be read starts nothing, and the one it left stops`() {
+        show(listOf(clip("big.mp4", 1_500_000_000), clip("broken.mp4", 700_000_000, durationMs = null, unreadable = true)))
+        openFullSize("big.mp4")
+        compose.waitForIdle()
+        assertTrue(viewPlayers.single().playing)
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+
+        assertEquals(emptyList<String>(), viewPlayers.single().paths)
+        assertFalse(viewPlayers.single().playing)
+    }
+
+    @Test
+    fun `a video the user paused stays paused when a swipe is let go on the same page`() {
+        show(videos)
+        openFullSize("big.mp4")
+        compose.waitForIdle()
+        compose.onNodeWithTag("fullSize").performTouchInput { click() }
+        compose.waitForIdle()
+        assertFalse(viewPlayers.single().playing)
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeRight() } // there is no page before the first
+        compose.waitForIdle()
+
+        assertEquals(listOf("/sdcard/Movies/big.mp4"), viewPlayers.single().paths)
+        assertFalse(viewPlayers.single().playing)
+    }
+
+    private fun pageWidth() = compose.onNodeWithTag("fullSize").fetchSemanticsNode().size.width.toFloat()
+
+    @Test
+    fun `a drag past half a page and back leaves a paused video paused where it was`() {
+        show(videos)
+        openFullSize("middle.mp4")
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Go to 00:30").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("fullSize").performTouchInput { click() }
+        compose.waitForIdle()
+        assertFalse(viewPlayers.single().playing)
+        val width = pageWidth()
+
+        compose.onNodeWithTag("fullSize").performTouchInput {
+            down(center)
+            moveBy(Offset(-0.7f * width, 0f))
+        }
+        compose.waitForIdle()
+        // The pager is past the middle of the page, and the video is still there: only a page it rests on takes it away.
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), viewPlayers.single().paths)
+        compose.onNodeWithTag("fullSize").performTouchInput {
+            moveBy(Offset(0.7f * width, 0f))
+            up()
+        }
+        compose.waitForIdle()
+
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), viewPlayers.single().paths)
+        assertFalse(viewPlayers.single().playing)
+        assertEquals(30_500, viewPlayers.single().positionMs)
+    }
+
+    @Test
+    fun `a video that failed is not tried again by a drag, only by the play button`() {
+        show(videos)
+        openFullSize("big.mp4")
+        compose.waitForIdle()
+        viewPlayers.single().fail()
+        compose.waitForIdle()
+        val width = pageWidth()
+
+        compose.onNodeWithTag("fullSize").performTouchInput {
+            down(center)
+            moveBy(Offset(-0.1f * width, 0f))
+            moveBy(Offset(0.1f * width, 0f))
+            up()
+        }
+        compose.waitForIdle()
+
+        assertEquals(emptyList<String>(), viewPlayers.single().paths)
+        compose.onNodeWithText("This video can't be played.").assertExists()
+
+        compose.onAllNodesWithContentDescription("Play video").onFirst().performClick()
+        compose.waitForIdle()
+
+        assertEquals(listOf("/sdcard/Movies/big.mp4"), viewPlayers.single().paths)
+    }
+
+    @Test
+    fun `a video earlier in the list leaving does not stop the one that plays`() {
+        var items by mutableStateOf(videos)
+        compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { VideosScreen(items, emptySet(), onToggle = {}, onApply = { _, _ -> }) } }
+        openFullSize("middle.mp4")
+        compose.waitForIdle()
+        assertTrue(viewPlayers.single().playing)
+
+        items = items.filter { it.video.path != "/sdcard/Movies/big.mp4" } // the pager's index of the playing video shifts
+        compose.waitForIdle()
+
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), viewPlayers.single().paths)
+        assertTrue(viewPlayers.single().playing)
+    }
+
+    @Test
+    fun `closing the view releases the player`() {
+        show(videos)
+        openFullSize("big.mp4")
+        compose.waitForIdle()
+
+        compose.onNodeWithContentDescription("Close").performClick()
+        compose.waitForIdle()
+
+        compose.onNodeWithTag("fullSize").assertDoesNotExist()
+        assertTrue(viewPlayers.single().released)
+    }
+
+    @Test
+    fun `the video pauses when the app leaves the screen`() {
+        val owner = object : LifecycleOwner {
+            override val lifecycle: LifecycleRegistry = LifecycleRegistry.createUnsafe(this)
+        }
+        compose.runOnUiThread { owner.lifecycle.currentState = Lifecycle.State.RESUMED }
+        show(videos, owner = owner)
+        openFullSize("middle.mp4")
+        compose.waitForIdle()
+        assertTrue(viewPlayers.single().playing)
+
+        compose.runOnUiThread { owner.lifecycle.currentState = Lifecycle.State.CREATED } // ON_PAUSE, then ON_STOP
+        compose.waitForIdle()
+
+        assertFalse(viewPlayers.single().playing)
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), viewPlayers.single().paths) // paused, not dropped
+    }
+
+    @Test
+    fun `a video that leaves the list while it plays is stopped, and the page that takes its place plays`() {
+        var items by mutableStateOf(videos)
+        compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { VideosScreen(items, emptySet(), onToggle = {}, onApply = { _, _ -> }) } }
+        openFullSize("big.mp4")
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), viewPlayers.single().paths)
+
+        items = items.filter { it.video.path != "/sdcard/Movies/middle.mp4" }
+        compose.waitForIdle()
+
+        // The page that takes its place is the one the pager rests on, so it plays, and the removed video is gone.
+        assertEquals(listOf("/sdcard/Movies/small.mp4"), viewPlayers.single().paths)
+        assertFalse(viewPlayers.single().released) // the view is still open
+    }
+
+    @Test
+    fun `a video that fails to play says so, and the view stays`() {
+        show(videos)
+        openFullSize("big.mp4")
+        compose.waitForIdle()
+
+        viewPlayers.single().fail()
+        compose.waitForIdle()
+
+        compose.onNodeWithText("This video can't be played.").assertExists()
+        compose.onNodeWithTag("fullSize").assertExists()
+        compose.onAllNodesWithContentDescription("Play video").onFirst().assertExists() // it can be tried again
+    }
+
+    @Test
+    fun `a video that cannot be read has the placeholder, no player and no controls`() {
+        show(listOf(clip("broken.mp4", 700_000_000, durationMs = null, unreadable = true)))
+
+        openFullSize("broken.mp4")
+
+        compose.onNodeWithTag("fullSize").assertExists()
+        compose.onAllNodesWithText("Can't be read").assertCountEquals(2) // the tile's and the page's
+        compose.onAllNodesWithContentDescription("Play video").assertCountEquals(0)
+        compose.onAllNodesWithContentDescription("Go to", substring = true).assertCountEquals(0)
+        assertTrue(viewPlayers.isEmpty())
+    }
+
+    @Test
+    fun `a favourite keeps its place, shows a heart and asks before the trash takes it`() {
+        val applied = Applied()
+        show(listOf(clip("big.mp4", 1_500_000_000, favorite = true), clip("small.mp4", 90_000_000)), applied)
+
+        compose.onNodeWithContentDescription("big.mp4. Video, 01:01, 1.5 GB. Not selected. Favourite").assertExists()
+        tile("big.mp4").performClick()
+        compose.onNodeWithText("Trash 1 video", substring = true).performClick()
+
+        assertNull(applied.paths) // asked first
+        compose.onNodeWithText("Move to trash anyway").performClick()
+        assertEquals(setOf("/sdcard/Movies/big.mp4"), applied.paths)
+        assertEquals(true, applied.trash)
+    }
+
+    /** The screen with a list of its own, as the view model holds it: a heart flips the flag of its video in place. */
+    private fun showHearts(requests: MutableList<Pair<String, Boolean>>, start: List<VideoItem>) {
+        compose.setContent {
+            var items by remember { mutableStateOf(start) }
+            var selected by remember { mutableStateOf(emptySet<String>()) }
+            CompositionLocalProvider(LocalPlayerFactory provides players.factory) {
+                VideosScreen(items, selected, onToggle = { selected = if (it in selected) selected - it else selected + it }, onApply = { _, _ -> }, onFavorite = { video, favorite ->
+                    requests += video.path to favorite
+                    items = items.map { if (it.video == video) it.copy(isFavorite = favorite) else it }
+                })
+            }
+        }
+    }
+
+    private fun heart(label: String) = compose.onNodeWithContentDescription(label)
+
+    @Test
+    fun `the full size heart makes a video a favourite and takes the mark off again`() {
+        val requests = mutableListOf<Pair<String, Boolean>>()
+        showHearts(requests, videos)
+
+        openFullSize("big.mp4")
+        heart("Add to favourites").assertIsEnabled().performClick()
+        heart("Remove from favourites").assertIsEnabled().performClick()
+        heart("Add to favourites").assertExists()
+
+        assertEquals(listOf("/sdcard/Movies/big.mp4" to true, "/sdcard/Movies/big.mp4" to false), requests)
+    }
+
+    @Test
+    fun `the heart is off while the video is selected, says why, and comes on when it is deselected`() {
+        val requests = mutableListOf<Pair<String, Boolean>>()
+        showHearts(requests, videos)
+        tile("big.mp4").performClick() // selected
+
+        openFullSize("big.mp4")
+        heart("Add to favourites").assertIsNotEnabled().performClick()
+        assertEquals(
+            "Unavailable while the video is selected. Deselect it first.",
+            heart("Add to favourites").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription),
+        )
+        assertEquals(emptyList<Pair<String, Boolean>>(), requests)
+
+        compose.onNodeWithText("Selected").performClick() // the full size checkbox
+        heart("Add to favourites").assertIsEnabled()
+    }
+
+    @Test
+    fun `cancelling the favourite dialog trashes nothing`() {
+        val applied = Applied()
+        show(listOf(clip("big.mp4", 1_500_000_000, favorite = true)), applied)
+
+        tile("big.mp4").performClick()
+        compose.onNodeWithText("Trash 1 video", substring = true).performClick()
+        compose.onNodeWithText("Cancel").performClick()
+
+        assertNull(applied.paths)
+    }
+
+    @Test
+    fun `a video that cannot be read stays in the list with a placeholder and a note`() {
+        show(listOf(clip("broken.mp4", 700_000_000, durationMs = null, unreadable = true)))
+
+        compose.onNodeWithText("Can't be read").assertExists()
+        compose.onNodeWithContentDescription("broken.mp4. Video, 700 MB. Can't be read. Not selected").assertExists()
+    }
+
+    @Test
+    fun `with nothing left it says so`() {
+        show(emptyList())
+
+        compose.onNodeWithText("No more videos to review.").assertExists()
+    }
+
+    @Test
+    fun `the Videos tab shows the largest videos with their count and size, and opens them`() {
+        var opened = false
+        compose.setContent { VideosTab(videos, indexed = true, onOpen = { opened = true }) }
+
+        compose.onNodeWithText("Up to 2.4 GB can be freed").assertExists()
+        compose.onNodeWithText("3 videos · 2.4 GB").assertExists()
+        compose.onNodeWithText("Largest videos").performClick()
+        assertEquals(true, opened)
+    }
+
+    @Test
+    fun `before a scan found a video the tab says they appear after the next scan, and has no row`() {
+        compose.setContent { VideosTab(emptyList(), indexed = false, onOpen = {}) }
+
+        compose.onNodeWithText("Videos appear after the next scan.").assertExists()
+        compose.onNodeWithText("Largest videos").assertDoesNotExist()
+    }
+
+    @Test
+    fun `once a scan has counted no video the tab says the phone has none`() {
+        compose.setContent { VideosTab(emptyList(), indexed = false, onOpen = {}, noVideos = true) }
+
+        compose.onNodeWithText("No videos found on this phone.").assertExists()
+        compose.onNodeWithText("Videos appear after the next scan.").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the tab says how many videos wait for Scan videos, and nothing once none waits`() {
+        var waiting by mutableStateOf(1_419)
+        compose.setContent { VideosTab(videos, indexed = true, onOpen = {}, waiting = waiting) }
+
+        compose.onNodeWithText("1419 videos not analysed yet").assertExists()
+
+        waiting = 0
+
+        compose.onNodeWithText("not analysed yet", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `once every video is reviewed the row stays, with none to open`() {
+        var opened = false
+        compose.setContent { VideosTab(emptyList(), indexed = true, onOpen = { opened = true }) }
+
+        compose.onNodeWithText("0 videos").assertExists()
+        compose.onNodeWithText("Largest videos").performClick()
+        assertEquals(false, opened)
+    }
+
+    @Test
+    fun `a category with a video detector is a row of the Videos tab with its count and size, and opens`() {
+        var opened: Category? = null
+        val duplicates = CategorySummary(Category.EXACT_DUPLICATE, 2, bytes = 1_500_000_000)
+        compose.setContent { VideosTab(videos, indexed = true, onOpen = {}, categories = listOf(duplicates), onOpenCategory = { opened = it }) }
+
+        compose.onNodeWithText("Exact copies").assertExists()
+        compose.onNodeWithText("2 videos · 1.5 GB").assertExists()
+        compose.onNodeWithText("Exact copies").performClick()
+        assertEquals(Category.EXACT_DUPLICATE, opened)
+    }
+
+    @Test
+    fun `an empty video category opens nothing, and says it needs Scan videos until that scan has run`() {
+        var opened: Category? = null
+        var ran by mutableStateOf(false)
+        val empty = CategorySummary(Category.EXACT_DUPLICATE, 0)
+        compose.setContent { VideosTab(videos, indexed = true, onOpen = {}, categories = listOf(empty), onOpenCategory = { opened = it }, scanRan = ran) }
+
+        compose.onNodeWithText("Needs Scan videos").assertExists()
+        compose.onNodeWithText("Exact copies").performClick()
+        assertNull(opened)
+
+        ran = true
+
+        compose.onNodeWithText("Needs Scan videos").assertDoesNotExist()
+        compose.onNodeWithText("0 videos", substring = true).assertExists()
+    }
+
+    @Test
+    fun `the tabs switch between Photos and Videos`() {
+        var tab = CleanTab.PHOTOS
+        compose.setContent { CleanTabs(tab, { tab = it }) }
+
+        compose.onNodeWithText("Videos").performClick()
+
+        assertEquals(CleanTab.VIDEOS, tab)
+    }
+
+    private fun many(count: Int) = (1..count).map { clip("v$it.mp4", 2_000_000_000L - it) }
+
+    private fun columns(): Int {
+        val tops = compose.onAllNodesWithContentDescription(".mp4", substring = true).fetchSemanticsNodes().map { it.boundsInRoot.top }
+        return tops.count { it == tops.min() }
+    }
+
+    @Test
+    fun `largest videos shows 16 a page, and the next page keeps the selection`() {
+        show(many(20))
+        compose.onAllNodesWithText("1 to 16 of 20").onFirst().assertExists()
+        tile("v17.mp4").assertDoesNotExist()
+        tile("v1.mp4").performClick()
+
+        compose.onAllNodesWithContentDescription("Next page").onFirst().performClick()
+        compose.waitForIdle()
+
+        compose.onAllNodesWithText("17 to 20 of 20").onFirst().assertExists()
+        tile("v17.mp4").assertExists()
+        tile("v1.mp4").assertDoesNotExist()
+        compose.onNodeWithText("Trash 1 video", substring = true).assertExists()
+    }
+
+    @Test
+    fun `trashing the whole last page shows the page before, which stays when the list grows again`() {
+        var items by mutableStateOf(many(20))
+        compose.setContent {
+            var selected by remember { mutableStateOf(emptySet<String>()) }
+            VideosScreen(items, selected, onToggle = { selected = if (it in selected) selected - it else selected + it }, onApply = { paths, _ ->
+                items = items.filterNot { it.video.path in paths }
+                selected = emptySet()
+            })
+        }
+        compose.onAllNodesWithContentDescription("Next page").onFirst().performClick()
+        compose.waitForIdle()
+        for (n in 17..20) tile("v$n.mp4").performClick()
+
+        compose.onNodeWithText("Trash 4 videos", substring = true).performClick()
+        compose.waitForIdle()
+        tile("v1.mp4").assertExists() // the list fits one page now
+
+        items = many(20) // a scan finds them again
+        compose.waitForIdle()
+        tile("v1.mp4").assertExists()
+        tile("v17.mp4").assertDoesNotExist() // still the first page, not the one that was emptied
+    }
+
+    @Test
+    fun `a rotation keeps the scroll of the page where it was`() {
+        val restore = StateRestorationTester(compose)
+        restore.setContent { VideosScreen(many(16), emptySet(), onToggle = {}, onApply = { _, _ -> }) }
+        compose.onNode(hasScrollAction()).performScrollToIndex(10)
+        compose.waitForIdle()
+        tile("v1.mp4").assertDoesNotExist()
+
+        restore.emulateSavedInstanceStateRestore()
+        compose.waitForIdle()
+
+        tile("v1.mp4").assertDoesNotExist()
+        tile("v11.mp4").assertExists()
+    }
+
+    @Test
+    fun `the next page starts at its top`() {
+        show(many(40))
+        compose.onNode(hasScrollAction()).performScrollToIndex(14)
+        compose.waitForIdle()
+
+        compose.onAllNodesWithContentDescription("Next page").onFirst().performClick()
+        compose.waitForIdle()
+
+        tile("v17.mp4").assertExists()
+    }
+
+    @Test
+    fun `a list that fits one page has no page controls`() {
+        show(many(16))
+
+        compose.onAllNodesWithContentDescription("Next page").assertCountEquals(0)
+    }
+
+    @Test
+    @Config(qualifiers = "w500dp-h900dp")
+    fun `largest videos has 2 columns on a compact width`() {
+        show(many(8))
+
+        assertEquals(2, columns())
+    }
+
+    @Test
+    @Config(qualifiers = "w800dp-h1280dp")
+    fun `largest videos has 4 columns on a medium width`() {
+        show(many(8))
+
+        assertEquals(4, columns())
+    }
+
+    /** Lets the screen and the loops' thread answer each other until both are quiet. */
+    private fun settle() {
+        repeat(3) {
+            compose.waitForIdle()
+            val done = CountDownLatch(1)
+            Handler(clipLoops).post { done.countDown() }
+            assertTrue(done.await(5, TimeUnit.SECONDS))
+        }
+        compose.waitForIdle()
+    }
+
+    private val loops get() = players.made.filter { it.builtOn == clipLoops.thread && !it.released }
+    private val slideshows get() = compose.onAllNodesWithTag("slideshow", useUnmergedTree = true).fetchSemanticsNodes().size
+
+    @Test
+    fun `the first two videos on screen play their first 10 seconds, muted, and the others show the slideshow`() {
+        show(many(8))
+        settle()
+
+        assertEquals(listOf("/sdcard/Movies/v1.mp4", "/sdcard/Movies/v2.mp4"), loops.flatMap { it.paths })
+        assertTrue(loops.all { it.endMs == LONG_LOOP_MS && it.muted && it.repeating })
+        assertEquals(compose.onAllNodesWithContentDescription(".mp4", substring = true).fetchSemanticsNodes().size - LOOPING_CLIPS, slideshows)
+    }
+
+    @Test
+    fun `a hot phone or battery saver turns the loops of largest videos into slideshows`() {
+        compose.setContent {
+            CompositionLocalProvider(LocalPlayerFactory provides players.factory) {
+                VideosScreen(many(8), emptySet(), onToggle = {}, onApply = { _, _ -> }, canPlay = false)
+            }
+        }
+        settle()
+
+        assertTrue(loops.isEmpty())
+        assertEquals(compose.onAllNodesWithContentDescription(".mp4", substring = true).fetchSemanticsNodes().size, slideshows)
+    }
+}

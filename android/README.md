@@ -192,9 +192,9 @@ The times grow with the library, so write down `indexed images` with every numbe
 **On a sideloaded install.** Without Google Play nothing applies the profile at install time. `androidx.profileinstaller` does it from inside the app: about five seconds after the first frame of the first start after an install or update, it writes the profile to where ART looks for it. That changes nothing yet. Android compiles the app with it at its next background dexopt, which needs the phone idle and charging, so usually overnight. Until then the app runs as if it had no profile. A measurement can't wait for that, so force both steps after installing:
 
 ```bash
-adb shell am broadcast -a androidx.profileinstaller.action.INSTALL_PROFILE io.github.bert0ns.cribrum/androidx.profileinstaller.ProfileInstallReceiver
-adb shell cmd package compile -f -m speed-profile io.github.bert0ns.cribrum
-adb shell cmd package dump io.github.bert0ns.cribrum | grep 'status='
+adb shell am broadcast -a androidx.profileinstaller.action.INSTALL_PROFILE io.github.bert0ns.anteater/androidx.profileinstaller.ProfileInstallReceiver
+adb shell cmd package compile -f -m speed-profile io.github.bert0ns.anteater
+adb shell cmd package dump io.github.bert0ns.anteater | grep 'status='
 ```
 
 The broadcast answers `result=1` when it wrote the profile and `result=2` when the app had already done so, and the last line must say `status=speed-profile`. Do the same on the build you compare with, since that one has the libraries' rules and would otherwise start from a different state.
@@ -210,7 +210,7 @@ scripts/generate_profile.sh
 
 `:baselineprofile` holds the generator, `HomeAndCategoriesGenerator`, an instrumented test that starts the app, waits for the home, opens a plain and a grouped category and scrolls them. It never taps anything else. It runs against the plugin's `nonMinifiedRelease` build, which differs from a build for users in three ways, so it can run on a phone that has the real app with a real library:
 
-- Its application id is `io.github.bert0ns.cribrum.profile`, so it installs beside the real app and the script uninstalls it at the end.
+- Its application id is `io.github.bert0ns.anteater.profile`, so it installs beside the real app and the script uninstalls it at the end.
 - Its manifest drops `MANAGE_EXTERNAL_STORAGE`, so it can't reach a real image or the real trash, and a scan stops at once. The script refuses a build that asks for it.
 - `app/src/nonMinifiedRelease` adds `ProfileSeed`, which only that build has. It lets the app past its permission screen through the `Permissions` hook, and fills the index with 300 flat-colored images in the package's private storage, with made-up signals. It runs before the collection starts, and the generator filters its classes out, so it stays out of the profile.
 
@@ -228,20 +228,20 @@ A debug build is signed with another key, so it can't be installed over a releas
 
 | Package | Contents | Lab counterpart |
 |---|---|---|
-| `io.github.bert0ns.cribrum.model` | Core types: `MediaRef`, `Category`, `Protection`, `Signal`, `IndexedMedia` | `cribrum_lab.model` |
-| `io.github.bert0ns.cribrum.ranker` | `Ranker`, `Candidate`, thresholds and protection weights | `cribrum_lab.ranker` |
-| `io.github.bert0ns.cribrum.index` | Room tables and `ImageIndex`, with the lab's schema | `cribrum_lab.index` |
-| `io.github.bert0ns.cribrum.metadata` | `ImageMetadata` and `readMetadata` | `cribrum_lab.metadata` |
-| `io.github.bert0ns.cribrum.trash` | `Trash` and `AppTrash`: the only code that deletes files (`docs/design.md` §9) | none: the lab never deletes |
-| `io.github.bert0ns.cribrum.sources` | `MediaSource`: the deep scan, MediaStore, and both merged | `cribrum_lab.sources` |
-| `io.github.bert0ns.cribrum.ui` | Compose screens | `cribrum_lab.labeling` (the lab's only UI) |
-| `io.github.bert0ns.cribrum.detectors` | `Detector`, `GroupDetector`, `AnalysisContext`, and the detectors ported so far | `cribrum_lab.detectors` |
-| `io.github.bert0ns.cribrum.hashing`, `.folders` | Content hash (xxHash3), camera and messaging folders | `cribrum_lab.hashing`, `cribrum_lab.folders` |
-| `io.github.bert0ns.cribrum.runtime` | `ModelRuntime` and `OnnxRuntime`: on-device models behind one interface | `cribrum_lab.runtime` |
-| `io.github.bert0ns.cribrum.mobileclip`, `.prompts` | MobileCLIP2-S0 image embeddings, and the zero-shot classes with the prompts' stored embeddings | `cribrum_lab.mobileclip`, `cribrum_lab.prompts` |
-| `io.github.bert0ns.cribrum.text` | `textCoverage`: PP-OCRv4 text detection, the share of the image covered by text | `cribrum_lab.text` |
-| `io.github.bert0ns.cribrum.imaging` | `loadGrayscale`: Pillow's decoding, luminance and Lanczos thumbnail, step by step | `cribrum_lab.imaging` |
-| `io.github.bert0ns.cribrum.review` | `Review`: pages of candidates, and decisions applied to the trash and the index together | none |
-| `io.github.bert0ns.cribrum.pipeline` | `Pipeline`, and `IndexWorker` running it with WorkManager | `cribrum_lab.pipeline` |
-| `io.github.bert0ns.cribrum.tracing` | `traceSuspend`: a trace section around code that suspends | none |
-| `io.github.bert0ns.cribrum.baselineprofile` (`:baselineprofile`) | The generator of the Baseline Profile | none |
+| `io.github.bert0ns.anteater.model` | Core types: `MediaRef`, `Category`, `Protection`, `Signal`, `IndexedMedia` | `cribrum_lab.model` |
+| `io.github.bert0ns.anteater.ranker` | `Ranker`, `Candidate`, thresholds and protection weights | `cribrum_lab.ranker` |
+| `io.github.bert0ns.anteater.index` | Room tables and `ImageIndex`, with the lab's schema | `cribrum_lab.index` |
+| `io.github.bert0ns.anteater.metadata` | `ImageMetadata` and `readMetadata` | `cribrum_lab.metadata` |
+| `io.github.bert0ns.anteater.trash` | `Trash` and `AppTrash`: the only code that deletes files (`docs/design.md` §9) | none: the lab never deletes |
+| `io.github.bert0ns.anteater.sources` | `MediaSource`: the deep scan, MediaStore, and both merged | `cribrum_lab.sources` |
+| `io.github.bert0ns.anteater.ui` | Compose screens | `cribrum_lab.labeling` (the lab's only UI) |
+| `io.github.bert0ns.anteater.detectors` | `Detector`, `GroupDetector`, `AnalysisContext`, and the detectors ported so far | `cribrum_lab.detectors` |
+| `io.github.bert0ns.anteater.hashing`, `.folders` | Content hash (xxHash3), camera and messaging folders | `cribrum_lab.hashing`, `cribrum_lab.folders` |
+| `io.github.bert0ns.anteater.runtime` | `ModelRuntime` and `OnnxRuntime`: on-device models behind one interface | `cribrum_lab.runtime` |
+| `io.github.bert0ns.anteater.mobileclip`, `.prompts` | MobileCLIP2-S0 image embeddings, and the zero-shot classes with the prompts' stored embeddings | `cribrum_lab.mobileclip`, `cribrum_lab.prompts` |
+| `io.github.bert0ns.anteater.text` | `textCoverage`: PP-OCRv4 text detection, the share of the image covered by text | `cribrum_lab.text` |
+| `io.github.bert0ns.anteater.imaging` | `loadGrayscale`: Pillow's decoding, luminance and Lanczos thumbnail, step by step | `cribrum_lab.imaging` |
+| `io.github.bert0ns.anteater.review` | `Review`: pages of candidates, and decisions applied to the trash and the index together | none |
+| `io.github.bert0ns.anteater.pipeline` | `Pipeline`, and `IndexWorker` running it with WorkManager | `cribrum_lab.pipeline` |
+| `io.github.bert0ns.anteater.tracing` | `traceSuspend`: a trace section around code that suspends | none |
+| `io.github.bert0ns.anteater.baselineprofile` (`:baselineprofile`) | The generator of the Baseline Profile | none |

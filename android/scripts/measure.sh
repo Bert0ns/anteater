@@ -43,7 +43,7 @@ fi
 read -ra adb <<<"${ADB:-adb}"
 here=$(cd "$(dirname "$0")" && pwd)
 res=$here/../app/src/main/res
-package=io.github.bert0ns.cribrum
+package=io.github.bert0ns.anteater
 remote=/data/local/tmp/cribrum-measure
 # The home's name of the category to open, in English and Italian.
 categories=("$@")

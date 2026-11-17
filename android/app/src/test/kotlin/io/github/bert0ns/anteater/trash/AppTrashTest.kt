@@ -1,0 +1,1047 @@
+package io.github.bert0ns.anteater.trash
+
+import io.github.bert0ns.anteater.model.MediaRef
+import io.github.bert0ns.anteater.model.MediaType
+import io.github.bert0ns.anteater.model.toMediaRef
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import java.io.File
+import java.io.IOException
+import java.nio.file.Files
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneOffset
+import java.util.Properties
+import java.util.UUID
+
+private class MovableClock(var now: Instant) : Clock() {
+    override fun instant() = now
+    override fun getZone() = ZoneOffset.UTC
+    override fun withZone(zone: java.time.ZoneId) = this
+}
+
+// Robolectric: the walk and the trash trace their calls, and a plain JVM test has no android.os.Trace.
+@RunWith(RobolectricTestRunner::class)
+class AppTrashTest {
+    @get:Rule
+    val folder = TemporaryFolder()
+
+    private val volume by lazy { folder.newFolder("storage") }
+    private val clock = MovableClock(Instant.parse("2026-10-19T12:00:00Z"))
+    private val changed = mutableListOf<String>()
+    private var retention = Duration.ofDays(30)
+    private var favorites: () -> Set<String> = { emptySet() }
+
+    /** What the trash asked MediaStore about, one entry for each query. */
+    private val asked = mutableListOf<List<String>>()
+
+    /** The paths of the restored images that were favourites, one entry for each restore that had any. */
+    private val favoritesRestored = mutableListOf<List<String>>()
+    private val trash by lazy {
+        AppTrash({ listOf(volume) }, clock, { retention }, { paths ->
+            asked += paths.toList()
+            favorites() intersect paths.toSet()
+        }, { favoritesRestored += it }) { changed += it }
+    }
+
+    private fun photo(path: String, bytes: String = "jpeg bytes"): MediaRef {
+        val file = File(volume, path)
+        file.parentFile!!.mkdirs()
+        file.writeText(bytes)
+        file.setLastModified(1_700_000_000_000)
+        return file.toMediaRef()
+    }
+
+    private fun video(path: String): MediaRef = File(photo(path, "mp4 bytes").path).toMediaRef(MediaType.VIDEO)
+
+    private fun test(block: suspend AppTrash.() -> Unit) = runBlocking { trash.block() }
+
+    @Test
+    fun `a video moves to the trash and back as a video`() = test {
+        val clip = video("DCIM/Camera/clip.mp4")
+
+        assertEquals(listOf(clip), moveToTrash(listOf(clip)).map { it.original })
+        assertEquals(clip, trashed().single().original)
+
+        assertEquals(listOf(clip), restore(listOf(clip)))
+        assertEquals(clip, File(clip.path).toMediaRef(MediaType.VIDEO))
+        assertTrue(trashed().isEmpty())
+    }
+
+    @Test
+    fun `a video is purged as a video, on request and once it expired`() = test {
+        val chosen = video("DCIM/Camera/chosen.mp4")
+        val old = video("DCIM/Camera/old.mp4")
+        moveToTrash(listOf(chosen, old))
+
+        assertEquals(listOf(chosen), purge(listOf(chosen)))
+        clock.now += Duration.ofDays(31)
+
+        assertEquals(listOf(old), purgeExpired().purged)
+        assertTrue(trashed().isEmpty())
+    }
+
+    /** The file's inode: a rename keeps it, a copy gets a new one. */
+    private fun inode(file: File): Any = Files.getAttribute(file.toPath(), "unix:ino")
+
+    @Test
+    fun `a video moves by rename on its volume, both ways, never by copy`() = test {
+        val clip = video("DCIM/Camera/big.mp4")
+        val before = inode(File(clip.path))
+
+        moveToTrash(listOf(clip))
+        assertEquals(before, inode(trashed().single().file))
+        restore(listOf(clip))
+
+        assertEquals(before, inode(File(clip.path)))
+    }
+
+    @Test
+    fun `a file on another volume goes to that volume's trash and back, by rename`() = runBlocking {
+        val card = folder.newFolder("card")
+        val trash = AppTrash({ listOf(volume, card) }, clock)
+        val clip = File(card, "DCIM/clip.mp4").apply {
+            parentFile!!.mkdirs()
+            writeText("mp4 bytes")
+        }.toMediaRef(MediaType.VIDEO)
+        val before = inode(File(clip.path))
+
+        trash.moveToTrash(listOf(clip))
+        val item = trash.trashed().single()
+        assertEquals(File(card, TRASH_FOLDER), item.file.parentFile!!.parentFile)
+        assertEquals(before, inode(item.file))
+        assertEquals(listOf(clip), trash.restore(listOf(clip)))
+
+        assertEquals(before, inode(File(clip.path)))
+        assertFalse(File(volume, TRASH_FOLDER).exists())
+    }
+
+    @Test
+    fun `an item whose original path is on another volume stays in the trash, since moving it there would copy it`() = runBlocking {
+        val card = folder.newFolder("card")
+        val trash = AppTrash({ listOf(volume, card) }, clock)
+        val clip = video("DCIM/clip.mp4")
+        trash.moveToTrash(listOf(clip))
+        // A trash folder copied by hand from the card to the phone, say: the record names the card.
+        val origin = File(trash.trashed().single().file.parentFile, "origin.properties")
+        val props = Properties().apply { origin.inputStream().use(::load) }
+        val elsewhere = File(card, "DCIM/clip.mp4").path
+        props["path"] = elsewhere
+        origin.outputStream().use { props.store(it, null) }
+        val moved = clip.copy(path = elsewhere)
+
+        assertEquals(emptyList<MediaRef>(), trash.restore(listOf(moved)))
+
+        assertFalse(File(elsewhere).exists())
+        assertEquals(listOf(moved), trash.trashed().map { it.original })
+    }
+
+    @Test
+    fun `moving returns the item each file became, as the trash lists it`() = test {
+        val image = photo("DCIM/n.jpg")
+
+        val moved = moveToTrash(listOf(image, photo("DCIM/gone.jpg").also { File(it.path).delete() }))
+
+        assertEquals(trashed(), moved)
+    }
+
+    /** The same file trashed twice: put back with its size and mtime, say by a sync app, and trashed again. */
+    private suspend fun AppTrash.twice(path: String): Pair<TrashedImage, TrashedImage> {
+        val first = moveToTrash(listOf(photo(path))).single()
+        clock.now += Duration.ofHours(1)
+        val second = moveToTrash(listOf(photo(path))).single()
+        assertEquals(first.original, second.original)
+        return first to second
+    }
+
+    @Test
+    fun `purging items deletes exactly the ones named, never another with an equal original`() = test {
+        val (first, second) = twice("DCIM/again.jpg")
+
+        assertEquals(listOf(first.original), purgeItems(listOf(first.file)))
+
+        assertEquals(listOf(second), trashed())
+    }
+
+    @Test
+    fun `purging an item already gone deletes nothing, even with an equal original still in the trash`() = test {
+        val (first, second) = twice("DCIM/again.jpg")
+        purgeItems(listOf(second.file))
+
+        assertEquals(emptyList<MediaRef>(), purgeItems(listOf(second.file)))
+
+        assertEquals(listOf(first), trashed())
+    }
+
+    @Test
+    fun `purging items ignores a file outside the trash`() = test {
+        val image = photo("DCIM/outside.jpg")
+
+        assertEquals(emptyList<MediaRef>(), purgeItems(listOf(File(image.path))))
+
+        assertTrue(File(image.path).exists())
+    }
+
+    /** The folder of [item], moved under a `.cribrum-trash` folder that is no volume's, as a trash folder copied by hand would be. */
+    private fun lookAlike(item: TrashedImage): File {
+        val copy = File(folder.newFolder("elsewhere", UUID.randomUUID().toString(), ".cribrum-trash"), UUID.randomUUID().toString())
+        item.file.parentFile!!.run { copyRecursively(copy) && deleteRecursively() }
+        return File(copy, item.file.name)
+    }
+
+    @Test
+    fun `purging items refuses an item in a look-alike trash folder outside the volumes, and the rest still go`() = test {
+        val real = moveToTrash(listOf(photo("DCIM/real.jpg"))).single()
+        val fake = lookAlike(moveToTrash(listOf(photo("DCIM/fake.jpg"))).single())
+
+        assertEquals(listOf(real.original), purgeItems(listOf(fake, real.file)))
+
+        assertTrue(fake.exists())
+        assertTrue(trashed().isEmpty())
+    }
+
+    @Test
+    fun `purging items refuses a trash folder that is no volume's own, even one that holds a valid item`() = test {
+        val nested = File(volume, "DCIM/.cribrum-trash").also { it.mkdirs() }
+        val item = moveToTrash(listOf(photo("DCIM/nested.jpg"))).single()
+        val inside = File(nested, "item").also { item.file.parentFile!!.copyRecursively(it) }
+
+        assertEquals(emptyList<MediaRef>(), purgeItems(listOf(File(inside, item.file.name))))
+
+        assertTrue(File(inside, item.file.name).exists())
+    }
+
+    private fun itemAt(original: String, trashFile: File) = TrashedImage(MediaRef(original, 1, 0), Instant.EPOCH, trashFile, Instant.EPOCH)
+
+    @Test
+    fun `an item is on its volume when its path reaches it through a symlink, as the sdcard alias reaches the real volume`() {
+        val alias = File(folder.root, "sdcard")
+        assumeTrue(runCatching { Files.createSymbolicLink(alias.toPath(), volume.toPath()) }.isSuccess)
+        val file = File(volume, ".cribrum-trash/item/a.jpg")
+
+        assertFalse(itemAt(File(alias, "DCIM/a.jpg").path, file).awayFromItsVolume)
+        assertFalse(itemAt(File(volume, "DCIM/a.jpg").path, File(alias, ".cribrum-trash/item/a.jpg")).awayFromItsVolume)
+    }
+
+    @Test
+    fun `an item whose path is on another volume is away from its volume`() {
+        val other = folder.newFolder("other")
+
+        assertTrue(itemAt(File(other, "DCIM/a.jpg").path, File(volume, ".cribrum-trash/item/a.jpg")).awayFromItsVolume)
+    }
+
+    @Test
+    fun `an item with a media type this build does not know reads as an image, so it is listed, restored and purged`() = test {
+        val image = photo("DCIM/later.jpg")
+        val expiring = photo("DCIM/expiring.jpg")
+        moveToTrash(listOf(image, expiring))
+        for (item in trashed()) {
+            val origin = File(item.file.parentFile, "origin.properties")
+            val props = Properties().apply { origin.inputStream().use(::load) }
+            props["media_type"] = "audio" // written by a later build, before a downgrade
+            origin.outputStream().use { props.store(it, null) }
+        }
+
+        assertEquals(setOf(image, expiring), trashed().map { it.original }.toSet())
+        assertEquals(listOf(image), restore(listOf(image)))
+        clock.now += Duration.ofDays(31)
+        assertEquals(listOf(expiring), purgeExpired().purged)
+    }
+
+    @Test
+    fun `an item written before the trash recorded media types reads as an image`() = test {
+        val image = photo("DCIM/before.jpg")
+        moveToTrash(listOf(image))
+        val origin = File(trashed().single().file.parentFile, "origin.properties")
+        val props = Properties().apply { origin.inputStream().use(::load) }
+        props.remove("media_type")
+        origin.outputStream().use { props.store(it, null) }
+
+        assertEquals(image, trashed().single().original)
+        assertEquals(listOf(image), restore(listOf(image)))
+    }
+
+    @Test
+    fun `moving takes the file out of its folder and keeps where it was`() = test {
+        val image = photo("DCIM/Camera/a.jpg")
+
+        assertEquals(listOf(image), moveToTrash(listOf(image)).map { it.original })
+
+        assertFalse(File(image.path).exists())
+        val item = trashed().single()
+        assertEquals(image, item.original)
+        assertEquals(clock.now, item.trashedAt)
+        assertEquals(clock.now, item.seenAt)
+        assertEquals("a.jpg", item.file.name)
+        assertTrue(File(volume, "$TRASH_FOLDER/.nomedia").exists())
+        assertEquals(listOf(image.path), changed)
+    }
+
+    @Test
+    fun `restoring puts back the same file with the same size and mtime`() = test {
+        val image = photo("WhatsApp/Media/WhatsApp Images/Sent/b.jpg")
+        moveToTrash(listOf(image))
+
+        assertEquals(listOf(image), restore(listOf(image)))
+
+        assertEquals(image, File(image.path).toMediaRef())
+        assertEquals(emptyList<TrashedImage>(), trashed())
+        assertEquals(listOf(volume.resolve(TRASH_FOLDER).resolve(".nomedia")), volume.resolve(TRASH_FOLDER).listFiles()!!.toList())
+    }
+
+    @Test
+    fun `restoring recreates a folder that is gone`() = test {
+        val image = photo("Pictures/Old/c.jpg")
+        moveToTrash(listOf(image))
+        File(volume, "Pictures/Old").delete()
+
+        assertEquals(listOf(image), restore(listOf(image)))
+
+        assertTrue(File(image.path).isFile)
+    }
+
+    @Test
+    fun `restoring never overwrites a file that took the original path`() = test {
+        val image = photo("DCIM/d.jpg")
+        moveToTrash(listOf(image))
+        photo("DCIM/d.jpg", "a new photo")
+
+        assertEquals(emptyList<MediaRef>(), restore(listOf(image)))
+
+        assertEquals("a new photo", File(image.path).readText())
+        assertEquals(listOf(image), trashed().map { it.original })
+    }
+
+    @Test
+    fun `a file changed or gone since its scan is not moved`() = test {
+        val changedFile = photo("DCIM/e.jpg")
+        File(changedFile.path).writeText("edited since the scan")
+        val gone = photo("DCIM/f.jpg")
+        File(gone.path).delete()
+
+        assertEquals(emptyList<TrashedImage>(), moveToTrash(listOf(changedFile, gone)))
+
+        assertTrue(File(changedFile.path).exists())
+        assertEquals(emptyList<TrashedImage>(), trashed())
+    }
+
+    @Test
+    fun `a file outside every volume is not moved`() = test {
+        val outside = File(folder.root, "elsewhere.jpg").apply { writeText("x") }.toMediaRef()
+
+        assertEquals(emptyList<TrashedImage>(), moveToTrash(listOf(outside)))
+
+        assertTrue(File(outside.path).exists())
+    }
+
+    @Test
+    fun `two files with the same name are kept apart`() = test {
+        val first = photo("DCIM/g.jpg", "first")
+        val second = photo("Download/g.jpg", "second")
+
+        moveToTrash(listOf(first, second))
+        restore(listOf(first, second))
+
+        assertEquals("first", File(first.path).readText())
+        assertEquals("second", File(second.path).readText())
+    }
+
+    @Test
+    fun `purging after 30 days deletes only what expired`() = test {
+        val old = photo("DCIM/old.jpg")
+        moveToTrash(listOf(old))
+        clock.now += Duration.ofDays(10)
+        val recent = photo("DCIM/recent.jpg")
+        moveToTrash(listOf(recent))
+
+        clock.now += Duration.ofDays(20)
+
+        assertEquals(listOf(old), purgeExpired().purged)
+        assertEquals(listOf(recent), trashed().map { it.original })
+        assertEquals(
+            listOf(".nomedia", trashed().single().file.parentFile!!.name).sorted(),
+            volume.resolve(TRASH_FOLDER).list()!!.sorted(),
+        )
+    }
+
+    @Test
+    fun `a new retention applies to images already in the trash`() = test {
+        val image = photo("DCIM/l.jpg")
+        moveToTrash(listOf(image))
+        clock.now += Duration.ofDays(10)
+
+        assertEquals(emptyList<MediaRef>(), purgeExpired().purged)
+        assertEquals(Instant.parse("2026-11-18T12:00:00Z"), trashed().single().purgeAt)
+
+        retention = Duration.ofDays(7)
+
+        assertEquals(Instant.parse("2026-10-26T12:00:00Z"), trashed().single().purgeAt)
+        assertEquals(listOf(image), purgeExpired().purged)
+        assertTrue(trashed().isEmpty())
+    }
+
+    @Test
+    fun `a longer retention keeps what the old one would have purged`() = test {
+        val image = photo("DCIM/m.jpg")
+        moveToTrash(listOf(image))
+        clock.now += Duration.ofDays(40)
+        retention = Duration.ofDays(60)
+
+        assertEquals(emptyList<MediaRef>(), purgeExpired().purged)
+        assertEquals(listOf(image), trashed().map { it.original })
+    }
+
+    @Test
+    fun `purging chosen images deletes them now`() = test {
+        val image = photo("DCIM/h.jpg")
+        val other = photo("DCIM/i.jpg")
+        moveToTrash(listOf(image, other))
+
+        purge(listOf(image))
+
+        assertEquals(listOf(other), trashed().map { it.original })
+        assertFalse(File(image.path).exists())
+    }
+
+    @Test
+    fun `purging returns only the images it deleted`() = test {
+        val gone = photo("DCIM/stuck.jpg")
+        val deleted = photo("DCIM/free.jpg")
+        moveToTrash(listOf(gone, deleted))
+        val stuck = trashed().single { it.original == gone }.file.parentFile!!
+        assumeTrue("the folder is still deletable (running as root?)", stuck.setWritable(false) && !stuck.canWrite())
+
+        val purged = try {
+            purge(listOf(gone, deleted, photo("DCIM/never-trashed.jpg")))
+        } finally {
+            stuck.setWritable(true)
+        }
+
+        assertEquals(listOf(deleted), purged)
+        assertEquals(listOf(gone), trashed().map { it.original })
+    }
+
+    @Test
+    fun `purging expired returns only the images it deleted`() = test {
+        val stuck = photo("DCIM/stuck.jpg")
+        val free = photo("DCIM/free.jpg")
+        moveToTrash(listOf(stuck, free))
+        val folder = trashed().single { it.original == stuck }.file.parentFile!!
+        assumeTrue("the folder is still deletable (running as root?)", folder.setWritable(false) && !folder.canWrite())
+        clock.now += Duration.ofDays(31)
+
+        val purged = try {
+            purgeExpired()
+        } finally {
+            folder.setWritable(true)
+        }
+
+        assertEquals(listOf(free), purged.purged)
+        // An item it could not delete is still in the trash, so its path is held and its row stays.
+        assertEquals(setOf(stuck.path), purged.held)
+        assertEquals(listOf(stuck), trashed().map { it.original })
+    }
+
+    @Test
+    fun `the trash survives a new instance, as after a reinstall`() {
+        val image = photo("DCIM/j.jpg")
+        runBlocking { trash.moveToTrash(listOf(image)) }
+
+        val again = AppTrash({ listOf(volume) }, clock)
+
+        assertEquals(listOf(image), runBlocking { again.restore(listOf(image)) })
+    }
+
+    @Test
+    fun `folders the trash did not write are left alone`() = test {
+        val stranger = File(volume, "$TRASH_FOLDER/not-ours").apply { mkdirs() }
+        File(stranger, "k.jpg").writeText("x")
+
+        assertEquals(emptyList<TrashedImage>(), trashed())
+        clock.now += Duration.ofDays(365)
+        purgeExpired()
+
+        assertTrue(File(stranger, "k.jpg").exists())
+    }
+
+    @Test
+    fun `refuses to move a file named origin properties`() = test {
+        val originFile = photo("DCIM/origin.properties")
+
+        assertEquals(emptyList<TrashedImage>(), moveToTrash(listOf(originFile)))
+
+        assertTrue(File(originFile.path).isFile)
+        assertTrue(trashed().isEmpty())
+    }
+
+    @Test
+    fun `corrupted or truncated origin properties is skipped without crashing`() = test {
+        val trashRoot = File(volume, TRASH_FOLDER).apply { mkdirs() }
+
+        // Empty (0-byte truncated) origin.properties
+        val emptyFolder = File(trashRoot, UUID.randomUUID().toString()).apply { mkdirs() }
+        File(emptyFolder, "test.jpg").writeText("data")
+        File(emptyFolder, "origin.properties").writeText("")
+
+        // Missing required fields
+        val fieldlessFolder = File(trashRoot, UUID.randomUUID().toString()).apply { mkdirs() }
+        File(fieldlessFolder, "test2.jpg").writeText("data")
+        File(fieldlessFolder, "origin.properties").writeText("path=/DCIM/test2.jpg\n")
+
+        // Malformed unicode / invalid properties
+        val invalidFolder = File(trashRoot, UUID.randomUUID().toString()).apply { mkdirs() }
+        File(invalidFolder, "test3.jpg").writeText("data")
+        File(invalidFolder, "origin.properties").writeBytes(byteArrayOf(0x00, 0x1F, 0x7F))
+
+        assertEquals(emptyList<TrashedImage>(), trashed())
+        assertEquals(emptyList<MediaRef>(), purgeExpired().purged)
+    }
+
+    @Test
+    fun `trashed_at in the future is treated as now and not purged`() = test {
+        val trashRoot = File(volume, TRASH_FOLDER).apply { mkdirs() }
+        val folder = File(trashRoot, UUID.randomUUID().toString()).apply { mkdirs() }
+        val imgFile = File(folder, "future.jpg").apply { writeText("img") }
+        val futureInstant = clock.now + Duration.ofDays(10)
+
+        val props = Properties().apply {
+            setProperty("path", "${volume.path}/DCIM/future.jpg")
+            setProperty("size", imgFile.length().toString())
+            setProperty("mtime_ns", "1700000000000000000")
+            setProperty("trashed_at", futureInstant.toString())
+            setProperty("seen_at", clock.now.toString())
+        }
+        File(folder, "origin.properties").outputStream().use { props.store(it, null) }
+
+        val items = trashed()
+        assertEquals(1, items.size)
+        // trashedAt in future is clamped to now
+        assertEquals(clock.now, items.single().trashedAt)
+        assertEquals(clock.now + retention, items.single().purgeAt)
+
+        assertEquals(emptyList<MediaRef>(), purgeExpired().purged)
+        assertTrue(imgFile.exists())
+    }
+
+    @Test
+    fun `clock moving back after trash rewrites seen_at and delays purge until retention passes`() = test {
+        val image = photo("DCIM/clock_rewind.jpg")
+        val trashedAt = clock.now
+        moveToTrash(listOf(image))
+
+        val folder = trashed().single().file.parentFile!!
+        val originFile = File(folder, "origin.properties")
+
+        // User turns the clock back 5 days
+        clock.now -= Duration.ofDays(5)
+        val rewoundNow = clock.now
+
+        // purgeExpired detects now < seen_at and rewrites seen_at to now
+        assertEquals(emptyList<MediaRef>(), purgeExpired().purged)
+
+        val updatedProps = Properties().apply { originFile.inputStream().use(::load) }
+        assertEquals(rewoundNow.toString(), updatedProps.getProperty("seen_at"))
+        assertEquals(trashedAt.toString(), updatedProps.getProperty("trashed_at"))
+
+        // Advance clock by 31 days (retention is 30 days from rewoundNow, but 26 days from trashedAt)
+        // At this point: seen_at + 30 days <= clock.now, but trashed_at + 30 days > clock.now!
+        clock.now = rewoundNow + Duration.ofDays(28)
+        assertEquals(emptyList<MediaRef>(), purgeExpired().purged)
+        assertTrue(trashed().isNotEmpty())
+
+        // Advance clock so both trashed_at + 30 days and seen_at + 30 days have passed
+        clock.now = trashedAt + Duration.ofDays(31)
+        assertEquals(listOf(image), purgeExpired().purged)
+        assertTrue(trashed().isEmpty())
+    }
+
+    @Test
+    fun `item lacking seen_at has seen_at written on purgeExpired and is not purged until retention passes`() = test {
+        val trashRoot = File(volume, TRASH_FOLDER).apply { mkdirs() }
+        val folder = File(trashRoot, UUID.randomUUID().toString()).apply { mkdirs() }
+        val imgFile = File(folder, "legacy.jpg").apply { writeText("img") }
+        val oldTrashedAt = clock.now - Duration.ofDays(45)
+
+        val props = Properties().apply {
+            setProperty("path", "${volume.path}/DCIM/legacy.jpg")
+            setProperty("size", imgFile.length().toString())
+            setProperty("mtime_ns", "1700000000000000000")
+            setProperty("trashed_at", oldTrashedAt.toString())
+            // No seen_at field
+        }
+        val originFile = File(folder, "origin.properties")
+        originFile.outputStream().use { props.store(it, null) }
+
+        // purgeExpired writes seen_at = clock.now and does not purge yet
+        assertEquals(emptyList<MediaRef>(), purgeExpired().purged)
+
+        val loaded = Properties().apply { originFile.inputStream().use(::load) }
+        assertEquals(clock.now.toString(), loaded.getProperty("seen_at"))
+
+        // Clock advances by 31 days (retention 30 days from seen_at)
+        clock.now += Duration.ofDays(31)
+        val purged = purgeExpired().purged
+        assertEquals(1, purged.size)
+        assertEquals("${volume.path}/DCIM/legacy.jpg", purged.single().path)
+        assertFalse(folder.exists())
+    }
+
+    @Test
+    fun `a move whose record write fails cleans up the trash folder and leaves the file in place`() = test {
+        val image = photo("DCIM/write_fail.jpg")
+        recordWriter = { _, _, _, _, _, _ -> throw IOException("simulated disk full") }
+
+        assertEquals(emptyList<TrashedImage>(), moveToTrash(listOf(image)))
+
+        assertTrue(File(image.path).exists())
+        val trashRoot = File(volume, TRASH_FOLDER)
+        assertEquals(emptyList<File>(), trashRoot.listFiles()?.filter { it.isDirectory }.orEmpty())
+    }
+
+    @Test
+    fun `a move whose rename fails cleans up the trash folder and leaves the file in place`() = test {
+        val image = photo("DCIM/rename_fail/photo.jpg")
+        val sourceDir = File(image.path).parentFile!!
+        sourceDir.setWritable(false)
+        try {
+            assertEquals(emptyList<TrashedImage>(), moveToTrash(listOf(image)))
+            assertTrue(File(image.path).exists())
+            val trashRoot = File(volume, TRASH_FOLDER)
+            assertEquals(emptyList<File>(), trashRoot.listFiles()?.filter { it.isDirectory }.orEmpty())
+        } finally {
+            sourceDir.setWritable(true)
+        }
+    }
+
+    @Test
+    fun `a restore whose rename fails leaves the item in the trash`() = test {
+        val image = photo("DCIM/restore_fail/photo.jpg")
+        moveToTrash(listOf(image))
+        val item = trashed().single()
+
+        val parentDir = File(image.path).parentFile!!
+        parentDir.setReadOnly()
+        try {
+            assertEquals(emptyList<MediaRef>(), restore(listOf(image)))
+            assertEquals(listOf(item), trashed())
+            assertTrue(item.file.exists())
+        } finally {
+            parentDir.setWritable(true)
+        }
+    }
+
+    @Test
+    fun `deleteItem refuses a folder outside the trash`() = test {
+        val outsideFolder = File(volume, "DCIM/Camera").apply { mkdirs() }
+        File(outsideFolder, "photo.jpg").writeText("data")
+
+        assertThrows(IllegalStateException::class.java) {
+            deleteItem(outsideFolder)
+        }
+
+        assertTrue(outsideFolder.exists())
+        assertTrue(File(outsideFolder, "photo.jpg").exists())
+    }
+
+    @Test
+    fun `restore onto a path that appears between the check and the rename fails without overwriting`() = test {
+        val image = photo("DCIM/collision.jpg", "original photo")
+        moveToTrash(listOf(image))
+
+        File(image.path).writeText("collision file")
+
+        assertEquals(emptyList<MediaRef>(), restore(listOf(image)))
+
+        assertEquals("collision file", File(image.path).readText())
+        assertEquals(listOf(image), trashed().map { it.original })
+    }
+
+    /** A compressed copy of [image] written next to it, smaller and with its mtime. */
+    private fun copyOf(image: MediaRef): File = copyFileFor(File(image.path)).apply {
+        writeText("small")
+        setLastModified(1_700_000_000_000)
+    }
+
+    private fun filesIn(image: MediaRef) = File(image.path).parentFile!!.list()!!.toList()
+
+    @Test
+    fun `a copy takes its original's path and the original waits in the trash with a record of it`() = test {
+        val image = photo("DCIM/Camera/a.jpg", "the original photo")
+        val copy = copyOf(image)
+
+        val swapped = (replaceWithCopy(image, copy) as Swap.Swapped).copy
+
+        assertEquals(MediaRef(image.path, 5, image.mtimeNs), swapped)
+        assertEquals("small", File(image.path).readText())
+        assertEquals(listOf("a.jpg"), filesIn(image))
+        val item = trashed().single()
+        assertEquals(image, item.original)
+        assertEquals(swapped, item.compressedCopy)
+        assertEquals("the original photo", item.file.readText())
+        assertEquals(listOf(image.path), changed)
+    }
+
+    @Test
+    fun `an image the gallery marked as a favourite is trashed with that written down, and the others without`() = test {
+        val heart = photo("DCIM/Camera/heart.jpg")
+        val plain = photo("DCIM/Camera/plain.jpg")
+        favorites = { setOf(heart.path) }
+
+        moveToTrash(listOf(heart, plain))
+
+        assertEquals(mapOf(heart to true, plain to false), trashed().associate { it.original to it.favorite })
+    }
+
+    @Test
+    fun `a swap asks MediaStore about its own path only, not for every favourite of the library`() = test {
+        val image = photo("DCIM/Camera/a.jpg", "the original photo")
+        photo("DCIM/Camera/b.jpg")
+
+        replaceWithCopy(image, copyOf(image))
+
+        assertEquals(listOf(listOf(image.path)), asked)
+    }
+
+    @Test
+    fun `a move asks about the images it moves, and a restore only about the copy it puts in the trash`() = test {
+        val first = photo("DCIM/Camera/a.jpg", "the original photo")
+        val second = photo("DCIM/Camera/b.jpg")
+        moveToTrash(listOf(first, second))
+        assertEquals(listOf(listOf(first.path, second.path)), asked)
+        asked.clear()
+
+        restore(listOf(first, second))
+
+        assertEquals(emptyList<List<String>>(), asked)
+    }
+
+    @Test
+    fun `a favourite swapped for its copy is reported and its trash item says it was one`() = test {
+        val image = photo("DCIM/Camera/a.jpg", "the original photo")
+        favorites = { setOf(image.path) }
+
+        val swap = replaceWithCopy(image, copyOf(image)) as Swap.Swapped
+
+        assertTrue(swap.favorite)
+        assertTrue(trashed().single().favorite)
+    }
+
+    @Test
+    fun `a photo that is not a favourite is swapped without the flag`() = test {
+        val image = photo("DCIM/Camera/a.jpg", "the original photo")
+
+        val swap = replaceWithCopy(image, copyOf(image)) as Swap.Swapped
+
+        assertFalse(swap.favorite)
+        assertFalse(trashed().single().favorite)
+    }
+
+    @Test
+    fun `a favourites query that fails does not stop the move`() = test {
+        val image = photo("DCIM/Camera/a.jpg")
+        favorites = { throw SecurityException("simulated") }
+
+        assertEquals(listOf(image), moveToTrash(listOf(image)).map { it.original })
+        assertFalse(trashed().single().favorite)
+    }
+
+    @Test
+    fun `restoring tells who was a favourite, and only those that came back`() = test {
+        val heart = photo("DCIM/Camera/heart.jpg")
+        val taken = photo("DCIM/Camera/taken.jpg")
+        val plain = photo("DCIM/Camera/plain.jpg")
+        favorites = { setOf(heart.path, taken.path) }
+        moveToTrash(listOf(heart, taken, plain))
+        File(taken.path).writeText("another file took the path")
+
+        assertEquals(setOf(heart, plain), restore(listOf(heart, taken, plain)).toSet())
+
+        assertEquals(listOf(listOf(heart.path)), favoritesRestored)
+    }
+
+    @Test
+    fun `a restore of images that were no favourites asks for nothing`() = test {
+        val image = photo("DCIM/Camera/a.jpg")
+        moveToTrash(listOf(image))
+
+        restore(listOf(image))
+
+        assertEquals(emptyList<List<String>>(), favoritesRestored)
+    }
+
+    @Test
+    fun `restoring a compressed original over a copy the gallery marked leaves that copy's flag written in its own item`() = test {
+        val image = photo("DCIM/Camera/a.jpg", "the original photo")
+        favorites = { setOf(image.path) }
+        replaceWithCopy(image, copyOf(image))
+
+        restore(listOf(image))
+
+        // The copy went to the trash while it was a favourite, and the original came back as one.
+        assertEquals(listOf(image.path), favoritesRestored.single())
+        assertTrue(trashed().single().favorite)
+    }
+
+    @Test
+    fun `restoring a compressed original puts its copy in the trash`() = test {
+        val image = photo("DCIM/Camera/a.jpg", "the original photo")
+        val swapped = (replaceWithCopy(image, copyOf(image)) as Swap.Swapped).copy
+        changed.clear()
+
+        assertEquals(listOf(image), restore(listOf(image)))
+
+        assertEquals(image, File(image.path).toMediaRef())
+        assertEquals("the original photo", File(image.path).readText())
+        val item = trashed().single()
+        assertEquals(swapped, item.original)
+        assertEquals(null, item.compressedCopy)
+        assertEquals("small", item.file.readText())
+        assertEquals(listOf(image.path), changed)
+    }
+
+    @Test
+    fun `restoring a compressed original whose path holds another file leaves both alone`() = test {
+        val image = photo("DCIM/Camera/a.jpg", "the original photo")
+        replaceWithCopy(image, copyOf(image))
+        File(image.path).writeText("edited in the gallery")
+
+        assertEquals(emptyList<MediaRef>(), restore(listOf(image)))
+
+        assertEquals("edited in the gallery", File(image.path).readText())
+        assertEquals(listOf(image), trashed().map { it.original })
+    }
+
+    @Test
+    fun `restoring a compressed original whose copy is gone puts it back`() = test {
+        val image = photo("DCIM/Camera/a.jpg", "the original photo")
+        val swapped = (replaceWithCopy(image, copyOf(image)) as Swap.Swapped).copy
+        moveToTrash(listOf(swapped))
+
+        assertEquals(listOf(image), restore(listOf(image)))
+
+        assertEquals(image, File(image.path).toMediaRef())
+        assertEquals(listOf(swapped), trashed().map { it.original })
+    }
+
+    @Test
+    fun `a restore that cannot put the original back returns the copy to its path`() = test {
+        val image = photo("DCIM/Camera/a.jpg", "the original photo")
+        val swapped = (replaceWithCopy(image, copyOf(image)) as Swap.Swapped).copy
+        val item = trashed().single()
+        mover = { from, to ->
+            if (from == item.file) throw IOException("simulated")
+            Files.move(from.toPath(), to.toPath())
+        }
+
+        assertEquals(emptyList<MediaRef>(), restore(listOf(image)))
+
+        assertEquals(swapped, File(image.path).toMediaRef())
+        assertEquals(listOf(item), trashed())
+    }
+
+    @Test
+    fun `a swap whose record write fails leaves the original and discards the copy`() = test {
+        val image = photo("DCIM/Camera/a.jpg", "the original photo")
+        recordWriter = { _, _, _, _, _, _ -> throw IOException("simulated disk full") }
+
+        assertEquals(Swap.Untouched, replaceWithCopy(image, copyOf(image)))
+
+        assertEquals(image, File(image.path).toMediaRef())
+        assertEquals(listOf("a.jpg"), filesIn(image))
+        assertEquals(emptyList<File>(), File(volume, TRASH_FOLDER).listFiles()!!.filter { it.isDirectory })
+    }
+
+    @Test
+    fun `a swap whose rename fails puts the original back and discards the copy`() = test {
+        val image = photo("DCIM/Camera/a.jpg", "the original photo")
+        val copy = copyOf(image)
+        mover = { from, to ->
+            if (from == copy) throw IOException("simulated")
+            Files.move(from.toPath(), to.toPath())
+        }
+
+        assertEquals(Swap.Untouched, replaceWithCopy(image, copy))
+
+        assertEquals(image, File(image.path).toMediaRef())
+        assertEquals(listOf("a.jpg"), filesIn(image))
+        assertEquals(emptyList<TrashedImage>(), trashed())
+        assertEquals(emptyList<File>(), File(volume, TRASH_FOLDER).listFiles()!!.filter { it.isDirectory })
+    }
+
+    @Test
+    fun `a swap that cannot put the original back leaves it to restore`() = test {
+        val image = photo("DCIM/Camera/a.jpg", "the original photo")
+        val copy = copyOf(image)
+        mover = { _, _ -> throw IOException("simulated") }
+
+        assertEquals(Swap.LeftInTrash, replaceWithCopy(image, copy))
+
+        assertFalse(copy.exists())
+        assertEquals(listOf(image), trashed().map { it.original })
+        mover = { from, to -> Files.move(from.toPath(), to.toPath()) }
+        assertEquals(listOf(image), restore(listOf(image)))
+        assertEquals(image, File(image.path).toMediaRef())
+    }
+
+    @Test
+    fun `a swap whose volumes cannot be listed discards the copy`() = runBlocking {
+        val image = photo("DCIM/Camera/a.jpg", "the original photo")
+        val copy = copyOf(image)
+        val broken = AppTrash({ throw IOException("simulated") }, clock)
+
+        assertEquals(Swap.Untouched, broken.replaceWithCopy(image, copy))
+
+        assertEquals(image, File(image.path).toMediaRef())
+        assertEquals(listOf("a.jpg"), filesIn(image))
+    }
+
+    @Test
+    fun `a swap refuses an original that changed since its scan`() = test {
+        val image = photo("DCIM/Camera/a.jpg", "the original photo")
+        File(image.path).writeText("changed since the scan")
+
+        assertEquals(Swap.Untouched, replaceWithCopy(image, copyOf(image)))
+
+        assertEquals("changed since the scan", File(image.path).readText())
+        assertEquals(listOf("a.jpg"), filesIn(image))
+        assertEquals(emptyList<TrashedImage>(), trashed())
+    }
+
+    @Test
+    fun `purging a compressed original keeps its copy`() = test {
+        val image = photo("DCIM/Camera/a.jpg", "the original photo")
+        val swapped = (replaceWithCopy(image, copyOf(image)) as Swap.Swapped).copy
+
+        assertEquals(listOf(image), purge(listOf(image)))
+
+        assertEquals(swapped, File(image.path).toMediaRef())
+        assertEquals(emptyList<TrashedImage>(), trashed())
+    }
+
+    @Test
+    fun `purging an image deletes one item, even when the same image is in the trash twice`() = test {
+        val first = photo("DCIM/Camera/a.jpg")
+        moveToTrash(listOf(first))
+        val again = photo("DCIM/Camera/a.jpg")
+        moveToTrash(listOf(again))
+        assertEquals(first, again)
+        assertEquals(2, trashed().size)
+
+        assertEquals(listOf(first), purge(listOf(first)))
+
+        assertEquals(1, trashed().size)
+    }
+
+    @Test
+    fun `purging an original leaves its compressed copy, which has its path`() = test {
+        val image = photo("DCIM/Camera/a.jpg", "the original photo")
+        val swapped = (replaceWithCopy(image, copyOf(image)) as Swap.Swapped).copy
+        moveToTrash(listOf(swapped))
+
+        purge(listOf(image))
+
+        assertEquals(listOf(swapped), trashed().map { it.original })
+    }
+
+    @Test
+    fun `a purged path that another trash item still holds is not one to forget`() = test {
+        val image = photo("DCIM/Camera/a.jpg", "the original photo")
+        val swapped = (replaceWithCopy(image, copyOf(image)) as Swap.Swapped).copy
+        val other = photo("DCIM/Camera/b.jpg")
+        moveToTrash(listOf(swapped, other))
+
+        assertEquals(listOf(other.path), unheldPaths(purge(listOf(image, other))))
+    }
+
+    @Test
+    fun `the expired purge tells the paths left unheld as a new listing would`() = test {
+        val image = photo("DCIM/Camera/a.jpg", "the original photo")
+        val swapped = (replaceWithCopy(image, copyOf(image)) as Swap.Swapped).copy
+        val other = photo("DCIM/Camera/b.jpg")
+        moveToTrash(listOf(other))
+        clock.now += Duration.ofDays(10)
+        moveToTrash(listOf(swapped))
+        clock.now += Duration.ofDays(25)
+
+        val purge = purgeExpired()
+
+        assertEquals(setOf(image, other), purge.purged.toSet())
+        assertEquals(setOf(image.path), purge.held)
+        assertEquals(listOf(other.path), purge.unheldPaths)
+        assertEquals(unheldPaths(purge.purged), purge.unheldPaths)
+    }
+
+    @Test
+    fun `the parallel listing gives the items and the order one read after another gives`() = test {
+        val images = (0 until 40).map { photo("DCIM/p$it.jpg", "photo $it") }
+        for (image in images.shuffled(java.util.Random(7))) {
+            clock.now += Duration.ofMinutes(1)
+            moveToTrash(listOf(image))
+        }
+        // Two items trashed at the same instant: the sort keeps them in listing order, as before.
+        moveToTrash(listOf(photo("DCIM/tie1.jpg"), photo("DCIM/tie2.jpg")))
+        File(volume, "$TRASH_FOLDER/no-origin").mkdirs()
+        File(volume, "$TRASH_FOLDER/origin-is-a-folder/origin.properties").mkdirs()
+
+        val oneByOne = volume.resolve(TRASH_FOLDER).listFiles()!!.mapNotNull { readItem(it) }.sortedByDescending { it.trashedAt }
+
+        assertEquals(42, oneByOne.size)
+        assertEquals(oneByOne, trashed())
+    }
+
+    @Test
+    fun `discarding refuses anything but a compressed copy outside the trash`() = test {
+        val image = photo("DCIM/Camera/a.jpg")
+        val lookalike = File(File(image.path).parentFile, ".pending-cribrum-x.jpg").apply { writeText("not ours") }
+        val folderNamedLikeACopy = copyFileFor(File(image.path)).apply { mkdirs() }
+        val inTrash = copyFileFor(File(volume, "$TRASH_FOLDER/item/a.jpg")).apply {
+            parentFile!!.mkdirs()
+            writeText("in the trash")
+        }
+
+        for (file in listOf(File(image.path), lookalike, folderNamedLikeACopy, inTrash)) {
+            assertThrows(file.name, IllegalStateException::class.java) { discardCopy(file) }
+            assertTrue(file.name, file.exists())
+        }
+    }
+
+    @Test
+    fun `discarding deletes a copy, and does nothing for one never written`() = test {
+        val image = photo("DCIM/Camera/a.jpg")
+        val copy = copyOf(image)
+
+        discardCopy(copy)
+        discardCopy(copyFileFor(File(image.path)))
+
+        assertFalse(copy.exists())
+        assertEquals(listOf("a.jpg"), filesIn(image))
+    }
+
+    @Test
+    fun `sweeping discards the copies a killed compression left, and nothing else`() = test {
+        val image = photo("DCIM/Camera/a.jpg")
+        val orphan = copyOf(image)
+        val pending = File(File(image.path).parentFile, ".pending-1700000000-b.jpg").apply { writeText("another app's") }
+        val inTrash = copyFileFor(File(volume, "$TRASH_FOLDER/item/a.jpg")).apply {
+            parentFile!!.mkdirs()
+            writeText("in the trash")
+        }
+
+        discardCopiesIn(listOf(File(image.path).parentFile!!, inTrash.parentFile!!, File(volume, "gone")))
+
+        assertFalse(orphan.exists())
+        assertTrue(pending.exists())
+        assertTrue(inTrash.exists())
+        assertEquals(image, File(image.path).toMediaRef())
+    }
+}

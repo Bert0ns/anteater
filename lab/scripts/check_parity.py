@@ -17,7 +17,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 LAB = ROOT / "lab/src/cribrum_lab"
-ANDROID = ROOT / "android/app/src/main/kotlin/io/github/bert0ns/cribrum"
+ANDROID = ROOT / "android/app/src/main/kotlin/io/github/bert0ns/anteater"
 
 LAB_ONLY: set[str] = set()
 """Ids of detectors the lab has and the app does not yet. Empty when they are all ported."""

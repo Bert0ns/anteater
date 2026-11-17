@@ -11,8 +11,8 @@ set -euo pipefail
 
 read -ra adb <<<"${ADB:-adb}"
 here=$(cd "$(dirname "$0")" && pwd)
-target=io.github.bert0ns.cribrum.profile
-runner=io.github.bert0ns.cribrum.baselineprofile
+target=io.github.bert0ns.anteater.profile
+runner=io.github.bert0ns.anteater.baselineprofile
 generator=$runner.HomeAndCategoriesGenerator
 output=/sdcard/Android/media/$runner
 profile=$here/../app/src/main/baselineProfiles/baseline-prof.txt
@@ -43,7 +43,7 @@ active='DisplayViewport\{[^}]*isActive=true'
 # Any Cribrum build, which the generator's start from the launcher would send away.
 resumed=$(shell dumpsys activity activities | grep 'ResumedActivity' || true)
 [[ -n $resumed ]] || die "no app is in the foreground: turn the screen on"
-[[ $resumed != *io.github.bert0ns.cribrum* ]] || die "Cribrum is in the foreground: leave it first"
+[[ $resumed != *io.github.bert0ns.anteater* ]] || die "Cribrum is in the foreground: leave it first"
 
 "${adb[@]}" install -r "$local_dir/app.apk"
 "${adb[@]}" install -r -t "$local_dir/generator.apk"

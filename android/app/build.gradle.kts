@@ -24,11 +24,11 @@ val gitVersionName: String =
         .ifEmpty { "0.1.0" }
 
 android {
-    namespace = "io.github.bert0ns.cribrum"
+    namespace = "io.github.bert0ns.anteater"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "io.github.bert0ns.cribrum"
+        applicationId = "io.github.bert0ns.anteater"
         // -PapplicationIdSuffix=.heiccheck installs beside the app on the phone, for the device tests run by hand.
         applicationIdSuffix = providers.gradleProperty("applicationIdSuffix").orNull
         minSdk = 30 // Android 11: scoped storage rules and MANAGE_EXTERNAL_STORAGE (design §4, §9)
@@ -256,7 +256,7 @@ val downloadPpocr = tasks.register<DownloadModel>("downloadPpocr") {
 androidComponents {
     onVariants { variant ->
         // The baselineprofile plugin's build types go on a phone beside the real app, never over it.
-        if (variant.name !in setOf("debug", "release", "benchmark")) variant.applicationId.set("io.github.bert0ns.cribrum.profile")
+        if (variant.name !in setOf("debug", "release", "benchmark")) variant.applicationId.set("io.github.bert0ns.anteater.profile")
         // The plugin points the source set of its build type at release's manifest, so this one has to be added here.
         if (variant.name == "nonMinifiedRelease") variant.sources.manifests.addStaticManifestFile("src/nonMinifiedRelease/AndroidManifest.xml")
         variant.sources.assets?.addGeneratedSourceDirectory(downloadMobileClip, DownloadModel::outputDirectory)
