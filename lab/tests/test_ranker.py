@@ -3,7 +3,15 @@ from pathlib import Path
 import pytest
 
 from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, Role
-from cribrum_lab.model import Category, IndexedMedia, MediaRef, Protection, ReviewState, Signal
+from cribrum_lab.model import (
+    Category,
+    IndexedMedia,
+    MediaRef,
+    MediaType,
+    Protection,
+    ReviewState,
+    Signal,
+)
 from cribrum_lab.ranker import Ranker
 
 THRESHOLDS = {Category.BLURRY: 0.5, Category.SCREENSHOT: 0.8, Category.EXACT_DUPLICATE: 0.5}
@@ -204,6 +212,37 @@ def test_by_category_applies_protection_too():
     order = rank(image("people", blur(0.9), faces()), image("wall", blur(0.8)))
 
     assert names(Ranker.by_category(order)[Category.BLURRY]) == ["wall", "people"]
+
+
+def sized(name, size, *signals, media_type=MediaType.VIDEO):
+    ref = MediaRef(Path(name), size, 0, media_type)
+    return IndexedMedia(ref, ReviewState.UNREVIEWED, signals, frozenset())
+
+
+def test_by_category_lists_the_larger_of_two_equal_videos_first():
+    # The path hash alone would put "small" first.
+    order = rank(sized("small", 1_000_000, blur(0.9)), sized("large", 900_000_000, blur(0.9)))
+
+    assert names(Ranker.by_category(order)[Category.BLURRY]) == ["large", "small"]
+
+
+def test_protection_lowers_a_video_by_its_factor_on_the_size():
+    # Faces halve the people video: 1000 MB counts as 500, ahead of 400 MB and behind 600 MB.
+    people = sized("people", 1_000_000_000, blur(0.9), faces())
+
+    for size, expected in [(400_000_000, ["people", "plain"]), (600_000_000, ["plain", "people"])]:
+        order = rank(people, sized("plain", size, blur(0.9)))
+        assert names(Ranker.by_category(order)[Category.BLURRY]) == expected
+
+
+def test_an_image_s_size_does_not_change_its_place():
+    # The path hash puts "small" first, and an image keeps that order whatever its size.
+    order = rank(
+        sized("small", 1_000_000, blur(0.9), media_type=MediaType.IMAGE),
+        sized("large", 900_000_000, blur(0.9), media_type=MediaType.IMAGE),
+    )
+
+    assert names(Ranker.by_category(order)[Category.BLURRY]) == ["small", "large"]
 
 
 def test_a_sticker_is_listed_only_as_a_sticker():
