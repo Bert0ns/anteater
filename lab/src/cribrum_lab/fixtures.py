@@ -274,9 +274,9 @@ NEAR_DUPLICATE_CLIPS = [
      "bitrate": 50000000, "frames": [[1, 0, 0], [0.8, 0.6, 0], [0.6, 0.8, 0]]},
     {"path": f"{_SENT}/trip-sd.mp4", "duration_ms": 20000, "width": 480, "height": 848,
      "bitrate": 1200000, "frames": [[0.99, 0.1, 0], [0.8, 0.6, 0.05], [0.6, 0.8, 0]]},
-    {"path": f"{_SENT}/trip-hd.mp4", "duration_ms": 20250, "width": 720, "height": 1280,
+    {"path": f"{_SENT}/trip-hd.mp4", "duration_ms": 20100, "width": 720, "height": 1280,
      "bitrate": 2000000, "frames": [[1, 0, 0], [0.8, 0.6, 0], [0.6, 0.8, 0]]},
-    {"path": f"{_SENT}/trip-late.mp4", "duration_ms": 20501, "width": 720, "height": 1280,
+    {"path": f"{_SENT}/trip-late.mp4", "duration_ms": 20201, "width": 720, "height": 1280,
      "bitrate": 2000000, "frames": [[1, 0, 0], [0.8, 0.6, 0], [0.6, 0.8, 0]]},
     # The same length, but other frames, no frames or no length: linked to none.
     {"path": f"{_SENT}/other.mp4", "duration_ms": 20000, "width": 480, "height": 848,
@@ -297,6 +297,31 @@ NEAR_DUPLICATE_CLIPS = [
      "bitrate": 1000000,
      "frames": [[0.5, 0, 0.87], [0.4, 0.1, 0.9], [0.25, 0.25, 0.93], [0.1, 0.4, 0.9],
                 [0, 0.5, 0.87]]},
+    # One frame each: a cosine of 0.81 links, and 0.79 does not.
+    {"path": "DCIM/Camera/bar.mp4", "duration_ms": 5000, "width": 1080, "height": 1920,
+     "bitrate": 8000000, "frames": [[1, 0, 0]]},
+    {"path": f"{_SENT}/bar-over.mp4", "duration_ms": 5000, "width": 480, "height": 848,
+     "bitrate": 1000000, "frames": [[0.81, 0.5864, 0]]},
+    {"path": "DCIM/Camera/under.mp4", "duration_ms": 6000, "width": 1080, "height": 1920,
+     "bitrate": 8000000, "frames": [[1, 0, 0]]},
+    {"path": f"{_SENT}/bar-under.mp4", "duration_ms": 6000, "width": 480, "height": 848,
+     "bitrate": 1000000, "frames": [[0.79, 0.6131, 0]]},
+    # The first and last are further apart than the gap, and link through the middle one.
+    {"path": f"{_SENT}/chain-1.mp4", "duration_ms": 30000, "width": 720, "height": 1280,
+     "bitrate": 2000000, "frames": [[0, 0.6, 0.8]]},
+    {"path": f"{_SENT}/chain-2.mp4", "duration_ms": 30060, "width": 480, "height": 848,
+     "bitrate": 1000000, "frames": [[0, 0.6, 0.8]]},
+    {"path": f"{_SENT}/chain-3.mp4", "duration_ms": 30120, "width": 480, "height": 848,
+     "bitrate": 900000, "frames": [[0, 0.6, 0.8]]},
+    # Two takes, camera videos captured at different instants, are no copies. A re-export that
+    # keeps the first one's instant is.
+    {"path": "DCIM/Camera/take-1.mp4", "duration_ms": 12000, "width": 2160, "height": 3840,
+     "bitrate": 50000000, "captured_instant": 1714550400000, "frames": [[0.8, 0, 0.6]]},
+    {"path": "DCIM/Camera/take-2.mp4", "duration_ms": 12000, "width": 2160, "height": 3840,
+     "bitrate": 50000000, "captured_instant": 1714550460000, "frames": [[0.8, 0, 0.6]]},
+    {"path": "DCIM/Camera/take-1-export.mp4", "duration_ms": 12000, "width": 1080,
+     "height": 1920, "bitrate": 8000000, "captured_instant": 1714550400000,
+     "frames": [[0.8, 0, 0.6]]},
 ]  # fmt: skip
 
 

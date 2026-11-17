@@ -26,12 +26,14 @@ NEAR_DUPLICATE_MIN_COSINE = 0.90
 """Embedding similarity that still links two images. A 75% crop of a photo scores about
 0.90 with MobileCLIP-S0; different photos of the same party stay under 0.8. MobileCLIP2-S0
 links about as many pairs at this threshold (docs/design.md, section 5)."""
-VIDEO_MAX_DURATION_GAP_MS = 250
+VIDEO_MAX_DURATION_GAP_MS = 100
 """Two videos further apart in length are not compared. A WhatsApp copy and its original had the
-same length on the labeled videos (docs/design.md, section 5)."""
+same length on the labeled videos, and a re-encode moves it by an audio frame or two at most
+(docs/design.md, section 5)."""
 VIDEO_MIN_FRAME_COSINE = 0.80
 """Frame similarity that still links two videos of about one length. On the labeled videos the two
-copies scored 0.887 and 0.980, and no other pair within the length gap above 0.6."""
+copies scored 0.887 and 0.980, and no other pair within the length gap above 0.6. Without the gap,
+0.7% of the other pairs reach it."""
 _CHUNK = 1024
 
 
@@ -71,7 +73,8 @@ class NearDuplicateDetector:
         self, videos: Sequence[MediaRef], context: AnalysisContext
     ) -> dict[MediaRef, list[Signal]]:
         """A video with no length or no frames is linked to none: a length alone is no evidence,
-        since many clips share one."""
+        since many clips share one. Two camera videos captured at different instants are takes of
+        a moment, not copies (docs/design.md, section 5)."""
         members = []
         for video in videos:
             meta = _video_metadata(video, context)
@@ -80,11 +83,14 @@ class NearDuplicateDetector:
                 members.append((meta.duration_ms, video, meta, np.stack(frames)))
         members.sort(key=lambda m: (m[0], str(m[1].path)))
         links = []
-        for i, (length, _, _, frames) in enumerate(members):
+        for i, (length, video, meta, frames) in enumerate(members):
             for j in range(i + 1, len(members)):
-                if members[j][0] - length > VIDEO_MAX_DURATION_GAP_MS:
+                other_length, other, other_meta, other_frames = members[j]
+                if other_length - length > VIDEO_MAX_DURATION_GAP_MS:
                     break
-                if _frame_similarity(frames, members[j][3]) >= VIDEO_MIN_FRAME_COSINE:
+                if _takes(video, meta, other, other_meta):
+                    continue
+                if _frame_similarity(frames, other_frames) >= VIDEO_MIN_FRAME_COSINE:
                     links.append((i, j))
         result = {}
         for component in _components(len(members), links):
@@ -176,6 +182,14 @@ def _frame_similarity(a: np.ndarray, b: np.ndarray) -> float:
     half a second off the times a copy's exact frames are at."""
     cosines = a @ b.T
     return float((cosines.max(axis=1).sum() + cosines.max(axis=0).sum()) / (len(a) + len(b)))
+
+
+def _takes(a: MediaRef, a_meta: VideoMetadata, b: MediaRef, b_meta: VideoMetadata) -> bool:
+    """Two camera videos with capture instants that differ were filmed apart. A copy saved to the
+    camera folder keeps its original's instant or has none."""
+    instants = a_meta.captured_instant, b_meta.captured_instant
+    both_camera = is_camera_folder(a.path) and is_camera_folder(b.path)
+    return both_camera and None not in instants and instants[0] != instants[1]
 
 
 def _video_preference(video: MediaRef, meta: VideoMetadata) -> tuple:
