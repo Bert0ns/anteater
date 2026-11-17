@@ -69,7 +69,7 @@ class AppTrashDeviceTest {
             setProperty("trashed_at", Instant.EPOCH.toString())
         }
         File(dir, "origin.properties").outputStream().use {
-            origin.store(it, "Cribrum trash: test item")
+            origin.store(it, "Anteater trash: test item")
         }
         return file
     }

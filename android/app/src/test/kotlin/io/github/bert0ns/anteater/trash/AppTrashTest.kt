@@ -192,9 +192,9 @@ class AppTrashTest {
         assertTrue(File(image.path).exists())
     }
 
-    /** The folder of [item], moved under a `.cribrum-trash` folder that is no volume's, as a trash folder copied by hand would be. */
+    /** The folder of [item], moved under a `.anteater-trash` folder that is no volume's, as a trash folder copied by hand would be. */
     private fun lookAlike(item: TrashedImage): File {
-        val copy = File(folder.newFolder("elsewhere", UUID.randomUUID().toString(), ".cribrum-trash"), UUID.randomUUID().toString())
+        val copy = File(folder.newFolder("elsewhere", UUID.randomUUID().toString(), ".anteater-trash"), UUID.randomUUID().toString())
         item.file.parentFile!!.run { copyRecursively(copy) && deleteRecursively() }
         return File(copy, item.file.name)
     }
@@ -212,7 +212,7 @@ class AppTrashTest {
 
     @Test
     fun `purging items refuses a trash folder that is no volume's own, even one that holds a valid item`() = test {
-        val nested = File(volume, "DCIM/.cribrum-trash").also { it.mkdirs() }
+        val nested = File(volume, "DCIM/.anteater-trash").also { it.mkdirs() }
         val item = moveToTrash(listOf(photo("DCIM/nested.jpg"))).single()
         val inside = File(nested, "item").also { item.file.parentFile!!.copyRecursively(it) }
 
@@ -227,17 +227,17 @@ class AppTrashTest {
     fun `an item is on its volume when its path reaches it through a symlink, as the sdcard alias reaches the real volume`() {
         val alias = File(folder.root, "sdcard")
         assumeTrue(runCatching { Files.createSymbolicLink(alias.toPath(), volume.toPath()) }.isSuccess)
-        val file = File(volume, ".cribrum-trash/item/a.jpg")
+        val file = File(volume, ".anteater-trash/item/a.jpg")
 
         assertFalse(itemAt(File(alias, "DCIM/a.jpg").path, file).awayFromItsVolume)
-        assertFalse(itemAt(File(volume, "DCIM/a.jpg").path, File(alias, ".cribrum-trash/item/a.jpg")).awayFromItsVolume)
+        assertFalse(itemAt(File(volume, "DCIM/a.jpg").path, File(alias, ".anteater-trash/item/a.jpg")).awayFromItsVolume)
     }
 
     @Test
     fun `an item whose path is on another volume is away from its volume`() {
         val other = folder.newFolder("other")
 
-        assertTrue(itemAt(File(other, "DCIM/a.jpg").path, File(volume, ".cribrum-trash/item/a.jpg")).awayFromItsVolume)
+        assertTrue(itemAt(File(other, "DCIM/a.jpg").path, File(volume, ".anteater-trash/item/a.jpg")).awayFromItsVolume)
     }
 
     @Test
@@ -1002,7 +1002,7 @@ class AppTrashTest {
     @Test
     fun `discarding refuses anything but a compressed copy outside the trash`() = test {
         val image = photo("DCIM/Camera/a.jpg")
-        val lookalike = File(File(image.path).parentFile, ".pending-cribrum-x.jpg").apply { writeText("not ours") }
+        val lookalike = File(File(image.path).parentFile, ".pending-anteater-x.jpg").apply { writeText("not ours") }
         val folderNamedLikeACopy = copyFileFor(File(image.path)).apply { mkdirs() }
         val inTrash = copyFileFor(File(volume, "$TRASH_FOLDER/item/a.jpg")).apply {
             parentFile!!.mkdirs()

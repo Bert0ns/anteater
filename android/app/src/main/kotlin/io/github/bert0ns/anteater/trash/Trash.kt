@@ -25,13 +25,13 @@ import java.util.Properties
 import java.util.UUID
 
 /** Folder at the root of each storage volume. Hidden, and with a `.nomedia` so galleries skip it. */
-const val TRASH_FOLDER = ".cribrum-trash"
+const val TRASH_FOLDER = ".anteater-trash"
 
 /** Where to write a compressed copy of [original]: next to it, so moving it into place is a rename on the same volume. The scan skips `.pending-` files (§4). */
-fun copyFileFor(original: File): File = File(original.parentFile, ".pending-cribrum-${UUID.randomUUID()}.jpg")
+fun copyFileFor(original: File): File = File(original.parentFile, ".pending-anteater-${UUID.randomUUID()}.jpg")
 
 /** The names [copyFileFor] gives. */
-private val COPY_NAME = Regex("""^\.pending-cribrum-[0-9a-f-]{36}\.jpg$""")
+private val COPY_NAME = Regex("""^\.pending-anteater-[0-9a-f-]{36}\.jpg$""")
 
 /** What [AppTrash.replaceWithCopy] did. The copy is discarded unless it is [Swapped]. */
 sealed interface Swap {
@@ -311,7 +311,7 @@ class AppTrash(
             origin["compressed_mtime_ns"] = compressedCopy.mtimeNs.toString()
         }
         if (favorite) origin["favorite"] = "true"
-        File(folder, ORIGIN).outputStream().use { origin.store(it, "Cribrum trash: where this file came from") }
+        File(folder, ORIGIN).outputStream().use { origin.store(it, "Anteater trash: where this file came from") }
     }
 
     /** Null for anything the trash did not write, or that lost its file. */
@@ -330,7 +330,7 @@ class AppTrash(
         val seenAt = if (syncSeenAt && (rawSeenAt == null || rawSeenAt > now)) {
             origin["seen_at"] = now.toString()
             runCatching {
-                originFile.outputStream().use { origin.store(it, "Cribrum trash: where this file came from") }
+                originFile.outputStream().use { origin.store(it, "Anteater trash: where this file came from") }
             }
             now
         } else {

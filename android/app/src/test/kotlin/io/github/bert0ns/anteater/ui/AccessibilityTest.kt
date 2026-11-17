@@ -133,7 +133,7 @@ class AccessibilityTest {
     @Test
     fun `the trash has targets of 48 dp`() {
         val at = Instant.now() - Duration.ofDays(3)
-        val trashed = listOf(TrashedImage(images[0], at, File("/sdcard/.cribrum-trash/x/img1.jpg"), at + Duration.ofDays(30)))
+        val trashed = listOf(TrashedImage(images[0], at, File("/sdcard/.anteater-trash/x/img1.jpg"), at + Duration.ofDays(30)))
         compose.setContent { TrashScreen(trashed, emptySet(), {}, { _, _ -> }, {}, {}) }
 
         assertTouchTargets("trash")
@@ -200,7 +200,7 @@ class AccessibilityTest {
     fun `the trash still works at twice the font size`() {
         RuntimeEnvironment.setFontScale(2f)
         val at = Instant.now() - Duration.ofDays(3)
-        val trashed = listOf(TrashedImage(images[0], at, File("/sdcard/.cribrum-trash/x/img1.jpg"), at + Duration.ofDays(30)))
+        val trashed = listOf(TrashedImage(images[0], at, File("/sdcard/.anteater-trash/x/img1.jpg"), at + Duration.ofDays(30)))
         var restored = 0
         compose.setContent { TrashScreen(trashed, trashed.map { it.file.path }.toSet(), {}, { _, _ -> }, { restored++ }, {}) }
 

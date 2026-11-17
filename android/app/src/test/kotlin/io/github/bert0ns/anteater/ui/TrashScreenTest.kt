@@ -51,7 +51,7 @@ class TrashScreenTest {
 
     private val trashed = listOf("a.jpg", "b.jpg").map {
         val trashedAt = Instant.now() - Duration.ofDays(3)
-        TrashedImage(MediaRef("/sdcard/DCIM/$it", 1, 0), trashedAt, File("/sdcard/.cribrum-trash/x/$it"), trashedAt + Duration.ofDays(30) - Duration.ofHours(12))
+        TrashedImage(MediaRef("/sdcard/DCIM/$it", 1, 0), trashedAt, File("/sdcard/.anteater-trash/x/$it"), trashedAt + Duration.ofDays(30) - Duration.ofHours(12))
     }
 
     @Test
@@ -66,7 +66,7 @@ class TrashScreenTest {
         compose.onNodeWithContentDescription("a.jpg. 27 days left").performClick()
         compose.onNodeWithText("Restore 1").performClick()
 
-        assertEquals(setOf("/sdcard/.cribrum-trash/x/a.jpg"), restored)
+        assertEquals(setOf("/sdcard/.anteater-trash/x/a.jpg"), restored)
     }
 
     @Test
@@ -152,7 +152,7 @@ class TrashScreenTest {
     @Test
     fun `one day left is spoken in the singular`() {
         val at = Instant.now()
-        val last = TrashedImage(MediaRef("/sdcard/DCIM/c.jpg", 1, 0), at, File("/sdcard/.cribrum-trash/x/c.jpg"), at + Duration.ofHours(20))
+        val last = TrashedImage(MediaRef("/sdcard/DCIM/c.jpg", 1, 0), at, File("/sdcard/.anteater-trash/x/c.jpg"), at + Duration.ofHours(20))
         compose.setContent { TrashScreen(listOf(last), emptySet(), {}, { _, _ -> }, {}, {}) }
 
         compose.onNodeWithContentDescription("c.jpg. 1 day left").assertExists()
@@ -188,8 +188,8 @@ class TrashScreenTest {
     @Test
     fun `two items with the same path are selected and deleted one by one`() {
         val at = Instant.now() - Duration.ofDays(3)
-        val original = TrashedImage(MediaRef("/sdcard/DCIM/a.jpg", 9, 0), at, File("/sdcard/.cribrum-trash/1/a.jpg"), at + Duration.ofDays(30))
-        val copy = TrashedImage(MediaRef("/sdcard/DCIM/a.jpg", 4, 1), at, File("/sdcard/.cribrum-trash/2/a.jpg"), at + Duration.ofDays(30))
+        val original = TrashedImage(MediaRef("/sdcard/DCIM/a.jpg", 9, 0), at, File("/sdcard/.anteater-trash/1/a.jpg"), at + Duration.ofDays(30))
+        val copy = TrashedImage(MediaRef("/sdcard/DCIM/a.jpg", 4, 1), at, File("/sdcard/.anteater-trash/2/a.jpg"), at + Duration.ofDays(30))
         var deleted: Set<String>? = null
         compose.setContent {
             var selected by remember { mutableStateOf(emptySet<String>()) }
@@ -207,7 +207,7 @@ class TrashScreenTest {
     @Test
     fun `emptying the trash counts every item, also two with the same path`() {
         val at = Instant.now() - Duration.ofDays(3)
-        val items = listOf(9L to 0L, 4L to 1L).mapIndexed { i, (size, mtime) -> TrashedImage(MediaRef("/sdcard/DCIM/a.jpg", size, mtime), at, File("/sdcard/.cribrum-trash/$i/a.jpg"), at + Duration.ofDays(30)) }
+        val items = listOf(9L to 0L, 4L to 1L).mapIndexed { i, (size, mtime) -> TrashedImage(MediaRef("/sdcard/DCIM/a.jpg", size, mtime), at, File("/sdcard/.anteater-trash/$i/a.jpg"), at + Duration.ofDays(30)) }
         compose.setContent { TrashScreen(items, emptySet(), {}, { _, _ -> }, {}, {}) }
 
         compose.onNodeWithText("Empty trash").performClick()
@@ -218,7 +218,7 @@ class TrashScreenTest {
     @Test
     fun `a favourite shows its heart at full size`() {
         val at = Instant.now() - Duration.ofDays(3)
-        val favourite = TrashedImage(MediaRef("/sdcard/DCIM/a.jpg", 1, 0), at, File("/sdcard/.cribrum-trash/x/a.jpg"), at + Duration.ofDays(30), favorite = true)
+        val favourite = TrashedImage(MediaRef("/sdcard/DCIM/a.jpg", 1, 0), at, File("/sdcard/.anteater-trash/x/a.jpg"), at + Duration.ofDays(30), favorite = true)
         compose.setContent { TrashScreen(listOf(favourite), emptySet(), {}, { _, _ -> }, {}, {}) }
 
         compose.onNodeWithContentDescription("a.jpg", substring = true).performTouchInput { longClick() }
@@ -243,7 +243,7 @@ class TrashScreenTest {
         val sticker = TrashedImage(
             MediaRef("/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Stickers/s.webp", 1, 0),
             Instant.now(),
-            File("/sdcard/.cribrum-trash/y/s.webp"),
+            File("/sdcard/.anteater-trash/y/s.webp"),
             Instant.now() + Duration.ofDays(30),
         )
         var chosen: List<TrashedImage> = emptyList()
@@ -258,13 +258,13 @@ class TrashScreenTest {
 
     private val clip = run {
         val at = Instant.now() - Duration.ofDays(3)
-        TrashedImage(MediaRef("/sdcard/DCIM/clip.mp4", 412_000_000, 0, MediaType.VIDEO), at, File("/sdcard/.cribrum-trash/v/clip.mp4"), at + Duration.ofDays(30) - Duration.ofHours(12))
+        TrashedImage(MediaRef("/sdcard/DCIM/clip.mp4", 412_000_000, 0, MediaType.VIDEO), at, File("/sdcard/.anteater-trash/v/clip.mp4"), at + Duration.ofDays(30) - Duration.ofHours(12))
     }
 
     @Test
     fun `a trashed video has its own section and shows its duration and size`() {
         // A trash file of its own: the lengths read are kept for the process, and the other tests read none for theirs.
-        val clip = clip.copy(file = File("/sdcard/.cribrum-trash/d/clip.mp4"))
+        val clip = clip.copy(file = File("/sdcard/.anteater-trash/d/clip.mp4"))
         ShadowMediaMetadataRetriever.addMetadata(clip.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "102000")
         compose.setContent { TrashScreen(trashed + clip, emptySet(), {}, { _, _ -> }, {}, {}) }
 
@@ -302,7 +302,7 @@ class TrashScreenTest {
     fun `a video in the trash plays when it opens at full size, and closing the view releases the player`() {
         val players = Players()
         // A path of its own: a video's length is cached by path for the whole run, and another test cached this clip's as unreadable.
-        val clip = clip.copy(file = File("/sdcard/.cribrum-trash/p/clip.mp4"))
+        val clip = clip.copy(file = File("/sdcard/.anteater-trash/p/clip.mp4"))
         ShadowMediaMetadataRetriever.addMetadata(clip.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "102000")
         compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { TrashScreen(listOf(clip), emptySet(), {}, { _, _ -> }, {}, {}) } }
         compose.onNodeWithContentDescription("clip.mp4", substring = true).performTouchInput { longClick() }
@@ -318,7 +318,7 @@ class TrashScreenTest {
     @Test
     fun `a trashed video whose length cannot be read has the placeholder, no play button and no controls`() {
         val players = Players()
-        val broken = clip.copy(MediaRef("/sdcard/DCIM/broken.mp4", 412_000_000, 0, MediaType.VIDEO), file = File("/sdcard/.cribrum-trash/b/broken.mp4")) // no metadata, so the retriever fails
+        val broken = clip.copy(MediaRef("/sdcard/DCIM/broken.mp4", 412_000_000, 0, MediaType.VIDEO), file = File("/sdcard/.anteater-trash/b/broken.mp4")) // no metadata, so the retriever fails
         compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { TrashScreen(listOf(broken), emptySet(), {}, { _, _ -> }, {}, {}) } }
         compose.onNodeWithContentDescription("broken.mp4", substring = true).performTouchInput { longClick() }
 
@@ -331,8 +331,8 @@ class TrashScreenTest {
     @Test
     fun `a video that leaves the trash while it plays is stopped, and the page that takes its place plays`() {
         val players = Players()
-        val first = clip.copy(MediaRef("/sdcard/DCIM/first.mp4", 412_000_000, 0, MediaType.VIDEO), file = File("/sdcard/.cribrum-trash/1/first.mp4"))
-        val second = clip.copy(MediaRef("/sdcard/DCIM/second.mp4", 412_000_000, 0, MediaType.VIDEO), file = File("/sdcard/.cribrum-trash/2/second.mp4"))
+        val first = clip.copy(MediaRef("/sdcard/DCIM/first.mp4", 412_000_000, 0, MediaType.VIDEO), file = File("/sdcard/.anteater-trash/1/first.mp4"))
+        val second = clip.copy(MediaRef("/sdcard/DCIM/second.mp4", 412_000_000, 0, MediaType.VIDEO), file = File("/sdcard/.anteater-trash/2/second.mp4"))
         for (item in listOf(first, second)) ShadowMediaMetadataRetriever.addMetadata(item.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "102000")
         var items by mutableStateOf(listOf(first, second))
         compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { TrashScreen(items, emptySet(), {}, { _, _ -> }, {}, {}) } }
@@ -367,7 +367,7 @@ class TrashScreenTest {
 
     @Test
     fun `a video's length is read once, so a tile that comes back opens no new retriever`() {
-        val again = clip.copy(file = File("/sdcard/.cribrum-trash/w/clip.mp4"))
+        val again = clip.copy(file = File("/sdcard/.anteater-trash/w/clip.mp4"))
         ShadowMediaMetadataRetriever.addMetadata(again.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "102000")
         var shown by mutableStateOf(true)
         compose.setContent { if (shown) TrashScreen(listOf(again), emptySet(), {}, { _, _ -> }, {}, {}) }

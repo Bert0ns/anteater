@@ -21,7 +21,7 @@ data class StorageUse(
     val index: Long,
     /** An estimate of what the stored vectors take in the index file. */
     val embeddings: Long,
-    /** The files in the `.cribrum-trash` folders. */
+    /** The files in the `.anteater-trash` folders. */
     val trash: Long,
     /** Every indexed image and video not in the trash. Unlike the storage map, these count the files in excluded folders, which stay in the index (docs/design.md §6.3). */
     val images: MediaTotal,

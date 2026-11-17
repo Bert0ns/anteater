@@ -952,7 +952,7 @@ class ReviewTest {
     @Test
     fun `expiring only counts images whose trashed_at and seen_at both passed retention`() = test {
         val now = Instant.now()
-        val trashRoot = File(volume, ".cribrum-trash").apply { mkdirs() }
+        val trashRoot = File(volume, ".anteater-trash").apply { mkdirs() }
         val folder = File(trashRoot, "custom-item").apply { mkdirs() }
         val imgFile = File(folder, "custom.jpg").apply { writeText("data") }
         val props = Properties().apply {
