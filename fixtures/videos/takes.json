@@ -1,0 +1,201 @@
+{
+ "clips": [
+  {
+   "captured_instant": 1714550400000,
+   "duration_ms": 2000,
+   "path": "DCIM/Camera/a1.mp4"
+  },
+  {
+   "captured_instant": 1714550410000,
+   "duration_ms": 30000,
+   "path": "DCIM/Camera/a2.mp4"
+  },
+  {
+   "captured_instant": 1714550740000,
+   "duration_ms": 5000,
+   "path": "DCIM/Camera/a3.mp4"
+  },
+  {
+   "captured_instant": 1714550750000,
+   "duration_ms": 10000,
+   "path": "DCIM/Camera/a4.mp4"
+  },
+  {
+   "captured_instant": 1714551061000,
+   "duration_ms": 4000,
+   "path": "DCIM/Camera/b.mp4"
+  },
+  {
+   "captured_instant": 1714550410000,
+   "duration_ms": 30000,
+   "path": "WhatsApp/Media/WhatsApp Video/Sent/a2.mp4"
+  },
+  {
+   "captured_instant": null,
+   "duration_ms": 30000,
+   "path": "DCIM/Camera/no-time.mp4"
+  },
+  {
+   "captured_instant": 1714550420000,
+   "duration_ms": 10000,
+   "path": "DCIM/Screen recordings/rec1.mp4"
+  },
+  {
+   "captured_instant": 1714550440000,
+   "duration_ms": 10000,
+   "path": "DCIM/Screen recordings/rec2.mp4"
+  },
+  {
+   "captured_instant": 1714557600000,
+   "duration_ms": 10000,
+   "frames": [
+    [
+     1,
+     0,
+     0
+    ],
+    [
+     0.6,
+     0.8,
+     0
+    ]
+   ],
+   "path": "DCIM/Camera/c1.mp4"
+  },
+  {
+   "captured_instant": 1714557660000,
+   "duration_ms": 10000,
+   "frames": [
+    [
+     0,
+     0.8,
+     0.6
+    ]
+   ],
+   "path": "DCIM/Camera/c2.mp4"
+  },
+  {
+   "captured_instant": 1714557720000,
+   "duration_ms": null,
+   "frames": [
+    [
+     1,
+     0,
+     0
+    ]
+   ],
+   "path": "DCIM/Camera/c3.mp4"
+  },
+  {
+   "captured_instant": 1714557780000,
+   "duration_ms": 10000,
+   "path": "DCIM/Camera/c4.mp4"
+  }
+ ],
+ "signals": {
+  "DCIM/Camera/a1.mp4": [
+   {
+    "category": "takes",
+    "detector": "takes",
+    "evidence": {
+     "group": "f162ba171f465961",
+     "role": "short_take",
+     "takes": "4"
+    },
+    "score": 1.0,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/a2.mp4": [
+   {
+    "category": "takes",
+    "detector": "takes",
+    "evidence": {
+     "group": "f162ba171f465961",
+     "role": "take",
+     "takes": "4"
+    },
+    "score": 1.0,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/a3.mp4": [
+   {
+    "category": "takes",
+    "detector": "takes",
+    "evidence": {
+     "group": "f162ba171f465961",
+     "role": "short_take",
+     "takes": "4"
+    },
+    "score": 1.0,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/a4.mp4": [
+   {
+    "category": "takes",
+    "detector": "takes",
+    "evidence": {
+     "group": "f162ba171f465961",
+     "role": "take",
+     "takes": "4"
+    },
+    "score": 1.0,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/c1.mp4": [
+   {
+    "category": "takes",
+    "detector": "takes",
+    "evidence": {
+     "group": "e7bec9360e8d6cf1",
+     "role": "take",
+     "takes": "2"
+    },
+    "score": 1.0,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/c2.mp4": [
+   {
+    "category": "takes",
+    "detector": "takes",
+    "evidence": {
+     "group": "e7bec9360e8d6cf1",
+     "role": "take",
+     "takes": "2"
+    },
+    "score": 1.0,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/c3.mp4": [
+   {
+    "category": "takes",
+    "detector": "takes",
+    "evidence": {
+     "group": "4235d653382abe78",
+     "role": "take",
+     "takes": "2"
+    },
+    "score": 1.0,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/c4.mp4": [
+   {
+    "category": "takes",
+    "detector": "takes",
+    "evidence": {
+     "group": "4235d653382abe78",
+     "role": "take",
+     "takes": "2"
+    },
+    "score": 1.0,
+    "version": 1
+   }
+  ]
+ }
+}

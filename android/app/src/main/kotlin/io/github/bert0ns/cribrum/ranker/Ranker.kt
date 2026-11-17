@@ -25,16 +25,17 @@ val THRESHOLDS: Map<Category, Float> = mapOf(
     Category.DOCUMENT to 0.2f,
     Category.FORWARDED to 0.5f,
     Category.STICKER to 0.5f,
+    Category.TAKES to 0.5f,
 )
 
 /** How much a protection signal at score 1 lowers an image's likelihood. */
 val PROTECTION_WEIGHTS: Map<Protection, Float> =
     mapOf(Protection.FACES to 0.5f, Protection.FAVORITE to 0.8f, Protection.ALBUM to 0.6f)
 
-/** Lowers images in no duplicate or burst group: nothing else keeps the same memory. */
+/** Lowers images in no duplicate, burst or takes group: nothing else keeps the same memory. */
 const val UNIQUE_WEIGHT = 0.2f
 
-val GROUP_CATEGORIES = setOf(Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE, Category.BURST)
+val GROUP_CATEGORIES = setOf(Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE, Category.BURST, Category.TAKES)
 
 data class Candidate(
     val image: IndexedMedia,

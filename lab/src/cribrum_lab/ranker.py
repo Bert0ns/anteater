@@ -20,6 +20,7 @@ THRESHOLDS = {
     Category.DOCUMENT: 0.2,
     Category.FORWARDED: 0.5,
     Category.STICKER: 0.5,
+    Category.TAKES: 0.5,
 }
 """Score a signal needs to make an image a candidate. Picked by the maintainer from the
 evaluation report's sweep, for recall (docs/design.md, 10). Keep them equal to the app's."""
@@ -27,8 +28,13 @@ evaluation report's sweep, for recall (docs/design.md, 10). Keep them equal to t
 PROTECTION_WEIGHTS = {Protection.FACES: 0.5, Protection.FAVORITE: 0.8, Protection.ALBUM: 0.6}
 """How much a protection signal at score 1 lowers an image's likelihood."""
 UNIQUE_WEIGHT = 0.2
-"""Lowers images in no duplicate or burst group: nothing else keeps the same memory."""
-GROUP_CATEGORIES = {Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE, Category.BURST}
+"""Lowers images in no duplicate, burst or takes group: nothing else keeps the same memory."""
+GROUP_CATEGORIES = {
+    Category.EXACT_DUPLICATE,
+    Category.NEAR_DUPLICATE,
+    Category.BURST,
+    Category.TAKES,
+}
 
 
 @dataclass(frozen=True)

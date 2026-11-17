@@ -1046,6 +1046,22 @@ class ReviewViewModelTest {
     private fun videoPaths(model: ReviewViewModel) = model.state.value.videos.map { it.video.path }
 
     @Test
+    fun `a page of takes opens with no take marked`() {
+        val takes = listOf("/sdcard/DCIM/Camera/1.mp4", "/sdcard/DCIM/Camera/2.mp4")
+        for (path in takes) {
+            clip(path, 300)
+            runBlocking { app.index.setSignals(path, "takes", 1, listOf(Signal("takes", 1, Category.TAKES, 1f, mapOf(GROUP_KEY to "t", ROLE_KEY to "take", "takes" to "2")))) }
+        }
+        val model = ReviewViewModel(app)
+
+        model.open(Category.TAKES, MediaType.VIDEO)
+        settle(model) { paths(it).size == 2 }
+
+        assertEquals(emptySet<String>(), model.state.value.marked)
+        assertEquals(2, model.state.value.remaining)
+    }
+
+    @Test
     fun `the home reads the videos, largest first, and knows whether the index holds any`() {
         val empty = ReviewViewModel(app)
         empty.refresh()

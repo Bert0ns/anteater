@@ -45,7 +45,7 @@
     <string name="scan_phase_video_scan">Ricerca dei video</string>
     <string name="scan_phase_video_metadata">Lettura dei video</string>
     <string name="scan_phase_video_frames">Analisi dei fotogrammi</string>
-    <string name="scan_phase_video_groups">Ricerca dei video duplicati</string>
+    <string name="scan_phase_video_groups">Ricerca di copie e riprese</string>
     <string name="scan_kind_images">Scansione delle foto</string>
     <string name="scan_kind_videos">Scansione dei video</string>
     <string name="scan_kind_both">Scansione di foto e video</string>
@@ -74,6 +74,7 @@
     <string name="category_forwarded">Inoltrate</string>
     <string name="category_forwarded_videos">Inoltrati</string>
     <string name="category_sticker">Sticker di WhatsApp</string>
+    <string name="category_takes">Riprese dello stesso momento</string>
     <string name="category_coming_soon">In arrivo</string>
     <plurals name="candidates">
         <item quantity="one">%d immagine da controllare</item>
@@ -100,6 +101,7 @@
     <string name="trash">Cestino</string>
     <string name="review_hint">Le immagini segnate vanno nel cestino.</string>
     <string name="review_hint_gestures">Toccane una per tenerla, tienila premuta per vederla a schermo intero.</string>
+    <string name="review_hint_unmarked">Nessuna immagine è segnata in anticipo. Tocca un\'immagine per segnarla per il cestino, tienila premuta per vederla a schermo intero.</string>
     <string name="review_done">Non ci sono altre immagini da controllare. Quelle saltate tornano quando riapri questa categoria.</string>
     <string name="best_copy">Migliore</string>
     <string name="apply">Cestina %1$d, tieni %2$d</string>
@@ -247,6 +249,7 @@
         <item quantity="many">Gli ultimi %2$d di video</item>
     </plurals>
     <string name="review_hint_videos">I video segnati vanno nel cestino.</string>
+    <string name="review_hint_unmarked_videos">Nessun video è segnato in anticipo. Tocca un video per segnarlo per il cestino, tienilo premuto per vederlo a schermo intero.</string>
     <string name="review_done_videos">Non ci sono altri video da controllare. Quelli saltati tornano quando riapri questa categoria.</string>
     <string name="videos_hint">Tocca un video per selezionarlo, tienilo premuto per vederlo a schermo intero. Nessun video è selezionato in anticipo.</string>
     <plurals name="videos_trash">
@@ -332,6 +335,13 @@
     <string name="reason_forwarded_exif">Nessun dato della fotocamera, come un\'immagine inoltrata</string>
     <string name="reason_forwarded">Sembra inoltrata da un\'app di messaggistica</string>
     <string name="reason_sticker">In una cartella di sticker</string>
+    <plurals name="reason_take">
+        <item quantity="one">Una di %1$d riprese dello stesso momento</item>
+        <item quantity="many">Una di %1$d riprese dello stesso momento</item>
+        <item quantity="other">Una di %1$d riprese dello stesso momento</item>
+    </plurals>
+    <string name="reason_take_plain">Una di più riprese dello stesso momento</string>
+    <string name="reason_short_take">Una ripresa breve, poi una più lunga dello stesso momento</string>
     <string name="settings_about">Informazioni</string>
     <string name="settings_version">Versione %1$s</string>
     <string name="settings_website">Sito web</string>

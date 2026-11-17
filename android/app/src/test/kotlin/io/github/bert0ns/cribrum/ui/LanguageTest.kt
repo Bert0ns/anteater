@@ -124,7 +124,7 @@ class LanguageTest {
     @Config(qualifiers = "it")
     fun `the favourite dialog gives the chosen retention in Italian`() {
         val image = MediaRef("/sdcard/DCIM/a.jpg", 1, 0)
-        val page = listOf(ReviewGroup("a", listOf(ReviewItem(image, suggestTrash = true, isFavorite = true))))
+        val page = listOf(ReviewGroup("a", listOf(ReviewItem(image, suggestTrash = true, isCandidate = true, isFavorite = true))))
         var days by mutableIntStateOf(1)
         compose.setContent { CategoryScreen(page, 1, setOf(image.path), false, {}, { _, _ -> }, {}, retentionDays = days) }
 

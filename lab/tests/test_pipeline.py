@@ -1,3 +1,4 @@
+import dataclasses
 import os
 import shutil
 from pathlib import Path
@@ -9,11 +10,17 @@ from PIL import Image
 
 from cribrum_lab import pipeline
 from cribrum_lab.detectors import blur
+from cribrum_lab.detectors.base import accepted_media_types
 from cribrum_lab.detectors.burst import BurstDetector
 from cribrum_lab.frames import FRAMES_VERSION
 from cribrum_lab.imaging import load_grayscale
 from cribrum_lab.index import ImageIndex
 from cribrum_lab.model import Category, MediaRef, MediaType, Protection, ReviewState, Signal
+from cribrum_lab.ranker import Ranker
+
+IMAGE_GROUP_DETECTORS = sum(
+    MediaType.IMAGE in accepted_media_types(d) for d in pipeline.GROUP_DETECTORS
+)
 
 
 def save(path, seed=0, size=(64, 48)):
@@ -164,7 +171,7 @@ def test_changed_image_is_analyzed_again_and_groups_are_recomputed(photos, index
     assert stats.new_or_changed == 1
     without_embeddings = 5  # blur, exposure, screenshot, faces, sticker: the others need embeddings
     phash = 1
-    assert stats.detector_runs == without_embeddings + phash + len(pipeline.GROUP_DETECTORS)
+    assert stats.detector_runs == without_embeddings + phash + IMAGE_GROUP_DETECTORS
     copy = photos.resolve() / "WhatsApp/Media/a-copy.png"
     assert Category.EXACT_DUPLICATE not in categories(index, copy)
 
@@ -492,7 +499,7 @@ def test_a_new_embedder_version_reruns_the_embedding_detectors_and_the_group_det
     stats = pipeline.run(photos, index, embedder=MeanColorEmbedder(version=2))
 
     readers = sum(getattr(d, "uses_embeddings", False) for d in pipeline.DETECTORS)
-    assert stats.detector_runs == 3 + 3 * readers + len(pipeline.GROUP_DETECTORS)
+    assert stats.detector_runs == 3 + 3 * readers + IMAGE_GROUP_DETECTORS
 
 
 def test_a_detectors_signal_follows_the_embedding_it_read(photos, index):
@@ -587,7 +594,7 @@ def test_a_run_stopped_after_the_fast_detectors_resumes_with_the_embeddings(phot
     stats = pipeline.run(photos, index, embedder=MeanColorEmbedder())
 
     readers = 2  # document and forwarded
-    assert stats.detector_runs == 3 + 3 * readers + len(pipeline.GROUP_DETECTORS)
+    assert stats.detector_runs == 3 + 3 * readers + IMAGE_GROUP_DETECTORS
 
 
 def test_the_steps_run_in_order_the_detectors_that_read_embeddings_last(photos, index):
@@ -1250,3 +1257,97 @@ def test_the_frames_come_before_the_video_group_detectors(videos, index):
 
     # A video group detector may read the frames (#396).
     assert steps.index("video_metadata") < steps.index("video_frames") < steps.index("video_groups")
+
+
+def takes_groups(index):
+    groups = {}
+    for image in index.images():
+        for signal in index.signals(image.path):
+            if signal.category is Category.TAKES:
+                groups.setdefault(signal.evidence["group"], set()).add(image.path.name)
+    return list(groups.values())
+
+
+def test_a_video_run_chains_the_takes_of_a_moment_from_the_stored_metadata(videos, index):
+    # Five seconds after clip.mp4 starts, and four after it ends.
+    shutil.copy(VIDEOS / "rotated.mp4", videos / "rotated.mp4")
+
+    pipeline.run(
+        videos.parent.parent, index, detectors=[], group_detectors=[pipeline.TakesDetector()],
+        embedder=MeanColorEmbedder(), images=False, videos=True,
+    )  # fmt: skip
+
+    assert takes_groups(index) == [{"clip.mp4", "rotated.mp4"}]
+
+
+def test_the_takes_read_the_stored_frames_and_frames_stored_later_run_them_again(videos, index):
+    shutil.copy(VIDEOS / "rotated.mp4", videos / "rotated.mp4")
+    seen = []
+
+    class Frames:
+        id, version, category = "frames_seen", 1, None
+        media_types = frozenset({MediaType.VIDEO})
+
+        def analyze(self, videos, context):
+            seen.append({v.path.name: len(context.frames(v)) for v in videos})
+            return {}
+
+    def run(embedder):
+        pipeline.run(
+            videos.parent.parent, index, detectors=[], group_detectors=[Frames()],
+            embedder=embedder, images=False, videos=True,
+        )  # fmt: skip
+
+    run(None)
+    run(MeanColorEmbedder())
+    run(MeanColorEmbedder())  # nothing new: no run
+
+    assert [s["clip.mp4"] for s in seen] == [0, 5]
+
+
+def test_takes_kept_after_their_first_take_went_to_the_trash_do_not_come_back(videos, index):
+    shutil.copy(VIDEOS / "rotated.mp4", videos / "rotated.mp4")
+    shutil.copy(VIDEOS / "clip.mp4", videos / "clip-again.mp4")  # the same time as clip.mp4
+    root = videos.parent.parent
+
+    def scan():
+        pipeline.run(
+            root, index, detectors=[], group_detectors=[pipeline.TakesDetector()],
+            images=False, videos=True,
+        )  # fmt: skip
+
+    scan()
+    first = videos / "clip-again.mp4"  # the first by instant, then by path
+    assert takes_groups(index) == [{"clip-again.mp4", "clip.mp4", "rotated.mp4"}]
+    index.set_review_state(first, ReviewState.TRASHED)
+    first.rename(root.parent / "trashed.mp4")
+    for name in ("clip.mp4", "rotated.mp4"):
+        index.set_review_state(videos / name, ReviewState.KEPT)
+    scan()
+
+    assert takes_groups(index) == [{"clip.mp4", "rotated.mp4"}]  # under another group id
+    ranked = Ranker().rank(index.indexed_media())
+    assert [c for c in ranked if c.is_candidate] == []
+
+
+def test_a_capture_time_read_again_runs_the_takes_again(videos, index):
+    shutil.copy(VIDEOS / "rotated.mp4", videos / "rotated.mp4")
+    root = videos.parent.parent
+
+    def scan():
+        steps = []
+        pipeline.run(
+            root, index, detectors=[], group_detectors=[pipeline.TakesDetector()],
+            images=False, videos=True, progress=lambda step, done, total: steps.append(step),
+        )  # fmt: skip
+        return steps
+
+    scan()
+    # As an older reader would have stored it: no capture time, and no file changed.
+    stored = index.video_metadata(videos / "rotated.mp4")
+    index.set_video_metadata(
+        videos / "rotated.mp4", dataclasses.replace(stored, captured_at=None, captured_instant=None)
+    )
+
+    assert "video_groups" in scan()
+    assert takes_groups(index) == []

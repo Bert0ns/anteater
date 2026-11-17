@@ -56,7 +56,7 @@ class AccessibilityTest {
     val compose = createComposeRule()
 
     private val images = (1..3).map { MediaRef("/sdcard/DCIM/img$it.jpg", 1_000_000, 0) }
-    private val page = images.map { ReviewGroup(it.path, listOf(ReviewItem(it, suggestTrash = true))) }
+    private val page = images.map { ReviewGroup(it.path, listOf(ReviewItem(it, suggestTrash = true, isCandidate = true))) }
     private val marked = images.map { it.path }.toSet()
 
     /**

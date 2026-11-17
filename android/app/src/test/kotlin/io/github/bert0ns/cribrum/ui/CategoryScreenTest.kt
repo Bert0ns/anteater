@@ -67,7 +67,7 @@ class CategoryScreenTest {
 
     // One folder each, so the full size view, which names the folder, says which image it shows.
     private val images = (1..3).map { MediaRef("/sdcard/Album$it/img$it.jpg", 1_000_000, 0) }
-    private val page = images.map { ReviewGroup(it.path, listOf(ReviewItem(it, suggestTrash = true))) }
+    private val page = images.map { ReviewGroup(it.path, listOf(ReviewItem(it, suggestTrash = true, isCandidate = true))) }
 
     @Test
     fun `category list shows candidate count and opens on tap`() {
@@ -86,7 +86,7 @@ class CategoryScreenTest {
     private val clips = listOf("/sdcard/DCIM/Camera/clip.mp4", "/sdcard/Download/clip.mp4").map { MediaRef(it, 800_000_000, 0, MediaType.VIDEO) }
     private val clipGroup = ReviewGroup(
         "g",
-        listOf(ReviewItem(clips[0], suggestTrash = false, isBest = true), ReviewItem(clips[1], suggestTrash = true, reasons = listOf(Signal("exact_duplicate", 1, Category.EXACT_DUPLICATE, 1f, mapOf(ROLE_KEY to Role.INFERIOR.value))))),
+        listOf(ReviewItem(clips[0], suggestTrash = false, isCandidate = false, isBest = true), ReviewItem(clips[1], suggestTrash = true, isCandidate = true, reasons = listOf(Signal("exact_duplicate", 1, Category.EXACT_DUPLICATE, 1f, mapOf(ROLE_KEY to Role.INFERIOR.value))))),
     )
 
     @Test
@@ -124,7 +124,7 @@ class CategoryScreenTest {
     @Test
     fun `an unreadable video of a group has the placeholder in its tile and its full size view, with no player`() {
         val players = Players()
-        val broken = ReviewGroup("g", listOf(ReviewItem(clips[0], suggestTrash = false, isBest = true), ReviewItem(clips[1], suggestTrash = true, unreadable = true)))
+        val broken = ReviewGroup("g", listOf(ReviewItem(clips[0], suggestTrash = false, isCandidate = false, isBest = true), ReviewItem(clips[1], suggestTrash = true, isCandidate = true, unreadable = true)))
         compose.setContent {
             CompositionLocalProvider(LocalPlayerFactory provides players.factory) {
                 CategoryScreen(listOf(broken), 1, setOf(clips[1].path), grouped = true, onToggle = {}, onApply = { _, _ -> }, onSkip = {}, mediaType = MediaType.VIDEO)
@@ -141,7 +141,7 @@ class CategoryScreenTest {
 
     @Test
     fun `the favourite dialog of a page of videos says videos`() {
-        val favourite = ReviewGroup("g", listOf(ReviewItem(clips[0], suggestTrash = false, isBest = true), ReviewItem(clips[1], suggestTrash = true, isFavorite = true)))
+        val favourite = ReviewGroup("g", listOf(ReviewItem(clips[0], suggestTrash = false, isCandidate = false, isBest = true), ReviewItem(clips[1], suggestTrash = true, isCandidate = true, isFavorite = true)))
         compose.setContent {
             CompositionLocalProvider(LocalPlayerFactory provides Players().factory) {
                 CategoryScreen(listOf(favourite), 1, setOf(clips[1].path), grouped = true, onToggle = {}, onApply = { _, _ -> }, onSkip = {}, mediaType = MediaType.VIDEO)
@@ -330,7 +330,7 @@ class CategoryScreenTest {
     }
 
     private fun dated(grouping: ReviewOrder, vararg days: LocalDate) = images.zip(days.toList()).map { (image, day) ->
-        ReviewGroup(image.path, listOf(ReviewItem(image, suggestTrash = true)), date = if (grouping == ReviewOrder.OFF) null else grouping.start(day, DayOfWeek.MONDAY))
+        ReviewGroup(image.path, listOf(ReviewItem(image, suggestTrash = true, isCandidate = true)), date = if (grouping == ReviewOrder.OFF) null else grouping.start(day, DayOfWeek.MONDAY))
     }
 
     @Test
@@ -350,7 +350,7 @@ class CategoryScreenTest {
     @Test
     fun `changing the grouping scrolls the grid back to its top`() {
         val many = (1..80).map { MediaRef("/sdcard/DCIM/many$it.jpg", 1_000, 0) }
-        val long = many.map { ReviewGroup(it.path, listOf(ReviewItem(it, suggestTrash = true))) }
+        val long = many.map { ReviewGroup(it.path, listOf(ReviewItem(it, suggestTrash = true, isCandidate = true))) }
         var grouping by mutableStateOf(ReviewOrder.OFF)
         compose.setContent { CategoryScreen(long, 80, emptySet(), false, {}, { _, _ -> }, {}, reviewOrder = grouping) }
 
@@ -403,7 +403,7 @@ class CategoryScreenTest {
 
     @Test
     fun `the full size checkbox follows the mark, including the user's taps`() {
-        val best = ReviewGroup("g", listOf(ReviewItem(images[0], suggestTrash = false, isBest = true), ReviewItem(images[1], suggestTrash = true)))
+        val best = ReviewGroup("g", listOf(ReviewItem(images[0], suggestTrash = false, isCandidate = false, isBest = true), ReviewItem(images[1], suggestTrash = true, isCandidate = true)))
         compose.setContent {
             var marked by remember { mutableStateOf(setOf(images[1].path)) }
             CategoryScreen(listOf(best), 1, marked, true, { image ->
@@ -471,7 +471,7 @@ class CategoryScreenTest {
     fun `the full size view says why the image is a candidate, strongest reason first`() {
         val dark = Signal("exposure", 1, Category.BAD_EXPOSURE, 1f, mapOf("case" to "dark"))
         val blurry = Signal("blur", 1, Category.BLURRY, 0.9f)
-        val group = ReviewGroup("g", listOf(ReviewItem(images[0], suggestTrash = true, reasons = listOf(dark, blurry)), ReviewItem(images[1], suggestTrash = true)))
+        val group = ReviewGroup("g", listOf(ReviewItem(images[0], suggestTrash = true, isCandidate = true, reasons = listOf(dark, blurry)), ReviewItem(images[1], suggestTrash = true, isCandidate = true)))
         compose.setContent { CategoryScreen(listOf(group), 2, emptySet(), false, {}, { _, _ -> }, {}) }
 
         openFullSize("Too dark")
@@ -510,7 +510,7 @@ class CategoryScreenTest {
 
     @Test
     fun `a group with a copy in an excluded folder says so`() {
-        val group = ReviewGroup("g", listOf(ReviewItem(images[0], suggestTrash = true)), hasExcludedCopy = true)
+        val group = ReviewGroup("g", listOf(ReviewItem(images[0], suggestTrash = true, isCandidate = true)), hasExcludedCopy = true)
         compose.setContent { CategoryScreen(listOf(group), 1, emptySet(), grouped = true, {}, { _, _ -> }, {}) }
 
         compose.onNodeWithText("Another copy is in an excluded folder").assertExists()
@@ -518,7 +518,7 @@ class CategoryScreenTest {
 
     @Test
     fun `a group with its best copy in the trash says so`() {
-        val group = ReviewGroup("g", listOf(ReviewItem(images[0], suggestTrash = false)), hasTrashedBestCopy = true)
+        val group = ReviewGroup("g", listOf(ReviewItem(images[0], suggestTrash = false, isCandidate = true)), hasTrashedBestCopy = true)
         compose.setContent { CategoryScreen(listOf(group), 1, emptySet(), grouped = true, {}, { _, _ -> }, {}) }
 
         compose.onNodeWithText("The best copy is in the trash").assertExists()
@@ -543,23 +543,50 @@ class CategoryScreenTest {
 
     @Test
     fun `on a group page keep counts only candidates, as the header does`() {
-        val best = ReviewItem(images[0], suggestTrash = false, isBest = true)
-        val group = ReviewGroup("g", listOf(best, ReviewItem(images[1], suggestTrash = true), ReviewItem(images[2], suggestTrash = true)))
+        val best = ReviewItem(images[0], suggestTrash = false, isCandidate = false, isBest = true)
+        val group = ReviewGroup("g", listOf(best, ReviewItem(images[1], suggestTrash = true, isCandidate = true), ReviewItem(images[2], suggestTrash = true, isCandidate = true)))
         compose.setContent { CategoryScreen(listOf(group), 2, setOf(images[1].path), grouped = true, {}, { _, _ -> }, {}) }
 
         compose.onNodeWithText("The last 2 images").assertExists()
         compose.onNodeWithText("Trash 1, keep 1").assertExists()
     }
 
+    private fun take(clip: MediaRef) = ReviewItem(clip, suggestTrash = false, isCandidate = true, reasons = listOf(Signal("takes", 1, Category.TAKES, 1f, mapOf(ROLE_KEY to Role.TAKE.value, "takes" to "3"))))
+
+    @Test
+    fun `a page of takes counts every take, marks none and says a tap marks one`() {
+        val takes = ReviewGroup("t", (clips + MediaRef("/sdcard/DCIM/Camera/third.mp4", 1_000, 0, MediaType.VIDEO)).map(::take))
+        compose.setContent {
+            CompositionLocalProvider(LocalPlayerFactory provides Players().factory) {
+                CategoryScreen(listOf(takes), 3, emptySet(), grouped = true, onToggle = {}, onApply = { _, _ -> }, onSkip = {}, mediaType = MediaType.VIDEO)
+            }
+        }
+
+        compose.onNodeWithText("The last 3 videos").assertExists()
+        compose.onNodeWithText("Trash 0, keep 3").assertExists()
+        compose.onNodeWithText("Nothing is marked for you. Tap a video to mark it for the trash, hold it to see it full size.").assertExists()
+        compose.onNodeWithText("Tap one to keep it", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `a group whose best copy is in the trash counts its copies and says a tap marks one`() {
+        val group = ReviewGroup("g", images.take(2).map { ReviewItem(it, suggestTrash = false, isCandidate = true) }, hasTrashedBestCopy = true)
+        compose.setContent { CategoryScreen(listOf(group), 2, setOf(images[0].path), grouped = true, {}, { _, _ -> }, {}) }
+
+        compose.onNodeWithText("The last 2 images").assertExists()
+        compose.onNodeWithText("Trash 1, keep 1").assertExists()
+        compose.onNodeWithText("Nothing is marked for you.", substring = true).assertExists()
+    }
+
     @Test
     fun `on a plain category page keep counts all unmarked images`() {
-        val plainPage = images.map { ReviewGroup(it.path, listOf(ReviewItem(it, suggestTrash = false))) }
+        val plainPage = images.map { ReviewGroup(it.path, listOf(ReviewItem(it, suggestTrash = false, isCandidate = false))) }
         compose.setContent { CategoryScreen(plainPage, 3, setOf(images[1].path), grouped = false, {}, { _, _ -> }, {}) }
 
         compose.onNodeWithText("Trash 1, keep 2").assertExists()
     }
 
-    private val favoritePage = images.mapIndexed { i, image -> ReviewGroup(image.path, listOf(ReviewItem(image, suggestTrash = true, isFavorite = i < 2))) }
+    private val favoritePage = images.mapIndexed { i, image -> ReviewGroup(image.path, listOf(ReviewItem(image, suggestTrash = true, isCandidate = true, isFavorite = i < 2))) }
 
     @Test
     fun `a favourite wears a heart, bottom right when kept and top right when marked, and others wear none`() {
@@ -785,9 +812,9 @@ class CategoryScreenTest {
     fun `a tile says the strongest reason and how the image is marked`() {
         val dark = Signal("exposure", 1, Category.BAD_EXPOSURE, 1f, mapOf("case" to "dark"))
         val blurry = Signal("blur", 1, Category.BLURRY, 0.9f)
-        val reasoned = ReviewItem(images[0], suggestTrash = true, reasons = listOf(dark, blurry))
-        val best = ReviewItem(images[1], suggestTrash = false, isBest = true, reasons = listOf(Signal("exact", 1, Category.EXACT_DUPLICATE, 1f, mapOf(ROLE_KEY to Role.BEST.value))))
-        val group = ReviewGroup("g", listOf(reasoned, best, ReviewItem(images[2], suggestTrash = true)))
+        val reasoned = ReviewItem(images[0], suggestTrash = true, isCandidate = true, reasons = listOf(dark, blurry))
+        val best = ReviewItem(images[1], suggestTrash = false, isCandidate = false, isBest = true, reasons = listOf(Signal("exact", 1, Category.EXACT_DUPLICATE, 1f, mapOf(ROLE_KEY to Role.BEST.value))))
+        val group = ReviewGroup("g", listOf(reasoned, best, ReviewItem(images[2], suggestTrash = true, isCandidate = true)))
         compose.setContent { CategoryScreen(listOf(group), 3, setOf(images[0].path), true, {}, { _, _ -> }, {}) }
 
         compose.onNodeWithContentDescription("Too dark. Marked for the trash").assertExists()

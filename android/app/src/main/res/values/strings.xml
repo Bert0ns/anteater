@@ -13,7 +13,7 @@
     <string name="scan_phase_video_scan">Looking for videos</string>
     <string name="scan_phase_video_metadata">Reading the videos</string>
     <string name="scan_phase_video_frames">Looking at the frames</string>
-    <string name="scan_phase_video_groups">Finding duplicate videos</string>
+    <string name="scan_phase_video_groups">Finding copies and takes</string>
     <string name="scan_kind_images">Photo scan</string>
     <string name="scan_kind_videos">Video scan</string>
     <string name="scan_kind_both">Photo and video scan</string>
@@ -43,6 +43,7 @@
     <string name="category_forwarded">Forwarded</string>
     <string name="category_forwarded_videos">Forwarded</string>
     <string name="category_sticker">WhatsApp stickers</string>
+    <string name="category_takes">Takes of one moment</string>
     <string name="category_coming_soon">Coming soon</string>
     <plurals name="candidates">
         <item quantity="one">%d image to review</item>
@@ -65,6 +66,7 @@
     <string name="trash">Trash</string>
     <string name="review_hint">Marked images go to the trash.</string>
     <string name="review_hint_gestures">Tap one to keep it, hold it to see it full size.</string>
+    <string name="review_hint_unmarked">Nothing is marked for you. Tap an image to mark it for the trash, hold it to see it full size.</string>
     <string name="review_done">No more images to review. Skipped ones come back when you open this category again.</string>
     <string name="best_copy">Best</string>
     <string name="apply">Trash %1$d, keep %2$d</string>
@@ -203,6 +205,7 @@
         <item quantity="other">The last %2$d videos</item>
     </plurals>
     <string name="review_hint_videos">Marked videos go to the trash.</string>
+    <string name="review_hint_unmarked_videos">Nothing is marked for you. Tap a video to mark it for the trash, hold it to see it full size.</string>
     <string name="review_done_videos">No more videos to review. Skipped ones come back when you open this category again.</string>
     <string name="videos_hint">Tap a video to select it, hold it to see it full size. Nothing is selected for you.</string>
     <plurals name="videos_trash">
@@ -282,6 +285,12 @@
     <string name="reason_forwarded_exif">No camera data, like a forwarded image</string>
     <string name="reason_forwarded">Looks forwarded from a messaging app</string>
     <string name="reason_sticker">In a sticker folder</string>
+    <plurals name="reason_take">
+        <item quantity="one">One of %1$d takes of one moment</item>
+        <item quantity="other">One of %1$d takes of one moment</item>
+    </plurals>
+    <string name="reason_take_plain">One of several takes of one moment</string>
+    <string name="reason_short_take">A short take, then a longer one of the same moment</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version %1$s</string>
     <string name="settings_website">Website</string>

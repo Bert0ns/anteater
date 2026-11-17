@@ -7,7 +7,7 @@ under lab/data/: it holds paths and metadata of personal images.
 import json
 import sqlite3
 from collections import defaultdict
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Self
@@ -296,36 +296,19 @@ class ImageIndex:
 
     def video_metadata(self, path: Path) -> VideoMetadata | None:
         row = self._db.execute(
-            """SELECT width, height, duration_ms, frame_rate, bitrate, has_audio, video_codec, hdr,
-               captured_at, captured_instant FROM images WHERE path = ? AND width IS NOT NULL""",
+            f"SELECT {_VIDEO_COLUMNS} FROM images WHERE path = ? AND width IS NOT NULL",
             (str(path),),
         ).fetchone()
-        if row is None:
-            return None
-        (
-            width,
-            height,
-            duration_ms,
-            frame_rate,
-            bitrate,
-            has_audio,
-            codec,
-            hdr,
-            captured_at,
-            instant,
-        ) = row
-        return VideoMetadata(
-            width,
-            height,
-            duration_ms,
-            frame_rate,
-            bitrate,
-            bool(has_audio),
-            codec,
-            bool(hdr),
-            datetime.fromisoformat(captured_at) if captured_at else None,
-            instant,
+        return None if row is None else _video_metadata(row)
+
+    def all_video_metadata(self) -> dict[Path, VideoMetadata]:
+        """The metadata of every video that has it, by path: one query, where a group detector
+        would make one per video."""
+        rows = self._db.execute(
+            f"""SELECT path, {_VIDEO_COLUMNS} FROM images
+               WHERE media_type = 'video' AND width IS NOT NULL"""
         )
+        return {Path(path): _video_metadata(row) for path, *row in rows}
 
     def read_videos(self, frames_version: int) -> list[tuple[MediaRef, int | None]]:
         """The videos whose metadata was read, readable and out of the trash, with their
@@ -665,6 +648,19 @@ class ImageIndex:
             )
             for path, size, mtime_ns, state, type_ in rows
         ]
+
+
+_VIDEO_COLUMNS = """width, height, duration_ms, frame_rate, bitrate, has_audio, video_codec, hdr,
+    captured_at, captured_instant"""
+
+
+def _video_metadata(row: Sequence) -> VideoMetadata:
+    width, height, duration, frame_rate, bitrate, has_audio, codec, hdr, captured_at, instant = row
+    captured = datetime.fromisoformat(captured_at) if captured_at else None
+    return VideoMetadata(
+        width, height, duration, frame_rate, bitrate, bool(has_audio), codec, bool(hdr), captured,
+        instant,
+    )  # fmt: skip
 
 
 def _ref(path: str, size: int, mtime_ns: int, media_type: str) -> MediaRef:

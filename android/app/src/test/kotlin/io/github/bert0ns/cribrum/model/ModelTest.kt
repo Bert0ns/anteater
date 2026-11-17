@@ -44,12 +44,20 @@ class ModelTest {
         assertEquals(
             listOf(
                 "exact_duplicate", "near_duplicate", "burst", "blurry",
-                "bad_exposure", "screenshot", "document", "forwarded", "sticker",
+                "bad_exposure", "screenshot", "document", "forwarded", "sticker", "takes",
             ),
             Category.entries.map { it.value },
         )
         assertEquals(listOf("faces", "favorite", "album"), Protection.entries.map { it.value })
         assertEquals(listOf("unreviewed", "kept", "trashed"), ReviewState.entries.map { it.value })
+    }
+
+    @Test
+    fun `a take is the same signal to the user whatever its group and role`() {
+        fun take(group: String, role: Role) = Signal("takes", 1, Category.TAKES, 1f, mapOf(GROUP_KEY to group, ROLE_KEY to role.value))
+
+        assertEquals(take("g1", Role.TAKE).identity, take("g2", Role.SHORT_TAKE).identity)
+        assertNotEquals(Signal("burst", 3, Category.BURST, 0.5f, mapOf(GROUP_KEY to "g1")).identity, Signal("burst", 3, Category.BURST, 0.5f, mapOf(GROUP_KEY to "g2")).identity)
     }
 
     @Test

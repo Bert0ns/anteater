@@ -4,7 +4,9 @@ package io.github.bert0ns.cribrum.detectors
 
 import io.github.bert0ns.cribrum.imaging.Pixels
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
+import io.github.bert0ns.cribrum.metadata.VideoMetadata
 import io.github.bert0ns.cribrum.metadata.readMetadata
+import io.github.bert0ns.cribrum.metadata.readVideoMetadata
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
@@ -33,6 +35,10 @@ data class AnalysisContext(
      * share its decodes, and drops it with the image. By default each call decodes anew.
      */
     val pixels: (MediaRef) -> Pixels = { Pixels(File(it.path)) },
+    /** Throws [io.github.bert0ns.cribrum.metadata.UnreadableVideo] when the header can't be read. */
+    val videoMetadata: suspend (MediaRef) -> VideoMetadata = { readVideoMetadata(File(it.path)) },
+    /** The L2-normalized embeddings of the video's sampled frames, in the order of their times: none when it has no frames stored. */
+    val frames: suspend (MediaRef) -> List<FloatArray> = { emptyList() },
     /** Known screen resolutions as (short side, long side). */
     val screenSizes: Set<Pair<Int, Int>> = SCREEN_SIZES,
 )
@@ -80,7 +86,8 @@ val IMAGES_ONLY: Set<MediaType> = setOf(MediaType.IMAGE)
  * Every member of a group gets a signal, so the review screen can show the whole group. Its
  * evidence holds the group id under `GROUP_KEY` and the member's role under `ROLE_KEY`: the copy
  * to keep is `Role.BEST` with score 0, so no threshold ever suggests it; the others are
- * `Role.INFERIOR`. Images in no group are left out of the result.
+ * `Role.INFERIOR`. A group of takes has no copy to keep, and its members are `Role.TAKE` or
+ * `Role.SHORT_TAKE`. Images in no group are left out of the result.
  */
 interface GroupDetector {
     val id: String

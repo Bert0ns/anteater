@@ -17,9 +17,10 @@ class ThresholdsTest {
     private val preferences = ApplicationProvider.getApplicationContext<Context>().getSharedPreferences("test", Context.MODE_PRIVATE)
 
     @Test
-    fun `fixed categories include stickers and exact duplicates`() {
+    fun `fixed categories include stickers, exact duplicates and takes`() {
         assertTrue(Thresholds.FIXED.contains(Category.STICKER))
         assertTrue(Thresholds.FIXED.contains(Category.EXACT_DUPLICATE))
+        assertTrue(Thresholds.FIXED.contains(Category.TAKES))
     }
 
     @Test

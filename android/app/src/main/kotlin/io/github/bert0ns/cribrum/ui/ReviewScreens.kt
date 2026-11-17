@@ -125,6 +125,7 @@ fun categoryName(category: Category, mediaType: MediaType = MediaType.IMAGE): St
         Category.DOCUMENT -> R.string.category_document
         Category.FORWARDED -> if (mediaType == MediaType.VIDEO) R.string.category_forwarded_videos else R.string.category_forwarded
         Category.STICKER -> R.string.category_sticker
+        Category.TAKES -> R.string.category_takes
     },
 )
 
@@ -227,9 +228,9 @@ private fun Tile(item: ReviewItem, marked: Boolean, onTap: () -> Unit, onHold: (
     )
     val why = item.reasons.firstNotNullOfOrNull(::reasonOf)?.text() ?: File(item.image.path).name
     val video = item.image.mediaType == MediaType.VIDEO
-    val size = Formatter.formatShortFileSize(LocalContext.current, item.image.size)
-    // A video's tile shows its size, so the description says it as well, beside the file's name.
-    val described = stringResource(R.string.tile_description, if (video) stringResource(R.string.tile_description, File(item.image.path).name, size) else why, state)
+    // A video's tile shows its length and size, so takes of one moment compare at a glance, and the description says them too.
+    val details = lengthAndSize(item.image.size, item.durationMs?.let(::formatLength))
+    val described = stringResource(R.string.tile_description, if (video) stringResource(R.string.tile_description, File(item.image.path).name, details) else why, state)
     // The tile's own description hides the heart's from a screen reader, so it says it too.
     val favorite = stringResource(if (video) R.string.favorite_video else R.string.favorite)
     val description = if (item.isFavorite) stringResource(R.string.tile_description, described, favorite) else described
@@ -255,7 +256,7 @@ private fun Tile(item: ReviewItem, marked: Boolean, onTap: () -> Unit, onHold: (
     ) {
         if (video) {
             VideoFrame(File(item.image.path), "Review.tile", Modifier.fillMaxSize(), unreadable = item.unreadable)
-            Text(size, Modifier.align(Alignment.BottomStart).background(Color.Black.copy(alpha = 0.6f)).padding(4.dp).clearAndSetSemantics {}, color = Color.White, style = MaterialTheme.typography.labelSmall)
+            Text(details, Modifier.align(Alignment.BottomStart).background(Color.Black.copy(alpha = 0.6f)).padding(4.dp).clearAndSetSemantics {}, color = Color.White, style = MaterialTheme.typography.labelSmall)
         } else {
             TracedAsyncImage(File(item.image.path), "Review.tile", null, Modifier.fillMaxSize(), tile = true)
         }
@@ -332,7 +333,7 @@ fun CategoryScreen(
     val toTrash = images.filter { it.image.path in marked }
     val favorites = toTrash.count { it.isFavorite }
     // Candidates only, as the header counts: a group's best copy is there for comparison, and nobody chose to keep it.
-    val toKeepCount = if (grouped) images.count { it.suggestTrash && it.image.path !in marked } else images.size - toTrash.size
+    val toKeepCount = if (grouped) images.count { it.isCandidate && it.image.path !in marked } else images.size - toTrash.size
     // The button with its counts, the 30 day trash and the Undo snackbar are the confirmation (D6). Only a favourite asks first.
     val apply = {
         haptics.performHapticFeedback((if (toTrash.isEmpty()) Haptic.KEEP else Haptic.TRASH).type)
@@ -343,7 +344,7 @@ fun CategoryScreen(
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             if (images.isNotEmpty()) {
                 // Candidates only: a group shows its best copy too, for comparison.
-                val shown = images.count { it.suggestTrash }
+                val shown = images.count { it.isCandidate }
                 val position = if (remaining > shown) {
                     (if (videos) R.plurals.page_more_videos else R.plurals.page_more)
                 } else if (videos) {
@@ -355,6 +356,9 @@ fun CategoryScreen(
             }
             if (images.isEmpty()) {
                 Text(stringResource(if (videos) R.string.review_done_videos else R.string.review_done), style = MaterialTheme.typography.bodySmall)
+            } else if (images.none { it.suggestTrash && !it.isFavorite }) {
+                // Takes, or a group whose best copy is in the trash or a sticker: a tap marks, so "tap to keep" would be wrong.
+                Text(stringResource(if (videos) R.string.review_hint_unmarked_videos else R.string.review_hint_unmarked), style = MaterialTheme.typography.bodySmall)
             } else {
                 Text(stringResource(if (videos) R.string.review_hint_videos else R.string.review_hint) + " " + stringResource(R.string.review_hint_gestures), style = MaterialTheme.typography.bodySmall)
             }

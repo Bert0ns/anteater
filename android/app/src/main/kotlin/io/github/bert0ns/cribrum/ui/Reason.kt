@@ -89,6 +89,14 @@ fun reasonOf(signal: Signal): Reason? {
             Reason(if (strongest.second > 0f) strongest.first else R.string.reason_forwarded)
         }
         Category.STICKER -> Reason(R.string.reason_sticker)
+        Category.TAKES -> {
+            val takes = evidence["takes"]?.toIntOrNull()
+            when {
+                evidence[ROLE_KEY] == Role.SHORT_TAKE.value -> Reason(R.string.reason_short_take)
+                takes == null -> Reason(R.string.reason_take_plain)
+                else -> Reason(R.plurals.reason_take, takes, takes)
+            }
+        }
         else -> null
     }
 }

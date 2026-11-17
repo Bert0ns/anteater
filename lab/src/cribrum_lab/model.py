@@ -21,6 +21,7 @@ class Category(Enum):
     DOCUMENT = "document"
     FORWARDED = "forwarded"
     STICKER = "sticker"
+    TAKES = "takes"
 
 
 class Protection(Enum):
@@ -84,7 +85,12 @@ class Signal:
     def identity(self) -> tuple[Category | Protection, str, str]:
         """What the signal says, whatever the detector version and score: category, group
         and role. The ranker uses it to tell a new signal from one the user already saw.
+
+        A take's is its category alone: trashing one take changes the group id and the roles of
+        the others, and a take the user kept must not come back for that (docs/design.md, 6.3).
         """
+        if self.category is Category.TAKES:
+            return self.category, "", ""
         return self.category, self.evidence.get(GROUP_KEY, ""), self.evidence.get(ROLE_KEY, "")
 
 
