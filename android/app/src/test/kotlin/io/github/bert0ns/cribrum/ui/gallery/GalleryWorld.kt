@@ -121,12 +121,12 @@ class GalleryWorld(val app: CribrumApp, val root: File, val clock: MovableClock 
     }
 
     /** A video file of [bytes], dated [at]. Its content is zeros: [showVideos] gives the retriever its frame and length. */
-    fun video(folder: String, name: String, bytes: Long, at: LocalDateTime): MediaRef {
+    fun video(folder: String, name: String, bytes: Long, at: LocalDateTime, vararg signals: Signal): MediaRef {
         val file = File(unique(folder, name))
         file.parentFile?.mkdirs()
         RandomAccessFile(file, "rw").use { it.setLength(bytes) }
         file.setLastModified(at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
-        return add(file.toMediaRef(MediaType.VIDEO), emptyList())
+        return add(file.toMediaRef(MediaType.VIDEO), signals.toList())
     }
 
     /**
