@@ -479,9 +479,6 @@ def _embed_frames(
             inputs, measures = pixels
             vectors = embedder.embed_pixels(np.stack(list(inputs.values())))
             # A detector's result belongs to the frames it read: new ones mean analyzing again.
-            index.forget_analyses(
-                [video.path], [d.id for d in detectors if getattr(d, "uses_frames", False)]
-            )
             index.set_frame_embeddings(
                 video.path,
                 embedder.id,
@@ -489,6 +486,7 @@ def _embed_frames(
                 FRAMES_VERSION,
                 dict(zip(inputs, vectors, strict=True)),
                 measures,
+                forget=[d.id for d in detectors if getattr(d, "uses_frames", False)],
             )
             stats.detector_runs += len(inputs)
         progress("video_frames", done, len(todo))

@@ -248,6 +248,19 @@ def test_the_measures_of_the_frames_are_stored_with_them_and_replaced_with_them(
     assert index.frame_measures(4) == {VIDEO.path: [dark]}
 
 
+def test_new_frames_forget_what_the_named_detectors_stored_in_the_same_transaction(index):
+    index.record(VIDEO)
+    index.set_signals(VIDEO.path, "blur", 1, [BLUR])
+    index.set_signals(VIDEO.path, "forwarded", 1, [])
+
+    index.set_frame_embeddings(
+        VIDEO.path, "clip", 1, 1, {300: np.ones(2, np.float32)}, forget=["blur"]
+    )
+
+    assert not index.is_analyzed(VIDEO.path, "blur", 1)
+    assert index.is_analyzed(VIDEO.path, "forwarded", 1)
+
+
 def test_a_changed_video_drops_the_measures_of_its_frames(index):
     index.record(VIDEO)
     measures = {300: FrameMeasures(1.0, 1, 2, 3, 4)}

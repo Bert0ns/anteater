@@ -412,12 +412,18 @@ class ImageIndex:
         frames_version: int,
         vectors: Mapping[int, np.ndarray],
         measures: Mapping[int, FrameMeasures] | None = None,
+        forget: Iterable[str] = (),
     ) -> None:
         """Replaces the video's frames of this model, by their time in milliseconds, and the
-        measures of the same frames in the same transaction."""
+        measures of the same frames in the same transaction, with what the detectors in `forget`
+        stored for the video, which belongs to the frames they read."""
         with self._db:
             exists = self._db.execute("SELECT 1 FROM images WHERE path = ?", (str(path),))
             _require(exists.fetchone(), path)
+            self._db.executemany(
+                "DELETE FROM analyses WHERE path = ? AND detector_id = ?",
+                [(str(path), detector_id) for detector_id in forget],
+            )
             self._db.execute(
                 "DELETE FROM frame_embeddings WHERE path = ? AND model = ?", (str(path), model)
             )
