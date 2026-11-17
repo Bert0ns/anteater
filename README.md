@@ -57,7 +57,7 @@ The Compress tab recompresses large camera JPEGs instead of deleting them. It li
 
 - **Three levels.** High quality is JPEG 90 at full resolution. Balanced is JPEG 85 and scales photos above 50 MP down to 50 MP. Smallest is JPEG 80 and scales photos above 12 MP down to 12 MP. Balanced saved a median 47% on one phone's camera photos in the lab.
 - **Split comparison.** A slider compares the original with the real recompressed result before you confirm, and zooms down to single pixels.
-- **Metadata.** The copy keeps the standard EXIF tags (date taken, camera and lens, orientation), GPS and, on Android 14 and newer, the Ultra HDR gain map. It loses the original XMP (except the new gain map's), the Samsung SEF trailer, C2PA credentials, IPTC, the EXIF thumbnail and the shooting mode info, and maker notes are not guaranteed. The summary says so before you confirm.
+- **Metadata.** The copy keeps the standard EXIF tags (date taken, camera and lens, orientation), GPS and, on Android 14 and newer, the Ultra HDR gain map. It loses the original XMP (except the new gain map's), the Samsung SEF trailer, C2PA credentials, IPTC, the EXIF thumbnail and the shooting mode info, and maker notes are not guaranteed. The summary says so before you confirm. If the photo was a gallery favourite, Android asks you, through a system dialog, to mark the copy as a favourite again.
 - **Reversible.** The original goes to the trash, and one button undoes the whole batch.
 - **Background batches.** A batch runs with a notification and pauses while the phone is severely hot.
 
