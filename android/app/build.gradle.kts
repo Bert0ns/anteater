@@ -44,12 +44,12 @@ android {
     signingConfigs {
         // The release key, which the release workflow writes from repository secrets. Without it a
         // release build comes out unsigned, and Android refuses to install it.
-        providers.environmentVariable("CRIBRUM_KEYSTORE").orNull?.let { keystore ->
+        providers.environmentVariable("ANTEATER_KEYSTORE").orNull?.let { keystore ->
             create("release") {
                 storeFile = file(keystore)
-                storePassword = providers.environmentVariable("CRIBRUM_KEYSTORE_PASSWORD").get()
-                keyAlias = providers.environmentVariable("CRIBRUM_KEY_ALIAS").get()
-                keyPassword = providers.environmentVariable("CRIBRUM_KEYSTORE_PASSWORD").get()
+                storePassword = providers.environmentVariable("ANTEATER_KEYSTORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("ANTEATER_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("ANTEATER_KEYSTORE_PASSWORD").get()
             }
         }
     }

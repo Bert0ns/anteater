@@ -50,7 +50,7 @@ jobs:
             echo "::error::the ANDROID_KEYSTORE_BASE64 secret is missing (android/README.md, Release)"; exit 1
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
-          echo "CRIBRUM_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          echo "ANTEATER_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v5
         with:
@@ -60,8 +60,8 @@ jobs:
 
       - name: Test and build
         env:
-          CRIBRUM_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          CRIBRUM_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANTEATER_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANTEATER_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: ./gradlew testDebugUnitTest lintDebug assembleRelease -PversionName="$VERSION" -PversionCode="$VERSION_CODE"
 
       - name: Check the signature
