@@ -283,6 +283,21 @@ class ClipLoopsTest {
     }
 
     @Test
+    fun `the tiles that play keep their places when the grid settles, ahead of tiles higher up`() {
+        show(page(clips(16)))
+        val grid = compose.onNode(hasScrollAction())
+        grid.performScrollToIndex(4) // the third row, clips 5 and 6, at the top
+        settle()
+        val lower = running.toList()
+        assertEquals(listOf("/sdcard/DCIM/Camera/clip5.mp4", "/sdcard/DCIM/Camera/clip6.mp4"), lower.flatMap { it.paths })
+
+        grid.performScrollToIndex(2) // up by a row: clips 3 and 4 come on screen above them
+        settle()
+
+        assertEquals(lower, running)
+    }
+
+    @Test
     fun `a clip that plays again goes on from where it was`() {
         show(page(clips(16)))
         val clip1 = players.made.first()
