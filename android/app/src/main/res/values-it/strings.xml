@@ -350,31 +350,31 @@
     <string name="settings_version">Versione %1$s</string>
     <string name="settings_website">Sito web</string>
     <string name="settings_source">Codice sorgente</string>
-    <string name="settings_trash_retention">Tieni nel cestino le immagini per</string>
+    <string name="settings_trash_retention">Tieni nel cestino i file per</string>
     <plurals name="settings_trash_days">
         <item quantity="one">%d giorno</item>
         <item quantity="other">%d giorni</item>
         <item quantity="many">%d di giorni</item>
     </plurals>
     <plurals name="settings_trash_retention_title">
-        <item quantity="one">Tenere le immagini solo %d giorno?</item>
-        <item quantity="other">Tenere le immagini solo %d giorni?</item>
-        <item quantity="many">Tenere le immagini solo %d di giorni?</item>
+        <item quantity="one">Tenere i file solo %d giorno?</item>
+        <item quantity="other">Tenere i file solo %d giorni?</item>
+        <item quantity="many">Tenere i file solo %d di giorni?</item>
     </plurals>
     <plurals name="settings_trash_retention_confirm">
-        <item quantity="one">La prossima scansione elimina definitivamente %1$d immagine nel cestino da più di %2$d giorni. Non si può annullare.</item>
-        <item quantity="other">La prossima scansione elimina definitivamente %1$d immagini nel cestino da più di %2$d giorni. Non si può annullare.</item>
-        <item quantity="many">La prossima scansione elimina definitivamente %1$d di immagini nel cestino da più di %2$d giorni. Non si può annullare.</item>
+        <item quantity="one">La prossima scansione elimina definitivamente %1$d file nel cestino da più di %2$d giorni. Non si può annullare.</item>
+        <item quantity="other">La prossima scansione elimina definitivamente %1$d file nel cestino da più di %2$d giorni. Non si può annullare.</item>
+        <item quantity="many">La prossima scansione elimina definitivamente %1$d di file nel cestino da più di %2$d giorni. Non si può annullare.</item>
     </plurals>
-    <string name="settings_trash_retention_applies">Vale anche per le immagini già nel cestino.</string>
+    <string name="settings_trash_retention_applies">Vale anche per i file già nel cestino.</string>
     <string name="settings_uninstall_warning">Disinstallando l\'app la cartella del cestino resta, quindi svuotalo prima.</string>
     <string name="settings_haptics">Feedback tattile</string>
     <string name="settings_videos_at_night">Analizza i video di notte</string>
     <string name="settings_videos_at_night_hint">Dopo che hai usato Scansiona i video, la scansione notturna analizza anche i nuovi video, dopo le foto.</string>
-    <string name="settings_haptics_hint">Una breve vibrazione quando selezioni, salti, tieni o cestini le immagini. Segue anche l\'impostazione del feedback al tocco del telefono.</string>
+    <string name="settings_haptics_hint">Una breve vibrazione quando selezioni, salti, tieni o cestini immagini e video. Segue anche l\'impostazione del feedback al tocco del telefono.</string>
     <string name="settings_language">Lingua</string>
     <string name="settings_thresholds">Soglie di rilevamento</string>
-    <string name="thresholds_direction">Sposta a sinistra per vedere più immagini, a destra per vederne meno.</string>
+    <string name="thresholds_direction">Sposta a sinistra per vedere più immagini o video, a destra per vederne meno.</string>
     <plurals name="thresholds_more">
         <item quantity="one">%d immagine in più rispetto al valore predefinito</item>
         <item quantity="other">%d immagini in più rispetto al valore predefinito</item>
@@ -403,7 +403,7 @@
     <string name="thresholds_reset">Ripristina i valori predefiniti</string>
     <string name="thresholds_slider_videos">%1$s, video</string>
     <string name="settings_excluded_folders">Cartelle escluse</string>
-    <string name="settings_no_excluded_folders">Nessuna cartella è esclusa. Escludine una dalla mappa dell\'archiviazione o da un\'immagine a schermo intero.</string>
+    <string name="settings_no_excluded_folders">Nessuna cartella è esclusa. Escludine una dalla mappa dell\'archiviazione o da un\'immagine o un video a schermo intero.</string>
     <string name="settings_storage_app">App</string>
     <string name="settings_storage_index">Dati della scansione</string>
     <string name="settings_storage_index_size">%s, senza i dati dell\'analisi</string>
@@ -442,7 +442,7 @@
         <item quantity="other">%1$d errori nell\'ultima scansione</item>
         <item quantity="many">%1$d di errori nell\'ultima scansione</item>
     </plurals>
-    <string name="settings_scan_status_failures_hint">La prossima scansione riprova con queste immagini. Tocca per mostrare o nascondere i nomi dei file.</string>
+    <string name="settings_scan_status_failures_hint">La prossima scansione riprova con questi file. Tocca per mostrare o nascondere i nomi dei file.</string>
     <string name="settings_scan_status_toggle_files">Mostra o nascondi i nomi dei file</string>
     <string name="settings_scan_status_files_shown">Nomi dei file mostrati</string>
     <string name="settings_scan_status_files_hidden">Nomi dei file nascosti</string>
@@ -463,9 +463,9 @@
         <item quantity="many">%1$d di %2$d di immagini analizzate</item>
     </plurals>
     <plurals name="settings_scan_status_row_failed">
-        <item quantity="one">%1$d non analizzata nell\'ultima scansione</item>
-        <item quantity="other">%1$d non analizzate nell\'ultima scansione</item>
-        <item quantity="many">%1$d non analizzate nell\'ultima scansione</item>
+        <item quantity="one">%1$d file non analizzato nell\'ultima scansione</item>
+        <item quantity="other">%1$d file non analizzati nell\'ultima scansione</item>
+        <item quantity="many">%1$d di file non analizzati nell\'ultima scansione</item>
     </plurals>
     <string name="excluded_folder_snackbar">Cartella %1$s esclusa, con le sue sottocartelle</string>
     <string name="excluded_copy">Un\'altra copia è in una cartella esclusa</string>

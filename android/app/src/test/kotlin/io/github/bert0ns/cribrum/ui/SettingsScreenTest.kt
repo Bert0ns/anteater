@@ -58,8 +58,8 @@ class SettingsScreenTest {
         compose.onNodeWithText("Settings").performClick()
 
         // The view model changes screen on its own scope, after it has read the retention.
-        compose.waitUntil(5_000) { compose.onAllNodesWithText("Keep trashed images for").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Keep trashed images for").assertIsDisplayed()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Keep trashed files for").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Keep trashed files for").assertIsDisplayed()
         compose.onNodeWithText("30 days").assertIsDisplayed()
         // The screen is named as the bar names it.
         assertEquals(2, compose.onAllNodesWithText("Settings").fetchSemanticsNodes().size)
@@ -85,7 +85,7 @@ class SettingsScreenTest {
             SettingsScreen(retentionDays = chosen, onRetentionChange = { chosen = it.also { days = it } })
         }
 
-        compose.onNodeWithText("Keep trashed images for").performClick()
+        compose.onNodeWithText("Keep trashed files for").performClick()
         compose.onNode(hasText("30 days") and isSelected()).assertExists()
         compose.onNode(hasText("7 days") and isSelected()).assertDoesNotExist()
         compose.onNodeWithText("7 days").performClick()
@@ -107,8 +107,8 @@ class SettingsScreenTest {
             )
         }
 
-        compose.onNodeWithText("Keep images only 7 days?").assertIsDisplayed()
-        compose.onNodeWithText("The next scan permanently deletes the 3 images that have been in the trash for more than 7 days. This cannot be undone.").assertIsDisplayed()
+        compose.onNodeWithText("Keep files only 7 days?").assertIsDisplayed()
+        compose.onNodeWithText("The next scan permanently deletes the 3 files that have been in the trash for more than 7 days. This cannot be undone.").assertIsDisplayed()
         compose.onNodeWithText("Cancel").performClick()
         assertEquals(listOf(0, 1), listOf(confirmed, cancelled))
 
@@ -218,7 +218,7 @@ class SettingsScreenTest {
     fun `settings screen says when no folder is excluded`() {
         compose.setContent { SettingsScreen() }
 
-        val text = "No folders are excluded. Exclude one from the storage map, or from an image at full size."
+        val text = "No folders are excluded. Exclude one from the storage map, or from an image or video at full size."
         compose.onNode(hasScrollAction()).performScrollToNode(hasText(text))
         compose.onNodeWithText(text).assertExists()
     }

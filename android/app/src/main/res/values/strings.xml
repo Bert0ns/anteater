@@ -301,28 +301,28 @@
     <string name="settings_website_url" translatable="false">https://cribrum.bertons.me</string>
     <string name="settings_source">Source code</string>
     <string name="settings_source_url" translatable="false">https://github.com/Bert0ns/cribrum</string>
-    <string name="settings_trash_retention">Keep trashed images for</string>
+    <string name="settings_trash_retention">Keep trashed files for</string>
     <plurals name="settings_trash_days">
         <item quantity="one">%d day</item>
         <item quantity="other">%d days</item>
     </plurals>
     <plurals name="settings_trash_retention_title">
-        <item quantity="one">Keep images only %d day?</item>
-        <item quantity="other">Keep images only %d days?</item>
+        <item quantity="one">Keep files only %d day?</item>
+        <item quantity="other">Keep files only %d days?</item>
     </plurals>
     <plurals name="settings_trash_retention_confirm">
-        <item quantity="one">The next scan permanently deletes the %1$d image that has been in the trash for more than %2$d days. This cannot be undone.</item>
-        <item quantity="other">The next scan permanently deletes the %1$d images that have been in the trash for more than %2$d days. This cannot be undone.</item>
+        <item quantity="one">The next scan permanently deletes the %1$d file that has been in the trash for more than %2$d days. This cannot be undone.</item>
+        <item quantity="other">The next scan permanently deletes the %1$d files that have been in the trash for more than %2$d days. This cannot be undone.</item>
     </plurals>
-    <string name="settings_trash_retention_applies">Applies to the images already in the trash too.</string>
+    <string name="settings_trash_retention_applies">Applies to the files already in the trash too.</string>
     <string name="settings_uninstall_warning">Uninstalling keeps the trash folder, so empty it first.</string>
     <string name="settings_haptics">Haptic feedback</string>
     <string name="settings_videos_at_night">Analyse videos at night</string>
     <string name="settings_videos_at_night_hint">Once you have run Scan videos, the night scan also analyses new videos, after the photos.</string>
-    <string name="settings_haptics_hint">A short vibration when you select, skip, keep or trash images. It also follows the phone\'s touch feedback setting.</string>
+    <string name="settings_haptics_hint">A short vibration when you select, skip, keep or trash images and videos. It also follows the phone\'s touch feedback setting.</string>
     <string name="settings_language">Language</string>
     <string name="settings_thresholds">Detection thresholds</string>
-    <string name="thresholds_direction">Move a slider left to see more images, right to see fewer.</string>
+    <string name="thresholds_direction">Move a slider left to see more images or videos, right to see fewer.</string>
     <plurals name="thresholds_more">
         <item quantity="one">%d image more than at the default</item>
         <item quantity="other">%d images more than at the default</item>
@@ -348,7 +348,7 @@
     <!-- What a screen reader says of a slider under "Videos", so it differs from the one of the same category under "Photos". -->
     <string name="thresholds_slider_videos">%1$s, videos</string>
     <string name="settings_excluded_folders">Excluded folders</string>
-    <string name="settings_no_excluded_folders">No folders are excluded. Exclude one from the storage map, or from an image at full size.</string>
+    <string name="settings_no_excluded_folders">No folders are excluded. Exclude one from the storage map, or from an image or video at full size.</string>
     <string name="settings_storage_app">App</string>
     <string name="settings_storage_index">Scan data</string>
     <string name="settings_storage_index_size">%s, without the analysis data</string>
@@ -384,7 +384,7 @@
         <item quantity="one">%1$d failure in the last scan</item>
         <item quantity="other">%1$d failures in the last scan</item>
     </plurals>
-    <string name="settings_scan_status_failures_hint">The next scan tries those images again. Tap to show or hide their file names.</string>
+    <string name="settings_scan_status_failures_hint">The next scan tries those files again. Tap to show or hide their file names.</string>
     <string name="settings_scan_status_toggle_files">Show or hide the file names</string>
     <string name="settings_scan_status_files_shown">File names shown</string>
     <string name="settings_scan_status_files_hidden">File names hidden</string>
