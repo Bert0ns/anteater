@@ -382,3 +382,20 @@ def test_a_short_clip_is_a_candidate_from_its_own_threshold_and_faces_only_lower
     plain = video("plain", short_clip(0.8))
     assert names(ranker.rank([people, plain])) == ["plain", "people"]
     assert all(c.is_candidate for c in ranker.rank([people, plain]))
+
+
+def test_a_kept_short_clip_stays_kept_when_a_photo_or_a_mistake_raises_its_score():
+    def short_clip(score, **evidence):
+        return Signal("short_clips", 1, Category.SHORT_CLIPS, score, evidence)
+
+    kept = short_clip(0.4, duration_chance="0.400")
+    stronger = short_clip(0.9, duration_chance="0.400", photo_chance="0.500", mistake="dark")
+    clip = IndexedMedia(
+        MediaRef(Path("clip"), 0, 0, MediaType.VIDEO),
+        ReviewState.KEPT,
+        (stronger,),
+        frozenset({kept.identity}),
+    )
+
+    assert stronger.identity == kept.identity
+    assert Ranker().rank([clip]) == []  # a kept image comes back only for a new signal

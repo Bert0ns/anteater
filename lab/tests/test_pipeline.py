@@ -1427,22 +1427,74 @@ def test_a_capture_time_read_again_runs_the_takes_again(videos, index):
     assert takes_groups(index) == []
 
 
-def test_a_photo_stored_beside_a_clip_runs_the_short_clips_again(videos, index):
-    root = videos.parent.parent
+def run_clips(videos, index, *detectors):
+    """A video run of these group detectors on the golden clip, with the stats of the run."""
+    return pipeline.run(
+        videos.parent.parent, index, detectors=[], group_detectors=list(detectors),
+        images=False, videos=True,
+    )  # fmt: skip
 
-    def evidence():
-        pipeline.run(
-            root, index, detectors=[], group_detectors=[pipeline.ShortClipsDetector()],
-            images=False, videos=True,
-        )  # fmt: skip
-        [signal] = index.signals(videos / "clip.mp4")
-        assert signal.category is Category.SHORT_CLIPS
-        return signal.evidence
 
-    assert "photo_chance" not in evidence()
+def clip_evidence(videos, index):
+    [signal] = [s for s in index.signals(videos / "clip.mp4") if s.category is Category.SHORT_CLIPS]
+    return signal.evidence
+
+
+def photo_beside_clip(videos, index, path=None):
     clip = index.video_metadata(videos / "clip.mp4")
-    index.set_metadata(
-        videos / "a.png", ImageMetadata(64, 48, "image/png", captured_at=clip.captured_at)
-    )
+    path = path or videos / "a.png"
+    index.set_metadata(path, ImageMetadata(64, 48, "image/png", captured_at=clip.captured_at))
 
-    assert "photo_chance" in evidence()
+
+def test_a_photo_stored_beside_a_clip_runs_the_short_clips_again(videos, index):
+    run_clips(videos, index, pipeline.ShortClipsDetector())
+    assert "photo_chance" not in clip_evidence(videos, index)
+
+    photo_beside_clip(videos, index)
+    run_clips(videos, index, pipeline.ShortClipsDetector())
+
+    assert "photo_chance" in clip_evidence(videos, index)
+
+
+def test_a_new_photo_runs_the_short_clips_and_no_other_group_detector(videos, index):
+    detectors = [pipeline.NearDuplicateDetector(), pipeline.ShortClipsDetector()]
+    assert run_clips(videos, index, *detectors).detector_runs == 2
+
+    photo_beside_clip(videos, index)
+    again = run_clips(videos, index, *detectors)
+
+    assert again.detector_runs == 1
+    assert index.group_fingerprint("short_clips:video", 1) is not None
+    assert run_clips(videos, index, *detectors).detector_runs == 0
+
+
+def test_a_new_takes_version_runs_the_short_clips_again(videos, index, monkeypatch):
+    run_clips(videos, index, pipeline.ShortClipsDetector())
+
+    monkeypatch.setattr(pipeline.TakesDetector, "version", 2)
+
+    assert run_clips(videos, index, pipeline.ShortClipsDetector()).detector_runs == 1
+
+
+def test_a_short_clips_run_that_is_up_to_date_loads_no_photo(videos, index, monkeypatch):
+    run_clips(videos, index, pipeline.ShortClipsDetector())
+
+    def fail(*_):
+        pytest.fail("loaded what an up to date run does not read")
+
+    for name in ("camera_photo_captures", "embeddings_of"):
+        monkeypatch.setattr(index, name, fail)
+
+    assert run_clips(videos, index, pipeline.ShortClipsDetector()).detector_runs == 0
+
+
+def test_a_screenshot_in_dcim_is_no_photo_beside_a_clip(videos, index):
+    run_clips(videos, index, pipeline.ShortClipsDetector())
+    shot = videos.parent / "Screenshots/shot.png"
+    save(shot, seed=7)
+    run_clips(videos, index, pipeline.ShortClipsDetector())  # records the file
+    photo_beside_clip(videos, index, shot.resolve())
+
+    run_clips(videos, index, pipeline.ShortClipsDetector())
+
+    assert "photo_chance" not in clip_evidence(videos, index)

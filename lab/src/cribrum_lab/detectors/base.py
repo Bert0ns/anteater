@@ -70,8 +70,13 @@ class AnalysisContext:
     frame_measures: Callable[[MediaRef], Sequence[FrameMeasures]] = lambda video: ()
     """What `frame_measures.measure_frame` kept of the video's sampled frames, in the order of their
     times: none when it has no frames stored."""
-    photos: Callable[[], Sequence[Photo]] = lambda: ()
-    """The photos in a camera folder with a capture time: none when the run has none to give."""
+    photos: Callable[[Sequence[datetime], int], Sequence[Photo]] = lambda times, window_ms: ()
+    """The camera photos (a photo with a capture time in a camera folder, screenshots left out)
+    taken within `window_ms` of any of the times, with their embeddings when the run has a model:
+    none when it has none to give. It loads only those, not every photo."""
+    stored_inputs: Callable[[], str] = lambda: ""
+    """Counts of the frame measures and the camera photos a group detector that reads them sees,
+    which change when they do. Cheap queries: a detector that is up to date loads nothing."""
     screen_sizes: Collection[tuple[int, int]] = SCREEN_SIZES
     """Known screen resolutions as (short side, long side)."""
     pixels: Callable[[MediaRef], Pixels] = lambda image: Pixels(image.path)
@@ -132,8 +137,11 @@ class GroupDetector(Protocol):
     the result.
 
     `version` follows the same rule as `Detector.version`, and `media_types` the one of
-    `Detector.media_types`. Per-image data they need (content hashes, metadata, embeddings) comes
-    from the lookups in `AnalysisContext`.
+    `Detector.media_types`. A detector that reads more than the files it is given, such as the
+    results of other detectors, may define `inputs_key(context) -> str`: the pipeline adds it to
+    the detector's own fingerprint, so only that detector runs again when it changes. Per-image
+    data they need (content hashes, metadata, embeddings) comes from the lookups in
+    `AnalysisContext`.
     """
 
     id: str
