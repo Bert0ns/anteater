@@ -182,8 +182,10 @@ fun VideosScreen(
     var askFavorites by remember { mutableStateOf(false) }
     var fullSize by remember { mutableStateOf<VideoItem?>(null) }
     var page by rememberSaveable { mutableIntStateOf(0) }
-    // A trash or a keep can empty the last page.
-    val shownPage = page.coerceAtMost((videos.size - 1).coerceAtLeast(0) / VIDEO_PAGE_SIZE)
+    // A trash or a keep can empty the last page: the one before it shows, and stays when a scan grows the list again.
+    val lastPage = (videos.size - 1).coerceAtLeast(0) / VIDEO_PAGE_SIZE
+    LaunchedEffect(lastPage) { if (page > lastPage) page = lastPage }
+    val shownPage = page.coerceAtMost(lastPage)
     val shown = videos.drop(shownPage * VIDEO_PAGE_SIZE).take(VIDEO_PAGE_SIZE)
     val grid = rememberLazyGridState()
     LaunchedEffect(shownPage) { grid.scrollToItem(0) }

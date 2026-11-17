@@ -698,6 +698,30 @@ class VideosScreenTest {
     }
 
     @Test
+    fun `trashing the whole last page shows the page before, which stays when the list grows again`() {
+        var items by mutableStateOf(many(20))
+        compose.setContent {
+            var selected by remember { mutableStateOf(emptySet<String>()) }
+            VideosScreen(items, selected, onToggle = { selected = if (it in selected) selected - it else selected + it }, onApply = { paths, _ ->
+                items = items.filterNot { it.video.path in paths }
+                selected = emptySet()
+            })
+        }
+        compose.onAllNodesWithContentDescription("Next page").onFirst().performClick()
+        compose.waitForIdle()
+        for (n in 17..20) tile("v$n.mp4").performClick()
+
+        compose.onNodeWithText("Trash 4 videos", substring = true).performClick()
+        compose.waitForIdle()
+        tile("v1.mp4").assertExists() // the list fits one page now
+
+        items = many(20) // a scan finds them again
+        compose.waitForIdle()
+        tile("v1.mp4").assertExists()
+        tile("v17.mp4").assertDoesNotExist() // still the first page, not the one that was emptied
+    }
+
+    @Test
     fun `a list that fits one page has no page controls`() {
         show(many(16))
 
