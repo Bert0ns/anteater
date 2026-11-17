@@ -1271,8 +1271,8 @@ class ReviewTest {
         val videos = overview(MediaType.VIDEO)
         val photos = overview()
 
-        assertEquals(listOf(Category.EXACT_DUPLICATE, Category.FORWARDED, Category.TAKES), videos.categories.map { it.category })
-        assertEquals(listOf(1, 0, 0), videos.categories.map { it.count })
+        assertEquals(listOf(Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE, Category.FORWARDED, Category.TAKES), videos.categories.map { it.category })
+        assertEquals(listOf(1, 0, 0, 0), videos.categories.map { it.count })
         assertEquals(copy.size, videos.freeableBytes)
         assertEquals(1, photos.categories.single { it.category == Category.EXACT_DUPLICATE }.count)
         assertEquals(photoCopy.size, photos.freeableBytes)
@@ -1296,7 +1296,7 @@ class ReviewTest {
         val clip = video("DCIM/clip.mp4", 100)
         index.setSignals(clip.path, "blur", 1, listOf(blurry(0.9f)))
 
-        assertEquals(listOf(Category.EXACT_DUPLICATE, Category.FORWARDED, Category.TAKES), overview(MediaType.VIDEO).categories.map { it.category })
+        assertEquals(listOf(Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE, Category.FORWARDED, Category.TAKES), overview(MediaType.VIDEO).categories.map { it.category })
     }
 
     @Test

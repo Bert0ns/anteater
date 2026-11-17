@@ -11,6 +11,7 @@ import io.github.bert0ns.cribrum.detectors.ExactDuplicateDetector
 import io.github.bert0ns.cribrum.detectors.ForwardedDetector
 import io.github.bert0ns.cribrum.detectors.GroupDetector
 import io.github.bert0ns.cribrum.detectors.MissingEmbedding
+import io.github.bert0ns.cribrum.detectors.NearDuplicateDetector
 import io.github.bert0ns.cribrum.detectors.TakesDetector
 import io.github.bert0ns.cribrum.folders.isStickerFolder
 import io.github.bert0ns.cribrum.frames.FRAMES_VERSION
@@ -33,6 +34,7 @@ import io.github.bert0ns.cribrum.model.Kind
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.Protection
+import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.model.toMediaRef
@@ -519,6 +521,21 @@ class PipelineTest {
 
         assertEquals(emptyList<Failure>(), stats.failures)
         assertFalse("videoFrames" in stats.phaseMs)
+    }
+
+    @Test
+    fun `a video run links a sent copy to its original once both have frames`() {
+        val clip = videos().getValue("clip")
+        val sent = File(root, "WhatsApp/Media/WhatsApp Video/Sent/clip.mp4").apply { parentFile!!.mkdirs() }
+        clip.copyTo(sent)
+        fun roles(embedder: Embedder?): Map<String, String> = runBlocking {
+            Pipeline(index, detectors = emptyList(), groupDetectors = listOf(NearDuplicateDetector()), embedder = embedder, videoMetadataReader = ::readVideo, frameReader = ::grayFrames)
+                .run(source, images = false, videos = true)
+            listOf(clip, sent).flatMap { file -> index.signals(file.path).filter { it.kind == Category.NEAR_DUPLICATE }.map { file.path to it.evidence.getValue(ROLE_KEY) } }.toMap()
+        }
+
+        assertEquals(emptyMap<String, String>(), roles(null)) // no frames, no link
+        assertEquals(mapOf(clip.path to "best", sent.path to "inferior"), roles(MeanColorEmbedder()))
     }
 
     @Test
