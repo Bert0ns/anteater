@@ -203,17 +203,20 @@ internal fun LoopingClip(file: File, endMs: Long?, modifier: Modifier, onFailed:
     }
     if (loop.failed) return
     val size = loop.videoSize
-    // A TextureView, not a SurfaceView: it scrolls with the grid and is clipped to the tile like any view.
-    AndroidView(
-        factory = { TextureView(it).apply { surfaceTextureListener = loop } },
-        modifier = modifier.clipToBounds().testTag("clipLoop").layout { measurable, constraints ->
-            val width = size?.let { it.width * it.pixelWidthHeightRatio } ?: constraints.maxWidth.toFloat()
-            val height = size?.height?.toFloat() ?: constraints.maxHeight.toFloat()
-            val scale = maxOf(constraints.maxWidth / width, constraints.maxHeight / height)
-            val placeable = measurable.measure(Constraints.fixed((width * scale).roundToInt(), (height * scale).roundToInt()))
-            layout(constraints.maxWidth, constraints.maxHeight) { placeable.place((constraints.maxWidth - placeable.width) / 2, (constraints.maxHeight - placeable.height) / 2) }
-        },
-    )
+    // A TextureView, not a SurfaceView: it scrolls with the grid and is clipped to the tile like any view. Keyed by the
+    // loop, so a loop made again gets a view of its own, whose surface goes to it and not to the one before.
+    key(loop) {
+        AndroidView(
+            factory = { TextureView(it).apply { surfaceTextureListener = loop } },
+            modifier = modifier.clipToBounds().testTag("clipLoop").layout { measurable, constraints ->
+                val width = size?.let { it.width * it.pixelWidthHeightRatio } ?: constraints.maxWidth.toFloat()
+                val height = size?.height?.toFloat() ?: constraints.maxHeight.toFloat()
+                val scale = maxOf(constraints.maxWidth / width, constraints.maxHeight / height)
+                val placeable = measurable.measure(Constraints.fixed((width * scale).roundToInt(), (height * scale).roundToInt()))
+                layout(constraints.maxWidth, constraints.maxHeight) { placeable.place((constraints.maxWidth - placeable.width) / 2, (constraints.maxHeight - placeable.height) / 2) }
+            },
+        )
+    }
 }
 
 /** How long a slideshow shows each frame. */
