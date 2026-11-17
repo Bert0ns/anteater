@@ -108,7 +108,7 @@ class ScreenshotDetectorTest {
 
     @Test
     fun `screen sizes are the lab's`() {
-        val lab = File("../../lab/src/cribrum_lab/screens.py").readText()
+        val lab = File("../../lab/src/anteater_lab/screens.py").readText()
         val sizes = Regex("""\((\d+), (\d+)\)""").findAll(lab).map { it.groupValues[1].toInt() to it.groupValues[2].toInt() }
 
         assertEquals(sizes.toSet(), SCREEN_SIZES)

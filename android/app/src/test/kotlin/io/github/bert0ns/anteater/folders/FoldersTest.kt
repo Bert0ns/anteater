@@ -29,7 +29,7 @@ class FoldersTest {
 
     @Test
     fun `messaging folders are the lab's`() {
-        val lab = File("../../lab/src/cribrum_lab/folders.py").readText()
+        val lab = File("../../lab/src/anteater_lab/folders.py").readText()
         val block = lab.substringAfter("_MESSAGING_FOLDERS = {").substringBefore("}")
 
         assertEquals(Regex("\"([^\"]+)\"").findAll(block).map { it.groupValues[1] }.toSet(), MESSAGING_FOLDERS)

@@ -346,7 +346,7 @@ class RankerTest {
 
     @Test
     fun `thresholds are the lab's`() {
-        val lab = java.io.File("../../lab/src/cribrum_lab/ranker.py").readText()
+        val lab = java.io.File("../../lab/src/anteater_lab/ranker.py").readText()
         for ((category, threshold) in THRESHOLDS) {
             assertTrue("$category", "Category.${category.name}: $threshold," in lab)
         }
