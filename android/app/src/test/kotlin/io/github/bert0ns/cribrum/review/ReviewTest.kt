@@ -391,7 +391,7 @@ class ReviewTest {
 
         val group = page(Category.EXACT_DUPLICATE).groups.single()
 
-        assertEquals(listOf(ReviewItem(best, false, isBest = true, reasons = listOf(duplicate("g", Role.BEST))), ReviewItem(copy, true, score = 1f, reasons = listOf(duplicate("g", Role.INFERIOR)))), group.images)
+        assertEquals(listOf(ReviewItem(best, false, isCandidate = false, isBest = true, reasons = listOf(duplicate("g", Role.BEST))), ReviewItem(copy, true, isCandidate = true, score = 1f, reasons = listOf(duplicate("g", Role.INFERIOR)))), group.images)
         assertFalse(group.hasExcludedCopy)
     }
 
@@ -402,7 +402,7 @@ class ReviewTest {
 
         val group = page(Category.NEAR_DUPLICATE).groups.single()
 
-        assertEquals(listOf(ReviewItem(best, false, isBest = true, reasons = listOf(nearDuplicate("g", Role.BEST))), ReviewItem(copy, true, score = 0.8f, reasons = listOf(nearDuplicate("g", Role.INFERIOR)))), group.images)
+        assertEquals(listOf(ReviewItem(best, false, isCandidate = false, isBest = true, reasons = listOf(nearDuplicate("g", Role.BEST))), ReviewItem(copy, true, isCandidate = true, score = 0.8f, reasons = listOf(nearDuplicate("g", Role.INFERIOR)))), group.images)
     }
 
     @Test
@@ -424,7 +424,7 @@ class ReviewTest {
         val group = page(Category.NEAR_DUPLICATE).groups.single()
 
         assertEquals(
-            ReviewItem(weak, false, score = 0f, reasons = listOf(nearDuplicate("g", Role.INFERIOR, score = 0.3f))),
+            ReviewItem(weak, false, isCandidate = false, score = 0f, reasons = listOf(nearDuplicate("g", Role.INFERIOR, score = 0.3f))),
             group.images.single { it.image == weak },
         )
         assertEquals(listOf(best, copy, weak).toSet(), group.images.map { it.image }.toSet())
@@ -466,7 +466,7 @@ class ReviewTest {
         excludeFolderOf(excludedCopy)
 
         val group = page(Category.EXACT_DUPLICATE).groups.single()
-        assertEquals(listOf(ReviewItem(best, false, isBest = true, reasons = listOf(duplicate("g", Role.BEST))), ReviewItem(copy, true, score = 1f, reasons = listOf(duplicate("g", Role.INFERIOR)))), group.images)
+        assertEquals(listOf(ReviewItem(best, false, isCandidate = false, isBest = true, reasons = listOf(duplicate("g", Role.BEST))), ReviewItem(copy, true, isCandidate = true, score = 1f, reasons = listOf(duplicate("g", Role.INFERIOR)))), group.images)
         assertTrue(group.hasExcludedCopy)
         assertEquals(ReviewState.UNREVIEWED, index.reviewState(excludedCopy.path))
     }
@@ -479,7 +479,7 @@ class ReviewTest {
         excludeFolderOf(best)
 
         val group = page(Category.EXACT_DUPLICATE).groups.single()
-        assertEquals(listOf(ReviewItem(copy, true, score = 1f, reasons = listOf(duplicate("g", Role.INFERIOR)))), group.images)
+        assertEquals(listOf(ReviewItem(copy, true, isCandidate = true, score = 1f, reasons = listOf(duplicate("g", Role.INFERIOR)))), group.images)
         assertTrue(group.hasExcludedCopy)
     }
 
@@ -1326,8 +1326,29 @@ class ReviewTest {
         assertEquals(1, overview(MediaType.VIDEO).categories.single { it.category == Category.EXACT_DUPLICATE }.count)
     }
 
-    private fun take(path: String, role: Role = Role.TAKE): MediaRef = video(path, 300).also {
-        runBlocking { index.setSignals(it.path, "takes", 1, listOf(Signal("takes", 1, Category.TAKES, 1f, mapOf(GROUP_KEY to "t", ROLE_KEY to role.value, "takes" to "3")))) }
+    private fun take(path: String, role: Role = Role.TAKE, group: String = "t", bytes: Int = 300): MediaRef = video(path, bytes).also {
+        runBlocking { index.setSignals(it.path, "takes", 1, listOf(Signal("takes", 1, Category.TAKES, 1f, mapOf(GROUP_KEY to group, ROLE_KEY to role.value, "takes" to "3")))) }
+    }
+
+    @Test
+    fun `a group of takes left with one take after the other went to the trash is not offered`() = test {
+        val first = take("DCIM/Camera/1.mp4")
+        take("DCIM/Camera/2.mp4")
+
+        apply(listOf(first), emptyList())
+
+        assertEquals(emptyList<ReviewGroup>(), page(Category.TAKES, mediaType = MediaType.VIDEO).groups)
+        assertEquals(0, overview(MediaType.VIDEO).categories.single { it.category == Category.TAKES }.count)
+    }
+
+    @Test
+    fun `largest first puts the takes that free the most first`() = test {
+        take("DCIM/Camera/a1.mp4", group = "small", bytes = 100)
+        take("DCIM/Camera/a2.mp4", group = "small", bytes = 100)
+        take("DCIM/Camera/b1.mp4", group = "big", bytes = 900)
+        take("DCIM/Camera/b2.mp4", group = "big", bytes = 900)
+
+        assertEquals(listOf("big", "small"), page(Category.TAKES, grouping = ReviewOrder.SIZE, mediaType = MediaType.VIDEO).groups.map { it.id })
     }
 
     @Test

@@ -228,10 +228,8 @@ private fun Tile(item: ReviewItem, marked: Boolean, onTap: () -> Unit, onHold: (
     )
     val why = item.reasons.firstNotNullOfOrNull(::reasonOf)?.text() ?: File(item.image.path).name
     val video = item.image.mediaType == MediaType.VIDEO
-    val size = Formatter.formatShortFileSize(LocalContext.current, item.image.size)
     // A video's tile shows its length and size, so takes of one moment compare at a glance, and the description says them too.
-    val length = item.durationMs?.let(::formatLength)
-    val details = listOfNotNull(length, size).joinToString(", ")
+    val details = lengthAndSize(item.image.size, item.durationMs?.let(::formatLength))
     val described = stringResource(R.string.tile_description, if (video) stringResource(R.string.tile_description, File(item.image.path).name, details) else why, state)
     // The tile's own description hides the heart's from a screen reader, so it says it too.
     val favorite = stringResource(if (video) R.string.favorite_video else R.string.favorite)
@@ -358,6 +356,9 @@ fun CategoryScreen(
             }
             if (images.isEmpty()) {
                 Text(stringResource(if (videos) R.string.review_done_videos else R.string.review_done), style = MaterialTheme.typography.bodySmall)
+            } else if (images.none { it.suggestTrash && !it.isFavorite }) {
+                // Takes, or a group whose best copy is in the trash or a sticker: a tap marks, so "tap to keep" would be wrong.
+                Text(stringResource(if (videos) R.string.review_hint_unmarked_videos else R.string.review_hint_unmarked), style = MaterialTheme.typography.bodySmall)
             } else {
                 Text(stringResource(if (videos) R.string.review_hint_videos else R.string.review_hint) + " " + stringResource(R.string.review_hint_gestures), style = MaterialTheme.typography.bodySmall)
             }

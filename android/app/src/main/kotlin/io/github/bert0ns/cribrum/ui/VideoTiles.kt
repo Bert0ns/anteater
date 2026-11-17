@@ -114,4 +114,8 @@ internal fun formatLength(millis: Long): String = DateUtils.formatElapsedTime(mi
 
 /** What a screen reader says of a video: "Video, 01:42, 412 MB", with no length when it is not known. */
 @Composable
-internal fun videoDetails(size: Long, duration: String?): String = stringResource(R.string.video_details, listOfNotNull(duration, Formatter.formatShortFileSize(LocalContext.current, size)).joinToString(", "))
+internal fun videoDetails(size: Long, duration: String?): String = stringResource(R.string.video_details, lengthAndSize(size, duration))
+
+/** A video's length and size, "01:42, 412 MB", with no length when it is not known. */
+@Composable
+internal fun lengthAndSize(size: Long, duration: String?): String = listOfNotNull(duration, Formatter.formatShortFileSize(LocalContext.current, size)).joinToString(", ")

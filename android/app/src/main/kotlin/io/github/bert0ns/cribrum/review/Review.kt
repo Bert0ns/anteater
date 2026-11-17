@@ -71,7 +71,7 @@ data class ReviewItem(
     /** What the screen preselects: trash the candidates, keep the best copy of a group. A group with no best copy, such as takes, preselects nothing. */
     val suggestTrash: Boolean,
     /** A candidate in this category, which the counts on the page take. Not a best copy, nor a member kept earlier. */
-    val isCandidate: Boolean = suggestTrash,
+    val isCandidate: Boolean,
     val isBest: Boolean = false,
     /** The candidate's score in this category, 0 for a best copy. */
     val score: Float = 0f,
@@ -412,7 +412,7 @@ class Review(
 
     private suspend fun singles(category: Category, candidates: List<Candidate>, grouping: ReviewOrder, favorites: Set<String>): List<ReviewGroup> {
         val groups = candidates.map {
-            ReviewGroup(it.image.ref.path, listOf(ReviewItem(it.image.ref, suggestTrash = true, score = score(it, category), reasons = it.reasons, isFavorite = it.image.ref.path in favorites, unreadable = it.image.unreadable, durationMs = it.image.durationMs)))
+            ReviewGroup(it.image.ref.path, listOf(ReviewItem(it.image.ref, suggestTrash = true, isCandidate = true, score = score(it, category), reasons = it.reasons, isFavorite = it.image.ref.path in favorites, unreadable = it.image.unreadable, durationMs = it.image.durationMs)))
         }
         if (!grouping.byDate) return groups
         val capturedAt = index.capturedAt()
