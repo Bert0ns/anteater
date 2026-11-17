@@ -410,7 +410,7 @@ class VideosScreenTest {
     }
 
     @Test
-    fun `the heart is off while the video is selected for the trash, says why, and comes on when it is deselected`() {
+    fun `the heart is off while the video is selected, says why, and comes on when it is deselected`() {
         val requests = mutableListOf<Pair<String, Boolean>>()
         showHearts(requests, videos)
         tile("big.mp4").performClick() // selected
@@ -418,7 +418,7 @@ class VideosScreenTest {
         openFullSize("big.mp4")
         heart("Add to favourites").assertIsNotEnabled().performClick()
         assertEquals(
-            "Unavailable while the video is marked for the trash. Unmark it first.",
+            "Unavailable while the video is selected. Deselect it first.",
             heart("Add to favourites").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription),
         )
         assertEquals(emptyList<Pair<String, Boolean>>(), requests)
