@@ -140,6 +140,13 @@ SCHEMA_VERSION = 10
 """Bump on every schema change: an index from another version is refused, not misread."""
 
 
+_CAMERA_PHOTOS = """media_type = 'image' AND captured_at IS NOT NULL
+    AND path LIKE '%/dcim/%' AND path NOT LIKE '%/screenshots/%'"""
+"""The camera photos SHORT_CLIPS looks at: a photo with a capture time in a camera folder, but not
+the screenshots a Samsung saves to DCIM. LIKE ignores the case of ASCII letters, as the folder
+checks do."""
+
+
 class IndexVersionError(Exception):
     """The database was written with another schema version."""
 
@@ -335,13 +342,44 @@ class ImageIndex:
         )
         return {Path(path): _video_metadata(row) for path, *row in rows}
 
-    def photo_captures(self) -> dict[Path, datetime]:
-        """The capture time of every image that has one, by path, in one query."""
-        rows = self._db.execute(
-            """SELECT path, captured_at FROM images
-               WHERE media_type = 'image' AND captured_at IS NOT NULL"""
-        )
+    def camera_photo_captures(self) -> dict[Path, datetime]:
+        """The capture time of every camera photo, by path, in one query that reads no embedding."""
+        rows = self._db.execute(f"SELECT path, captured_at FROM images WHERE {_CAMERA_PHOTOS}")
         return {Path(path): datetime.fromisoformat(at) for path, at in rows}
+
+    def embeddings_of(
+        self, model: str, model_version: int, paths: Iterable[Path]
+    ) -> dict[Path, np.ndarray]:
+        """The stored embeddings of these paths only, in chunks the database takes."""
+        wanted = [str(path) for path in paths]
+        found = {}
+        for start in range(0, len(wanted), 500):
+            chunk = wanted[start : start + 500]
+            marks = ",".join("?" * len(chunk))
+            rows = self._db.execute(
+                f"""SELECT path, vector FROM embeddings
+                    WHERE model = ? AND model_version = ? AND path IN ({marks})""",
+                (model, model_version, *chunk),
+            )
+            found |= {Path(path): np.frombuffer(vector, dtype="<f4") for path, vector in rows}
+        return found
+
+    def short_clip_inputs(self, model: str, model_version: int, frames_version: int) -> str:
+        """What SHORT_CLIPS reads besides the videos, as counts that change when it does: the
+        videos with frame measures, the camera photos, and those with an embedding."""
+        (measured,) = self._db.execute(
+            "SELECT COUNT(DISTINCT path) FROM frame_measures WHERE frames_version = ?",
+            (frames_version,),
+        ).fetchone()
+        (photos,) = self._db.execute(
+            f"SELECT COUNT(*) FROM images WHERE {_CAMERA_PHOTOS}"
+        ).fetchone()
+        (embedded,) = self._db.execute(
+            f"""SELECT COUNT(*) FROM images JOIN embeddings USING (path)
+                WHERE {_CAMERA_PHOTOS} AND model = ? AND model_version = ?""",
+            (model, model_version),
+        ).fetchone()
+        return f"{measured}:{photos}:{embedded}"
 
     def read_videos(self, frames_version: int) -> list[tuple[MediaRef, int | None]]:
         """The videos whose metadata was read, readable and out of the trash, with their

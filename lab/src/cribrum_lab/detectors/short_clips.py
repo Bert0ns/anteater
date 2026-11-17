@@ -7,7 +7,9 @@ signal, whatever else it has. Faces and favourites protect it in the ranker, so 
 here.
 """
 
+from bisect import bisect_left, bisect_right
 from collections.abc import Sequence
+from datetime import datetime, timedelta
 
 import numpy as np
 
@@ -48,9 +50,14 @@ GIF_MAX_SIDE = 480
 class ShortClipsDetector:
     id = "short_clips"
     version = 1
-    """Bump with TAKES, BLURRY and BAD_EXPOSURE, whose results on videos it reads."""
     category = Category.SHORT_CLIPS
     media_types = frozenset({MediaType.VIDEO})
+
+    def inputs_key(self, context: AnalysisContext) -> str:
+        """What it reads besides its videos: the versions of TAKES, BLURRY and BAD_EXPOSURE, whose
+        results on videos it takes, and the counts of the measures and camera photos."""
+        versions = (TakesDetector.version, BlurDetector.version, ExposureDetector.version)
+        return f"{':'.join(map(str, versions))}:{context.stored_inputs()}"
 
     def analyze(
         self, videos: Sequence[MediaRef], context: AnalysisContext
@@ -60,15 +67,19 @@ class ShortClipsDetector:
             for video, found in TakesDetector().analyze(videos, context).items()
             if found[0].evidence[ROLE_KEY] == Role.SHORT_TAKE
         }
-        photos = list(context.photos())
-        result = {}
+        short = {}
         for video in videos:
             meta = _metadata(video, context)
-            if meta is None or not 0 < (meta.duration_ms or 0) < SHORT_CLIP_MAX_MS:
-                continue
+            if meta is not None and 0 < (meta.duration_ms or 0) < SHORT_CLIP_MAX_MS:
+                short[video] = meta
+        times = [meta.captured_at for meta in short.values() if meta.captured_at is not None]
+        photos = sorted(context.photos(times, PHOTO_WINDOW_MS), key=lambda p: p.captured_at)
+        stamps = [photo.captured_at for photo in photos]
+        result = {}
+        for video, meta in short.items():
             chances = {"duration": DURATION_WEIGHT * _fade(meta.duration_ms)}
             evidence = {"duration_ms": str(meta.duration_ms)}
-            if _photo_beside(video, meta, photos, context):
+            if _photo_beside(video, meta, photos, stamps, context):
                 chances["photo"] = PHOTO_WEIGHT
             if video in failed:
                 chances["failed_take"] = TAKE_WEIGHT
@@ -94,21 +105,29 @@ def _fade(duration_ms: int) -> float:
 
 
 def _photo_beside(
-    video: MediaRef, meta: VideoMetadata, photos: Sequence[Photo], context: AnalysisContext
+    video: MediaRef,
+    meta: VideoMetadata,
+    photos: Sequence[Photo],
+    stamps: Sequence[datetime],
+    context: AnalysisContext,
 ) -> bool:
-    """Recall first: without an embedding of the photo or frames of the clip, time alone decides."""
+    """Recall first: without an embedding of the photo or frames of the clip, time alone decides.
+    `photos` are sorted by time, `stamps` their times: the window is found by bisection."""
     if meta.captured_at is None:
         return False
+    window = timedelta(milliseconds=PHOTO_WINDOW_MS)
+    beside = photos[
+        bisect_left(stamps, meta.captured_at - window) : bisect_right(
+            stamps, meta.captured_at + window
+        )
+    ]
     frames = context.frames(video)
-    for photo in photos:
-        gap = abs((meta.captured_at - photo.captured_at).total_seconds() * 1000)
-        if gap > PHOTO_WINDOW_MS:
-            continue
-        if photo.embedding is None or len(frames) == 0:
-            return True
-        if max(float(np.dot(photo.embedding, frame)) for frame in frames) >= PHOTO_MIN_COSINE:
-            return True
-    return False
+    return any(
+        photo.embedding is None
+        or len(frames) == 0
+        or max(float(np.dot(photo.embedding, frame)) for frame in frames) >= PHOTO_MIN_COSINE
+        for photo in beside
+    )
 
 
 def _mistake(video: MediaRef, context: AnalysisContext) -> tuple[str, float] | None:

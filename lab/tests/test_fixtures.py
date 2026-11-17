@@ -157,3 +157,12 @@ def test_the_short_clips_fixture_still_matches_the_lab():
     }
     assert pieces == {"duration", "photo", "failed_take", "mistake", "gif"}
     assert "DCIM/Camera/at-the-limit.mp4" not in expected["signals"]
+    # Each floor lets a score just above it count and not one just below it.
+    found = {
+        path.removeprefix("DCIM/Camera/"): s[0]["evidence"]
+        for path, s in expected["signals"].items()
+    }
+    assert "mistake_chance" in found["just-dark-enough.mp4"]
+    assert "mistake_chance" not in found["not-dark-enough.mp4"]
+    assert "photo_chance" in found["just-alike.mp4"]
+    assert "photo_chance" not in found["not-alike.mp4"]

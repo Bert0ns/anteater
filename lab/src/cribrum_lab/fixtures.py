@@ -449,6 +449,16 @@ SHORT_CLIP_CLIPS = [
      "measures": [_BLURRED] * 3 + [_SHARP] * 2},
     {"path": "DCIM/Camera/one-dark-frame.mp4", "duration_ms": 8000,
      "measures": [_DARK] + [_SHARP] * 4},
+    # The edges of the two floors: a score of 0.156 for the dark frames and 0.141, and a closest
+    # frame at a cosine of 0.61 and of 0.59.
+    {"path": "DCIM/Camera/just-dark-enough.mp4", "duration_ms": 8000,
+     "measures": [_SHARP | {"p95": 84}] * 5},
+    {"path": "DCIM/Camera/not-dark-enough.mp4", "duration_ms": 8000,
+     "measures": [_SHARP | {"p95": 85}] * 5},
+    {"path": "DCIM/Camera/just-alike.mp4", "duration_ms": 6000, "at": "16:00:00",
+     "frames": [[1, 0, 0]]},
+    {"path": "DCIM/Camera/not-alike.mp4", "duration_ms": 6000, "at": "17:00:00",
+     "frames": [[1, 0, 0]]},
     # A GIF-style clip, and the three that are not: sound, a high resolution, a camera folder.
     {"path": f"{_GIFS}/gif.mp4", "duration_ms": 8000, "width": 480, "height": 848,
      "has_audio": False},
@@ -467,6 +477,8 @@ SHORT_CLIP_PHOTOS = [
     {"captured_at": "2024-05-01T12:00:10", "embedding": [0, 1, 0]},
     {"captured_at": "2024-05-01T13:00:30", "embedding": None},
     {"captured_at": "2024-05-01T14:00:20", "embedding": None},
+    {"captured_at": "2024-05-01T16:00:30", "embedding": [0.61, 0.79, 0]},
+    {"captured_at": "2024-05-01T17:00:30", "embedding": [0.59, 0.81, 0]},
 ]  # fmt: skip
 
 
@@ -489,7 +501,7 @@ def short_clips_expected() -> dict:
             np.array(f, dtype=np.float32) for f in clips[video].get("frames", [])
         ],
         frame_measures=lambda video: [FrameMeasures(**m) for m in clips[video].get("measures", [])],
-        photos=lambda: [
+        photos=lambda times, window_ms: [
             Photo(
                 datetime.fromisoformat(p["captured_at"]),
                 None if p["embedding"] is None else np.array(p["embedding"], dtype=np.float32),

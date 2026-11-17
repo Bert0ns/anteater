@@ -49,7 +49,7 @@ class Clip:
             video_metadata=self.meta.__getitem__,
             frames=lambda v: self.frames.get(v, []),
             frame_measures=lambda v: self.measures.get(v, []),
-            photos=lambda: self.photos,
+            photos=lambda times, window_ms: self.photos,
         )
         return ShortClipsDetector().analyze(list(self.meta), context).get(self.video, [])
 

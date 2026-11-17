@@ -197,6 +197,112 @@
   },
   {
    "duration_ms": 8000,
+   "measures": [
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 84,
+     "p99": 240,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 84,
+     "p99": 240,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 84,
+     "p99": 240,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 84,
+     "p99": 240,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 84,
+     "p99": 240,
+     "peak_variance": 900.0
+    }
+   ],
+   "path": "DCIM/Camera/just-dark-enough.mp4"
+  },
+  {
+   "duration_ms": 8000,
+   "measures": [
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 85,
+     "p99": 240,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 85,
+     "p99": 240,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 85,
+     "p99": 240,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 85,
+     "p99": 240,
+     "peak_variance": 900.0
+    },
+    {
+     "p1": 5,
+     "p5": 20,
+     "p95": 85,
+     "p99": 240,
+     "peak_variance": 900.0
+    }
+   ],
+   "path": "DCIM/Camera/not-dark-enough.mp4"
+  },
+  {
+   "at": "16:00:00",
+   "duration_ms": 6000,
+   "frames": [
+    [
+     1,
+     0,
+     0
+    ]
+   ],
+   "path": "DCIM/Camera/just-alike.mp4"
+  },
+  {
+   "at": "17:00:00",
+   "duration_ms": 6000,
+   "frames": [
+    [
+     1,
+     0,
+     0
+    ]
+   ],
+   "path": "DCIM/Camera/not-alike.mp4"
+  },
+  {
+   "duration_ms": 8000,
    "has_audio": false,
    "height": 848,
    "path": "WhatsApp/Media/WhatsApp Animated Gifs/gif.mp4",
@@ -299,6 +405,22 @@
   {
    "captured_at": "2024-05-01T14:00:20",
    "embedding": null
+  },
+  {
+   "captured_at": "2024-05-01T16:00:30",
+   "embedding": [
+    0.61,
+    0.79,
+    0
+   ]
+  },
+  {
+   "captured_at": "2024-05-01T17:00:30",
+   "embedding": [
+    0.59,
+    0.81,
+    0
+   ]
   }
  ],
  "signals": {
@@ -367,6 +489,33 @@
     "version": 1
    }
   ],
+  "DCIM/Camera/just-alike.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.360",
+     "duration_ms": "6000",
+     "photo_chance": "0.500"
+    },
+    "score": 0.68,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/just-dark-enough.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.280",
+     "duration_ms": "8000",
+     "mistake": "dark",
+     "mistake_chance": "0.125"
+    },
+    "score": 0.37,
+    "version": 1
+   }
+  ],
   "DCIM/Camera/no-embedding.mp4": [
    {
     "category": "short_clips",
@@ -377,6 +526,30 @@
      "photo_chance": "0.500"
     },
     "score": 0.68,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/not-alike.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.360",
+     "duration_ms": "6000"
+    },
+    "score": 0.3600000000000001,
+    "version": 1
+   }
+  ],
+  "DCIM/Camera/not-dark-enough.mp4": [
+   {
+    "category": "short_clips",
+    "detector": "short_clips",
+    "evidence": {
+     "duration_chance": "0.280",
+     "duration_ms": "8000"
+    },
+    "score": 0.28,
     "version": 1
    }
   ],

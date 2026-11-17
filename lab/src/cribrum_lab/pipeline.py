@@ -9,10 +9,11 @@ unchanged data does no detector work.
 
 import contextlib
 import multiprocessing
+from bisect import bisect_left, bisect_right
 from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
-from datetime import tzinfo
+from datetime import datetime, timedelta, tzinfo
 from pathlib import Path
 from typing import Protocol
 
@@ -35,7 +36,7 @@ from cribrum_lab.detectors.screenshot import ScreenshotDetector
 from cribrum_lab.detectors.short_clips import ShortClipsDetector
 from cribrum_lab.detectors.sticker import StickerDetector
 from cribrum_lab.detectors.takes import TakesDetector
-from cribrum_lab.folders import is_camera_folder, is_sticker_folder
+from cribrum_lab.folders import is_sticker_folder
 from cribrum_lab.frame_measures import measure_frame
 from cribrum_lab.frames import FRAMES_VERSION, frame_times, read_frames
 from cribrum_lab.imaging import Pixels
@@ -299,8 +300,7 @@ def _group_steps(
     # Read once: a query per video would be slow on a large library, as it was for the images.
     video = media_type is MediaType.VIDEO
     videos = index.all_video_metadata() if video else {}
-    measures = index.frame_measures(FRAMES_VERSION) if video else {}
-    photos = _camera_photos(index, embedder) if video else []
+    stored = _StoredForClips(index, embedder) if video else None
     inputs = [i for i in index.images() if i.path in found and i.media_type is media_type]
     # The exact detector skips an image whose content hash fails: the run stores those paths
     # with its fingerprint.
@@ -330,8 +330,9 @@ def _group_steps(
         metadata=_metadata(index),
         video_metadata=_video_metadata(videos),
         frames=lambda video: frames.get(video.path, []),
-        frame_measures=lambda video: measures.get(video.path, ()),
-        photos=lambda: photos,
+        frame_measures=stored.measures if stored else (lambda video: ()),
+        photos=stored.photos_near if stored else (lambda times, window_ms: ()),
+        stored_inputs=stored.inputs if stored else (lambda: ""),
         embedding=_stored_embedding(embeddings),
         sharpness=_stored_sharpness(index, blur_detector),
     )
@@ -341,15 +342,10 @@ def _group_steps(
         model = f"{embedder.id}:{embedder.version}:{FRAMES_VERSION}:{len(frames)}" if frames else ""
         # A capture time read again, as by a migration, is new input though no file changed.
         model += f":{sum(m.captured_instant is not None for m in videos.values())}"
-        # The measures and the photos beside a clip are new input to SHORT_CLIPS too.
-        model += f":{len(measures)}:{len(photos)}:{sum(p.embedding is not None for p in photos)}"
     # A hash that failed on an earlier run is a result a group detector lacked.
     hashed = index.hashed_paths()
     # Burst reads blur's stored measure: a new blur version is new input, though no file changed.
     blur_input = f"{blur_detector.id}:{blur_detector.version}" if blur_detector else ""
-    if video:  # SHORT_CLIPS reads the video's exposure too
-        exposure = next((d for d in detectors if d.category == Category.BAD_EXPOSURE), None)
-        blur_input += f":{exposure.id}:{exposure.version}" if exposure else ""
     for detector in group_detectors:
         if media_type not in accepted_media_types(detector):
             continue
@@ -357,8 +353,13 @@ def _group_steps(
         images = media_type is MediaType.IMAGE
         run_id = detector.id if images else f"{detector.id}:{media_type.value}"
         step = detector.id if images else VIDEO_GROUPS_STEP
+        # A detector that reads more than its files, such as the photos beside a clip, adds its
+        # own inputs: a new photo runs it again and no other group detector.
+        extra = getattr(detector, "inputs_key", None)
         fingerprint = _fingerprint(
-            inputs, f"{model}:{sum(i.path in hashed for i in inputs)}:{blur_input}"
+            inputs,
+            f"{model}:{sum(i.path in hashed for i in inputs)}:{blur_input}"
+            f"{':' + extra(context) if extra else ''}",
         )
         # Hashing again only what failed in the last run groups a file that has become
         # readable, without a run on every scan.
@@ -378,15 +379,40 @@ def _group_steps(
         progress(step, 1, 1)
 
 
-def _camera_photos(index: ImageIndex, embedder: Embedder | None) -> list[Photo]:
-    """The photos in a camera folder with a capture time, with their embeddings when the run has
-    a model: what SHORT_CLIPS looks at for a photo beside a clip."""
-    embeddings = index.embeddings(embedder.id, embedder.version) if embedder else {}
-    return [
-        Photo(at, embeddings.get(path))
-        for path, at in index.photo_captures().items()
-        if is_camera_folder(path)
-    ]
+class _StoredForClips:
+    """What SHORT_CLIPS reads from the index besides the videos. Each part loads when a detector
+    asks for it, not before: a run that finds the detector up to date reads none of it."""
+
+    def __init__(self, index: ImageIndex, embedder: Embedder | None) -> None:
+        self._index = index
+        self._embedder = embedder
+        self._measures: dict[Path, list[FrameMeasures]] | None = None
+        self._captures: dict[Path, datetime] | None = None
+
+    def measures(self, video: MediaRef) -> Sequence[FrameMeasures]:
+        if self._measures is None:
+            self._measures = self._index.frame_measures(FRAMES_VERSION)
+        return self._measures.get(video.path, ())
+
+    def photos_near(self, times: Sequence[datetime], window_ms: int) -> list[Photo]:
+        """The camera photos within `window_ms` of any of `times`, with their embeddings."""
+        if self._captures is None:
+            self._captures = self._index.camera_photo_captures()
+        window = timedelta(milliseconds=window_ms)
+        ordered = sorted(self._captures.items(), key=lambda item: item[1])
+        stamps = [at for _, at in ordered]
+        near = {}
+        for time in times:
+            start, end = bisect_left(stamps, time - window), bisect_right(stamps, time + window)
+            near |= dict(ordered[start:end])
+        embedder = self._embedder
+        vectors = self._index.embeddings_of(embedder.id, embedder.version, near) if embedder else {}
+        return [Photo(at, vectors.get(path)) for path, at in near.items()]
+
+    def inputs(self) -> str:
+        embedder = self._embedder
+        model, version = (embedder.id, embedder.version) if embedder else ("", 0)
+        return self._index.short_clip_inputs(model, version, FRAMES_VERSION)
 
 
 def _video_steps(
@@ -430,7 +456,7 @@ def _video_steps(
         found,
         index,
         group_detectors,
-        detectors,
+        (),
         embedder,
         {},
         stats,
