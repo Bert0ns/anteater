@@ -1189,6 +1189,89 @@ class ReviewViewModelTest {
         assertEquals(listOf("/sdcard/a.mp4"), trash.moves.single().map { it.path })
     }
 
+    /** A view model on the list of [clips], whose favourite requests the user answers with [granted] and the gallery records. */
+    private fun withVideoFavorites(clips: List<String>, favorites: MutableSet<String>, asked: MutableList<Pair<String, Boolean>>, granted: Boolean = true): ReviewViewModel {
+        clips.forEachIndexed { i, path -> clip(path, 100L - i) }
+        val model = ReviewViewModel(app, Review(app.index, RecordingTrash(), favorites = { favorites.toSet() })) { path, favorite ->
+            asked += path to favorite
+            if (granted) if (favorite) favorites += path else favorites -= path
+            granted
+        }
+        model.openVideos()
+        settle(model) { videoPaths(it).size == clips.size }
+        return model
+    }
+
+    private fun videoHearts(model: ReviewViewModel) = model.state.value.videos.filter { it.isFavorite }.map { it.video.path }
+
+    @Test
+    fun `hearting a video of the list shows the heart and keeps the list and the selection`() {
+        val asked = mutableListOf<Pair<String, Boolean>>()
+        val model = withVideoFavorites(listOf("/sdcard/a.mp4", "/sdcard/b.mp4"), mutableSetOf(), asked)
+        model.toggleVideo("/sdcard/b.mp4")
+        settle(model) { it.state.value.videoSelected.isNotEmpty() }
+        val video = model.state.value.videos[0].video
+
+        model.setFavorite(video, true)
+        settle(model) { videoHearts(it).isNotEmpty() }
+
+        assertEquals(listOf(video.path to true), asked)
+        assertEquals(listOf("/sdcard/a.mp4"), videoHearts(model))
+        assertEquals(listOf("/sdcard/a.mp4", "/sdcard/b.mp4"), videoPaths(model))
+        assertEquals(setOf("/sdcard/b.mp4"), model.state.value.videoSelected)
+    }
+
+    @Test
+    fun `a favourite video of the list loses its heart when the user takes it off`() {
+        val asked = mutableListOf<Pair<String, Boolean>>()
+        val model = withVideoFavorites(listOf("/sdcard/a.mp4"), mutableSetOf("/sdcard/a.mp4"), asked)
+        assertEquals(listOf("/sdcard/a.mp4"), videoHearts(model))
+
+        model.setFavorite(model.state.value.videos.single().video, false)
+        settle(model) { videoHearts(it).isEmpty() }
+
+        assertEquals(listOf("/sdcard/a.mp4" to false), asked)
+    }
+
+    @Test
+    fun `a video selected for the trash is not asked about, and a declined request changes nothing`() {
+        val asked = mutableListOf<Pair<String, Boolean>>()
+        val model = withVideoFavorites(listOf("/sdcard/a.mp4", "/sdcard/b.mp4"), mutableSetOf(), asked, granted = false)
+        model.toggleVideo("/sdcard/a.mp4")
+        settle(model) { it.state.value.videoSelected.isNotEmpty() }
+
+        model.setFavorite(model.state.value.videos[0].video, true)
+        settle(model) { true }
+        assertEquals(emptyList<Pair<String, Boolean>>(), asked)
+
+        val before = model.state.value
+        model.setFavorite(model.state.value.videos[1].video, true)
+        settle(model) { asked.isNotEmpty() }
+        assertEquals(before, model.state.value)
+    }
+
+    @Test
+    fun `a favourite made on the list is no surprise at the apply`() {
+        val trash = RecordingTrash()
+        clip("/sdcard/a.mp4", 10)
+        val favorites = mutableSetOf<String>()
+        val model = ReviewViewModel(app, Review(app.index, trash, favorites = { favorites.toSet() })) { path, favorite ->
+            if (favorite) favorites += path else favorites -= path
+            true
+        }
+        model.openVideos()
+        settle(model) { videoPaths(it).size == 1 }
+        model.setFavorite(model.state.value.videos.single().video, true)
+        settle(model) { videoHearts(it).isNotEmpty() }
+        model.toggleVideo("/sdcard/a.mp4") // the user selects it after hearting it, and the dialog asks about the heart
+
+        model.applyVideos(setOf("/sdcard/a.mp4"), trash = true)
+        settle(model) { it.state.value.lastDecision != null }
+
+        assertFalse(model.state.value.favoriteAppeared)
+        assertEquals(listOf("/sdcard/a.mp4"), trash.moves.single().map { it.path })
+    }
+
     @Test
     fun `Clean opens on the tab the user used last`() {
         val model = ReviewViewModel(app)

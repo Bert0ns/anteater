@@ -517,15 +517,10 @@ private fun FullSize(
             onToggle(current.image)
         }
         val marked = current.image.path in marked
-        // The gallery's favourite mark is not offered on a video: only the heart of one that already is.
-        val heart: @Composable () -> Unit = if (video) {
-            { if (current.isFavorite) FavoriteHeart(description = stringResource(R.string.favorite_video)) }
-        } else {
-            {
-                FavoriteToggle(current.isFavorite, enabled = !marked) {
-                    haptics.performHapticFeedback(Haptic.TICK.type)
-                    onFavorite(current.image, it)
-                }
+        val heart: @Composable () -> Unit = {
+            FavoriteToggle(current.isFavorite, enabled = !marked, video = video) {
+                haptics.performHapticFeedback(Haptic.TICK.type)
+                onFavorite(current.image, it)
             }
         }
         FullSizeBar(current.image.path, current.isFavorite, heart = heart) {
@@ -619,14 +614,14 @@ internal fun BoxScope.FullSizeBar(path: String, favorite: Boolean, heart: @Compo
 }
 
 /**
- * The heart of the review's full size view: filled for a favourite, an outline for any other image, and a tap says the
- * other. It is off while the image is marked for the trash, and says why to a screen reader, which would only hear
+ * The heart of the full size view of a photo or a [video]: filled for a favourite, an outline for any other, and a tap says
+ * the other. It is off while the item is marked for the trash, and says why to a screen reader, which would only hear
  * "dimmed" from a plain disabled button.
  */
 @Composable
-private fun FavoriteToggle(favorite: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
+internal fun FavoriteToggle(favorite: Boolean, enabled: Boolean, video: Boolean = false, onChange: (Boolean) -> Unit) {
     val label = stringResource(if (favorite) R.string.favorite_remove else R.string.favorite_add)
-    val reason = stringResource(R.string.favorite_off_marked)
+    val reason = stringResource(if (video) R.string.favorite_off_marked_video else R.string.favorite_off_marked)
     IconButton(
         { onChange(!favorite) },
         Modifier.semantics { if (!enabled) stateDescription = reason },

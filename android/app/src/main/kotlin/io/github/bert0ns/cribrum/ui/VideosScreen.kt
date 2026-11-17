@@ -61,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.model.Category
+import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.review.CategorySummary
 import io.github.bert0ns.cribrum.review.VideoItem
@@ -167,6 +168,8 @@ fun VideosScreen(
     retentionDays: Int = TrashRetention.DEFAULT_DAYS,
     /** A change is running: the list on screen is about to be replaced, so confirming it is off. */
     loading: Boolean = false,
+    /** Makes the video a gallery favourite, or takes the mark off, from the full size view. */
+    onFavorite: (MediaRef, Boolean) -> Unit = { _, _ -> },
 ) {
     val haptics = LocalHapticFeedback.current
     var askFavorites by remember { mutableStateOf(false) }
@@ -238,7 +241,7 @@ fun VideosScreen(
         if (fullSize != null && videos.none { it.video.path == fullSize?.video?.path }) fullSize = null
     }
     fullSize?.let { start ->
-        FullSize(videos, start, selected, onToggle) { fullSize = null }
+        FullSize(videos, start, selected, onToggle, onFavorite) { fullSize = null }
     }
 }
 
@@ -301,10 +304,11 @@ private fun VideoTile(item: VideoItem, selected: Boolean, onHold: () -> Unit, on
 
 /**
  * The videos of the list at full size, over the viewer the review and Compress share: a tap on a video plays it, with the controls
- * and the strip of frames in the bar, and a swipe to another video stops it (§8).
+ * and the strip of frames in the bar, a swipe to another video stops it, and a heart makes the video a gallery favourite or takes that off (§8).
  */
 @Composable
-private fun FullSize(videos: List<VideoItem>, start: VideoItem, selected: Set<String>, onToggle: (String) -> Unit, onClose: () -> Unit) {
+private fun FullSize(videos: List<VideoItem>, start: VideoItem, selected: Set<String>, onToggle: (String) -> Unit, onFavorite: (MediaRef, Boolean) -> Unit, onClose: () -> Unit) {
+    val haptics = LocalHapticFeedback.current
     val playback = rememberVideoPlayback()
     // A video that leaves the list while it plays leaves the pager's page where it was, so no swipe stops it.
     val paths = videos.map { it.video.path }
@@ -315,7 +319,14 @@ private fun FullSize(videos: List<VideoItem>, start: VideoItem, selected: Set<St
     FullSizeViewer(videos.map { it.video.path }, start.video.path, onClose, image, onPage = { playback.stop() }) { page ->
         val item = videos.getOrNull(page) ?: return@FullSizeViewer // the list emptied under the dialog; the screen closes it next
         FullSizeToggle(item.video.path in selected, stringResource(R.string.video_tile_selected), MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary) { onToggle(item.video.path) }
-        FullSizeBar(item.video.path, item.isFavorite, heart = { if (item.isFavorite) FavoriteHeart(description = stringResource(R.string.favorite_video)) }) {
+        // A selected video is one the user means to trash, and a favourite and a trash contradict each other, as in the review.
+        val heart: @Composable () -> Unit = {
+            FavoriteToggle(item.isFavorite, enabled = item.video.path !in selected, video = true) {
+                haptics.performHapticFeedback(Haptic.TICK.type)
+                onFavorite(item.video, it)
+            }
+        }
+        FullSizeBar(item.video.path, item.isFavorite, heart = heart) {
             val file = File(item.video.path)
             val length = item.durationMs ?: if (item.unreadable) null else rememberLengthMillis(file, "${item.video.path}|${item.video.size}|${item.video.mtimeNs}")
             VideoControls(playback, file, "Videos.fullSize", length, item.unreadable)
