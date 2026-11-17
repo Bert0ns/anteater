@@ -31,6 +31,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
 import androidx.core.view.children
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -126,7 +127,6 @@ class VideosScreenTest {
 
         compose.onNodeWithTag("fullSize").assertExists()
         compose.onNodeWithText("Video, 01:01, 800 MB").assertExists()
-        assertTrue(players.made.isEmpty()) // it does not play until asked
     }
 
     private fun openFullSize(name: String) {
@@ -134,14 +134,10 @@ class VideosScreenTest {
         compose.onNodeWithTag("fullSize").assertExists()
     }
 
-    private fun play() = compose.onAllNodesWithContentDescription("Play video").onFirst().performClick()
-
     @Test
-    fun `the play button plays the video, and the controls say where it is`() {
+    fun `opening a video plays it without a tap, and the controls say where it is`() {
         show(videos)
         openFullSize("middle.mp4")
-
-        play()
         compose.waitForIdle()
 
         assertEquals(listOf("/sdcard/Movies/middle.mp4"), players.made.single().paths)
@@ -155,7 +151,6 @@ class VideosScreenTest {
     fun `a tap on the picture pauses the video and plays it again, and does not close the view`() {
         show(videos)
         openFullSize("middle.mp4")
-        play()
         compose.waitForIdle()
 
         compose.onNodeWithTag("fullSize").performTouchInput { click() }
@@ -193,7 +188,6 @@ class VideosScreenTest {
     fun `the screen stays on while the video plays, and not while it is paused or has ended`() {
         show(videos)
         openFullSize("middle.mp4")
-        play()
         compose.waitForIdle()
         assertTrue(surface()!!.keepScreenOn)
 
@@ -230,12 +224,13 @@ class VideosScreenTest {
         show(videos)
         openFullSize("middle.mp4")
 
-        compose.onNode(tapSays("Play video")).assertExists()
-        compose.onAllNodesWithContentDescription("Go to", substring = true).onFirst().assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
-
-        play()
         compose.waitForIdle()
         compose.onNode(tapSays("Pause video")).assertExists()
+        compose.onAllNodesWithContentDescription("Go to", substring = true).onFirst().assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+
+        compose.onNodeWithTag("fullSize").performTouchInput { click() }
+        compose.waitForIdle()
+        compose.onNode(tapSays("Play video")).assertExists()
     }
 
     @Test
@@ -245,9 +240,7 @@ class VideosScreenTest {
         openFullSize("middle.mp4")
         fun labels() = compose.onAllNodesWithContentDescription("Go to", substring = true).fetchSemanticsNodes().map { it.config.getOrNull(SemanticsProperties.ContentDescription)?.single() }
         val before = labels()
-
-        play()
-        compose.waitForIdle()
+        compose.waitForIdle() // the video starts, and the player reads its own length
 
         assertEquals(listOf("Go to 00:06", "Go to 00:18", "Go to 00:30", "Go to 00:42", "Go to 00:54"), before)
         assertEquals(before, labels())
@@ -258,39 +251,73 @@ class VideosScreenTest {
     fun `the sound button mutes the video and brings the sound back`() {
         show(videos)
         openFullSize("middle.mp4")
-        play()
+        compose.waitForIdle()
+        assertEquals(1f, players.made.single().volume, 0f)
+        assertTrue(players.made.single().focus) // opening a video takes audio focus, so the user's music pauses
 
         compose.onNodeWithContentDescription("Mute").performClick()
         compose.waitForIdle()
         assertEquals(0f, players.made.single().volume, 0f)
+        assertFalse(players.made.single().focus)
 
         compose.onNodeWithContentDescription("Unmute").performClick()
         compose.waitForIdle()
         assertEquals(1f, players.made.single().volume, 0f)
+        assertTrue(players.made.single().focus)
     }
 
     @Test
-    fun `a swipe to the next video stops the one that plays, with the same player`() {
+    fun `a swipe to the next video stops the one that plays and plays that one, with the same player`() {
         show(videos)
         openFullSize("big.mp4")
-        play()
         compose.waitForIdle()
+        assertEquals(listOf("/sdcard/Movies/big.mp4"), players.made.single().paths)
 
         compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
         compose.waitForIdle()
 
         assertEquals(1, players.made.size)
-        assertEquals(emptyList<String>(), players.made.single().paths)
+        assertEquals(listOf("/sdcard/Movies/middle.mp4"), players.made.single().paths)
+        assertTrue(players.made.single().playing)
         assertFalse(players.made.single().released)
         compose.onNodeWithText("Video, 01:01, 800 MB").assertExists()
         compose.onNodeWithText("00:00 / 01:01").assertExists()
     }
 
     @Test
+    fun `a swipe onto a video that cannot be read starts nothing, and the one it left stops`() {
+        show(listOf(clip("big.mp4", 1_500_000_000), clip("broken.mp4", 700_000_000, durationMs = null, unreadable = true)))
+        openFullSize("big.mp4")
+        compose.waitForIdle()
+        assertTrue(players.made.single().playing)
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+
+        assertEquals(emptyList<String>(), players.made.single().paths)
+        assertFalse(players.made.single().playing)
+    }
+
+    @Test
+    fun `a video the user paused stays paused when a swipe is let go on the same page`() {
+        show(videos)
+        openFullSize("big.mp4")
+        compose.waitForIdle()
+        compose.onNodeWithTag("fullSize").performTouchInput { click() }
+        compose.waitForIdle()
+        assertFalse(players.made.single().playing)
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeRight() } // there is no page before the first
+        compose.waitForIdle()
+
+        assertEquals(listOf("/sdcard/Movies/big.mp4"), players.made.single().paths)
+        assertFalse(players.made.single().playing)
+    }
+
+    @Test
     fun `closing the view releases the player`() {
         show(videos)
         openFullSize("big.mp4")
-        play()
         compose.waitForIdle()
 
         compose.onNodeWithContentDescription("Close").performClick()
@@ -308,7 +335,6 @@ class VideosScreenTest {
         compose.runOnUiThread { owner.lifecycle.currentState = Lifecycle.State.RESUMED }
         show(videos, owner = owner)
         openFullSize("middle.mp4")
-        play()
         compose.waitForIdle()
         assertTrue(players.made.single().playing)
 
@@ -320,20 +346,19 @@ class VideosScreenTest {
     }
 
     @Test
-    fun `a video that leaves the list while it plays is stopped`() {
+    fun `a video that leaves the list while it plays is stopped, and the page that takes its place plays`() {
         var items by mutableStateOf(videos)
         compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { VideosScreen(items, emptySet(), onToggle = {}, onApply = { _, _ -> }) } }
         openFullSize("big.mp4")
         compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
-        compose.waitForIdle()
-        play()
         compose.waitForIdle()
         assertEquals(listOf("/sdcard/Movies/middle.mp4"), players.made.single().paths)
 
         items = items.filter { it.video.path != "/sdcard/Movies/middle.mp4" }
         compose.waitForIdle()
 
-        assertEquals(emptyList<String>(), players.made.single().paths)
+        // The page that takes its place is the one the pager rests on, so it plays, and the removed video is gone.
+        assertEquals(listOf("/sdcard/Movies/small.mp4"), players.made.single().paths)
         assertFalse(players.made.single().released) // the view is still open
     }
 
@@ -341,7 +366,6 @@ class VideosScreenTest {
     fun `a video that fails to play says so, and the view stays`() {
         show(videos)
         openFullSize("big.mp4")
-        play()
         compose.waitForIdle()
 
         players.made.single().fail()

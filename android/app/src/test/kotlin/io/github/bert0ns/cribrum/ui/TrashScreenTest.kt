@@ -21,7 +21,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -300,15 +299,13 @@ class TrashScreenTest {
     }
 
     @Test
-    fun `a video in the trash plays at full size, and closing the view releases the player`() {
+    fun `a video in the trash plays when it opens at full size, and closing the view releases the player`() {
         val players = Players()
         // A path of its own: a video's length is cached by path for the whole run, and another test cached this clip's as unreadable.
         val clip = clip.copy(file = File("/sdcard/.cribrum-trash/p/clip.mp4"))
         ShadowMediaMetadataRetriever.addMetadata(clip.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "102000")
         compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { TrashScreen(listOf(clip), emptySet(), {}, { _, _ -> }, {}, {}) } }
         compose.onNodeWithContentDescription("clip.mp4", substring = true).performTouchInput { longClick() }
-
-        compose.onAllNodesWithContentDescription("Play video").onFirst().performClick()
         compose.waitForIdle()
 
         assertEquals(listOf(clip.file.path), players.made.single().paths)
@@ -332,7 +329,7 @@ class TrashScreenTest {
     }
 
     @Test
-    fun `a video that leaves the trash while it plays is stopped`() {
+    fun `a video that leaves the trash while it plays is stopped, and the page that takes its place plays`() {
         val players = Players()
         val first = clip.copy(MediaRef("/sdcard/DCIM/first.mp4", 412_000_000, 0, MediaType.VIDEO), file = File("/sdcard/.cribrum-trash/1/first.mp4"))
         val second = clip.copy(MediaRef("/sdcard/DCIM/second.mp4", 412_000_000, 0, MediaType.VIDEO), file = File("/sdcard/.cribrum-trash/2/second.mp4"))
@@ -342,14 +339,14 @@ class TrashScreenTest {
         compose.onNodeWithContentDescription("first.mp4", substring = true).performTouchInput { longClick() }
         compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
         compose.waitForIdle()
-        compose.onAllNodesWithContentDescription("Play video").onFirst().performClick()
         compose.waitForIdle()
         assertEquals(listOf(second.file.path), players.made.single().paths)
 
         items = listOf(first)
         compose.waitForIdle()
 
-        assertEquals(emptyList<String>(), players.made.single().paths)
+        // The page that takes its place plays, and the removed video is gone.
+        assertEquals(listOf(first.file.path), players.made.single().paths)
     }
 
     @Test

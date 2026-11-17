@@ -151,7 +151,13 @@ fun TrashScreen(
         LaunchedEffect(paths) { if (playback.loaded != null && playback.loaded !in paths) playback.stop() }
         val image: @Composable (Int) -> Unit = { page ->
             trashed.getOrNull(page)?.let { item ->
-                if (item.isVideo) VideoPage(item.file, "Trash.fullSize", playback, rememberLengthRead(item.file) == NO_LENGTH, close) else ZoomableImage(item.file.path, close)
+                if (item.isVideo) {
+                    // The index has no record of a trashed video, so it plays once the retriever has read its length, and not at all when it cannot.
+                    val read = rememberLengthRead(item.file)
+                    VideoPage(item.file, "Trash.fullSize", playback, read == NO_LENGTH, close, autoplay = read != null)
+                } else {
+                    ZoomableImage(item.file.path, close)
+                }
             }
         }
         FullSizeViewer(paths, start.file.path, onClose = close, image = image, onPage = { playback.stop() }) { page ->

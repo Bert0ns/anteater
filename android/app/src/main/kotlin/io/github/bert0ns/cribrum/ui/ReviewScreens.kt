@@ -64,6 +64,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -548,7 +549,7 @@ private fun FullSize(
  * The full size view both the review and the Compress page open: a black dialog that pages through
  * [paths] from [start], with [image] in each page, the review's zoomable image unless the screen
  * has its own. [overlay] draws over it what is specific to the screen, for the page the pager is on. [onPage] hears each page
- * the pager moves to, so a video that plays can stop.
+ * the pager moves to, so a video that plays can stop. A page learns from [LocalPageSettled] that the pager came to rest on it.
  */
 @Composable
 internal fun FullSizeViewer(
@@ -566,7 +567,7 @@ internal fun FullSizeViewer(
     Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             HorizontalPager(pager, Modifier.fillMaxSize().testTag("fullSize"), key = { paths[it] }) { page ->
-                image(page)
+                CompositionLocalProvider(LocalPageSettled provides (page == pager.currentPage && !pager.isScrollInProgress)) { image(page) }
             }
             overlay(pager.currentPage)
             // A tap on an image closes the view too, but nothing showed that. A video's tap plays and pauses, so this is its only way out.

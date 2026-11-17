@@ -104,10 +104,11 @@ class CategoryScreenTest {
     }
 
     @Test
-    fun `holding a video of a group opens it full size with its folder, and trashing the copy applies as for images`() {
+    fun `holding a video of a group opens it full size with its folder and plays it, and trashing the copy applies as for images`() {
         var confirmed: Pair<Set<String>, Set<String>>? = null
+        val players = Players()
         compose.setContent {
-            CompositionLocalProvider(LocalPlayerFactory provides Players().factory) {
+            CompositionLocalProvider(LocalPlayerFactory provides players.factory) {
                 CategoryScreen(listOf(clipGroup), 1, setOf(clips[1].path), grouped = true, onToggle = {}, onApply = { trash, keep -> confirmed = trash to keep }, onSkip = {}, mediaType = MediaType.VIDEO)
             }
         }
@@ -115,6 +116,9 @@ class CategoryScreenTest {
         compose.onNodeWithContentDescription("Marked for the trash", substring = true).performTouchInput { longClick() }
         compose.onNodeWithTag("fullSize").assertExists()
         compose.onNodeWithText("Download").assertExists() // the folder of the copy
+        compose.waitForIdle()
+        assertEquals(listOf(clips[1].path), players.made.single().paths)
+        assertTrue(players.made.single().playing)
         compose.onNodeWithContentDescription("Close").performClick()
         compose.onNodeWithText("Trash 1, keep 0").performClick()
 

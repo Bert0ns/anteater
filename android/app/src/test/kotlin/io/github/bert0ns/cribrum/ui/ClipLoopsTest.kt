@@ -165,7 +165,8 @@ class ClipLoopsTest {
 
         compose.onNodeWithContentDescription("clip1.mp4", substring = true).performTouchInput { longClick() }
         compose.waitForIdle()
-        assertTrue(running.isEmpty())
+        // Only the video of the full size view plays, which starts on its own.
+        assertEquals(listOf("/sdcard/DCIM/Camera/clip1.mp4"), running.single().paths)
 
         compose.onNodeWithContentDescription("Close").performClick()
         compose.waitForIdle()
