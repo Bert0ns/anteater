@@ -175,6 +175,8 @@ fun VideosScreen(
     loading: Boolean = false,
     /** Makes the video a gallery favourite, or takes the mark off, from the full size view. */
     onFavorite: (MediaRef, Boolean) -> Unit = { _, _ -> },
+    /** False while the phone is hot or in battery saver: the tiles that would play show the slideshow instead. */
+    canPlay: Boolean = true,
 ) {
     val haptics = LocalHapticFeedback.current
     var askFavorites by remember { mutableStateOf(false) }
@@ -185,6 +187,9 @@ fun VideosScreen(
     val shown = videos.drop(shownPage * VIDEO_PAGE_SIZE).take(VIDEO_PAGE_SIZE)
     val grid = rememberLazyGridState()
     LaunchedEffect(shownPage) { grid.scrollToItem(0) }
+    // Every video moves, as in "Short clips", looping its first seconds, since these are the longest.
+    val movers = remember(shown) { shown.filterNot { it.unreadable }.map { it.video.path }.toSet() }
+    val motion = rememberTileMotion(grid, movers, fullSize != null, canPlay)
     val chosen = videos.filter { it.video.path in selected }
     val favorites = chosen.count { it.isFavorite }
     val size = Formatter.formatShortFileSize(LocalContext.current, chosen.sumOf { it.video.size }).replace(' ', ' ')
@@ -210,7 +215,7 @@ fun VideosScreen(
             val controls: @Composable () -> Unit = { PageControls(shownPage, videos.size, { page = it }, VIDEO_PAGE_SIZE) }
             if (paged) item(span = { GridItemSpan(maxLineSpan) }, key = "pages-top") { controls() }
             items(shown, key = { it.video.path }) { item ->
-                VideoTile(item, item.video.path in selected, onHold = { fullSize = item }) {
+                VideoTile(item, item.video.path in selected, motion, onHold = { fullSize = item }) {
                     haptics.performHapticFeedback(Haptic.TICK.type)
                     onToggle(item.video.path)
                 }
@@ -264,9 +269,12 @@ fun VideosScreen(
 @Composable
 private fun VideoItem.lengthText(): String? = durationMs?.let(::formatLength) ?: if (unreadable) null else rememberDuration(File(video.path), "${video.path}|${video.size}|${video.mtimeNs}")
 
-/** A frame with its length and size. A tap selects it and a long press opens it full size. A video that cannot be read draws a placeholder and says so. */
+/**
+ * A frame with its length and size, and the clip or the slideshow over it while it moves, by [motion]. A tap selects it and
+ * a long press opens it full size. A video that cannot be read draws a placeholder and says so.
+ */
 @Composable
-private fun VideoTile(item: VideoItem, selected: Boolean, onHold: () -> Unit, onToggle: () -> Unit) {
+private fun VideoTile(item: VideoItem, selected: Boolean, motion: TileMotion, onHold: () -> Unit, onToggle: () -> Unit) {
     val path = item.video.path
     val size = Formatter.formatShortFileSize(LocalContext.current, item.video.size)
     val length = item.lengthText()
@@ -299,6 +307,7 @@ private fun VideoTile(item: VideoItem, selected: Boolean, onHold: () -> Unit, on
             },
     ) {
         VideoFrame(File(path), "Videos.tile", Modifier.fillMaxSize(), unreadable = item.unreadable)
+        motion.Over(item.video, item.durationMs, LONG_LOOP_MS, Modifier.fillMaxSize())
         // The description says all of this, so the visible texts stay out of the screen reader's way.
         Row(Modifier.align(Alignment.TopStart).clearAndSetSemantics {}.background(Color.Black.copy(alpha = 0.6f)).padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.PlayArrow, null, Modifier.size(16.dp), tint = Color.White)

@@ -114,6 +114,9 @@ private fun videoFrameRequest(context: Context, file: File, section: String, atM
  */
 internal const val LOOPING_CLIPS = 2
 
+/** How much of a video that can be long a tile loops: its first 10 seconds. A short clip or a take loops whole. */
+internal const val LONG_LOOP_MS = 10_000L
+
 /** The thread every loop's player lives on (#457): building, starting and releasing one blocks it, and not the main thread. */
 internal val clipLoops: Looper by lazy { HandlerThread("ClipLoops").apply { start() }.looper }
 

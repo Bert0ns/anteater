@@ -290,16 +290,13 @@ private fun Tile(item: ReviewItem, marked: Boolean, motion: TileMotion, loopEndM
     }
 }
 
-/** How much of a copy a tile loops: its first 10 seconds, since copies can be long videos. A short clip or a take loops whole. */
-private const val COPY_LOOP_MS = 10_000L
-
 /**
- * The tiles of a video review that move (#457): every short clip, the best copy of each group of copies, and the longest
- * take of each moment, since the user compares the others against it. The other categories keep still frames, and an
- * unreadable video never moves.
+ * The tiles of a video review that move (#457): every video of a review of single videos, the best copy of each group of
+ * copies, and the longest take of each moment, since the user compares the others against it. An unreadable video never
+ * moves.
  */
 private fun movingTiles(category: Category, page: List<ReviewGroup>): Set<String> = when (category) {
-    Category.SHORT_CLIPS -> page.flatMap { it.images }.filterNot { it.unreadable }
+    in SINGLE_VIDEO_CATEGORIES -> page.flatMap { it.images }.filterNot { it.unreadable }
     Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE -> page.mapNotNull { group -> group.images.firstOrNull { it.isBest && !it.unreadable } }
     // The longest readable take, so a moment whose longest take cannot be read still moves.
     Category.TAKES -> page.mapNotNull { group -> group.images.filterNot { it.unreadable }.maxByOrNull { it.durationMs ?: 0 } }
@@ -395,7 +392,8 @@ fun CategoryScreen(
         LaunchedEffect(reviewOrder) { grid.scrollToItem(0) }
         val movers = remember(page, category, videos) { if (videos && category != null) movingTiles(category, page) else emptySet() }
         val motion = rememberTileMotion(grid, movers, fullSize != null, canPlay)
-        val loopEndMs = if (category == Category.EXACT_DUPLICATE || category == Category.NEAR_DUPLICATE) COPY_LOOP_MS else null
+        // A short clip or a take loops whole, and the other videos, which can be long, their first seconds.
+        val loopEndMs = if (category == Category.SHORT_CLIPS || category == Category.TAKES) null else LONG_LOOP_MS
         val columns = if (videos && category in SINGLE_VIDEO_CATEGORIES) videoColumns() else GridCells.Adaptive(110.dp)
         LazyVerticalGrid(columns, Modifier.weight(1f), grid) {
             for ((position, group) in page.withIndex()) {

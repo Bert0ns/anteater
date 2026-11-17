@@ -407,6 +407,7 @@ private fun AppContent(model: ReviewViewModel) {
                             retentionDays = state.retentionDays,
                             loading = state.loading,
                             onFavorite = model::setFavorite,
+                            canPlay = rememberCanPlay(true),
                         )
                         is Screen.Category -> CategoryScreen(
                             state.page,

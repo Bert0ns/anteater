@@ -354,13 +354,22 @@ class ClipLoopsTest {
         assertEquals(listOf(187L), framesOf("/sdcard/DCIM/Camera/clip1.mp4"))
     }
 
-    @Test
-    fun `the grid of another video category keeps still frames`() {
-        show(page(clips(8)), category = Category.FORWARDED)
+    private fun singleVideosMove(category: Category) {
+        show(page(clips(8)), category = category)
 
-        assertTrue(players.made.isEmpty())
-        assertEquals(0, slideshows)
+        assertEquals((1..LOOPING_CLIPS).map { "/sdcard/DCIM/Camera/clip$it.mp4" }, players.made.flatMap { it.paths })
+        assertTrue(players.made.all { it.endMs == LONG_LOOP_MS && it.repeating && it.muted })
+        assertEquals(compose.onAllNodesWithContentDescription("clip", substring = true).fetchSemanticsNodes().size - LOOPING_CLIPS, slideshows)
     }
+
+    @Test
+    fun `blurry videos move as short clips do, and loop their first 10 seconds`() = singleVideosMove(Category.BLURRY)
+
+    @Test
+    fun `too dark or too bright videos move as short clips do, and loop their first 10 seconds`() = singleVideosMove(Category.BAD_EXPOSURE)
+
+    @Test
+    fun `forwarded videos move as short clips do, and loop their first 10 seconds`() = singleVideosMove(Category.FORWARDED)
 
     @Test
     fun `the full size view stops the loops and the slideshows, and closing it starts them again`() {
@@ -383,7 +392,7 @@ class ClipLoopsTest {
         show(copies(6), category = category)
 
         assertEquals(listOf("/sdcard/DCIM/Camera/best1.mp4", "/sdcard/DCIM/Camera/best2.mp4"), players.made.flatMap { it.paths })
-        assertTrue(players.made.all { it.endMs == 10_000L && it.repeating })
+        assertTrue(players.made.all { it.endMs == LONG_LOOP_MS && it.repeating })
         firstSlide()
         assertEquals(listOf(3_812L), framesOf("/sdcard/DCIM/Camera/best3.mp4"))
         assertTrue(frames.none { it.first.contains("copy") })
