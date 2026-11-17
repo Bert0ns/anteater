@@ -42,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -70,6 +71,7 @@ import io.github.bert0ns.cribrum.review.CategorySummary
 import io.github.bert0ns.cribrum.review.VIDEO_PAGE_SIZE
 import io.github.bert0ns.cribrum.review.VideoItem
 import io.github.bert0ns.cribrum.trash.TrashRetention
+import kotlinx.coroutines.launch
 import java.io.File
 
 /** The two tabs of Clean: Photos, the list of categories, and Videos. */
@@ -188,7 +190,7 @@ fun VideosScreen(
     val shownPage = page.coerceAtMost(lastPage)
     val shown = videos.drop(shownPage * VIDEO_PAGE_SIZE).take(VIDEO_PAGE_SIZE)
     val grid = rememberLazyGridState()
-    LaunchedEffect(shownPage) { grid.scrollToItem(0) }
+    val scope = rememberCoroutineScope()
     // Every video moves, as in "Short clips", looping its first seconds, since these are the longest.
     val movers = remember(shown) { shown.filterNot { it.unreadable }.map { it.video.path }.toSet() }
     val motion = rememberTileMotion(grid, movers, fullSize != null, canPlay)
@@ -214,7 +216,12 @@ fun VideosScreen(
         }
         LazyVerticalGrid(videoColumns(), Modifier.weight(1f), grid) {
             val paged = videos.size > VIDEO_PAGE_SIZE
-            val controls: @Composable () -> Unit = { PageControls(shownPage, videos.size, { page = it }, VIDEO_PAGE_SIZE) }
+            // A new page starts at its top. Only the controls scroll there, so a rotation keeps the scroll where it was.
+            val goTo: (Int) -> Unit = {
+                page = it
+                scope.launch { grid.scrollToItem(0) }
+            }
+            val controls: @Composable () -> Unit = { PageControls(shownPage, videos.size, goTo, VIDEO_PAGE_SIZE) }
             if (paged) item(span = { GridItemSpan(maxLineSpan) }, key = "pages-top") { controls() }
             items(shown, key = { it.video.path }) { item ->
                 VideoTile(item, item.video.path in selected, motion, onHold = { fullSize = item }) {

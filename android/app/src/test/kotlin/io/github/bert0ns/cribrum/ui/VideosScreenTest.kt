@@ -23,6 +23,8 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -33,6 +35,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
@@ -719,6 +722,33 @@ class VideosScreenTest {
         compose.waitForIdle()
         tile("v1.mp4").assertExists()
         tile("v17.mp4").assertDoesNotExist() // still the first page, not the one that was emptied
+    }
+
+    @Test
+    fun `a rotation keeps the scroll of the page where it was`() {
+        val restore = StateRestorationTester(compose)
+        restore.setContent { VideosScreen(many(16), emptySet(), onToggle = {}, onApply = { _, _ -> }) }
+        compose.onNode(hasScrollAction()).performScrollToIndex(10)
+        compose.waitForIdle()
+        tile("v1.mp4").assertDoesNotExist()
+
+        restore.emulateSavedInstanceStateRestore()
+        compose.waitForIdle()
+
+        tile("v1.mp4").assertDoesNotExist()
+        tile("v11.mp4").assertExists()
+    }
+
+    @Test
+    fun `the next page starts at its top`() {
+        show(many(40))
+        compose.onNode(hasScrollAction()).performScrollToIndex(14)
+        compose.waitForIdle()
+
+        compose.onAllNodesWithContentDescription("Next page").onFirst().performClick()
+        compose.waitForIdle()
+
+        tile("v17.mp4").assertExists()
     }
 
     @Test
