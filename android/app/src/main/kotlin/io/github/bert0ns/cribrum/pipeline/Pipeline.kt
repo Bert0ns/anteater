@@ -398,14 +398,44 @@ class Pipeline(
         }
     }
 
-    /** The video steps, which only a run asked for videos takes: the metadata, the frames, then the group detectors that accept videos, which may read the frames. */
+    /** The video steps, which only a run asked for videos takes: the metadata, the frames, then the detectors and the group detectors that accept videos, which may read the frames. */
     private suspend fun videoSteps(found: Set<String>, stats: Stats, progress: Progress) {
         val pending = index.withoutMetadata().filter { it.mediaType == MediaType.VIDEO }
         phase("videoMetadata", stats) {
             readAndStore(pending, VIDEO_METADATA_STEP, progress, read = { attempt { videoMetadataReader(it) } }) { batch -> storeVideoMetadata(batch, stats) }
         }
         if (embedder != null) phase("videoFrames", stats) { embedFrames(embedder, stats, progress) }
+        analyzeVideos(found, stats)
         groupSteps(MediaType.VIDEO, found, emptyMap(), "", null, stats, progress)
+    }
+
+    /**
+     * Runs the per-video detectors on each video that lacks them. They read no frame yet: a video is given no embedding, so a detector
+     * that asks for one fails and is counted. A video whose header did not read is left out, as an unreadable image is.
+     */
+    private suspend fun analyzeVideos(found: Set<String>, stats: Stats) {
+        val selected = detectors.filter { MediaType.VIDEO in it.mediaTypes }
+        if (selected.isEmpty()) return
+        val analyzed = index.analyzedPaths(selected.associate { it.id to it.version })
+        val unreadable = index.unreadable().toSet()
+        val context = AnalysisContext()
+        val results = index.images().filter { it.mediaType == MediaType.VIDEO && it.path in found && it.path !in unreadable }.flatMap { video ->
+            selected.filter { video.path !in analyzed.getValue(it.id) }.map { detector -> Triple(video.path, detector, attempt { detector.analyze(video, context) }) }
+        }
+        for (batch in results.chunked(STORE_BATCH)) {
+            index.batch(batch.map { it.first }) { recorded ->
+                for ((path, detector, result) in batch) {
+                    if (path !in recorded) continue // the row went while the scan ran
+                    result.fold(
+                        {
+                            index.setSignals(path, detector.id, detector.version, it)
+                            stats.detectorRuns++
+                        },
+                        { stats.failures += Failure(path, detector.id, failureMessage(it)) },
+                    )
+                }
+            }
+        }
     }
 
     /**

@@ -1271,8 +1271,8 @@ class ReviewTest {
         val videos = overview(MediaType.VIDEO)
         val photos = overview()
 
-        assertEquals(listOf(Category.EXACT_DUPLICATE), videos.categories.map { it.category })
-        assertEquals(listOf(1), videos.categories.map { it.count })
+        assertEquals(listOf(Category.EXACT_DUPLICATE, Category.FORWARDED), videos.categories.map { it.category })
+        assertEquals(listOf(1, 0), videos.categories.map { it.count })
         assertEquals(copy.size, videos.freeableBytes)
         assertEquals(1, photos.categories.single { it.category == Category.EXACT_DUPLICATE }.count)
         assertEquals(photoCopy.size, photos.freeableBytes)
@@ -1296,7 +1296,7 @@ class ReviewTest {
         val clip = video("DCIM/clip.mp4", 100)
         index.setSignals(clip.path, "blur", 1, listOf(blurry(0.9f)))
 
-        assertEquals(emptyList<Category>(), overview(MediaType.VIDEO).categories.map { it.category }.filter { it != Category.EXACT_DUPLICATE })
+        assertEquals(listOf(Category.EXACT_DUPLICATE, Category.FORWARDED), overview(MediaType.VIDEO).categories.map { it.category })
     }
 
     @Test
@@ -1321,9 +1321,9 @@ class ReviewTest {
         val decision = applyPage(page(Category.EXACT_DUPLICATE, mediaType = MediaType.VIDEO), setOf(copy.path))
 
         assertEquals(listOf(copy), decision.trashed)
-        assertEquals(0, overview(MediaType.VIDEO).categories.single().count)
+        assertEquals(0, overview(MediaType.VIDEO).categories.single { it.category == Category.EXACT_DUPLICATE }.count)
         undo(decision)
-        assertEquals(1, overview(MediaType.VIDEO).categories.single().count)
+        assertEquals(1, overview(MediaType.VIDEO).categories.single { it.category == Category.EXACT_DUPLICATE }.count)
     }
 
     @Test
