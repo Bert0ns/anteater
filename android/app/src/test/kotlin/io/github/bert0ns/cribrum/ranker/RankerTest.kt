@@ -6,6 +6,7 @@ import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.GROUP_KEY
 import io.github.bert0ns.cribrum.model.IndexedMedia
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.Protection
 import io.github.bert0ns.cribrum.model.ROLE_KEY
 import io.github.bert0ns.cribrum.model.ReviewState
@@ -26,6 +27,8 @@ private fun image(
     state: ReviewState = ReviewState.UNREVIEWED,
     seenWhenKept: Set<SignalIdentity> = emptySet(),
 ) = IndexedMedia(MediaRef(name, 0, 0), state, signals.toList(), seenWhenKept)
+
+private fun sized(name: String, size: Long, vararg signals: Signal, mediaType: MediaType = MediaType.VIDEO) = IndexedMedia(MediaRef(name, size, 0, mediaType), ReviewState.UNREVIEWED, signals.toList(), emptySet())
 
 private fun blur(score: Float, version: Int = 1) = Signal("blur", version, Category.BLURRY, score)
 
@@ -274,6 +277,36 @@ class RankerTest {
         val order = rank(image("people", blur(0.9f), faces()), image("wall", blur(0.8f)))
 
         assertEquals(listOf("wall", "people"), names(Ranker.byCategory(order).getValue(Category.BLURRY)))
+    }
+
+    @Test
+    fun `by category lists the larger of two equal videos first`() {
+        // The path hash alone would put "small" first.
+        val order = rank(sized("small", 1_000_000, blur(0.9f)), sized("large", 900_000_000, blur(0.9f)))
+
+        assertEquals(listOf("large", "small"), names(Ranker.byCategory(order).getValue(Category.BLURRY)))
+    }
+
+    @Test
+    fun `protection lowers a video by its factor on the size`() {
+        // Faces halve the people video: 1000 MB counts as 500, ahead of 400 MB and behind 600 MB.
+        val people = sized("people", 1_000_000_000, blur(0.9f), faces())
+
+        for ((size, expected) in listOf(400_000_000L to listOf("people", "plain"), 600_000_000L to listOf("plain", "people"))) {
+            val order = rank(people, sized("plain", size, blur(0.9f)))
+            assertEquals(expected, names(Ranker.byCategory(order).getValue(Category.BLURRY)))
+        }
+    }
+
+    @Test
+    fun `an image's size does not change its place`() {
+        // The path hash puts "small" first, and an image keeps that order whatever its size.
+        val order = rank(
+            sized("small", 1_000_000, blur(0.9f), mediaType = MediaType.IMAGE),
+            sized("large", 900_000_000, blur(0.9f), mediaType = MediaType.IMAGE),
+        )
+
+        assertEquals(listOf("small", "large"), names(Ranker.byCategory(order).getValue(Category.BLURRY)))
     }
 
     @Test

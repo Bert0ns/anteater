@@ -6,6 +6,8 @@ import io.github.bert0ns.cribrum.detectors.pathDigest
 import io.github.bert0ns.cribrum.folders.isExcluded
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.model.IndexedMedia
+import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.Protection
 import io.github.bert0ns.cribrum.model.ReviewState
 import io.github.bert0ns.cribrum.model.Signal
@@ -104,7 +106,9 @@ class Ranker(private val thresholds: Map<Category, Float> = THRESHOLDS) {
     companion object {
         /**
          * Candidates under each category they have a reason for, highest score first, each score
-         * lowered by the candidate's protection. A sticker is listed under STICKER only.
+         * lowered by the candidate's protection. A video's score is also multiplied by its size, so
+         * of two equal videos the larger comes first, and an image's size plays no part
+         * (docs/design.md §6.6). A sticker is listed under STICKER only.
          */
         fun byCategory(ranked: List<Candidate>): Map<Category, List<Candidate>> {
             val groups = mutableMapOf<Category, MutableList<Candidate>>()
@@ -117,12 +121,15 @@ class Ranker(private val thresholds: Map<Category, Float> = THRESHOLDS) {
             }
             return groups.mapValues { (category, candidates) ->
                 candidates.sortedByDescending { c ->
-                    c.protection * c.reasons.filter { it.kind == category }.maxOf { it.score }
+                    c.protection * c.reasons.filter { it.kind == category }.maxOf { it.score } * weight(c.image.ref)
                 }
             }
         }
     }
 }
+
+/** The bytes a video frees: a 900 MB video is worth more of a review than a 5 MB clip. Double, as a Float would round sizes. */
+private fun weight(ref: MediaRef): Double = if (ref.mediaType == MediaType.VIDEO) ref.size.toDouble() else 1.0
 
 /**
  * xxh3 of the path as an unsigned number, which orders the same as the lab's `_tie_break` hex
