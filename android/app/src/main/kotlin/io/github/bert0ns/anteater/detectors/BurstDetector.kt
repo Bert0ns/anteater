@@ -1,5 +1,5 @@
 // BURST: shots of the same moment, taken seconds apart (docs/design.md §5). Mirrors
-// lab/src/cribrum_lab/detectors/burst.py.
+// lab/src/anteater_lab/detectors/burst.py.
 package io.github.bert0ns.anteater.detectors
 
 import io.github.bert0ns.anteater.model.Category

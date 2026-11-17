@@ -65,11 +65,11 @@ class ReadmeScreenshots {
     val folder = TemporaryFolder()
 
     private val outputDirs: List<File> by lazy {
-        val dirsProperty = System.getProperty("cribrum.screenshots.dirs")
+        val dirsProperty = System.getProperty("anteater.screenshots.dirs")
         if (!dirsProperty.isNullOrBlank()) {
             dirsProperty.split(",").map { File(it.trim()) }
         } else {
-            listOfNotNull(System.getProperty("cribrum.screenshots.dir")?.let(::File))
+            listOfNotNull(System.getProperty("anteater.screenshots.dir")?.let(::File))
         }
     }
 

@@ -1,4 +1,4 @@
-// Room tables of the image index. The schema is the lab's (lab/src/cribrum_lab/index.py), table
+// Room tables of the image index. The schema is the lab's (lab/src/anteater_lab/index.py), table
 // by table and column by column, so both indexes mean the same thing; IndexSchemaTest checks it.
 package io.github.bert0ns.anteater.index
 

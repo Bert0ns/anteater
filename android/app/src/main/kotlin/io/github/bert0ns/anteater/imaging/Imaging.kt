@@ -1,5 +1,5 @@
 // Pixel loading shared by the detectors that look at image content. Mirrors
-// lab/src/cribrum_lab/imaging.py, step by step, so measures computed on the pixels match the lab's:
+// lab/src/anteater_lab/imaging.py, step by step, so measures computed on the pixels match the lab's:
 // Pillow's reduced JPEG decoding, EXIF orientation, ITU-R 601 luminance and Lanczos thumbnail.
 package io.github.bert0ns.anteater.imaging
 

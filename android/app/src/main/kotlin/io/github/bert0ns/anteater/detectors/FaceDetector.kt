@@ -1,5 +1,5 @@
 // FACES protection: images with faces are more likely memories (docs/design.md §6.2). Mirrors
-// lab/src/cribrum_lab/detectors/faces.py.
+// lab/src/anteater_lab/detectors/faces.py.
 //
 // YuNet (OpenCV Zoo, MIT license) is a 230 KB ONNX face detector. The build copies the lab's file
 // into the app, so both run the same model on ONNX Runtime, like MobileCLIP. The decoding below

@@ -1,5 +1,5 @@
 // BAD_EXPOSURE: pocket shots, black frames, blown-out and flat frames (docs/design.md §5). Mirrors
-// lab/src/cribrum_lab/detectors/exposure.py.
+// lab/src/anteater_lab/detectors/exposure.py.
 package io.github.bert0ns.anteater.detectors
 
 import io.github.bert0ns.anteater.model.Category

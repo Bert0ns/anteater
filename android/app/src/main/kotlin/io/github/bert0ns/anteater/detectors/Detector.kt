@@ -1,5 +1,5 @@
 // Detector interfaces. Every analysis technique implements one of them. Mirrors
-// lab/src/cribrum_lab/detectors/base.py and docs/design.md §7.
+// lab/src/anteater_lab/detectors/base.py and docs/design.md §7.
 package io.github.bert0ns.anteater.detectors
 
 import io.github.bert0ns.anteater.imaging.Pixels

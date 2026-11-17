@@ -1,5 +1,5 @@
 // Reads a video's metadata from the file's header, without decoding a frame. Mirrors read_video_metadata in
-// lab/src/cribrum_lab/metadata.py.
+// lab/src/anteater_lab/metadata.py.
 package io.github.bert0ns.anteater.metadata
 
 import android.media.MediaExtractor

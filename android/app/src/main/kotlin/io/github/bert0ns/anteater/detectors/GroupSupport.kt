@@ -1,5 +1,5 @@
 // Helpers shared by the group detectors: embedding similarity and group ids (xxh3 of the best
-// copy's path, as in lab/src/cribrum_lab/detectors/).
+// copy's path, as in lab/src/anteater_lab/detectors/).
 package io.github.bert0ns.anteater.detectors
 
 import com.appmattus.crypto.Algorithm

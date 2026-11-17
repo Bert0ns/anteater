@@ -1,5 +1,5 @@
 // DOCUMENT: slides, whiteboards, notes, homework, receipts, printed pages (docs/design.md §5).
-// Mirrors lab/src/cribrum_lab/detectors/document.py.
+// Mirrors lab/src/anteater_lab/detectors/document.py.
 package io.github.bert0ns.anteater.detectors
 
 import io.github.bert0ns.anteater.model.Category

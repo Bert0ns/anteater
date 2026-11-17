@@ -1,4 +1,4 @@
-// What a file's folder says about where the image came from. Mirrors lab/src/cribrum_lab/folders.py.
+// What a file's folder says about where the image came from. Mirrors lab/src/anteater_lab/folders.py.
 package io.github.bert0ns.anteater.folders
 
 import java.io.File

@@ -31,7 +31,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.abs
 
-private const val TAG = "cribrum-heic"
+private const val TAG = "anteater-heic"
 private const val WIDTH = 640
 private const val HEIGHT = 480
 private const val STOP_TIMEOUT_MS = 10_000L
@@ -104,7 +104,7 @@ private val CASES = listOf(
  *     adb install -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
  *     adb shell am instrument -w -e class io.github.bert0ns.anteater.imaging.HeicRotationDeviceTest \
  *         io.github.bert0ns.anteater.heiccheck.test/androidx.test.runner.AndroidJUnitRunner
- *     adb logcat -d -s cribrum-heic:I
+ *     adb logcat -d -s anteater-heic:I
  *     adb uninstall io.github.bert0ns.anteater.heiccheck.test
  *     adb uninstall io.github.bert0ns.anteater.heiccheck
  *

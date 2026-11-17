@@ -1,6 +1,6 @@
 // Analysis pipeline: scan → metadata → detectors that read no embedding → embeddings, with the detectors
 // that read one beside them → group detectors, then the video steps when a run asks for them: the video metadata, then the frames.
-// Mirrors lab/src/cribrum_lab/pipeline.py, which runs the embeddings and those detectors one after the other.
+// Mirrors lab/src/anteater_lab/pipeline.py, which runs the embeddings and those detectors one after the other.
 package io.github.bert0ns.anteater.pipeline
 
 import android.os.SystemClock

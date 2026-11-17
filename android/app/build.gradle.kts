@@ -98,18 +98,18 @@ android {
             // -PreadmeScreenshots makes ReadmeScreenshots write docs/screenshots and site/screenshots (android/README.md).
             if (providers.gradleProperty("readmeScreenshots").isPresent) {
                 it.systemProperty(
-                    "cribrum.screenshots.dirs",
+                    "anteater.screenshots.dirs",
                     "${rootProject.file("../docs/screenshots").path},${rootProject.file("../site/screenshots").path}",
                 )
                 it.outputs.upToDateWhen { false }
             } else {
                 it.exclude("**/ReadmeScreenshots*")
             }
-            // -PuiGallery makes UiGallery write its images and index.md to /tmp/cribrum-ui-gallery, or to the folder
+            // -PuiGallery makes UiGallery write its images and index.md to /tmp/anteater-ui-gallery, or to the folder
             // given as -PuiGallery=<folder> (android/README.md).
             val gallery = providers.gradleProperty("uiGallery")
             if (gallery.isPresent) {
-                it.systemProperty("cribrum.gallery.dir", gallery.get().ifBlank { "/tmp/cribrum-ui-gallery" })
+                it.systemProperty("anteater.gallery.dir", gallery.get().ifBlank { "/tmp/anteater-ui-gallery" })
                 it.outputs.upToDateWhen { false }
             } else {
                 it.exclude("**/UiGallery*")
@@ -155,7 +155,7 @@ baselineProfile {
     automaticGenerationDuringBuild = false
 }
 
-/** Downloads pinned files and checks their SHA-256, as lab/src/cribrum_lab/models.py does. */
+/** Downloads pinned files and checks their SHA-256, as lab/src/anteater_lab/models.py does. */
 abstract class DownloadModel : DefaultTask() {
     /** File name to "url sha256". */
     @get:Input
@@ -227,7 +227,7 @@ val copyYuNet = tasks.register<CopyFiles>("copyYuNet") {
 }
 
 // The MobileCLIP2-S0 image encoder, from the same revision and with the same SHA-256 as
-// lab/src/cribrum_lab/mobileclip.py, with its license. Packed in the APK, never committed.
+// lab/src/anteater_lab/mobileclip.py, with its license. Packed in the APK, never committed.
 val downloadMobileClip = tasks.register<DownloadModel>("downloadMobileClip") {
     files.put(
         "mobileclip2_s0/vision_model.onnx",
@@ -243,7 +243,7 @@ val downloadMobileClip = tasks.register<DownloadModel>("downloadMobileClip") {
 }
 
 // PP-OCRv4 text detection, from the same revision and with the same SHA-256 as
-// lab/src/cribrum_lab/text.py. Packed in the APK as a resource, never committed.
+// lab/src/anteater_lab/text.py. Packed in the APK as a resource, never committed.
 val downloadPpocr = tasks.register<DownloadModel>("downloadPpocr") {
     files.put(
         "ppocr/ch_PP-OCRv4_det_infer.onnx",

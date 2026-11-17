@@ -1,5 +1,5 @@
 // Persistent image index, so later scans only process new or changed files. Mirrors
-// lab/src/cribrum_lab/index.py method by method.
+// lab/src/anteater_lab/index.py method by method.
 package io.github.bert0ns.anteater.index
 
 import android.content.Context

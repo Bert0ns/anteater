@@ -140,7 +140,7 @@ class UiGallery(private val shot: Shot) {
 
     companion object {
         private const val META = ".meta"
-        private val outputDir = System.getProperty("cribrum.gallery.dir")?.let(::File)?.also { dir ->
+        private val outputDir = System.getProperty("anteater.gallery.dir")?.let(::File)?.also { dir ->
             require(dir.isAbsolute && dir.parentFile != null) { "-PuiGallery needs an absolute folder other than the root, not '$dir'" }
         }
 

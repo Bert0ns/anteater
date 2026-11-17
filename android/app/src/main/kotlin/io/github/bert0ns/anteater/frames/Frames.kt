@@ -1,5 +1,5 @@
 // Frames sampled from a video, for the detectors images have (docs/design.md §5). Mirrors
-// lab/src/cribrum_lab/frames.py, which decodes the same times with FFmpeg.
+// lab/src/anteater_lab/frames.py, which decodes the same times with FFmpeg.
 package io.github.bert0ns.anteater.frames
 
 import android.graphics.Color

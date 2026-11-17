@@ -1,5 +1,5 @@
 // FORWARDED: memes, stickers and greeting images from messaging apps (docs/design.md §5).
-// Mirrors lab/src/cribrum_lab/detectors/forwarded.py.
+// Mirrors lab/src/anteater_lab/detectors/forwarded.py.
 package io.github.bert0ns.anteater.detectors
 
 import io.github.bert0ns.anteater.folders.isMessagingFolder

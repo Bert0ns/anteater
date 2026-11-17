@@ -1,4 +1,4 @@
-// MobileCLIP2-S0 image embeddings (docs/design.md §5). Mirrors lab/src/cribrum_lab/mobileclip.py
+// MobileCLIP2-S0 image embeddings (docs/design.md §5). Mirrors lab/src/anteater_lab/mobileclip.py
 // without the text encoder: the app ships the prompts' embeddings instead.
 package io.github.bert0ns.anteater.mobileclip
 

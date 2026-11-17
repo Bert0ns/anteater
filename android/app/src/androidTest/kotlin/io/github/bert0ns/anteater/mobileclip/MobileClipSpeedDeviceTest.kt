@@ -15,7 +15,7 @@ import kotlin.system.measureNanoTime
 
 /**
  * How long MobileCLIP2-S0 takes per image on the phone (docs/design.md §5). The numbers go to
- * logcat under the tag "cribrum-speed".
+ * logcat under the tag "anteater-speed".
  */
 class MobileClipSpeedDeviceTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
@@ -55,6 +55,6 @@ class MobileClipSpeedDeviceTest {
     }
 
     private companion object {
-        const val TAG = "cribrum-speed"
+        const val TAG = "anteater-speed"
     }
 }

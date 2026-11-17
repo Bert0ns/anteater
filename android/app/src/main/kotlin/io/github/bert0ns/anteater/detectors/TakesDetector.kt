@@ -1,5 +1,5 @@
 // TAKES: camera videos of one moment, filmed one after the other (docs/design.md §5). Mirrors
-// lab/src/cribrum_lab/detectors/takes.py.
+// lab/src/anteater_lab/detectors/takes.py.
 package io.github.bert0ns.anteater.detectors
 
 import io.github.bert0ns.anteater.folders.isCameraFolder

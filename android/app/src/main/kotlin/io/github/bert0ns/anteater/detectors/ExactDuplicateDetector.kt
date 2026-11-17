@@ -1,5 +1,5 @@
 // EXACT_DUPLICATE: byte-identical files (docs/design.md §5). Mirrors
-// lab/src/cribrum_lab/detectors/exact_duplicate.py.
+// lab/src/anteater_lab/detectors/exact_duplicate.py.
 package io.github.bert0ns.anteater.detectors
 
 import io.github.bert0ns.anteater.folders.isCameraFolder

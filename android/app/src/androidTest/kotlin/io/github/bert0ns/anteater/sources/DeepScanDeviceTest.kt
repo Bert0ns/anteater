@@ -18,7 +18,7 @@ import java.util.concurrent.CountDownLatch
 /** The deep scan finds what MediaStore misses: images in `.nomedia` folders, like WhatsApp's Sent. */
 class DeepScanDeviceTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
-    private val folder = File(Environment.getExternalStorageDirectory(), "Pictures/cribrum-test")
+    private val folder = File(Environment.getExternalStorageDirectory(), "Pictures/anteater-test")
 
     @Before
     fun grantAllFilesAccess() {

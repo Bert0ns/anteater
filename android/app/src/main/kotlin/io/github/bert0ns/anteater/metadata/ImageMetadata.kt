@@ -1,4 +1,4 @@
-// Image metadata used by detectors and best-copy selection. Mirrors lab/src/cribrum_lab/metadata.py.
+// Image metadata used by detectors and best-copy selection. Mirrors lab/src/anteater_lab/metadata.py.
 package io.github.bert0ns.anteater.metadata
 
 import java.time.LocalDateTime

@@ -1,4 +1,4 @@
-// Reads image metadata from the file header. Mirrors read_metadata in lab/src/cribrum_lab/metadata.py.
+// Reads image metadata from the file header. Mirrors read_metadata in lab/src/anteater_lab/metadata.py.
 package io.github.bert0ns.anteater.metadata
 
 import android.graphics.BitmapFactory

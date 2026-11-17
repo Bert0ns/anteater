@@ -1,4 +1,4 @@
-// Screen resolutions used to recognize screenshots. Mirrors lab/src/cribrum_lab/screens.py: add a
+// Screen resolutions used to recognize screenshots. Mirrors lab/src/anteater_lab/screens.py: add a
 // resolution there and here, for any device whose screenshots end up on the phone.
 package io.github.bert0ns.anteater.detectors
 

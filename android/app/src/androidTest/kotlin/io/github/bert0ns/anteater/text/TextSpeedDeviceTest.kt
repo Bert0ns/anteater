@@ -15,7 +15,7 @@ import kotlin.system.measureNanoTime
 
 /**
  * How long text coverage takes per image on the phone (docs/design.md §5). The numbers go to
- * logcat under the tag "cribrum-speed". The detector's cost depends on the image's size, not on
+ * logcat under the tag "anteater-speed". The detector's cost depends on the image's size, not on
  * what is in it, so noise stands in for photos. Run it on a non-debuggable build: a debuggable one
  * runs the Kotlin preprocessing about three times slower.
  */
@@ -71,7 +71,7 @@ class TextSpeedDeviceTest {
     }
 
     private companion object {
-        const val TAG = "cribrum-speed"
+        const val TAG = "anteater-speed"
 
         /** Rounds before timing: the runtime's JIT compiles the hot loops during the first ones, which a scan of thousands of images mostly runs without. */
         const val WARMUP = 15

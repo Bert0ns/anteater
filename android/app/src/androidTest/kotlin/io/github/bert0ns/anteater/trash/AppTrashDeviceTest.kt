@@ -26,7 +26,7 @@ class AppTrashDeviceTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val storageRoot = Environment.getExternalStorageDirectory()
     private val realTrashFolder = File(storageRoot, TRASH_FOLDER)
-    private val folder = File(storageRoot, "Pictures/cribrum-test")
+    private val folder = File(storageRoot, "Pictures/anteater-test")
     private fun testTrash(clock: Clock = Clock.systemUTC()) = AppTrash(volumes = { listOf(folder) }, clock = clock)
     private val trash = testTrash()
     private var createdRealTrashFolder = false
@@ -59,7 +59,7 @@ class AppTrashDeviceTest {
             realTrashFolder.mkdirs()
             createdRealTrashFolder = true
         }
-        val dir = File(realTrashFolder, "cribrum-test-${UUID.randomUUID()}").apply { mkdirs() }
+        val dir = File(realTrashFolder, "anteater-test-${UUID.randomUUID()}").apply { mkdirs() }
         sentinelDir = dir
         val file = File(dir, "sentinel.jpg").apply { writeBytes(ByteArray(1024) { it.toByte() }) }
         val origin = Properties().apply {

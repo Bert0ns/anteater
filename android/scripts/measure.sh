@@ -44,7 +44,7 @@ read -ra adb <<<"${ADB:-adb}"
 here=$(cd "$(dirname "$0")" && pwd)
 res=$here/../app/src/main/res
 package=io.github.bert0ns.anteater
-remote=/data/local/tmp/cribrum-measure
+remote=/data/local/tmp/anteater-measure
 # The home's name of the category to open, in English and Italian.
 categories=("$@")
 [[ ${#categories[@]} -gt 0 ]] || categories=("Similar copies" "Copie simili")
@@ -54,7 +54,7 @@ trace_ms=150000
 # How long a screen gets to load its first tiles before the script reads it or scrolls it.
 settle=6
 
-local_dir=$(mktemp -d ./cribrum-measure.XXXXXX)
+local_dir=$(mktemp -d ./anteater-measure.XXXXXX)
 local_dir=${local_dir#./}
 cleanup() {
     if [[ $1 != 0 ]]; then

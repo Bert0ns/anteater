@@ -1,11 +1,11 @@
 // Zero-shot classes and their MobileCLIP prompts, in one versioned place (docs/design.md §5).
-// Mirrors lab/src/cribrum_lab/prompts.py.
+// Mirrors lab/src/anteater_lab/prompts.py.
 //
 // The prompt embeddings are generated once in the lab and committed there in prompt_embeddings.json,
 // which the build copies into the app as is, so the app never needs the text encoder. After editing
 // PROMPTS, bump VERSION and the version of every detector using them, then regenerate the file in the lab:
 //
-//     uv run python -m cribrum_lab.prompts
+//     uv run python -m anteater_lab.prompts
 package io.github.bert0ns.anteater.prompts
 
 import io.github.bert0ns.anteater.mobileclip.MODEL_ID

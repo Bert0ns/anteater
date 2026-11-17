@@ -1,4 +1,4 @@
-// Core types shared by every component. Mirrors lab/src/cribrum_lab/model.py and docs/design.md §7.
+// Core types shared by every component. Mirrors lab/src/anteater_lab/model.py and docs/design.md §7.
 package io.github.bert0ns.anteater.model
 
 import java.io.File

@@ -1,5 +1,5 @@
 // SCREENSHOT: path and file name, screen-sized image, no camera EXIF (docs/design.md §5).
-// Mirrors lab/src/cribrum_lab/detectors/screenshot.py.
+// Mirrors lab/src/anteater_lab/detectors/screenshot.py.
 package io.github.bert0ns.anteater.detectors
 
 import io.github.bert0ns.anteater.model.Category

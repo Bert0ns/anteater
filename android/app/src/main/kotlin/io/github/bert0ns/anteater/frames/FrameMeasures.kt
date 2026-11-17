@@ -1,5 +1,5 @@
 // What the detectors that read frames keep of a video's sampled frame (docs/design.md §5). Mirrors
-// lab/src/cribrum_lab/frame_measures.py.
+// lab/src/anteater_lab/frame_measures.py.
 package io.github.bert0ns.anteater.frames
 
 import io.github.bert0ns.anteater.detectors.BlurDetector

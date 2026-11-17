@@ -1,5 +1,5 @@
 // STICKER: stickers saved by messaging apps (docs/design.md §5). Mirrors
-// lab/src/cribrum_lab/detectors/sticker.py.
+// lab/src/anteater_lab/detectors/sticker.py.
 package io.github.bert0ns.anteater.detectors
 
 import io.github.bert0ns.anteater.folders.isStickerFolder

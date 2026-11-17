@@ -1,5 +1,5 @@
 // Text coverage: the share of an image covered by text (docs/design.md §5). Mirrors
-// lab/src/cribrum_lab/text.py.
+// lab/src/anteater_lab/text.py.
 //
 // PP-OCRv4's text detector (Apache-2.0, 4.7 MB ONNX) gives a probability of text for every pixel;
 // the coverage is the share of pixels above TEXT_PROBABILITY. Only detection runs, not

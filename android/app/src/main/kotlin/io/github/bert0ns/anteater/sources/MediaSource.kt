@@ -1,4 +1,4 @@
-// Media sources: where images and videos come from. Mirrors lab/src/cribrum_lab/sources.py and docs/design.md §4.
+// Media sources: where images and videos come from. Mirrors lab/src/anteater_lab/sources.py and docs/design.md §4.
 package io.github.bert0ns.anteater.sources
 
 import android.content.ContentResolver

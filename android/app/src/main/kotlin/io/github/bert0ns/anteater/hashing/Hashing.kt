@@ -1,4 +1,4 @@
-// Hashes used to find duplicates. Mirrors lab/src/cribrum_lab/hashing.py (docs/design.md §5).
+// Hashes used to find duplicates. Mirrors lab/src/anteater_lab/hashing.py (docs/design.md §5).
 package io.github.bert0ns.anteater.hashing
 
 import com.appmattus.crypto.Algorithm

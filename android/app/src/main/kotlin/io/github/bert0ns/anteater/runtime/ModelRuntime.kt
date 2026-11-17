@@ -1,5 +1,5 @@
 // ModelRuntime: on-device ML models behind one interface (docs/design.md §7). Mirrors
-// lab/src/cribrum_lab/runtime.py: both run the same ONNX files, so both compute the same outputs.
+// lab/src/anteater_lab/runtime.py: both run the same ONNX files, so both compute the same outputs.
 package io.github.bert0ns.anteater.runtime
 
 import ai.onnxruntime.OnnxTensor

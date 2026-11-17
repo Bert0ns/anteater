@@ -1,5 +1,5 @@
 // SHORT_CLIPS: short videos recorded by mistake or beside a photo (docs/design.md §5). Mirrors
-// lab/src/cribrum_lab/detectors/short_clips.py.
+// lab/src/anteater_lab/detectors/short_clips.py.
 package io.github.bert0ns.anteater.detectors
 
 import io.github.bert0ns.anteater.folders.isMessagingFolder

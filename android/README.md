@@ -21,7 +21,7 @@ A run filtered to one test used to abort the JVM now and then with `Class not fo
 
 Detector tests compare with the lab's golden fixtures (`fixtures/golden`), decoding them with Android's own decoders through Robolectric's native graphics.
 
-Instrumented tests run on a connected phone. The app trash tests move files on its real shared storage under `Pictures/cribrum-test` and place a temporary sentinel in the real device trash to verify it survives, cleaning up after themselves:
+Instrumented tests run on a connected phone. The app trash tests move files on its real shared storage under `Pictures/anteater-test` and place a temporary sentinel in the real device trash to verify it survives, cleaning up after themselves:
 
 ```bash
 ./gradlew connectedDebugAndroidTest
@@ -58,7 +58,7 @@ It keeps the debug build's application id and signature, so it installs over a d
 
 ### UI gallery
 
-`UiGallery` renders every screen and key state of the app to PNG files, for a review of the UI by someone who cannot hold the phone. It drives the real `App` (the navigation bar, the top bar, the snackbar and the dialogs) with the real view models, over a library drawn in code: no photo and no file from a device is involved. It makes about 120 images, in Italian and in English, and some of them in the dark theme, with a font scale of 1.5 and on an unfolded Fold. `-PuiGallery` turns it on, and without it Gradle leaves the test out. The `ui-council` skill (`.agents/skills/ui-council/`) runs such a review with two models. The images go to `/tmp/cribrum-ui-gallery`, or to the folder given as `-PuiGallery=<folder>`, with an `index.md` that says what each one shows:
+`UiGallery` renders every screen and key state of the app to PNG files, for a review of the UI by someone who cannot hold the phone. It drives the real `App` (the navigation bar, the top bar, the snackbar and the dialogs) with the real view models, over a library drawn in code: no photo and no file from a device is involved. It makes about 120 images, in Italian and in English, and some of them in the dark theme, with a font scale of 1.5 and on an unfolded Fold. `-PuiGallery` turns it on, and without it Gradle leaves the test out. The `ui-council` skill (`.agents/skills/ui-council/`) runs such a review with two models. The images go to `/tmp/anteater-ui-gallery`, or to the folder given as `-PuiGallery=<folder>`, with an `index.md` that says what each one shows:
 
 ```bash
 ./gradlew -PuiGallery testDebugUnitTest --tests '*UiGallery'
@@ -180,7 +180,7 @@ android/scripts/measure.sh Screenshots
 
 ```bash
 cd /mnt/c/Users/Public
-ADB='cmd.exe /c C:\Users\<you>\AppData\Local\Android\Sdk\platform-tools\adb.exe' ~/cribrum/android/scripts/measure.sh
+ADB='cmd.exe /c C:\Users\<you>\AppData\Local\Android\Sdk\platform-tools\adb.exe' <repo>/android/scripts/measure.sh
 ```
 
 The times grow with the library, so write down `indexed images` with every number.
@@ -218,7 +218,7 @@ Use the script and not the plugin's `generateBaselineProfile`. That task only re
 
 ## Release
 
-Releases are manual: on GitHub, Actions → release → Run workflow, on `main`, with the version as `MAJOR.MINOR.PATCH`. The workflow refuses a version that is not above the latest release, runs the unit tests and lint, and publishes `cribrum-X.Y.Z.apk` and its SHA-256 as the release `vX.Y.Z`. Install it with `adb install -r`, or open it on the phone.
+Releases are manual: on GitHub, Actions → release → Run workflow, on `main`, with the version as `MAJOR.MINOR.PATCH`. The workflow refuses a version that is not above the latest release, runs the unit tests and lint, and publishes `anteater-X.Y.Z.apk` and its SHA-256 as the release `vX.Y.Z`. Install it with `adb install -r`, or open it on the phone.
 
 Every release is signed with the same key, so each one installs over the previous one. It lives in the repository secrets `ANDROID_KEYSTORE_BASE64` (the PKCS12 keystore, in base64), `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`. Keep a copy of the keystore and its password outside GitHub: with a lost key, the next release can only be installed after uninstalling the app, which drops its index. The trash is on shared storage and survives.
 
@@ -228,20 +228,20 @@ A debug build is signed with another key, so it can't be installed over a releas
 
 | Package | Contents | Lab counterpart |
 |---|---|---|
-| `io.github.bert0ns.anteater.model` | Core types: `MediaRef`, `Category`, `Protection`, `Signal`, `IndexedMedia` | `cribrum_lab.model` |
-| `io.github.bert0ns.anteater.ranker` | `Ranker`, `Candidate`, thresholds and protection weights | `cribrum_lab.ranker` |
-| `io.github.bert0ns.anteater.index` | Room tables and `ImageIndex`, with the lab's schema | `cribrum_lab.index` |
-| `io.github.bert0ns.anteater.metadata` | `ImageMetadata` and `readMetadata` | `cribrum_lab.metadata` |
+| `io.github.bert0ns.anteater.model` | Core types: `MediaRef`, `Category`, `Protection`, `Signal`, `IndexedMedia` | `anteater_lab.model` |
+| `io.github.bert0ns.anteater.ranker` | `Ranker`, `Candidate`, thresholds and protection weights | `anteater_lab.ranker` |
+| `io.github.bert0ns.anteater.index` | Room tables and `ImageIndex`, with the lab's schema | `anteater_lab.index` |
+| `io.github.bert0ns.anteater.metadata` | `ImageMetadata` and `readMetadata` | `anteater_lab.metadata` |
 | `io.github.bert0ns.anteater.trash` | `Trash` and `AppTrash`: the only code that deletes files (`docs/design.md` §9) | none: the lab never deletes |
-| `io.github.bert0ns.anteater.sources` | `MediaSource`: the deep scan, MediaStore, and both merged | `cribrum_lab.sources` |
-| `io.github.bert0ns.anteater.ui` | Compose screens | `cribrum_lab.labeling` (the lab's only UI) |
-| `io.github.bert0ns.anteater.detectors` | `Detector`, `GroupDetector`, `AnalysisContext`, and the detectors ported so far | `cribrum_lab.detectors` |
-| `io.github.bert0ns.anteater.hashing`, `.folders` | Content hash (xxHash3), camera and messaging folders | `cribrum_lab.hashing`, `cribrum_lab.folders` |
-| `io.github.bert0ns.anteater.runtime` | `ModelRuntime` and `OnnxRuntime`: on-device models behind one interface | `cribrum_lab.runtime` |
-| `io.github.bert0ns.anteater.mobileclip`, `.prompts` | MobileCLIP2-S0 image embeddings, and the zero-shot classes with the prompts' stored embeddings | `cribrum_lab.mobileclip`, `cribrum_lab.prompts` |
-| `io.github.bert0ns.anteater.text` | `textCoverage`: PP-OCRv4 text detection, the share of the image covered by text | `cribrum_lab.text` |
-| `io.github.bert0ns.anteater.imaging` | `loadGrayscale`: Pillow's decoding, luminance and Lanczos thumbnail, step by step | `cribrum_lab.imaging` |
+| `io.github.bert0ns.anteater.sources` | `MediaSource`: the deep scan, MediaStore, and both merged | `anteater_lab.sources` |
+| `io.github.bert0ns.anteater.ui` | Compose screens | `anteater_lab.labeling` (the lab's only UI) |
+| `io.github.bert0ns.anteater.detectors` | `Detector`, `GroupDetector`, `AnalysisContext`, and the detectors ported so far | `anteater_lab.detectors` |
+| `io.github.bert0ns.anteater.hashing`, `.folders` | Content hash (xxHash3), camera and messaging folders | `anteater_lab.hashing`, `anteater_lab.folders` |
+| `io.github.bert0ns.anteater.runtime` | `ModelRuntime` and `OnnxRuntime`: on-device models behind one interface | `anteater_lab.runtime` |
+| `io.github.bert0ns.anteater.mobileclip`, `.prompts` | MobileCLIP2-S0 image embeddings, and the zero-shot classes with the prompts' stored embeddings | `anteater_lab.mobileclip`, `anteater_lab.prompts` |
+| `io.github.bert0ns.anteater.text` | `textCoverage`: PP-OCRv4 text detection, the share of the image covered by text | `anteater_lab.text` |
+| `io.github.bert0ns.anteater.imaging` | `loadGrayscale`: Pillow's decoding, luminance and Lanczos thumbnail, step by step | `anteater_lab.imaging` |
 | `io.github.bert0ns.anteater.review` | `Review`: pages of candidates, and decisions applied to the trash and the index together | none |
-| `io.github.bert0ns.anteater.pipeline` | `Pipeline`, and `IndexWorker` running it with WorkManager | `cribrum_lab.pipeline` |
+| `io.github.bert0ns.anteater.pipeline` | `Pipeline`, and `IndexWorker` running it with WorkManager | `anteater_lab.pipeline` |
 | `io.github.bert0ns.anteater.tracing` | `traceSuspend`: a trace section around code that suspends | none |
 | `io.github.bert0ns.anteater.baselineprofile` (`:baselineprofile`) | The generator of the Baseline Profile | none |

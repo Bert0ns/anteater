@@ -32,7 +32,7 @@ import kotlin.system.measureNanoTime
 /**
  * The frames of the golden videos of fixtures/videos/, taken on the phone and compared with the lab's in frames.json, and what
  * one video of the phone's own costs (docs/design.md §5). Robolectric decodes no video, so only a phone can run this.
- * Everything goes to logcat under the tag "cribrum-frames".
+ * Everything goes to logcat under the tag "anteater-frames".
  *
  * Each video must keep the frames at the times the lab's do: all of them for SDR, one a keyframe for HDR. An SDR frame must
  * match the lab's embedding within the cosine floor and its mean colour within a few levels, which a wrong frame or a wrong
@@ -49,7 +49,7 @@ import kotlin.system.measureNanoTime
  *     adb shell am instrument -w -e class io.github.bert0ns.anteater.frames.VideoFramesDeviceTest \
  *         -e video /sdcard/DCIM/Camera/<a 4K 60 fps HLG clip>.mp4 \
  *         io.github.bert0ns.anteater.framecheck.test/androidx.test.runner.AndroidJUnitRunner
- *     adb logcat -d -s cribrum-frames:I > ../lab/data/frames-log.txt
+ *     adb logcat -d -s anteater-frames:I > ../lab/data/frames-log.txt
  *     adb pull /sdcard/DCIM/Camera/<the same clip>.mp4 ../lab/data/
  *     adb uninstall io.github.bert0ns.anteater.framecheck.test
  *     adb uninstall io.github.bert0ns.anteater.framecheck
@@ -197,7 +197,7 @@ class VideoFramesDeviceTest {
         /** With a dot whatever the phone's language, so compare_frames.py reads the log. */
         fun Double.fixed(digits: Int): String = String.format(Locale.ROOT, "%.${digits}f", this)
 
-        const val TAG = "cribrum-frames"
+        const val TAG = "anteater-frames"
         const val INSTALLED_APP = "io.github.bert0ns.anteater"
     }
 }

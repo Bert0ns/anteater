@@ -1,4 +1,4 @@
-// Turns signals into candidates and a review order. Mirrors lab/src/cribrum_lab/ranker.py and
+// Turns signals into candidates and a review order. Mirrors lab/src/anteater_lab/ranker.py and
 // docs/design.md §6.
 package io.github.bert0ns.anteater.ranker
 

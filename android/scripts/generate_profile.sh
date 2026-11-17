@@ -17,7 +17,7 @@ generator=$runner.HomeAndCategoriesGenerator
 output=/sdcard/Android/media/$runner
 profile=$here/../app/src/main/baselineProfiles/baseline-prof.txt
 
-local_dir=$(mktemp -d ./cribrum-profile.XXXXXX)
+local_dir=$(mktemp -d ./anteater-profile.XXXXXX)
 local_dir=${local_dir#./}
 cleanup() {
     "${adb[@]}" uninstall "$target" >/dev/null 2>&1 || true
