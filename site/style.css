@@ -262,6 +262,10 @@ p {
   color: var(--text-muted);
 }
 
+p a {
+  overflow-wrap: anywhere;
+}
+
 p:last-child {
   margin-bottom: 0;
 }
