@@ -372,7 +372,7 @@
     <string name="settings_uninstall_warning">Disinstallando l\'app la cartella del cestino resta, quindi svuotalo prima.</string>
     <string name="settings_haptics">Feedback tattile</string>
     <string name="settings_images_at_night">Analizza le immagini di notte</string>
-    <string name="settings_images_at_night_hint">Mentre il telefono si ricarica, la scansione notturna analizza le nuove immagini e svuota il cestino scaduto. Con entrambi gli interruttori spenti, svuota solo il cestino.</string>
+    <string name="settings_images_at_night_hint">Mentre il telefono si ricarica, la scansione notturna analizza le nuove immagini e svuota il cestino scaduto. Se di notte non analizza nemmeno i video, svuota solo il cestino.</string>
     <string name="settings_videos_at_night">Analizza i video di notte</string>
     <string name="settings_videos_at_night_hint">Dopo che hai usato Scansiona i video, la scansione notturna analizza anche i nuovi video, dopo le foto.</string>
     <string name="settings_haptics_hint">Una breve vibrazione quando selezioni, salti, tieni o cestini immagini e video. Segue anche l\'impostazione del feedback al tocco del telefono.</string>
