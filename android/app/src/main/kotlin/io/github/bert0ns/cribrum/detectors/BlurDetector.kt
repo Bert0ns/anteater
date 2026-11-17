@@ -5,7 +5,9 @@ package io.github.bert0ns.cribrum.detectors
 import io.github.bert0ns.cribrum.imaging.Gray
 import io.github.bert0ns.cribrum.imaging.loadGrayscale
 import io.github.bert0ns.cribrum.model.Category
+import io.github.bert0ns.cribrum.model.FrameMeasures
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.Signal
 import java.io.File
 import java.util.Locale
@@ -15,15 +17,30 @@ class BlurDetector : Detector {
     override val version = 1
     override val category = Category.BLURRY
     override val decodeSide = MAX_SIDE
+    override val mediaTypes = setOf(MediaType.IMAGE, MediaType.VIDEO)
+
+    /** Of a video. */
+    override val usesFrames = true
 
     override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
+        if (image.mediaType == MediaType.VIDEO) return video(context.frameMeasures(image))
         val (globalVariance, peakVariance) = measure(context.pixels(image).gray(MAX_SIDE)) ?: return emptyList()
-        val score = (HALF_SCORE_VARIANCE / (HALF_SCORE_VARIANCE + peakVariance)).toFloat()
         val evidence = mapOf(
             "global_variance" to "%.1f".format(Locale.ROOT, globalVariance),
             PEAK_VARIANCE_KEY to "%.1f".format(Locale.ROOT, peakVariance),
         )
-        return listOf(Signal(id, version, Category.BLURRY, score, evidence))
+        return listOf(Signal(id, version, Category.BLURRY, score(peakVariance), evidence))
+    }
+
+    /**
+     * The score of the median frame's sharpest region, so a video is blurry when most of its frames are, and one blurred frame
+     * does not make it so (docs/design.md §5).
+     */
+    private fun video(frames: List<FrameMeasures>): List<Signal> {
+        if (frames.isEmpty()) return emptyList()
+        val typical = median(frames.map { it.peakVariance })
+        val evidence = mapOf("frames" to frames.size.toString(), "median_variance" to "%.1f".format(Locale.ROOT, typical))
+        return listOf(Signal(id, version, Category.BLURRY, score(typical), evidence))
     }
 
     companion object {
@@ -37,6 +54,8 @@ class BlurDetector : Detector {
 
         /** The evidence key of the sharpest region's variance, which BURST reads back as sharpness. */
         const val PEAK_VARIANCE_KEY = "peak_variance"
+
+        private fun score(peakVariance: Double): Float = (HALF_SCORE_VARIANCE / (HALF_SCORE_VARIANCE + peakVariance)).toFloat()
 
         /** The peak variance [measure] gives for [image], 0 when it can't be decoded or is under 3 px on a side. */
         fun peakVariance(image: MediaRef): Double = try {

@@ -1,0 +1,632 @@
+{
+ "clips": {
+  "blurred.mp4": [
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 25.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 25.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 25.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   }
+  ],
+  "bright.mp4": [
+   {
+    "p1": 200,
+    "p5": 230,
+    "p95": 254,
+    "p99": 255,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 200,
+    "p5": 230,
+    "p95": 254,
+    "p99": 255,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 200,
+    "p5": 230,
+    "p95": 254,
+    "p99": 255,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 200,
+    "p5": 230,
+    "p95": 254,
+    "p99": 255,
+    "peak_variance": 900.0
+   }
+  ],
+  "dark.mp4": [
+   {
+    "p1": 0,
+    "p5": 1,
+    "p95": 6,
+    "p99": 9,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 0,
+    "p5": 1,
+    "p95": 6,
+    "p99": 9,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 0,
+    "p5": 1,
+    "p95": 6,
+    "p99": 9,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   }
+  ],
+  "faces.mp4": [
+   {
+    "face_area": 0.1,
+    "face_confidence": 0.8,
+    "faces": 2,
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   },
+   {
+    "face_area": 0.02,
+    "face_confidence": 0.65,
+    "faces": 1,
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   },
+   {
+    "face_area": 0.1,
+    "face_confidence": 0.8,
+    "faces": 2,
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   }
+  ],
+  "four-frames.mp4": [
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 25.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 25.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   }
+  ],
+  "no-frames.mp4": [],
+  "one-blurred-frame.mp4": [
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 25.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   }
+  ],
+  "one-frame.mp4": [
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 25.0
+   }
+  ],
+  "sharp.mp4": [
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   }
+  ],
+  "two-dark-frames.mp4": [
+   {
+    "p1": 0,
+    "p5": 1,
+    "p95": 6,
+    "p99": 9,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 0,
+    "p5": 1,
+    "p95": 6,
+    "p99": 9,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   },
+   {
+    "p1": 5,
+    "p5": 20,
+    "p95": 200,
+    "p99": 240,
+    "peak_variance": 900.0
+   }
+  ]
+ },
+ "signals": {
+  "blurred.mp4": [
+   {
+    "category": "blurry",
+    "detector": "blur",
+    "evidence": {
+     "frames": "5",
+     "median_variance": "25.0"
+    },
+    "score": 0.8,
+    "version": 1
+   },
+   {
+    "category": "bad_exposure",
+    "detector": "exposure",
+    "evidence": {
+     "bright_score": "0.000",
+     "case": "dark",
+     "dark_score": "0.000",
+     "flat_score": "0.000",
+     "frames": "5"
+    },
+    "score": 0.0,
+    "version": 1
+   },
+   {
+    "category": "faces",
+    "detector": "faces",
+    "evidence": {
+     "faces": "0",
+     "frames_with_faces": "0",
+     "largest_face": "0.0000"
+    },
+    "score": 0.0,
+    "version": 1
+   }
+  ],
+  "bright.mp4": [
+   {
+    "category": "blurry",
+    "detector": "blur",
+    "evidence": {
+     "frames": "4",
+     "median_variance": "900.0"
+    },
+    "score": 0.1,
+    "version": 1
+   },
+   {
+    "category": "bad_exposure",
+    "detector": "exposure",
+    "evidence": {
+     "bright_score": "0.922",
+     "case": "bright",
+     "dark_score": "0.000",
+     "flat_score": "0.141",
+     "frames": "4"
+    },
+    "score": 0.921875,
+    "version": 1
+   },
+   {
+    "category": "faces",
+    "detector": "faces",
+    "evidence": {
+     "faces": "0",
+     "frames_with_faces": "0",
+     "largest_face": "0.0000"
+    },
+    "score": 0.0,
+    "version": 1
+   }
+  ],
+  "dark.mp4": [
+   {
+    "category": "blurry",
+    "detector": "blur",
+    "evidence": {
+     "frames": "5",
+     "median_variance": "900.0"
+    },
+    "score": 0.1,
+    "version": 1
+   },
+   {
+    "category": "bad_exposure",
+    "detector": "exposure",
+    "evidence": {
+     "bright_score": "0.000",
+     "case": "dark",
+     "dark_score": "1.000",
+     "flat_score": "0.859",
+     "frames": "5"
+    },
+    "score": 1.0,
+    "version": 1
+   },
+   {
+    "category": "faces",
+    "detector": "faces",
+    "evidence": {
+     "faces": "0",
+     "frames_with_faces": "0",
+     "largest_face": "0.0000"
+    },
+    "score": 0.0,
+    "version": 1
+   }
+  ],
+  "faces.mp4": [
+   {
+    "category": "blurry",
+    "detector": "blur",
+    "evidence": {
+     "frames": "5",
+     "median_variance": "900.0"
+    },
+    "score": 0.1,
+    "version": 1
+   },
+   {
+    "category": "bad_exposure",
+    "detector": "exposure",
+    "evidence": {
+     "bright_score": "0.000",
+     "case": "dark",
+     "dark_score": "0.000",
+     "flat_score": "0.000",
+     "frames": "5"
+    },
+    "score": 0.0,
+    "version": 1
+   },
+   {
+    "category": "faces",
+    "detector": "faces",
+    "evidence": {
+     "faces": "2",
+     "frames_with_faces": "3",
+     "largest_face": "0.1000"
+    },
+    "score": 0.45,
+    "version": 1
+   }
+  ],
+  "four-frames.mp4": [
+   {
+    "category": "blurry",
+    "detector": "blur",
+    "evidence": {
+     "frames": "4",
+     "median_variance": "462.5"
+    },
+    "score": 0.17777777777777778,
+    "version": 1
+   },
+   {
+    "category": "bad_exposure",
+    "detector": "exposure",
+    "evidence": {
+     "bright_score": "0.000",
+     "case": "dark",
+     "dark_score": "0.000",
+     "flat_score": "0.000",
+     "frames": "4"
+    },
+    "score": 0.0,
+    "version": 1
+   },
+   {
+    "category": "faces",
+    "detector": "faces",
+    "evidence": {
+     "faces": "0",
+     "frames_with_faces": "0",
+     "largest_face": "0.0000"
+    },
+    "score": 0.0,
+    "version": 1
+   }
+  ],
+  "no-frames.mp4": [],
+  "one-blurred-frame.mp4": [
+   {
+    "category": "blurry",
+    "detector": "blur",
+    "evidence": {
+     "frames": "5",
+     "median_variance": "900.0"
+    },
+    "score": 0.1,
+    "version": 1
+   },
+   {
+    "category": "bad_exposure",
+    "detector": "exposure",
+    "evidence": {
+     "bright_score": "0.000",
+     "case": "dark",
+     "dark_score": "0.000",
+     "flat_score": "0.000",
+     "frames": "5"
+    },
+    "score": 0.0,
+    "version": 1
+   },
+   {
+    "category": "faces",
+    "detector": "faces",
+    "evidence": {
+     "faces": "0",
+     "frames_with_faces": "0",
+     "largest_face": "0.0000"
+    },
+    "score": 0.0,
+    "version": 1
+   }
+  ],
+  "one-frame.mp4": [
+   {
+    "category": "blurry",
+    "detector": "blur",
+    "evidence": {
+     "frames": "1",
+     "median_variance": "25.0"
+    },
+    "score": 0.8,
+    "version": 1
+   },
+   {
+    "category": "bad_exposure",
+    "detector": "exposure",
+    "evidence": {
+     "bright_score": "0.000",
+     "case": "dark",
+     "dark_score": "0.000",
+     "flat_score": "0.000",
+     "frames": "1"
+    },
+    "score": 0.0,
+    "version": 1
+   },
+   {
+    "category": "faces",
+    "detector": "faces",
+    "evidence": {
+     "faces": "0",
+     "frames_with_faces": "0",
+     "largest_face": "0.0000"
+    },
+    "score": 0.0,
+    "version": 1
+   }
+  ],
+  "sharp.mp4": [
+   {
+    "category": "blurry",
+    "detector": "blur",
+    "evidence": {
+     "frames": "5",
+     "median_variance": "900.0"
+    },
+    "score": 0.1,
+    "version": 1
+   },
+   {
+    "category": "bad_exposure",
+    "detector": "exposure",
+    "evidence": {
+     "bright_score": "0.000",
+     "case": "dark",
+     "dark_score": "0.000",
+     "flat_score": "0.000",
+     "frames": "5"
+    },
+    "score": 0.0,
+    "version": 1
+   },
+   {
+    "category": "faces",
+    "detector": "faces",
+    "evidence": {
+     "faces": "0",
+     "frames_with_faces": "0",
+     "largest_face": "0.0000"
+    },
+    "score": 0.0,
+    "version": 1
+   }
+  ],
+  "two-dark-frames.mp4": [
+   {
+    "category": "blurry",
+    "detector": "blur",
+    "evidence": {
+     "frames": "5",
+     "median_variance": "900.0"
+    },
+    "score": 0.1,
+    "version": 1
+   },
+   {
+    "category": "bad_exposure",
+    "detector": "exposure",
+    "evidence": {
+     "bright_score": "0.000",
+     "case": "dark",
+     "dark_score": "0.000",
+     "flat_score": "0.000",
+     "frames": "5"
+    },
+    "score": 0.0,
+    "version": 1
+   },
+   {
+    "category": "faces",
+    "detector": "faces",
+    "evidence": {
+     "faces": "0",
+     "frames_with_faces": "0",
+     "largest_face": "0.0000"
+    },
+    "score": 0.0,
+    "version": 1
+   }
+  ]
+ }
+}

@@ -9,6 +9,7 @@ import io.github.bert0ns.cribrum.compress.JpegStatus
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
 import io.github.bert0ns.cribrum.metadata.VideoMetadata
 import io.github.bert0ns.cribrum.model.Category
+import io.github.bert0ns.cribrum.model.FrameMeasures
 import io.github.bert0ns.cribrum.model.GROUP_KEY
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
@@ -429,6 +430,32 @@ class ImageIndexTest {
 
         assertEquals(mapOf(VIDEO.path to listOf(500L)), sampledTimes("clip", 1, 2))
         assertEquals(emptyMap<String, List<Long>>(), sampledTimes("clip", 1, 1))
+    }
+
+    @Test
+    fun `the measures of the frames are stored with them and replaced with them`() = test {
+        record(VIDEO)
+        val vector = floatArrayOf(1f)
+        val sharp = FrameMeasures(900.0, 5.0, 20.0, 200.0, 240.0, faces = 2, faceConfidence = 0.8, faceArea = 0.1)
+        val dark = FrameMeasures(0.0, 0.0, 0.0, 2.0, 3.0)
+
+        setFrameEmbeddings(VIDEO.path, "clip", 1, 3, mapOf(700L to vector, 300L to vector), mapOf(700L to dark, 300L to sharp))
+
+        assertEquals(mapOf(VIDEO.path to listOf(sharp, dark)), frameMeasures(3)) // in the order of the times
+        assertEquals(emptyMap<String, List<FrameMeasures>>(), frameMeasures(2))
+        setFrameEmbeddings(VIDEO.path, "clip", 1, 4, mapOf(500L to vector), mapOf(500L to dark))
+        assertEquals(emptyMap<String, List<FrameMeasures>>(), frameMeasures(3))
+        assertEquals(mapOf(VIDEO.path to listOf(dark)), frameMeasures(4))
+    }
+
+    @Test
+    fun `a changed video drops the measures of its frames`() = test {
+        record(VIDEO)
+        setFrameEmbeddings(VIDEO.path, "clip", 1, 1, mapOf(300L to floatArrayOf(1f)), mapOf(300L to FrameMeasures(1.0, 1.0, 2.0, 3.0, 4.0)))
+
+        record(VIDEO.copy(size = 901, mtimeNs = 2))
+
+        assertEquals(emptyMap<String, List<FrameMeasures>>(), frameMeasures(1))
     }
 
     @Test
@@ -1043,6 +1070,7 @@ class ImageIndexTest {
         "fileBytes" to { fileBytes() },
         "embeddings" to { embeddings("clip", 1) },
         "frameEmbeddings" to { frameEmbeddings("clip", 1, 1) },
+        "frameMeasures" to { frameMeasures(1) },
         "sampledTimes" to { sampledTimes("clip", 1, 1) },
         "readVideos" to { readVideos(1) },
         "analyzedPaths" to { analyzedPaths("blur", 1) },

@@ -14,6 +14,7 @@ import io.github.bert0ns.cribrum.compress.Marker
 import io.github.bert0ns.cribrum.folders.isExcluded
 import io.github.bert0ns.cribrum.metadata.ImageMetadata
 import io.github.bert0ns.cribrum.metadata.VideoMetadata
+import io.github.bert0ns.cribrum.model.FrameMeasures
 import io.github.bert0ns.cribrum.model.IndexedMedia
 import io.github.bert0ns.cribrum.model.Kind
 import io.github.bert0ns.cribrum.model.MediaRef
@@ -91,6 +92,7 @@ class ImageIndex(private val db: IndexDatabase) :
                 dao.deleteAnalyses(image.path)
                 dao.deleteEmbeddings(image.path)
                 dao.deleteFramesOf(image.path)
+                dao.deleteFrameMeasures(image.path)
                 dao.deleteJpeg(image.path)
             }
         }
@@ -249,12 +251,23 @@ class ImageIndex(private val db: IndexDatabase) :
     /** Every stored embedding of this model version, loaded at once for group detectors. */
     suspend fun embeddings(model: String, modelVersion: Int): Map<String, FloatArray> = dao.embeddings(model, modelVersion).associate { row -> row.path to floats(row.vector) }
 
-    /** Replaces the video's frames of this model, by their time in milliseconds, taken at [framesVersion]. */
-    suspend fun setFrameEmbeddings(path: String, model: String, modelVersion: Int, framesVersion: Int, vectors: Map<Long, FloatArray>) = writeTransaction {
+    /**
+     * Replaces the video's frames of this model, by their time in milliseconds, taken at [framesVersion], and the [measures] of the
+     * same frames in the same transaction.
+     */
+    suspend fun setFrameEmbeddings(path: String, model: String, modelVersion: Int, framesVersion: Int, vectors: Map<Long, FloatArray>, measures: Map<Long, FrameMeasures> = emptyMap()) = writeTransaction {
         requireRecorded(path)
         dao.deleteFrameEmbeddings(path, model)
         dao.putFrameEmbeddings(vectors.map { (timeMs, vector) -> FrameEmbeddingRow(path, model, modelVersion, framesVersion, timeMs, bytes(vector)) })
+        dao.deleteFrameMeasures(path)
+        dao.putFrameMeasures(
+            measures.map { (timeMs, m) -> FrameMeasuresRow(path, framesVersion, timeMs, m.peakVariance, m.p1, m.p5, m.p95, m.p99, m.faces, m.faceConfidence, m.faceArea) },
+        )
     }
+
+    /** Every video's frame measures of this frames version, in the order of their times. */
+    suspend fun frameMeasures(framesVersion: Int): Map<String, List<FrameMeasures>> = dao.frameMeasures(framesVersion)
+        .groupBy({ it.path }, { FrameMeasures(it.peakVariance, it.p1, it.p5, it.p95, it.p99, it.faces, it.faceConfidence, it.faceArea) })
 
     /** Every video's frames of these versions, by time, in the order of their times. */
     suspend fun frameEmbeddings(model: String, modelVersion: Int, framesVersion: Int): Map<String, Map<Long, FloatArray>> = dao.frameEmbeddings(model, modelVersion, framesVersion)
@@ -560,7 +573,7 @@ class ImageIndex(private val db: IndexDatabase) :
     }
 
     companion object {
-        fun open(context: Context, name: String = "index.sqlite"): ImageIndex = ImageIndex(Room.databaseBuilder(context, IndexDatabase::class.java, name).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build())
+        fun open(context: Context, name: String = "index.sqlite"): ImageIndex = ImageIndex(Room.databaseBuilder(context, IndexDatabase::class.java, name).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10).build())
     }
 }
 

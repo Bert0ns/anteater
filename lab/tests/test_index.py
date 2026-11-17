@@ -8,7 +8,15 @@ import pytest
 from cribrum_lab.detectors import GROUP_KEY, ROLE_KEY, Role
 from cribrum_lab.index import ImageIndex, IndexVersionError
 from cribrum_lab.metadata import ImageMetadata, VideoMetadata
-from cribrum_lab.model import Category, MediaRef, MediaType, Protection, ReviewState, Signal
+from cribrum_lab.model import (
+    Category,
+    FrameMeasures,
+    MediaRef,
+    MediaType,
+    Protection,
+    ReviewState,
+    Signal,
+)
 from cribrum_lab.ranker import Ranker
 
 PHOTO = MediaRef(Path("/photos/a.jpg"), 100, 1)
@@ -222,6 +230,45 @@ def test_a_changed_video_drops_its_frames(index):
     index.record(MediaRef(VIDEO.path, 901, 2, MediaType.VIDEO))
 
     assert index.frame_embeddings("clip", 1, 1) == {}
+
+
+def test_the_measures_of_the_frames_are_stored_with_them_and_replaced_with_them(index):
+    index.record(VIDEO)
+    vector = np.ones(2, np.float32)
+    sharp = FrameMeasures(900.0, 5, 20, 200, 240, faces=2, face_confidence=0.8, face_area=0.1)
+    dark = FrameMeasures(0.0, 0, 0, 2, 3)
+
+    both = {700: vector, 300: vector}
+    index.set_frame_embeddings(VIDEO.path, "clip", 1, 3, both, {700: dark, 300: sharp})
+
+    assert index.frame_measures(3) == {VIDEO.path: [sharp, dark]}  # in the order of the times
+    assert index.frame_measures(2) == {}
+    index.set_frame_embeddings(VIDEO.path, "clip", 1, 4, {500: vector}, {500: dark})
+    assert index.frame_measures(3) == {}
+    assert index.frame_measures(4) == {VIDEO.path: [dark]}
+
+
+def test_new_frames_forget_what_the_named_detectors_stored_in_the_same_transaction(index):
+    index.record(VIDEO)
+    index.set_signals(VIDEO.path, "blur", 1, [BLUR])
+    index.set_signals(VIDEO.path, "forwarded", 1, [])
+
+    index.set_frame_embeddings(
+        VIDEO.path, "clip", 1, 1, {300: np.ones(2, np.float32)}, forget=["blur"]
+    )
+
+    assert not index.is_analyzed(VIDEO.path, "blur", 1)
+    assert index.is_analyzed(VIDEO.path, "forwarded", 1)
+
+
+def test_a_changed_video_drops_the_measures_of_its_frames(index):
+    index.record(VIDEO)
+    measures = {300: FrameMeasures(1.0, 1, 2, 3, 4)}
+    index.set_frame_embeddings(VIDEO.path, "clip", 1, 1, {300: np.ones(2, np.float32)}, measures)
+
+    index.record(MediaRef(VIDEO.path, 901, 2, MediaType.VIDEO))
+
+    assert index.frame_measures(1) == {}
 
 
 def test_deleting_the_embeddings_leaves_the_rest_of_the_index_as_it_was(index):

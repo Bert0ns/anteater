@@ -8,6 +8,7 @@ import io.github.bert0ns.cribrum.metadata.VideoMetadata
 import io.github.bert0ns.cribrum.metadata.readMetadata
 import io.github.bert0ns.cribrum.metadata.readVideoMetadata
 import io.github.bert0ns.cribrum.model.Category
+import io.github.bert0ns.cribrum.model.FrameMeasures
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.Signal
@@ -39,6 +40,8 @@ data class AnalysisContext(
     val videoMetadata: suspend (MediaRef) -> VideoMetadata = { readVideoMetadata(File(it.path)) },
     /** The L2-normalized embeddings of the video's sampled frames, in the order of their times: none when it has no frames stored. */
     val frames: suspend (MediaRef) -> List<FloatArray> = { emptyList() },
+    /** What [io.github.bert0ns.cribrum.frames.measureFrame] kept of the video's sampled frames, in the order of their times: none when it has no frames stored. */
+    val frameMeasures: suspend (MediaRef) -> List<FrameMeasures> = { emptyList() },
     /** Known screen resolutions as (short side, long side). */
     val screenSizes: Set<Pair<Int, Int>> = SCREEN_SIZES,
 )
@@ -72,6 +75,12 @@ interface Detector {
      */
     val decodeSide: Int? get() = null
 
+    /**
+     * True when [analyze] reads a video's frames. The pipeline runs such a detector after the frames step and only on a video with
+     * measures stored, and a new sampling of the frames makes its stored result stale.
+     */
+    val usesFrames: Boolean get() = false
+
     /** The media types the pipeline gives it, images only unless it says more. Keep it equal to the lab's `media_types`. */
     val mediaTypes: Set<MediaType> get() = IMAGES_ONLY
 
@@ -100,4 +109,11 @@ interface GroupDetector {
     val mediaTypes: Set<MediaType> get() = IMAGES_ONLY
 
     suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>>
+}
+
+/** The median, the mean of the middle two for an even count, as Python's `statistics.median` takes it. */
+internal fun median(values: List<Double>): Double {
+    val sorted = values.sorted()
+    val middle = sorted.size / 2
+    return if (sorted.size % 2 == 1) sorted[middle] else (sorted[middle - 1] + sorted[middle]) / 2
 }

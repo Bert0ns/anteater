@@ -9,16 +9,20 @@ import android.media.MediaMetadataRetriever
 import io.github.bert0ns.cribrum.imaging.Argb
 import io.github.bert0ns.cribrum.metadata.HDR_TRANSFERS
 import io.github.bert0ns.cribrum.metadata.UnreadableVideo
+import io.github.bert0ns.cribrum.model.FrameMeasures
 import java.io.File
 import java.io.IOException
 
 const val FRAMES = 5
 
-/** Bump it when the frames a video gives change, such as their times or their decoding: the frames stored at another version are taken again. */
-const val FRAMES_VERSION = 2
+/** Bump it when the frames a video gives change, such as their times or their decoding, or what is kept of each frame (its measures): the frames stored at another version are taken again. */
+const val FRAMES_VERSION = 3
 
 /** Kept off each end, where a clip fades in, starts black or catches the hand on the button. */
 const val MARGIN_MS = 500
+
+/** A sampled frame as the frames step takes it: what the model reads, and what the detectors keep of it, since the frame itself is dropped. */
+class SampledFrame(val input: FloatArray, val measures: FrameMeasures)
 
 /**
  * The times to sample, in milliseconds: the middle of each of [FRAMES] equal slices of the video, [MARGIN_MS] off each

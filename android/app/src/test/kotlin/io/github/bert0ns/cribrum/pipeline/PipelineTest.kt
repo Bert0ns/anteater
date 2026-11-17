@@ -8,6 +8,8 @@ import io.github.bert0ns.cribrum.detectors.BlurDetector
 import io.github.bert0ns.cribrum.detectors.BurstDetector
 import io.github.bert0ns.cribrum.detectors.Detector
 import io.github.bert0ns.cribrum.detectors.ExactDuplicateDetector
+import io.github.bert0ns.cribrum.detectors.ExposureDetector
+import io.github.bert0ns.cribrum.detectors.FaceDetector
 import io.github.bert0ns.cribrum.detectors.ForwardedDetector
 import io.github.bert0ns.cribrum.detectors.GroupDetector
 import io.github.bert0ns.cribrum.detectors.MissingEmbedding
@@ -15,6 +17,7 @@ import io.github.bert0ns.cribrum.detectors.NearDuplicateDetector
 import io.github.bert0ns.cribrum.detectors.TakesDetector
 import io.github.bert0ns.cribrum.folders.isStickerFolder
 import io.github.bert0ns.cribrum.frames.FRAMES_VERSION
+import io.github.bert0ns.cribrum.frames.SampledFrame
 import io.github.bert0ns.cribrum.hashing.PHASH_DECODE_SIDE
 import io.github.bert0ns.cribrum.hashing.contentHash
 import io.github.bert0ns.cribrum.hashing.perceptualHash
@@ -29,6 +32,7 @@ import io.github.bert0ns.cribrum.metadata.VideoMetadata
 import io.github.bert0ns.cribrum.metadata.readMetadata
 import io.github.bert0ns.cribrum.mobileclip.preprocess
 import io.github.bert0ns.cribrum.model.Category
+import io.github.bert0ns.cribrum.model.FrameMeasures
 import io.github.bert0ns.cribrum.model.GROUP_KEY
 import io.github.bert0ns.cribrum.model.Kind
 import io.github.bert0ns.cribrum.model.MediaRef
@@ -310,9 +314,9 @@ class PipelineTest {
     }
 
     /** Frames as the model takes them, a flat gray each, since Robolectric decodes no video. */
-    private fun grayFrames(file: File, times: List<Long>): Map<Long, FloatArray> = times.associateWith { FloatArray(3 * 256 * 256) { 0.5f } }
+    private fun grayFrames(file: File, times: List<Long>): Map<Long, SampledFrame> = times.associateWith { SampledFrame(FloatArray(3 * 256 * 256) { 0.5f }, GRAY) }
 
-    private fun videoScan(frameReader: (File, List<Long>) -> Map<Long, FloatArray> = ::grayFrames, embedder: Embedder? = MeanColorEmbedder()) = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), embedder = embedder, videoMetadataReader = ::readVideo, frameReader = frameReader)
+    private fun videoScan(frameReader: (File, List<Long>) -> Map<Long, SampledFrame> = ::grayFrames, embedder: Embedder? = MeanColorEmbedder()) = Pipeline(index, detectors = emptyList(), groupDetectors = emptyList(), embedder = embedder, videoMetadataReader = ::readVideo, frameReader = frameReader)
 
     private fun frameTimesStored(embedder: Embedder = MeanColorEmbedder(), framesVersion: Int = FRAMES_VERSION) = runBlocking { index.sampledTimes(embedder.id, embedder.version, framesVersion) }
 
@@ -511,6 +515,59 @@ class PipelineTest {
         // A video group detector may read the frames (#396).
         assertTrue(steps.indexOf(VIDEO_METADATA_STEP) < steps.indexOf(VIDEO_FRAMES_STEP))
         assertTrue(steps.indexOf(VIDEO_FRAMES_STEP) < steps.indexOf(VIDEO_GROUPS_STEP))
+    }
+
+    /** The three detectors that read a video's frames, as the app runs them, with the pipeline's own frame reader replaced. */
+    private fun frameScan(embedder: Embedder? = MeanColorEmbedder(), detectors: List<Detector> = listOf(BlurDetector(), ExposureDetector(), FaceDetector())) = Pipeline(index, detectors = detectors, groupDetectors = emptyList(), embedder = embedder, videoMetadataReader = ::readVideo, frameReader = ::grayFrames)
+
+    @Test
+    fun `a video run measures the frames it embeds and runs the detectors that read them after the frames`() {
+        val clip = videos().getValue("clip")
+        val seen = mutableListOf<Boolean>()
+        val probe = object : Detector {
+            override val id = "probe"
+            override val version = 1
+            override val mediaTypes = setOf(MediaType.VIDEO)
+            override val usesFrames = true
+
+            override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
+                seen += context.frameMeasures(image).size == 5 && index.frameMeasures(FRAMES_VERSION).containsKey(image.path)
+                return emptyList()
+            }
+        }
+
+        val stats = runBlocking { frameScan(detectors = listOf(BlurDetector(), ExposureDetector(), FaceDetector(), probe)).run(source, images = false, videos = true) }
+
+        assertEquals(5, runBlocking { index.frameMeasures(FRAMES_VERSION) }.getValue(clip.path).size)
+        assertEquals(setOf(Category.BLURRY, Category.BAD_EXPOSURE, Protection.FACES), kinds("DCIM/Camera/clip.mp4"))
+        assertEquals(emptySet<Kind>(), kinds("DCIM/Camera/broken.mp4")) // unreadable: no measures, no result
+        assertEquals(listOf(true), seen) // the frames were stored when it ran, and it ran once
+        assertEquals(emptyList<Failure>(), stats.failures)
+    }
+
+    @Test
+    fun `a video run without the model has no frame to analyze and stores nothing`() {
+        val clip = videos().getValue("clip")
+
+        val stats = runBlocking { frameScan(embedder = null).run(source, images = false, videos = true) }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(emptyMap<String, List<FrameMeasures>>(), runBlocking { index.frameMeasures(FRAMES_VERSION) })
+        assertEquals(emptySet<Kind>(), kinds("DCIM/Camera/clip.mp4"))
+        assertEquals(emptyList<String>(), runBlocking { index.analyzedPaths("blur", BlurDetector().version) }.filter { it == clip.path })
+    }
+
+    @Test
+    fun `frames sampled again make the detectors that read them run again`() {
+        val clip = videos().getValue("clip")
+        runBlocking { frameScan().run(source, images = false, videos = true) }
+        assertEquals(0, runBlocking { frameScan().run(source, images = false, videos = true) }.detectorRuns)
+        // Frames of another version, as a new FRAMES_VERSION leaves them: the step takes the video's frames again.
+        runBlocking { index.setFrameEmbeddings(clip.path, "mean_color", 1, FRAMES_VERSION - 1, mapOf(300L to FloatArray(512)), mapOf(300L to GRAY)) }
+
+        val stats = runBlocking { frameScan().run(source, images = false, videos = true) }
+
+        assertEquals(5 + 3, stats.detectorRuns) // the five frames, and the three detectors again
     }
 
     @Test
@@ -2491,3 +2548,6 @@ class PipelineTest {
         assertEquals(0, runBlocking { index.embeddings(embedder.id, embedder.version) }.size)
     }
 }
+
+/** What a flat gray frame measures: no detail, a flat luminance and no face. */
+private val GRAY = FrameMeasures(0.0, 128.0, 128.0, 128.0, 128.0)

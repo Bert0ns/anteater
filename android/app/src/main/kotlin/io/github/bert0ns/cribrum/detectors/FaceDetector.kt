@@ -11,7 +11,9 @@ import io.github.bert0ns.cribrum.imaging.Pixels
 import io.github.bert0ns.cribrum.imaging.resampleChannels
 import io.github.bert0ns.cribrum.imaging.turnedSize
 import io.github.bert0ns.cribrum.model.Category
+import io.github.bert0ns.cribrum.model.FrameMeasures
 import io.github.bert0ns.cribrum.model.MediaRef
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.Protection
 import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.runtime.ModelRuntime
@@ -36,10 +38,15 @@ class FaceDetector(private val injected: ModelRuntime? = null) : Detector {
     override val category: Category? = null
 
     override val decodeSide = YuNet.INPUT_SIDE
+    override val mediaTypes = setOf(MediaType.IMAGE, MediaType.VIDEO)
+
+    /** Of a video. */
+    override val usesFrames = true
 
     private val runtime by lazy { injected ?: defaultRuntime }
 
     override suspend fun analyze(image: MediaRef, context: AnalysisContext): List<Signal> {
+        if (image.mediaType == MediaType.VIDEO) return video(context.frameMeasures(image))
         val boxed = YuNet.letterbox(context.pixels(image))
         val faces = YuNet.detect(runtime, boxed.pixels)
         val evidence = mutableMapOf("faces" to faces.size.toString())
@@ -49,6 +56,21 @@ class FaceDetector(private val injected: ModelRuntime? = null) : Detector {
             val area = faces.maxOf { it.width * it.height }
             evidence["largest_face"] = "%.4f".format(Locale.ROOT, area / (boxed.width.toDouble() * boxed.height)) // fraction of the image
         }
+        return listOf(Signal(id, version, Protection.FACES, score, evidence))
+    }
+
+    /**
+     * The mean over the frames of each one's most confident face, 0 for a frame with none: a person in some of the frames protects
+     * the video, in all of them protects it more (docs/design.md §5).
+     */
+    private fun video(frames: List<FrameMeasures>): List<Signal> {
+        if (frames.isEmpty()) return emptyList()
+        val score = (frames.sumOf { it.faceConfidence } / frames.size).toFloat()
+        val evidence = mapOf(
+            "faces" to frames.maxOf { it.faces }.toString(),
+            "frames_with_faces" to frames.count { it.faces > 0 }.toString(),
+            "largest_face" to "%.4f".format(Locale.ROOT, frames.maxOf { it.faceArea }),
+        )
         return listOf(Signal(id, version, Protection.FACES, score, evidence))
     }
 }
@@ -130,7 +152,7 @@ internal object YuNet {
 }
 
 /** Lives for the process and is shared by every pipeline worker. One thread, as the lab's: they all run the detector at once. */
-private val defaultRuntime: ModelRuntime by lazy {
+internal val defaultRuntime: ModelRuntime by lazy {
     val stream = object {}.javaClass.getResourceAsStream(MODEL) ?: error("Resource $MODEL not found on classpath")
     OnnxRuntime(stream.use { it.readBytes() }, threads = 1, name = "yunet")
 }

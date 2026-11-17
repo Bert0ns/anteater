@@ -7,6 +7,7 @@ import io.github.bert0ns.cribrum.compress.CompressibleImage
 import io.github.bert0ns.cribrum.compress.JPEG_RULES_VERSION
 import io.github.bert0ns.cribrum.compress.JpegInfo
 import io.github.bert0ns.cribrum.compress.JpegStatus
+import io.github.bert0ns.cribrum.model.FrameMeasures
 import io.github.bert0ns.cribrum.model.MediaRef
 import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.model.ReviewState
@@ -180,6 +181,18 @@ class IndexMigrationTest {
         ImageIndex.open(context, NAME).use {
             assertEquals(emptyMap<String, List<Long>>(), runBlocking { it.sampledTimes("mobileclip2_s0", 1, 1) })
             assertEquals(listOf("/videos/clip.mp4"), runBlocking { it.readVideos(1) }.map { video -> video.ref.path })
+        }
+    }
+
+    @Test
+    fun `version 9 opens with no frame measured yet, so a video scan samples every video again`() {
+        createDatabase(context, 9).use {
+            it.execSQL("INSERT INTO images (path, size, mtime_ns, media_type, width, height, duration_ms) VALUES ('/videos/clip.mp4', 900, 2, 'video', 64, 48, 1000)")
+        }
+
+        ImageIndex.open(context, NAME).use {
+            assertEquals(emptyMap<String, List<FrameMeasures>>(), runBlocking { it.frameMeasures(3) })
+            assertEquals(listOf("/videos/clip.mp4"), runBlocking { it.readVideos(3) }.map { video -> video.ref.path })
         }
     }
 }

@@ -12,6 +12,7 @@ import io.github.bert0ns.cribrum.pipeline.Coverage
 import io.github.bert0ns.cribrum.pipeline.ScanReport
 import io.github.bert0ns.cribrum.pipeline.coverage
 import io.github.bert0ns.cribrum.ranker.THRESHOLDS
+import io.github.bert0ns.cribrum.ranker.VIDEO_THRESHOLDS
 import io.github.bert0ns.cribrum.review.CategorySummary
 import io.github.bert0ns.cribrum.review.Decision
 import io.github.bert0ns.cribrum.review.Overview
@@ -138,6 +139,10 @@ data class ReviewState(
     val thresholds: Map<Category, Float> = THRESHOLDS,
     val thresholdCounts: Map<Category, Int> = emptyMap(),
     val defaultCounts: Map<Category, Int> = emptyMap(),
+    /** The same for the videos, in the "Videos" section of the thresholds screen: only the categories whose video score is graded. */
+    val videoThresholds: Map<Category, Float> = VIDEO_THRESHOLDS,
+    val videoThresholdCounts: Map<Category, Int> = emptyMap(),
+    val videoDefaultCounts: Map<Category, Int> = emptyMap(),
     /** The folder the user just excluded, until they undo it or move on. */
     val lastExclusion: String? = null,
     /** Images a restore or an undo left in the trash because a file has their path, until the snackbar goes. */
@@ -157,6 +162,7 @@ class ReviewViewModel @JvmOverloads constructor(
             it.index,
             it.trash,
             thresholds = { it.thresholds.values },
+            videoThresholds = { it.thresholds.videoValues },
             favorites = { favoritePaths(it.contentResolver) },
             // The locale the screen formats its date labels with (LocalConfiguration), so a week and its label agree.
             firstDayOfWeek = { WeekFields.of(it.resources.configuration.locales[0]).firstDayOfWeek },
@@ -381,18 +387,24 @@ class ReviewViewModel @JvmOverloads constructor(
 
     private fun showThresholds(onlyIfOpen: Boolean) = load {
         if (onlyIfOpen && it.screen != Screen.Thresholds) return@load it
-        it.copy(screen = Screen.Thresholds, defaultCounts = review.counts(THRESHOLDS)).withThresholds(app.thresholds.values)
+        it.copy(screen = Screen.Thresholds, defaultCounts = review.counts(THRESHOLDS), videoDefaultCounts = review.counts(THRESHOLDS, VIDEO_THRESHOLDS, MediaType.VIDEO)).withThresholds()
     }
 
     /** Applies at once: the signals are in the index, so the lists only need ranking again. */
     fun setThreshold(category: Category, value: Float) = load {
         app.thresholds[category] = value
-        it.withThresholds(app.thresholds.values)
+        it.withThresholds()
+    }
+
+    /** The same for a video's threshold, which only the categories with a graded video score have. */
+    fun setVideoThreshold(category: Category, value: Float) = load {
+        app.thresholds.setVideo(category, value)
+        it.withThresholds()
     }
 
     fun resetThresholds() = load {
         app.thresholds.reset()
-        it.withThresholds(app.thresholds.values)
+        it.withThresholds()
     }
 
     /** "Largest videos" read again, with whether the index holds any video at all and how many wait for "Scan videos". The selection keeps the videos still listed. */
@@ -406,7 +418,16 @@ class ReviewViewModel @JvmOverloads constructor(
         return copy(categories = photos.categories, freeableBytes = photos.freeableBytes, videoCategories = overviews.getValue(MediaType.VIDEO).categories)
     }
 
-    private suspend fun ReviewState.withThresholds(thresholds: Map<Category, Float>) = copy(thresholds = thresholds, thresholdCounts = review.counts(thresholds))
+    private suspend fun ReviewState.withThresholds(): ReviewState {
+        val thresholds = app.thresholds.values
+        val videoThresholds = app.thresholds.videoValues
+        return copy(
+            thresholds = thresholds,
+            thresholdCounts = review.counts(thresholds, videoThresholds),
+            videoThresholds = videoThresholds,
+            videoThresholdCounts = review.counts(thresholds, videoThresholds, MediaType.VIDEO),
+        )
+    }
 
     /** Opens the destination of the navigation bar, keeping what the user left in it. */
     fun selectDestination(destination: Destination) {

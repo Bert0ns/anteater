@@ -11,7 +11,10 @@ from PIL import Image
 from cribrum_lab import pipeline
 from cribrum_lab.detectors import blur
 from cribrum_lab.detectors.base import accepted_media_types
+from cribrum_lab.detectors.blur import BlurDetector
 from cribrum_lab.detectors.burst import BurstDetector
+from cribrum_lab.detectors.exposure import ExposureDetector
+from cribrum_lab.detectors.faces import FaceDetector
 from cribrum_lab.frames import FRAMES_VERSION
 from cribrum_lab.imaging import load_grayscale
 from cribrum_lab.index import ImageIndex
@@ -1197,6 +1200,54 @@ def test_frames_stored_at_another_frame_version_are_sampled_again(videos, index,
     assert list(index.sampled_times(embedder.id, embedder.version, FRAMES_VERSION + 1)) == [
         videos / "clip.mp4"
     ]
+
+
+FRAME_DETECTORS = [BlurDetector(), ExposureDetector(), FaceDetector()]
+
+
+def signals_of(index, path):
+    return {s.detector_id: s for s in index.signals(path)}
+
+
+def test_a_video_run_measures_the_frames_it_embeds_and_runs_the_detectors_that_read_them(
+    videos, index
+):
+    pipeline.run(
+        videos.parent.parent, index, detectors=FRAME_DETECTORS, group_detectors=[],
+        embedder=MeanColorEmbedder(), images=False, videos=True,
+    )  # fmt: skip
+
+    assert len(index.frame_measures(FRAMES_VERSION)[videos / "clip.mp4"]) == 5
+    assert set(signals_of(index, videos / "clip.mp4")) == {"blur", "exposure", "faces"}
+    assert index.signals(videos / "broken.mp4") == []  # unreadable: no measures, no result
+
+
+def test_a_video_run_without_an_embedder_has_no_frame_to_analyze_and_stores_nothing(videos, index):
+    stats = pipeline.run(
+        videos.parent.parent, index, detectors=FRAME_DETECTORS, group_detectors=[],
+        images=False, videos=True,
+    )  # fmt: skip
+
+    assert stats.failures == []
+    assert index.signals(videos / "clip.mp4") == []
+    assert not index.is_analyzed(videos / "clip.mp4", "blur", BlurDetector.version)
+
+
+def test_frames_sampled_again_make_the_detectors_that_read_them_run_again(
+    videos, index, monkeypatch
+):
+    def scan():
+        return pipeline.run(
+            videos.parent.parent, index, detectors=FRAME_DETECTORS, group_detectors=[],
+            embedder=MeanColorEmbedder(), images=False, videos=True,
+        )  # fmt: skip
+
+    scan()
+    assert scan().detector_runs == 0
+    monkeypatch.setattr(pipeline, "FRAMES_VERSION", FRAMES_VERSION + 1)
+    stats = scan()
+
+    assert stats.detector_runs == 5 + 3  # the five frames, and the three detectors again
 
 
 def test_a_video_whose_frames_fail_is_a_failure_and_is_tried_again(videos, index, monkeypatch):

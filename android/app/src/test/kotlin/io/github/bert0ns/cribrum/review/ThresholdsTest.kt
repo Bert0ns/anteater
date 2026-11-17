@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import io.github.bert0ns.cribrum.model.Category
 import io.github.bert0ns.cribrum.ranker.THRESHOLDS
+import io.github.bert0ns.cribrum.ranker.VIDEO_THRESHOLDS
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -91,5 +92,35 @@ class ThresholdsTest {
         preferences.edit().putFloat("threshold_BLURRY", 7f).putFloat("threshold_DOCUMENT", 0f).commit()
 
         assertEquals(THRESHOLDS, Thresholds(preferences).values)
+    }
+
+    @Test
+    fun `a video's threshold is stored apart from the photos' and is not touched by it`() {
+        Thresholds(preferences).setVideo(Category.BLURRY, 0.6f)
+
+        assertEquals(VIDEO_THRESHOLDS + (Category.BLURRY to 0.6f), Thresholds(preferences).videoValues)
+        assertEquals(THRESHOLDS, Thresholds(preferences).values)
+        Thresholds(preferences)[Category.BLURRY] = 0.9f
+        assertEquals(0.6f, Thresholds(preferences).videoValues.getValue(Category.BLURRY))
+    }
+
+    @Test
+    fun `setting a video's default stores nothing, and reset restores both`() {
+        Thresholds(preferences).setVideo(Category.BAD_EXPOSURE, 0.9f)
+        Thresholds(preferences).setVideo(Category.BAD_EXPOSURE, VIDEO_THRESHOLDS.getValue(Category.BAD_EXPOSURE))
+        assertEquals(emptyMap<String, Any>(), preferences.all)
+
+        Thresholds(preferences).setVideo(Category.BLURRY, 0.6f)
+        Thresholds(preferences)[Category.BLURRY] = 0.9f
+        Thresholds(preferences).reset()
+
+        assertEquals(VIDEO_THRESHOLDS, Thresholds(preferences).videoValues)
+        assertEquals(THRESHOLDS, Thresholds(preferences).values)
+        assertEquals(emptyMap<String, Any>(), preferences.all)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `a category with no graded video score has no video threshold to set`() {
+        Thresholds(preferences).setVideo(Category.FORWARDED, 0.5f)
     }
 }

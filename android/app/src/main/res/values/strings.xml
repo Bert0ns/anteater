@@ -323,11 +323,26 @@
         <item quantity="one">%d image more than at the default</item>
         <item quantity="other">%d images more than at the default</item>
     </plurals>
+    <!-- The same under "Videos" on the thresholds screen. -->
+    <plurals name="candidates_videos">
+        <item quantity="one">%d video to review</item>
+        <item quantity="other">%d videos to review</item>
+    </plurals>
+    <plurals name="thresholds_more_videos">
+        <item quantity="one">%d video more than at the default</item>
+        <item quantity="other">%d videos more than at the default</item>
+    </plurals>
+    <plurals name="thresholds_fewer_videos">
+        <item quantity="one">%d video fewer than at the default</item>
+        <item quantity="other">%d videos fewer than at the default</item>
+    </plurals>
     <plurals name="thresholds_fewer">
         <item quantity="one">%d image fewer than at the default</item>
         <item quantity="other">%d images fewer than at the default</item>
     </plurals>
     <string name="thresholds_reset">Reset to defaults</string>
+    <!-- What a screen reader says of a slider under "Videos", so it differs from the one of the same category under "Photos". -->
+    <string name="thresholds_slider_videos">%1$s, videos</string>
     <string name="settings_excluded_folders">Excluded folders</string>
     <string name="settings_no_excluded_folders">No folders are excluded. Exclude one from the storage map, or from an image at full size.</string>
     <string name="settings_storage_app">App</string>

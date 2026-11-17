@@ -7,13 +7,14 @@ gives the same boxes.
 """
 
 import functools
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageOps
 
 from cribrum_lab.detectors.base import AnalysisContext
-from cribrum_lab.model import MediaRef, Protection, Signal
+from cribrum_lab.model import FrameMeasures, MediaRef, MediaType, Protection, Signal
 from cribrum_lab.runtime import ModelRuntime, OnnxRuntime
 
 INPUT_SIDE = 640
@@ -33,11 +34,16 @@ class FaceDetector:
     """It emits a protection signal, which is no category to review."""
     decode_side = INPUT_SIDE
     """Pillow decodes its RGB draft on its own, so in the lab it shares no decode."""
+    media_types = frozenset({MediaType.IMAGE, MediaType.VIDEO})
+    uses_frames = True
+    """Of a video."""
 
     def __init__(self, runtime: ModelRuntime | None = None) -> None:
         self._runtime = runtime
 
     def analyze(self, image: MediaRef, context: AnalysisContext) -> list[Signal]:
+        if image.media_type is MediaType.VIDEO:
+            return self._video(context.frame_measures(image))
         pixels, (width, height) = letterbox(image.path)
         faces = detect(self._runtime or _default_runtime(), pixels)
         evidence = {"faces": str(len(faces))}
@@ -46,6 +52,20 @@ class FaceDetector:
             score = max(confidence for confidence, _ in faces)
             area = max(w * h for _, (_, _, w, h) in faces)
             evidence["largest_face"] = f"{area / (width * height):.4f}"  # fraction of the image
+        return [Signal(self.id, self.version, Protection.FACES, score, evidence)]
+
+    def _video(self, frames: Sequence[FrameMeasures]) -> list[Signal]:
+        """The mean over the frames of each one's most confident face, 0 for a frame with none: a
+        person in some of the frames protects the video, in all of them protects it more
+        (docs/design.md, section 5)."""
+        if not frames:
+            return []
+        score = sum(frame.face_confidence for frame in frames) / len(frames)
+        evidence = {
+            "faces": str(max(frame.faces for frame in frames)),
+            "frames_with_faces": str(sum(frame.faces > 0 for frame in frames)),
+            "largest_face": f"{max(frame.face_area for frame in frames):.4f}",
+        }
         return [Signal(self.id, self.version, Protection.FACES, score, evidence)]
 
 
@@ -57,12 +77,16 @@ def letterbox(path: Path) -> tuple[np.ndarray, tuple[int, int]]:
     """
     with Image.open(path) as image:
         image.draft("RGB", (INPUT_SIDE, INPUT_SIDE))
-        image = ImageOps.exif_transpose(image).convert("RGB")
-        scale = INPUT_SIDE / max(image.size)
-        size = (max(1, round(image.width * scale)), max(1, round(image.height * scale)))
-        image = image.resize(size, Image.Resampling.BILINEAR)
-        canvas = np.zeros((INPUT_SIDE, INPUT_SIDE, 3), dtype=np.float32)
-        canvas[: size[1], : size[0]] = np.asarray(image, dtype=np.float32)
+        return letterboxed(ImageOps.exif_transpose(image).convert("RGB"))
+
+
+def letterboxed(image: Image.Image) -> tuple[np.ndarray, tuple[int, int]]:
+    """`letterbox` of an upright RGB image already decoded, such as a video's frame."""
+    scale = INPUT_SIDE / max(image.size)
+    size = (max(1, round(image.width * scale)), max(1, round(image.height * scale)))
+    image = image.resize(size, Image.Resampling.BILINEAR)
+    canvas = np.zeros((INPUT_SIDE, INPUT_SIDE, 3), dtype=np.float32)
+    canvas[: size[1], : size[0]] = np.asarray(image, dtype=np.float32)
     return canvas[:, :, ::-1].transpose(2, 0, 1)[None].copy(), size
 
 

@@ -334,3 +334,34 @@ def test_a_favorite_or_an_album_lowers_an_image_below_an_unprotected_one():
     )
 
     assert names(order) == ["plain", "album", "fav"]
+
+
+def video(name, *signals):
+    return IndexedMedia(MediaRef(Path(name), 0, 0, MediaType.VIDEO), signals=signals)
+
+
+def test_a_video_has_the_threshold_of_its_own_where_the_category_has_one():
+    ranker = Ranker(THRESHOLDS, {Category.BLURRY: 0.15})
+
+    ranked = ranker.rank([video("clip", blur(0.2)), image("photo", blur(0.2))])
+
+    assert [(c.image.ref.path.name, c.is_candidate) for c in ranked] == [
+        ("clip", True),
+        ("photo", False),
+    ]
+
+
+def test_the_photos_threshold_cannot_hide_a_video():
+    ranker = Ranker({**THRESHOLDS, Category.BLURRY: 1.0}, {Category.BLURRY: 0.15})
+
+    assert names(ranker.rank([video("clip", blur(0.2))])) == ["clip"]
+    assert ranker.rank([video("clip", blur(0.2))])[0].is_candidate
+
+
+def test_a_video_shares_the_threshold_of_a_category_with_no_video_threshold():
+    ranker = Ranker(THRESHOLDS, {Category.BLURRY: 0.15})
+
+    clip = ranker.rank([video("clip", screenshot(0.7))])[0]
+
+    assert not clip.is_candidate  # 0.8 for photos and videos alike
+    assert ranker.rank([video("clip", screenshot(0.9))])[0].is_candidate

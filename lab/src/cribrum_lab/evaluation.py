@@ -128,7 +128,7 @@ def evaluate(
     """
     images = [dataclasses.replace(i, review_state=ReviewState.UNREVIEWED) for i in images]
     row = {image.ref.path: i for i, image in enumerate(images)}
-    ranked = {c.image.ref.path: c for c in Ranker(thresholds).rank(images)}
+    ranked = {c.image.ref.path: c for c in Ranker(thresholds, thresholds).rank(images)}
     labeled = [label for label in labels if label.path in row]
     deletable = np.array([row[x.path] for x in labeled if x.decision is Decision.DELETE], int)
     kept = np.array([row[x.path] for x in labeled if x.decision is Decision.KEEP], int)
@@ -190,7 +190,9 @@ def _library_weights(
     A stratum's weight is its size in the index divided by its labels. A label without a
     recorded stratum is placed by whether `sampled_with` made its image a candidate.
     """
-    candidate = {c.image.ref.path: c.is_candidate for c in Ranker(sampled_with).rank(images)}
+    candidate = {
+        c.image.ref.path: c.is_candidate for c in Ranker(sampled_with, sampled_with).rank(images)
+    }
 
     def stratum(label: Label) -> Stratum:
         if label.stratum:

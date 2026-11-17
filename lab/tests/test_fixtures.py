@@ -124,3 +124,21 @@ def test_the_near_duplicates_fixture_still_matches_the_lab():
     assert fixtures.near_duplicates_expected() == expected
     roles = {s[0]["evidence"]["role"] for s in expected["signals"].values()}
     assert roles == {"best", "inferior"}
+
+
+def test_the_frame_detectors_fixture_still_matches_the_lab():
+    expected = json.loads(fixtures.FRAME_DETECTORS.read_text())
+
+    assert fixtures.frame_detectors_expected() == expected
+    # It covers a video blurry, dark and protected, and one with no frame to read.
+    scores = {
+        path: {s["detector"]: s["score"] for s in found}
+        for path, found in expected["signals"].items()
+    }
+    assert scores["blurred.mp4"]["blur"] > 0.5 > scores["one-blurred-frame.mp4"]["blur"]
+    assert scores["dark.mp4"]["exposure"] == 1.0
+    assert scores["faces.mp4"]["faces"] > 0
+    assert scores["no-frames.mp4"] == {}
+    # One frame is its own median: the video scores as that frame does.
+    assert scores["one-frame.mp4"]["blur"] == pytest.approx(0.8)
+    assert expected["signals"]["one-frame.mp4"][0]["evidence"]["frames"] == "1"

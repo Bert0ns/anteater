@@ -24,6 +24,7 @@ import io.github.bert0ns.cribrum.ranker.Candidate
 import io.github.bert0ns.cribrum.ranker.GROUP_CATEGORIES
 import io.github.bert0ns.cribrum.ranker.Ranker
 import io.github.bert0ns.cribrum.ranker.THRESHOLDS
+import io.github.bert0ns.cribrum.ranker.VIDEO_THRESHOLDS
 import io.github.bert0ns.cribrum.tracing.traceSuspend
 import io.github.bert0ns.cribrum.trash.Trash
 import io.github.bert0ns.cribrum.trash.TrashedImage
@@ -130,6 +131,7 @@ private class Ranking(
     val images: List<IndexedMedia>,
     val excluded: List<String>,
     val thresholds: Map<Category, Float>,
+    val videoThresholds: Map<Category, Float>,
     /** The candidates the review offers: without those of a group it hides (see [GroupMembers.isHidden]). */
     val byCategory: Map<Category, List<Candidate>>,
     /** The candidates with those of hidden groups: a hidden group can come back, so its copies stay undecided. */
@@ -161,6 +163,8 @@ class Review(
     private val trash: Trash,
     /** Read on every call, so a threshold the user changes applies to the next list without a scan. */
     private val thresholds: () -> Map<Category, Float> = { THRESHOLDS },
+    /** The thresholds of the videos, for the categories that have one of their own (docs/design.md §6.1). */
+    private val videoThresholds: () -> Map<Category, Float> = { VIDEO_THRESHOLDS },
     private val detectorCategories: Set<Category> = DETECTOR_CATEGORIES,
     private val videoDetectorCategories: Set<Category> = VIDEO_DETECTOR_CATEGORIES,
     private val zone: () -> ZoneId = ZoneId::systemDefault,
@@ -190,13 +194,13 @@ class Review(
      * that have a video detector.
      */
     suspend fun overview(mediaType: MediaType = MediaType.IMAGE): Overview = withContext(Dispatchers.Default) {
-        traceSuspend("Review.overview") { summarize(ranking(thresholds()).byCategory, mediaType) }
+        traceSuspend("Review.overview") { summarize(ranking().byCategory, mediaType) }
     }
 
     /** The overview of each media type from one ranking: the home reads both tabs at once. */
     suspend fun overviews(): Map<MediaType, Overview> = withContext(Dispatchers.Default) {
         traceSuspend("Review.overview") {
-            val byCategory = ranking(thresholds()).byCategory
+            val byCategory = ranking().byCategory
             MediaType.entries.associateWith { summarize(byCategory, it) }
         }
     }
@@ -222,39 +226,44 @@ class Review(
         index.unreviewedVideos().filterNot { isExcluded(it.ref.path, excluded) }.map { VideoItem(it.ref, it.durationMs, it.unreadable, it.ref.path in favorites) }
     }
 
-    /** How many candidates each category would list at [thresholds], which are the ones in use by default. */
-    suspend fun counts(thresholds: Map<Category, Float> = this.thresholds()): Map<Category, Int> = withContext(Dispatchers.Default) {
+    /** How many candidates of a [mediaType] each category would list at [thresholds] and [videoThresholds], which are the ones in use by default. */
+    suspend fun counts(
+        thresholds: Map<Category, Float> = this.thresholds(),
+        videoThresholds: Map<Category, Float> = this.videoThresholds(),
+        mediaType: MediaType = MediaType.IMAGE,
+    ): Map<Category, Int> = withContext(Dispatchers.Default) {
         traceSuspend("Review.counts") {
-            val byCategory = ranking(thresholds).byCategory
-            Category.entries.associateWith { byCategory[it].orEmpty().of(MediaType.IMAGE).size }
+            val byCategory = ranking(thresholds, videoThresholds).byCategory
+            Category.entries.associateWith { byCategory[it].orEmpty().of(mediaType).size }
         }
     }
 
     // Traced here and not in Ranker, whose tests run on the plain JVM, where android.os.Trace is not there.
-    private fun rank(thresholds: Map<Category, Float>, images: List<IndexedMedia>, excluded: Collection<String>) = trace("Ranker.rank") { Ranker(thresholds).rank(images, excluded) }
+    private fun rank(thresholds: Map<Category, Float>, videoThresholds: Map<Category, Float>, images: List<IndexedMedia>, excluded: Collection<String>) = trace("Ranker.rank") { Ranker(thresholds, videoThresholds).rank(images, excluded) }
 
     /**
      * The version is read before the index, so a read that a write overtakes is kept under the version before the
      * write and not used after it. Excluded folders are writes to the index too, so the version covers them.
      */
-    private suspend fun ranking(thresholds: Map<Category, Float>): Ranking {
+    private suspend fun ranking(thresholds: Map<Category, Float> = this.thresholds(), videoThresholds: Map<Category, Float> = this.videoThresholds()): Ranking {
         val version = index.version
         val favorites = favorites()
         val cached = last.get()?.takeIf { it.version == version }
-        if (cached != null && cached.thresholds == thresholds && cached.favorites == favorites) return cached
+        if (cached != null && cached.thresholds == thresholds && cached.videoThresholds == videoThresholds && cached.favorites == favorites) return cached
         val images = cached?.images ?: readImages()
         val excluded = cached?.excluded ?: index.excludedFolders()
         // A copy, so a caller that changes its map afterwards does not change the key.
         val key = thresholds.toMap()
+        val videoKey = videoThresholds.toMap()
         val groups = cached?.groups ?: GROUP_CATEGORIES.associateWith { groupMembers(it, images, excluded) }
         // The favourite signal is not stored: the gallery can change it any time, and a scan is no reason to wait.
         val protected = if (favorites.isEmpty()) images else images.map { if (it.ref.path in favorites) it.copy(signals = it.signals + FAVORITE_SIGNAL) else it }
-        val ranked = Ranker.byCategory(rank(key, protected, excluded))
+        val ranked = Ranker.byCategory(rank(key, videoKey, protected, excluded))
         val byCategory = ranked.mapValues { (category, candidates) ->
             val members = groups[category] ?: return@mapValues candidates
             candidates.filterNot { candidate -> candidate.hiddenIn(category, members) }
         }
-        return Ranking(version, images, excluded, key, byCategory, ranked, groups, favorites).also(::store)
+        return Ranking(version, images, excluded, key, videoKey, byCategory, ranked, groups, favorites).also(::store)
     }
 
     private fun List<Candidate>.of(mediaType: MediaType) = filter { it.image.ref.mediaType == mediaType }
@@ -278,7 +287,7 @@ class Review(
      */
     suspend fun page(category: Category, skipped: Set<String> = emptySet(), grouping: ReviewOrder = ReviewOrder.OFF, mediaType: MediaType = MediaType.IMAGE): Page = withContext(Dispatchers.Default) {
         traceSuspend("Review.page") {
-            val ranking = ranking(thresholds())
+            val ranking = ranking()
             val candidates = ranking.byCategory[category].orEmpty().of(mediaType)
             val (hidden, groups) = (
                 if (category in GROUP_CATEGORIES) {

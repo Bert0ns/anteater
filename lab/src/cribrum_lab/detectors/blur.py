@@ -1,10 +1,13 @@
 """BLURRY: variance of the Laplacian on a downscaled grayscale image (docs/design.md, section 5)."""
 
+from collections.abc import Sequence
+from statistics import median
+
 import numpy as np
 
 from cribrum_lab.detectors.base import AnalysisContext
 from cribrum_lab.imaging import load_grayscale
-from cribrum_lab.model import Category, MediaRef, Signal
+from cribrum_lab.model import Category, FrameMeasures, MediaRef, MediaType, Signal
 
 MAX_SIDE = 512
 TILES = 4
@@ -20,18 +23,35 @@ class BlurDetector:
     version = 1
     category = Category.BLURRY
     decode_side = MAX_SIDE
+    media_types = frozenset({MediaType.IMAGE, MediaType.VIDEO})
+    uses_frames = True
+    """Of a video."""
 
     def analyze(self, image: MediaRef, context: AnalysisContext) -> list[Signal]:
+        if image.media_type is MediaType.VIDEO:
+            return self._video(context.frame_measures(image))
         measured = measure(context.pixels(image).gray(MAX_SIDE))
         if measured is None:
             return []
         global_variance, peak_variance = measured
-        score = HALF_SCORE_VARIANCE / (HALF_SCORE_VARIANCE + peak_variance)
         evidence = {
             "global_variance": f"{global_variance:.1f}",
             PEAK_VARIANCE_KEY: f"{peak_variance:.1f}",
         }
-        return [Signal(self.id, self.version, Category.BLURRY, score, evidence)]
+        return [Signal(self.id, self.version, Category.BLURRY, score(peak_variance), evidence)]
+
+    def _video(self, frames: Sequence[FrameMeasures]) -> list[Signal]:
+        """The score of the median frame's sharpest region, so a video is blurry when most of its
+        frames are, and one blurred frame does not make it so (docs/design.md, section 5)."""
+        if not frames:
+            return []
+        typical = median(frame.peak_variance for frame in frames)
+        evidence = {"frames": str(len(frames)), "median_variance": f"{typical:.1f}"}
+        return [Signal(self.id, self.version, Category.BLURRY, score(typical), evidence)]
+
+
+def score(peak_variance: float) -> float:
+    return HALF_SCORE_VARIANCE / (HALF_SCORE_VARIANCE + peak_variance)
 
 
 def measure(gray: np.ndarray) -> tuple[float, float] | None:
