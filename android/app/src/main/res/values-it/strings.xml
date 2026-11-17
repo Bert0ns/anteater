@@ -72,6 +72,7 @@
     <string name="category_screenshot">Screenshot</string>
     <string name="category_document">Documenti e appunti</string>
     <string name="category_forwarded">Inoltrate</string>
+    <string name="category_forwarded_videos">Inoltrati</string>
     <string name="category_sticker">Sticker di WhatsApp</string>
     <string name="category_coming_soon">In arrivo</string>
     <plurals name="candidates">

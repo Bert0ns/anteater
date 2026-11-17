@@ -5,6 +5,7 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasScrollAction
@@ -67,6 +68,19 @@ class LanguageTest {
         compose.onNode(hasText("Cestina 1 video", substring = true)).performClick()
         compose.onNodeWithText("1 di questi è tra i preferiti della galleria. Spostarlo comunque nel cestino?").assertExists()
         compose.onNodeWithText("In tutto 1,5", substring = true).assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = "it")
+    fun `forwarded agrees with what it lists, Inoltrate of photos and Inoltrati of videos`() {
+        val forwarded = listOf(CategorySummary(Category.FORWARDED, 2, bytes = 2_000_000))
+        var photos by mutableStateOf(true)
+        compose.setContent { if (photos) CategoryList(forwarded, 0, {}) else VideosTab(emptyList(), indexed = true, onOpen = {}, categories = forwarded) }
+
+        compose.onNodeWithText("Inoltrate").assertExists()
+        photos = false
+        compose.onNodeWithText("Inoltrati").assertExists()
+        compose.onAllNodesWithText("Inoltrate").assertCountEquals(0)
     }
 
     @Test

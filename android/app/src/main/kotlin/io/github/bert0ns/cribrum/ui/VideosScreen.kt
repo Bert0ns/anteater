@@ -61,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.bert0ns.cribrum.R
 import io.github.bert0ns.cribrum.model.Category
+import io.github.bert0ns.cribrum.model.MediaType
 import io.github.bert0ns.cribrum.review.CategorySummary
 import io.github.bert0ns.cribrum.review.VideoItem
 import io.github.bert0ns.cribrum.trash.TrashRetention
@@ -129,7 +130,7 @@ fun VideosTab(
         items(categories, key = { it.category }) { summary ->
             val canOpen = summary.count > 0
             ListItem(
-                headlineContent = { Text(categoryName(summary.category)) },
+                headlineContent = { Text(categoryName(summary.category, MediaType.VIDEO)) },
                 supportingContent = {
                     val count = pluralStringResource(R.plurals.videos_count, summary.count, summary.count)
                     Text(

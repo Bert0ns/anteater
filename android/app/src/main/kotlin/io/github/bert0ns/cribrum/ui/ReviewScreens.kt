@@ -112,8 +112,9 @@ import io.github.bert0ns.cribrum.trash.TrashRetention
 import kotlinx.coroutines.flow.drop
 import java.io.File
 
+/** The category's name, which agrees with [mediaType] where a language needs it: Italian says "Inoltrate" of photos and "Inoltrati" of videos. */
 @Composable
-fun categoryName(category: Category): String = stringResource(
+fun categoryName(category: Category, mediaType: MediaType = MediaType.IMAGE): String = stringResource(
     when (category) {
         Category.EXACT_DUPLICATE -> R.string.category_exact_duplicate
         Category.NEAR_DUPLICATE -> R.string.category_near_duplicate
@@ -122,7 +123,7 @@ fun categoryName(category: Category): String = stringResource(
         Category.BAD_EXPOSURE -> R.string.category_bad_exposure
         Category.SCREENSHOT -> R.string.category_screenshot
         Category.DOCUMENT -> R.string.category_document
-        Category.FORWARDED -> R.string.category_forwarded
+        Category.FORWARDED -> if (mediaType == MediaType.VIDEO) R.string.category_forwarded_videos else R.string.category_forwarded
         Category.STICKER -> R.string.category_sticker
     },
 )
