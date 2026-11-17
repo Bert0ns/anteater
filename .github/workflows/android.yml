@@ -42,5 +42,5 @@ jobs:
       - if: steps.changed.outputs.run
         uses: actions/upload-artifact@v5
         with:
-          name: cribrum-debug-apk
+          name: anteater-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
