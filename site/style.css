@@ -389,7 +389,8 @@ footer a:hover {
 
 .footer-nav {
   display: flex;
-  gap: 1.25rem;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
 }
 
 @media (max-width: 600px) {

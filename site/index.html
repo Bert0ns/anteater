@@ -47,7 +47,7 @@
     <header class="hero">
       <h1>A local sieve for the photos and videos on your Android phone</h1>
       <p class="hero-lead">
-        Cribrum finds the photos and videos you can delete or recompress: blurry shots, duplicates, short clips, screenshots and files that messaging apps leave behind. It suggests and you decide. Nothing is deleted without your confirmation, and everything runs on the phone.
+        Cribrum finds the photos and videos you can delete or recompress: blurry shots, duplicates, short clips, screenshots and files that messaging apps leave behind. It suggests and you decide. Nothing is deleted without your confirmation, and nothing leaves the phone.
       </p>
 
       <div class="cta-row">
@@ -63,7 +63,7 @@
 
       <div class="screenshots" aria-label="App screenshots">
         <figure class="screenshot-figure">
-          <img src="screenshots/home.png" alt="Photos tab of Clean with the space that can be freed and nine categories, each with a count and a size" class="screenshot-img" width="411" height="891">
+          <img src="screenshots/home.png" alt="Photos tab of Clean with the space that can be freed and the photo categories, each with a count and a size" class="screenshot-img" width="411" height="891">
           <figcaption class="screenshot-caption">Photo categories</figcaption>
         </figure>
         <figure class="screenshot-figure">
@@ -71,7 +71,7 @@
           <figcaption class="screenshot-caption">Review grid</figcaption>
         </figure>
         <figure class="screenshot-figure">
-          <img src="screenshots/group.png" alt="Similar copies as groups of three photos, the best copy of each group kept and the others marked" class="screenshot-img" width="411" height="891">
+          <img src="screenshots/group.png" alt="Similar copies as groups of three photos, the best copy of each group labelled Best and most of the others marked" class="screenshot-img" width="411" height="891">
           <figcaption class="screenshot-caption">Copies in groups</figcaption>
         </figure>
         <figure class="screenshot-figure">
@@ -179,7 +179,7 @@
           </div>
           <div class="feature-row">
             <div class="feature-term">Similar copies</div>
-            <div class="feature-desc">Finds the smaller copy WhatsApp keeps in its Sent folder and keeps the camera original.</div>
+            <div class="feature-desc">The smaller copy WhatsApp keeps in its Sent folder. Cribrum keeps the camera original.</div>
           </div>
           <div class="feature-row">
             <div class="feature-term">Blurry, too dark or too bright</div>
@@ -208,7 +208,7 @@
         <div class="feature-list">
           <div class="feature-row">
             <div class="feature-term">Three quality levels</div>
-            <div class="feature-desc">High quality keeps the full resolution, Balanced scales very large photos down to 50 MP, and Smallest down to 12 MP. In the lab, Balanced saved a median 47% on one phone's camera photos.</div>
+            <div class="feature-desc">High quality keeps the full resolution. Balanced scales photos above 50 MP down to 50 MP, and Smallest scales photos above 12 MP down to 12 MP. In the lab, Balanced saved a median 47% on one phone's camera photos.</div>
           </div>
           <div class="feature-row">
             <div class="feature-term">Before and after</div>
@@ -220,7 +220,7 @@
           </div>
           <div class="feature-row">
             <div class="feature-term">Background batches</div>
-            <div class="feature-desc">A batch runs with a notification, and pauses while the phone is very hot. Video compression is not built.</div>
+            <div class="feature-desc">A batch runs with a notification, and pauses while the phone is very hot. Videos cannot be compressed yet.</div>
           </div>
         </div>
       </section>
@@ -233,7 +233,7 @@
         <div class="feature-list">
           <div class="feature-row">
             <div class="feature-term">Where it goes</div>
-            <div class="feature-desc">The button under a page moves the files to a trash folder on the phone. Nothing is copied, and the folder stays if you uninstall the app.</div>
+            <div class="feature-desc">The button under a page moves the files to a trash folder on the phone. They still take space until they are deleted for good, and the folder stays if you uninstall the app.</div>
           </div>
           <div class="feature-row">
             <div class="feature-term">Restore</div>
@@ -253,7 +253,7 @@
           </div>
           <div class="feature-row">
             <div class="feature-term">Favourites</div>
-            <div class="feature-desc">Photos and videos you hearted in the gallery show a heart and start unticked. A page that marks one for the trash asks first.</div>
+            <div class="feature-desc">Photos and videos you hearted in the gallery show a heart and start unmarked. A page that marks one for the trash asks first.</div>
           </div>
         </div>
       </section>
@@ -267,7 +267,7 @@
           </div>
           <div class="feature-row">
             <div class="feature-term">Detection thresholds</div>
-            <div class="feature-desc">A slider for each category, with live counts of the candidates.</div>
+            <div class="feature-desc">A slider for most categories, with live counts of the candidates.</div>
           </div>
           <div class="feature-row">
             <div class="feature-term">Excluded folders</div>
@@ -279,7 +279,7 @@
           </div>
           <div class="feature-row">
             <div class="feature-term">Night scan</div>
-            <div class="feature-desc">Scans new photos and new videos once a night while the phone charges. Two switches turn each one off. With both off, the night run only empties the expired trash.</div>
+            <div class="feature-desc">Scans new photos once a night while the phone charges, and new videos too once you have run Scan videos. Two switches turn each one off. With both off, the night run only empties the expired trash.</div>
           </div>
           <div class="feature-row">
             <div class="feature-term">Language and look</div>
@@ -316,7 +316,7 @@
           Gallery apps only see the folders Android indexes, and skip folders with a <code>.nomedia</code> file, such as WhatsApp's sent media. Cribrum asks for All files access, so it can read those folders and manage its trash.
         </p>
         <p>
-          Google Play restricts that permission to file managers, so Cribrum is a direct APK download on GitHub. The app has no network permission, so it cannot send anything anywhere.
+          Google Play allows that permission only for a few kinds of apps, such as file managers, so Cribrum is a direct APK download on GitHub. The app has no network permission, so it cannot send anything anywhere.
         </p>
       </section>
 
@@ -352,7 +352,7 @@
             <span class="step-num">4</span>
             <div class="step-body">
               <h3>Scan and review</h3>
-              <p>Tap Scan now for photos and Scan videos for videos. Cribrum also scans new files once a night while the phone charges. Then open a category to review it, or recompress large photos from the Compress tab.</p>
+              <p>Tap Scan now for photos and Scan videos for videos. After that, Cribrum also scans new files once a night while the phone charges. Then open a category to review it, or recompress large photos from the Compress tab.</p>
             </div>
           </li>
         </ol>
