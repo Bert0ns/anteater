@@ -331,7 +331,7 @@ private fun AppContent(model: ReviewViewModel) {
                             when (screen) {
                                 Screen.Home -> stringResource(R.string.app_name)
                                 Screen.Compress -> stringResource(R.string.nav_compress)
-                                is Screen.Category -> categoryName(screen.category)
+                                is Screen.Category -> categoryName(screen.category, screen.mediaType)
                                 Screen.Videos -> stringResource(R.string.videos_largest)
                                 is Screen.Trash -> stringResource(R.string.trash)
                                 // The bar's own label, which the #322 fix keeps short enough for a font scale of 1.5.
