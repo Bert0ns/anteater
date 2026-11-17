@@ -8,7 +8,7 @@ Website: https://cribrum.bertons.me
 
 Cribrum finds photos and videos on your phone that you can delete or recompress without losing memories that matter: blurry shots, duplicate copies, bursts, takes of one moment, short clips recorded by mistake, photos of lecture slides and notes, screenshots, and media scattered by messaging apps.
 
-It suggests and you decide. Deleted files move to a local trash folder first, so you can restore them during the retention window.
+It suggests and you decide. Nothing is deleted without your confirmation. The button under each page moves the marked files to a trash folder on the phone, where you can restore them until the retention ends.
 
 ## What it does
 
@@ -40,7 +40,7 @@ Exact copies, similar copies and bursts open as groups. The app picks the best c
 
 ### Videos
 
-The Videos tab of Clean has its own scan button ("Scan videos"), its own counts and its own total. It lists "Largest videos", every video you have not reviewed, biggest first, and the categories that have a video detector:
+The Videos tab of Clean has its own scan button ("Scan videos"), its own counts and its own total. Its first row, "Largest videos", lists every video you have not reviewed, biggest first. Below it are the categories that have a video detector:
 
 - **Exact copies.** Same size and content hash.
 - **Similar copies.** Videos of nearly the same length (within 100 ms) whose five MobileCLIP frame embeddings match. It finds the re-encoded copy WhatsApp keeps in `Sent` and keeps the camera original.
@@ -49,7 +49,7 @@ The Videos tab of Clean has its own scan button ("Scan videos"), its own counts 
 - **Takes of one moment.** Camera videos that start within five minutes of the previous one's end, split where the frames differ. There is no best take, so nothing is preselected.
 - **Short clips.** Clips under 15 seconds, scored higher when a camera photo was taken beside them, they are a failed take, they are dark or blurred, or they are silent clips in a chat folder.
 
-A tile shows a frame, the length and the size. In Short clips the first tiles on screen loop muted, so you can decide at a glance. Holding a tile opens the video in the app (Media3 ExoPlayer), with a strip of five frames to jump to. In a video category, the larger of two videos with the same score comes first.
+A tile shows a frame, the length and the size. In Short clips the first tiles on screen loop muted, so you can decide at a glance. Holding a tile opens the video in the app (Media3 ExoPlayer), with a strip of five frames to jump to. In a video category a video's score is multiplied by its size, so large videos come first.
 
 ### Photo compression
 
@@ -64,9 +64,9 @@ The Compress tab recompresses large camera JPEGs instead of deleting them. It li
 ### Trash and undo
 
 - **Where.** A `.cribrum-trash` folder at the root of each storage volume, with a `.nomedia` file. Moving is a rename on the same volume, never a copy, and the folder survives an uninstall.
-- **Retention.** 30 days by default, or 7, 14, 60 or 90 days in Settings. The scan purges expired files. Files are deleted for good only after the retention ends or when you delete them from the trash, which asks first.
+- **Retention.** 30 days by default, or 7, 14, 60 or 90 days in Settings. The scan purges expired files. Files are deleted for good only when the retention ends, when you delete them from the trash, or when you tap "Free X now". The last two ask first.
 - **Restore.** A file goes back to its original path, and is not restored over another file.
-- **Freeing space now.** After a page that trashes more than 1 GB, the snackbar offers "Free 2.3 GB now", which deletes only the files of that page.
+- **Freeing space now.** After a page that trashes more than 1 GB, the snackbar offers "Free 2.3 GB now". It asks first, then deletes only the files of that page.
 
 ### Favourites and protection
 
@@ -85,8 +85,8 @@ The Compress tab recompresses large camera JPEGs instead of deleting them. It li
 
 ### Settings and storage map
 
-- **Trash retention** and the **Haptics** and **Language** items.
-- **Detection thresholds.** One slider per category, with live candidate counts. Blurry and Too dark or too bright have a second slider for videos, and Short clips has one for videos only.
+- **Trash retention**, **Haptics**, and **Language** on Android 13 and newer.
+- **Detection thresholds.** A slider for each category except Exact copies, WhatsApp stickers and Takes of one moment, with live candidate counts. Blurry and Too dark or too bright have a second slider for videos, and Short clips has one for videos only.
 - **Excluded folders.** Folders and their subfolders left out of the review and the map.
 - **Storage map.** A treemap of the photo and video space per folder. Tap a block for its size, file count and video share, open it, or exclude the folder.
 - **Scan report.** The last scan, the steps that have not covered every file and what the app takes on the phone.
@@ -111,7 +111,7 @@ The Compress tab recompresses large camera JPEGs instead of deleting them. It li
   </tr>
   <tr>
     <td><img src="docs/screenshots/trash.png" width="250" alt="Trash screen showing the days left before deletion"></td>
-    <td><img src="docs/screenshots/settings.png" width="250" alt="Settings screen with trash retention and the night scan switches"></td>
+    <td><img src="docs/screenshots/settings.png" width="250" alt="Settings screen with trash retention, haptics and the night scan"></td>
     <td><img src="docs/screenshots/storage-map.png" width="250" alt="Storage map treemap of device folders"></td>
   </tr>
 </table>
