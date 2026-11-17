@@ -506,8 +506,8 @@ class ReviewTest {
         assertTrue(group.hasTrashedBestCopy)
         assertEquals(
             listOf(
-                ReviewItem(other, suggestTrash = false, score = 1f, reasons = listOf(duplicate("g", Role.INFERIOR))),
-                ReviewItem(copy, suggestTrash = false, score = 1f, reasons = listOf(duplicate("g", Role.INFERIOR))),
+                ReviewItem(other, suggestTrash = false, isCandidate = true, score = 1f, reasons = listOf(duplicate("g", Role.INFERIOR))),
+                ReviewItem(copy, suggestTrash = false, isCandidate = true, score = 1f, reasons = listOf(duplicate("g", Role.INFERIOR))),
             ),
             group.images.sortedBy { it.image.path },
         )
@@ -1271,8 +1271,8 @@ class ReviewTest {
         val videos = overview(MediaType.VIDEO)
         val photos = overview()
 
-        assertEquals(listOf(Category.EXACT_DUPLICATE, Category.FORWARDED), videos.categories.map { it.category })
-        assertEquals(listOf(1, 0), videos.categories.map { it.count })
+        assertEquals(listOf(Category.EXACT_DUPLICATE, Category.FORWARDED, Category.TAKES), videos.categories.map { it.category })
+        assertEquals(listOf(1, 0, 0), videos.categories.map { it.count })
         assertEquals(copy.size, videos.freeableBytes)
         assertEquals(1, photos.categories.single { it.category == Category.EXACT_DUPLICATE }.count)
         assertEquals(photoCopy.size, photos.freeableBytes)
@@ -1296,7 +1296,7 @@ class ReviewTest {
         val clip = video("DCIM/clip.mp4", 100)
         index.setSignals(clip.path, "blur", 1, listOf(blurry(0.9f)))
 
-        assertEquals(listOf(Category.EXACT_DUPLICATE, Category.FORWARDED), overview(MediaType.VIDEO).categories.map { it.category })
+        assertEquals(listOf(Category.EXACT_DUPLICATE, Category.FORWARDED, Category.TAKES), overview(MediaType.VIDEO).categories.map { it.category })
     }
 
     @Test
@@ -1324,6 +1324,44 @@ class ReviewTest {
         assertEquals(0, overview(MediaType.VIDEO).categories.single { it.category == Category.EXACT_DUPLICATE }.count)
         undo(decision)
         assertEquals(1, overview(MediaType.VIDEO).categories.single { it.category == Category.EXACT_DUPLICATE }.count)
+    }
+
+    private fun take(path: String, role: Role = Role.TAKE): MediaRef = video(path, 300).also {
+        runBlocking { index.setSignals(it.path, "takes", 1, listOf(Signal("takes", 1, Category.TAKES, 1f, mapOf(GROUP_KEY to "t", ROLE_KEY to role.value, "takes" to "3")))) }
+    }
+
+    @Test
+    fun `the takes of one moment are a page of videos where every take counts and none is preselected`() = test {
+        val takes = listOf(take("DCIM/Camera/1.mp4", Role.SHORT_TAKE), take("DCIM/Camera/2.mp4"), take("DCIM/Camera/3.mp4"))
+
+        val page = page(Category.TAKES, mediaType = MediaType.VIDEO)
+        val items = page.groups.single().images
+
+        assertEquals(takes.toSet(), items.map { it.image }.toSet())
+        assertTrue(items.none { it.suggestTrash || it.isBest })
+        assertTrue(items.all { it.isCandidate })
+        assertEquals(3, page.remaining)
+        assertEquals(3, overview(MediaType.VIDEO).categories.single { it.category == Category.TAKES }.count)
+        assertFalse("a category of videos only has no row on the Photos tab", overview().categories.any { it.category == Category.TAKES })
+    }
+
+    @Test
+    fun `skipping a group of takes takes its takes off what is left`() = test {
+        take("DCIM/Camera/1.mp4")
+        take("DCIM/Camera/2.mp4")
+
+        assertEquals(0, page(Category.TAKES, skipped = setOf("t"), mediaType = MediaType.VIDEO).remaining)
+    }
+
+    @Test
+    fun `applying a page of takes with none marked keeps them all`() = test {
+        take("DCIM/Camera/1.mp4")
+        take("DCIM/Camera/2.mp4")
+
+        val decision = applyPage(page(Category.TAKES, mediaType = MediaType.VIDEO), emptySet())
+
+        assertEquals(2, decision.kept.size)
+        assertEquals(0, overview(MediaType.VIDEO).categories.single { it.category == Category.TAKES }.count)
     }
 
     @Test

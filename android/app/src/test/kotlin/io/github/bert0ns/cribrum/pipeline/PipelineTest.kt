@@ -11,6 +11,7 @@ import io.github.bert0ns.cribrum.detectors.ExactDuplicateDetector
 import io.github.bert0ns.cribrum.detectors.ForwardedDetector
 import io.github.bert0ns.cribrum.detectors.GroupDetector
 import io.github.bert0ns.cribrum.detectors.MissingEmbedding
+import io.github.bert0ns.cribrum.detectors.TakesDetector
 import io.github.bert0ns.cribrum.folders.isStickerFolder
 import io.github.bert0ns.cribrum.frames.FRAMES_VERSION
 import io.github.bert0ns.cribrum.hashing.PHASH_DECODE_SIDE
@@ -101,6 +102,9 @@ class PipelineTest {
     }
 
     private fun run(pipeline: Pipeline = Pipeline(index)) = runBlocking { pipeline.run(source) }
+
+    /** The group detectors a scan of the images runs: the takes look at videos only. */
+    private val imageGroupDetectors = GROUP_DETECTORS.count { MediaType.IMAGE in it.mediaTypes }
 
     private fun kinds(path: String): Set<Kind> = runBlocking { index.signals(File(root, path).path) }.map { it.kind }.toSet()
 
@@ -407,6 +411,50 @@ class PipelineTest {
 
         assertTrue(scan.isCancelled)
         assertEquals(setOf(clip.path), frameTimesStored().keys)
+    }
+
+    private fun takesGroups(): List<Set<String>> = runBlocking {
+        index.images().flatMap { image -> index.signals(image.path).filter { it.kind == Category.TAKES }.map { it.evidence.getValue(GROUP_KEY) to File(image.path).name } }
+            .groupBy({ it.first }, { it.second }).values.map { it.toSet() }
+    }
+
+    @Test
+    fun `a video run chains the takes of a moment from the stored metadata`() {
+        videos()
+        File(root, "DCIM/Camera/clip.mp4").copyTo(File(root, "DCIM/Camera/later.mp4"))
+        // Five seconds after the clip starts, and four after it ends.
+        val reader = { file: File -> if (file.nameWithoutExtension == "later") clipMeta.copy(capturedAt = clipMeta.capturedAt!!.plusSeconds(5)) else readVideo(file) }
+        val pipeline = Pipeline(index, detectors = emptyList(), groupDetectors = listOf(TakesDetector()), embedder = MeanColorEmbedder(), videoMetadataReader = reader, frameReader = ::grayFrames)
+
+        val stats = runBlocking { pipeline.run(source, images = false, videos = true) }
+
+        assertEquals(emptyList<Failure>(), stats.failures)
+        assertEquals(listOf(setOf("clip.mp4", "later.mp4")), takesGroups())
+    }
+
+    @Test
+    fun `the takes read the stored frames, and frames stored later run them again`() {
+        val clip = videos().getValue("clip")
+        val seen = mutableListOf<Int>()
+        val frames = object : GroupDetector {
+            override val id = "frames_seen"
+            override val version = 1
+            override val mediaTypes = setOf(MediaType.VIDEO)
+
+            override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
+                seen += context.frames(images.single { it.path == clip.path }).size
+                return emptyMap()
+            }
+        }
+        fun scan(embedder: Embedder?) = runBlocking {
+            Pipeline(index, detectors = emptyList(), groupDetectors = listOf(frames), embedder = embedder, videoMetadataReader = ::readVideo, frameReader = ::grayFrames).run(source, images = false, videos = true)
+        }
+
+        scan(null)
+        scan(MeanColorEmbedder())
+        scan(MeanColorEmbedder()) // nothing new: no run
+
+        assertEquals(listOf(0, 5), seen)
     }
 
     @Test
@@ -754,7 +802,7 @@ class PipelineTest {
         val stats = run(Pipeline(index, embedder = MeanColorEmbedder()))
 
         assertEquals(1, stats.newOrChanged)
-        assertEquals(DETECTORS.size + 2 + GROUP_DETECTORS.size, stats.detectorRuns) // + hash, embedding
+        assertEquals(DETECTORS.size + 2 + imageGroupDetectors, stats.detectorRuns) // + hash, embedding
         assertFalse(Category.EXACT_DUPLICATE in kinds("WhatsApp/Media/a-copy.png"))
     }
 
@@ -1353,7 +1401,7 @@ class PipelineTest {
             setOf(
                 Category.BLURRY, Category.BAD_EXPOSURE, Category.SCREENSHOT, Category.STICKER,
                 Category.DOCUMENT, Category.FORWARDED,
-                Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE, Category.BURST,
+                Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE, Category.BURST, Category.TAKES,
             ),
             DETECTOR_CATEGORIES,
         )
@@ -1471,7 +1519,7 @@ class PipelineTest {
         val stats = run(Pipeline(index, embedder = MeanColorEmbedder(version = 2)))
 
         val readers = DETECTORS.count { it.usesEmbeddings }
-        assertEquals(3 + 3 * readers + GROUP_DETECTORS.size, stats.detectorRuns)
+        assertEquals(3 + 3 * readers + imageGroupDetectors, stats.detectorRuns)
     }
 
     @Test
@@ -1551,7 +1599,7 @@ class PipelineTest {
         val stats = run(Pipeline(index, embedder = MeanColorEmbedder()))
 
         val readers = DETECTORS.count { it.usesEmbeddings }
-        assertEquals(3 + 3 * readers + GROUP_DETECTORS.size, stats.detectorRuns) // embeddings, then the readers; no fast detector, no hash
+        assertEquals(3 + 3 * readers + imageGroupDetectors, stats.detectorRuns) // embeddings, then the readers; no fast detector, no hash
     }
 
     @Test

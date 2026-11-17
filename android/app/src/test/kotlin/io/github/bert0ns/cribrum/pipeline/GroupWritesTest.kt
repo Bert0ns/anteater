@@ -114,6 +114,7 @@ class GroupWritesTest {
     private inner class Checked(private val detector: GroupDetector, override val version: Int, private val forget: String?) : GroupDetector {
         override val id = detector.id
         override val category = detector.category
+        override val mediaTypes = detector.mediaTypes
 
         override suspend fun analyze(images: List<MediaRef>, context: AnalysisContext): Map<MediaRef, List<Signal>> {
             compare()

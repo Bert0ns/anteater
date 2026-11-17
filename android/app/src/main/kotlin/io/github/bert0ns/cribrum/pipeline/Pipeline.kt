@@ -23,6 +23,7 @@ import io.github.bert0ns.cribrum.detectors.MissingEmbedding
 import io.github.bert0ns.cribrum.detectors.NearDuplicateDetector
 import io.github.bert0ns.cribrum.detectors.ScreenshotDetector
 import io.github.bert0ns.cribrum.detectors.StickerDetector
+import io.github.bert0ns.cribrum.detectors.TakesDetector
 import io.github.bert0ns.cribrum.folders.isStickerFolder
 import io.github.bert0ns.cribrum.frames.FRAMES_VERSION
 import io.github.bert0ns.cribrum.frames.frameTimes
@@ -83,10 +84,15 @@ val SKIPPED_ON_STICKERS: Set<String> = setOf("blur", "exposure", "faces")
 /** Whether a sticker runs [detector]: not one that reads the embedding, which a sticker never gets, nor one in [SKIPPED_ON_STICKERS]. */
 fun runsOnStickers(detector: Detector): Boolean = !detector.usesEmbeddings && detector.id !in SKIPPED_ON_STICKERS
 
-val GROUP_DETECTORS: List<GroupDetector> = listOf(ExactDuplicateDetector(), NearDuplicateDetector(), BurstDetector())
+val GROUP_DETECTORS: List<GroupDetector> = listOf(ExactDuplicateDetector(), NearDuplicateDetector(), BurstDetector(), TakesDetector())
 val GROUP_DETECTOR_IDS: Set<String> = GROUP_DETECTORS.map { it.id }.toSet()
 val DETECTOR_CATEGORIES: Set<Category> =
     (DETECTORS.mapNotNull { it.category } + GROUP_DETECTORS.mapNotNull { it.category }).toSet()
+
+/** The categories whose detectors take only videos, such as the takes of one moment: the Photos tab leaves them out. */
+val VIDEO_ONLY_CATEGORIES: Set<Category> =
+    GROUP_DETECTORS.filter { MediaType.IMAGE !in it.mediaTypes }.mapNotNull { it.category }.toSet() -
+        (DETECTORS.filter { MediaType.IMAGE in it.mediaTypes }.mapNotNull { it.category } + GROUP_DETECTORS.filter { MediaType.IMAGE in it.mediaTypes }.mapNotNull { it.category }).toSet()
 
 /** The categories that have a detector for videos: the ones the Videos tab lists (docs/design.md §8). */
 val VIDEO_DETECTOR_CATEGORIES: Set<Category> =
@@ -337,8 +343,9 @@ class Pipeline(
     /**
      * Runs the group detectors that accept [mediaType] on the files of that type, so a group never mixes images and videos.
      * The image run and the video run each keep a fingerprint of their own, so neither runs the other's detectors again.
+     * [frames] holds the videos' stored frames, in the order of their times.
      */
-    private suspend fun groupSteps(mediaType: MediaType, found: Set<String>, embeddings: Map<String, FloatArray>, model: String, blur: Detector?, stats: Stats, progress: Progress) {
+    private suspend fun groupSteps(mediaType: MediaType, found: Set<String>, embeddings: Map<String, FloatArray>, model: String, blur: Detector?, stats: Stats, progress: Progress, frames: Map<String, List<FloatArray>> = emptyMap()) {
         val media = index.images().filter { it.path in found && it.mediaType == mediaType }
         val video = mediaType == MediaType.VIDEO
         // The exact detector skips an image whose content hash fails: the run stores those paths with its fingerprint.
@@ -358,6 +365,8 @@ class Pipeline(
             perceptualHash = { perceptualHashes[it.path] ?: throw NoSuchElementException(it.path) },
             embedding = { embeddings[it.path] ?: throw MissingEmbedding(it) },
             metadata = { metadata[it.path] ?: throw UnreadableImage(File(it.path)) },
+            videoMetadata = { index.videoMetadata(it.path) ?: throw UnreadableVideo(File(it.path)) },
+            frames = { frames[it.path].orEmpty() },
             // Burst ranks its shots by the measure blur stored, and decodes a shot again only when blur left none.
             sharpness = { storedSharpness(blur, it) ?: BlurDetector.peakVariance(it) },
         )
@@ -409,8 +418,15 @@ class Pipeline(
             readAndStore(pending, VIDEO_METADATA_STEP, progress, read = { attempt { videoMetadataReader(it) } }) { batch -> storeVideoMetadata(batch, stats) }
         }
         analyzeVideos(found, stats)
-        if (embedder != null) phase("videoFrames", stats) { embedFrames(embedder, stats, progress) }
-        groupSteps(MediaType.VIDEO, found, emptyMap(), "", null, stats, progress)
+        var frames = emptyMap<String, List<FloatArray>>()
+        var model = ""
+        if (embedder != null) {
+            phase("videoFrames", stats) { embedFrames(embedder, stats, progress) }
+            frames = index.frameEmbeddings(embedder.id, embedder.version, FRAMES_VERSION).mapValues { it.value.values.toList() }
+            // A video's frames change what its group detectors can see, as embeddings do for images.
+            if (frames.isNotEmpty()) model = "${embedder.id}:${embedder.version}:$FRAMES_VERSION:${frames.size}"
+        }
+        groupSteps(MediaType.VIDEO, found, emptyMap(), model, null, stats, progress, frames)
     }
 
     /**

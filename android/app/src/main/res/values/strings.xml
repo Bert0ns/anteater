@@ -13,7 +13,7 @@
     <string name="scan_phase_video_scan">Looking for videos</string>
     <string name="scan_phase_video_metadata">Reading the videos</string>
     <string name="scan_phase_video_frames">Looking at the frames</string>
-    <string name="scan_phase_video_groups">Finding duplicate videos</string>
+    <string name="scan_phase_video_groups">Finding copies and takes</string>
     <string name="scan_kind_images">Photo scan</string>
     <string name="scan_kind_videos">Video scan</string>
     <string name="scan_kind_both">Photo and video scan</string>
@@ -43,6 +43,7 @@
     <string name="category_forwarded">Forwarded</string>
     <string name="category_forwarded_videos">Forwarded</string>
     <string name="category_sticker">WhatsApp stickers</string>
+    <string name="category_takes">Takes of one moment</string>
     <string name="category_coming_soon">Coming soon</string>
     <plurals name="candidates">
         <item quantity="one">%d image to review</item>
@@ -282,6 +283,12 @@
     <string name="reason_forwarded_exif">No camera data, like a forwarded image</string>
     <string name="reason_forwarded">Looks forwarded from a messaging app</string>
     <string name="reason_sticker">In a sticker folder</string>
+    <plurals name="reason_take">
+        <item quantity="one">One of %1$d takes of one moment</item>
+        <item quantity="other">One of %1$d takes of one moment</item>
+    </plurals>
+    <string name="reason_take_plain">One of several takes of one moment</string>
+    <string name="reason_short_take">A short take, then a longer one of the same moment</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version %1$s</string>
     <string name="settings_website">Website</string>

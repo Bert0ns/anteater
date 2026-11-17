@@ -45,7 +45,7 @@
     <string name="scan_phase_video_scan">Ricerca dei video</string>
     <string name="scan_phase_video_metadata">Lettura dei video</string>
     <string name="scan_phase_video_frames">Analisi dei fotogrammi</string>
-    <string name="scan_phase_video_groups">Ricerca dei video duplicati</string>
+    <string name="scan_phase_video_groups">Ricerca di copie e riprese</string>
     <string name="scan_kind_images">Scansione delle foto</string>
     <string name="scan_kind_videos">Scansione dei video</string>
     <string name="scan_kind_both">Scansione di foto e video</string>
@@ -74,6 +74,7 @@
     <string name="category_forwarded">Inoltrate</string>
     <string name="category_forwarded_videos">Inoltrati</string>
     <string name="category_sticker">Sticker di WhatsApp</string>
+    <string name="category_takes">Riprese dello stesso momento</string>
     <string name="category_coming_soon">In arrivo</string>
     <plurals name="candidates">
         <item quantity="one">%d immagine da controllare</item>
@@ -332,6 +333,13 @@
     <string name="reason_forwarded_exif">Nessun dato della fotocamera, come un\'immagine inoltrata</string>
     <string name="reason_forwarded">Sembra inoltrata da un\'app di messaggistica</string>
     <string name="reason_sticker">In una cartella di sticker</string>
+    <plurals name="reason_take">
+        <item quantity="one">Una di %1$d riprese dello stesso momento</item>
+        <item quantity="many">Una di %1$d riprese dello stesso momento</item>
+        <item quantity="other">Una di %1$d riprese dello stesso momento</item>
+    </plurals>
+    <string name="reason_take_plain">Una di più riprese dello stesso momento</string>
+    <string name="reason_short_take">Una ripresa breve, poi una più lunga dello stesso momento</string>
     <string name="settings_about">Informazioni</string>
     <string name="settings_version">Versione %1$s</string>
     <string name="settings_website">Sito web</string>

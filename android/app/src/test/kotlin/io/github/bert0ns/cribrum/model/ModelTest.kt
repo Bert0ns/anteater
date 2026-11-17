@@ -44,7 +44,7 @@ class ModelTest {
         assertEquals(
             listOf(
                 "exact_duplicate", "near_duplicate", "burst", "blurry",
-                "bad_exposure", "screenshot", "document", "forwarded", "sticker",
+                "bad_exposure", "screenshot", "document", "forwarded", "sticker", "takes",
             ),
             Category.entries.map { it.value },
         )

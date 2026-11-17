@@ -19,6 +19,7 @@ import io.github.bert0ns.cribrum.model.Signal
 import io.github.bert0ns.cribrum.model.SignalIdentity
 import io.github.bert0ns.cribrum.pipeline.DETECTOR_CATEGORIES
 import io.github.bert0ns.cribrum.pipeline.VIDEO_DETECTOR_CATEGORIES
+import io.github.bert0ns.cribrum.pipeline.VIDEO_ONLY_CATEGORIES
 import io.github.bert0ns.cribrum.ranker.Candidate
 import io.github.bert0ns.cribrum.ranker.GROUP_CATEGORIES
 import io.github.bert0ns.cribrum.ranker.Ranker
@@ -67,8 +68,10 @@ data class ReviewGroup(
 
 data class ReviewItem(
     val image: MediaRef,
-    /** What the screen preselects: trash the candidates, keep the best copy of a group. */
+    /** What the screen preselects: trash the candidates, keep the best copy of a group. A group with no best copy, such as takes, preselects nothing. */
     val suggestTrash: Boolean,
+    /** A candidate in this category, which the counts on the page take. Not a best copy, nor a member kept earlier. */
+    val isCandidate: Boolean = suggestTrash,
     val isBest: Boolean = false,
     /** The candidate's score in this category, 0 for a best copy. */
     val score: Float = 0f,
@@ -200,7 +203,7 @@ class Review(
 
     private fun summarize(all: Map<Category, List<Candidate>>, mediaType: MediaType): Overview {
         val byCategory = all.mapValues { (_, candidates) -> candidates.of(mediaType) }
-        val listed = if (mediaType == MediaType.IMAGE) Category.entries else Category.entries.filter { it in videoDetectorCategories }
+        val listed = if (mediaType == MediaType.IMAGE) Category.entries - VIDEO_ONLY_CATEGORIES else Category.entries.filter { it in videoDetectorCategories }
         val categories = listed.map { category ->
             val candidates = byCategory[category].orEmpty()
             CategorySummary(category, candidates.size, mediaType == MediaType.VIDEO || category in detectorCategories, candidates.sumOf { it.image.ref.size })
@@ -285,7 +288,7 @@ class Review(
                     singles(category, candidates, grouping, ranking.favorites)
                 }
                 )
-                .let { all -> if (grouping == ReviewOrder.SIZE) all.sortedByDescending { group -> group.images.filter { it.suggestTrash }.sumOf { it.image.size } } else all }
+                .let { all -> if (grouping == ReviewOrder.SIZE) all.sortedByDescending { group -> group.images.filter { it.isCandidate }.sumOf { it.image.size } } else all }
                 .partition { it.id in skipped }
             val page = mutableListOf<ReviewGroup>()
             var size = 0
@@ -294,7 +297,7 @@ class Review(
                 page += group
                 size += group.images.size
             }
-            val skippedCandidates = hidden.sumOf { group -> group.images.count { it.suggestTrash } }
+            val skippedCandidates = hidden.sumOf { group -> group.images.count { it.isCandidate } }
             Page(page, candidates.size - skippedCandidates)
         }
     }
@@ -481,6 +484,7 @@ class Review(
                 ReviewItem(
                     image = image.ref,
                     suggestTrash = hasBest && !best && image.ref.path in candidateScores,
+                    isCandidate = image.ref.path in candidateScores,
                     isBest = best,
                     score = candidateScores[image.ref.path] ?: 0f,
                     reasons = candidateReasons[image.ref.path] ?: image.signals.filter { it.kind == category },

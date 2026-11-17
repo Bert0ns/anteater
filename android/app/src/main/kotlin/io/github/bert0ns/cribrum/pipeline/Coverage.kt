@@ -6,6 +6,7 @@ import io.github.bert0ns.cribrum.folders.isStickerFolder
 import io.github.bert0ns.cribrum.index.ImageIndex
 import io.github.bert0ns.cribrum.mobileclip.MODEL_ID
 import io.github.bert0ns.cribrum.mobileclip.MODEL_VERSION
+import io.github.bert0ns.cribrum.model.MediaType
 
 /** The [Failure.step] of an image the model could not embed, and the id of its row. */
 const val EMBEDDING_STEP = "embedding"
@@ -17,7 +18,7 @@ data class Coverage(val id: String, val version: Int, val analysed: Int, val nee
  * The embedding first, then each detector. Images in the trash are left out, since the scan no longer
  * looks at them. A sticker needs neither the embedding nor the detectors that skip it (§5), so an
  * embedding or a result it still has from an earlier scan counts for nothing. Group detectors see
- * every image the scan finds, unreadable ones too.
+ * every image the scan finds, unreadable ones too, and one that looks at videos only, such as the takes, has no row.
  */
 suspend fun ImageIndex.coverage(
     detectors: List<Detector> = DETECTORS,
@@ -32,5 +33,5 @@ suspend fun ImageIndex.coverage(
     suspend fun row(id: String, version: Int, needed: Set<String>, analysed: Set<String>) = Coverage(id, version, needed.count { it in analysed }, needed.size)
     return listOf(row(EMBEDDING_STEP, modelVersion, embeddable, embeddedPaths(model, modelVersion))) +
         detectors.map { row(it.id, it.version, if (runsOnStickers(it)) readable else embeddable, analyzedPaths(it.id, it.version)) } +
-        groupDetectors.map { row(it.id, it.version, everything, analyzedPaths(it.id, it.version)) }
+        groupDetectors.filter { MediaType.IMAGE in it.mediaTypes }.map { row(it.id, it.version, everything, analyzedPaths(it.id, it.version)) }
 }

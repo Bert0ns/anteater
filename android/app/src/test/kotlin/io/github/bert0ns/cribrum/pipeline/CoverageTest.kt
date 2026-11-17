@@ -129,7 +129,7 @@ class CoverageTest {
             "embedding" to 1, "document" to 1, "forwarded" to 1, "blur" to 1, "exposure" to 1, "faces" to 1,
             "screenshot" to 2, "sticker" to 2, // readable images: the camera image and the sticker
             "exact_duplicate" to 3, "near_duplicate" to 3, "burst" to 3, // every image found, the broken file included
-        )
+        ) // and no row for the takes, which look at videos only
         assertEquals(needed, rows.mapValues { it.value.needed })
         assertEquals(rows.mapValues { it.value.needed }, rows.mapValues { it.value.analysed })
     }

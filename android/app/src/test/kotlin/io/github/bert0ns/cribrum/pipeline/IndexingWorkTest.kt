@@ -665,7 +665,7 @@ class IndexingWorkTest {
         Indexing.scanNow(app)
         runBlocking { withTimeout(10_000) { Indexing.progress(app).filterNotNull().first() } }
 
-        assertEquals("Phase 4 of 4 · Finding duplicate videos", notificationTitle())
+        assertEquals("Phase 4 of 4 · Finding copies and takes", notificationTitle())
         assertEquals("Video scan", notificationSubText())
     }
 
