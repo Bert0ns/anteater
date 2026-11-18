@@ -12,7 +12,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -39,32 +43,45 @@ internal fun shareIntent(uri: Uri, mimeType: String?): Intent {
     return Intent.createChooser(send, null).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 }
 
-/** Opens the share sheet for the image or video at [path]. False when MediaStore has no row for it, or the sheet could not open. */
+/** Opens the share sheet for the image or video at [path]. False when MediaStore has no row for it or cannot be read, or the sheet could not open. */
 internal suspend fun shareMedia(context: Context, path: String): Boolean {
     val resolver = context.contentResolver
-    val (uri, type) = withContext(Dispatchers.IO) {
-        mediaUri(resolver, path)?.let { it to resolver.getType(it) }
-    } ?: return false
     return try {
+        val (uri, type) = withContext(Dispatchers.IO) {
+            mediaUri(resolver, path)?.let { it to resolver.getType(it) }
+        } ?: return false
         context.startActivity(shareIntent(uri, type))
         true
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        Log.w("share", "Could not open the share sheet", e)
+        // A SecurityException or a RuntimeException of MediaProvider, as from an unmounted volume, ends in the toast, not a crash.
+        Log.w("share", "Could not share $path", e)
         false
     }
 }
 
-/** The button that shares the photo or video at [path]. A toast says so when it has no MediaStore row to share. */
+/** The button that shares the photo or video at [path]. A toast says so when it cannot be shared. A tap while a share is being prepared does nothing. */
 @Composable
 internal fun ShareButton(path: String, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var sharing by remember { mutableStateOf(false) }
     val label = stringResource(R.string.share)
     val failed = stringResource(R.string.share_failed)
     IconButton(
-        { scope.launch { if (!shareMedia(context, path)) withContext(Dispatchers.Main) { Toast.makeText(context, failed, Toast.LENGTH_SHORT).show() } } },
+        {
+            if (!sharing) {
+                sharing = true
+                scope.launch {
+                    try {
+                        if (!shareMedia(context, path)) Toast.makeText(context, failed, Toast.LENGTH_SHORT).show()
+                    } finally {
+                        sharing = false
+                    }
+                }
+            }
+        },
         modifier.background(Color.Black.copy(alpha = 0.55f), CircleShape),
     ) { Icon(ShareIcon, label, tint = Color.White) }
 }
