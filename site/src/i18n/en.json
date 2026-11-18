@@ -139,7 +139,7 @@
       },
       {
         "term": "Similar copies",
-        "desc": "The smaller copy WhatsApp keeps in its Sent folder. Anteater keeps the camera original."
+        "desc": "A recompressed or smaller copy of a video, such as the one WhatsApp keeps in its Sent folder. Anteater keeps the camera original."
       },
       {
         "term": "Blurry, too dark or too bright",
@@ -435,7 +435,7 @@
         {
           "id": "videos-similar",
           "term": "Similar copies",
-          "desc": "The smaller copy WhatsApp keeps in its Sent folder. Anteater keeps the camera original."
+          "desc": "A recompressed or smaller copy of a video, such as the one WhatsApp keeps in its Sent folder. Anteater keeps the camera original."
         },
         {
           "id": "videos-quality",
@@ -570,7 +570,7 @@
         {
           "id": "settings-thresholds",
           "term": "Detection thresholds",
-          "desc": "A slider for each category except exact copies, WhatsApp stickers and takes of one moment, which are either in or out. The live count shows how many more or fewer files you would see. Videos have their own sliders, and Reset to defaults puts them all back."
+          "desc": "A slider for each category, except exact copies, WhatsApp stickers, takes of one moment and Largest videos, which have none. Videos have their own sliders for blurry, too dark or too bright, and short clips, and the other video categories follow the photo sliders. The live count shows how many more or fewer files you would see, and Reset to defaults puts them all back."
         },
         {
           "id": "settings-excluded",
@@ -585,7 +585,7 @@
         {
           "id": "settings-language",
           "term": "Language and look",
-          "desc": "Haptics on or off, English or Italian on Android 13 and newer, and the phone's dark theme."
+          "desc": "Haptics on or off, and English or Italian on Android 13 and newer. The app follows the phone's light or dark theme."
         },
         {
           "id": "settings-storage",

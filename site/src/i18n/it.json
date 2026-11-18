@@ -139,7 +139,7 @@
       },
       {
         "term": "Copie simili",
-        "desc": "La copia più piccola che WhatsApp tiene nella cartella Sent. Anteater tiene l'originale della fotocamera."
+        "desc": "Una copia ricompressa o più piccola di un video, come quella che WhatsApp tiene nella cartella Sent. Anteater tiene l'originale della fotocamera."
       },
       {
         "term": "Sfocati, troppo scuri o troppo chiari",
@@ -388,7 +388,7 @@
         {
           "id": "review-full-size",
           "term": "A schermo intero, con il motivo",
-          "desc": "Tieni premuta una foto per vederla a schermo intero, tra le altre foto della pagina. Dice perché è stata segnalata e permette di non suggerire più l'intera cartella. Un pulsante lì condivide il file."
+          "desc": "Tieni premuta una foto per vederla a schermo intero, sopra le altre foto della pagina. Dice perché è stata segnalata e permette di non suggerire più l'intera cartella. Un pulsante lì condivide il file."
         },
         {
           "id": "review-groups",
@@ -408,7 +408,7 @@
         {
           "id": "review-kept",
           "term": "Quello che tieni resta tenuto",
-          "desc": "Una foto che tieni non viene suggerita di nuovo, a meno che compaia qualcosa di nuovo che la riguarda, come una copia migliore."
+          "desc": "Una foto che tieni non viene suggerita di nuovo, a meno che non compaia qualcosa di nuovo che la riguarda, come una copia migliore."
         },
         {
           "id": "review-protected",
@@ -435,7 +435,7 @@
         {
           "id": "videos-similar",
           "term": "Copie simili",
-          "desc": "La copia più piccola che WhatsApp tiene nella cartella Sent. Anteater tiene l'originale della fotocamera."
+          "desc": "Una copia ricompressa o più piccola di un video, come quella che WhatsApp tiene nella cartella Sent. Anteater tiene l'originale della fotocamera."
         },
         {
           "id": "videos-quality",
@@ -502,7 +502,7 @@
         {
           "id": "compress-originals",
           "term": "Originali e annullamento",
-          "desc": "L'originale va nel cestino, e Ripristina gli originali rimette a posto tutta la compressione, finché il cestino li conserva. Se la foto era tra i preferiti della galleria, Android ti chiede di segnare di nuovo la copia come preferita."
+          "desc": "Gli originali vanno nel cestino, e Ripristina gli originali rimette a posto tutta la compressione, finché il cestino li conserva. Se la foto era tra i preferiti della galleria, Android ti chiede di segnare di nuovo la copia come preferita."
         },
         {
           "id": "compress-batches",
@@ -570,7 +570,7 @@
         {
           "id": "settings-thresholds",
           "term": "Soglie di rilevamento",
-          "desc": "Un cursore per ogni categoria, tranne copie identiche, sticker di WhatsApp e riprese dello stesso momento, che o ci sono o non ci sono. Il conteggio in tempo reale mostra quanti file in più o in meno vedresti. I video hanno i loro cursori, e Ripristina i valori predefiniti rimette tutto a posto."
+          "desc": "Un cursore per ogni categoria, tranne copie identiche, sticker di WhatsApp, riprese dello stesso momento e Video più grandi, che non ne hanno. I video hanno cursori propri per sfocati, troppo scuri o troppo chiari e clip brevi, e le altre categorie di video seguono i cursori delle foto. Il conteggio in tempo reale mostra quanti file in più o in meno vedresti, e Ripristina i valori predefiniti rimette tutto a posto."
         },
         {
           "id": "settings-excluded",
@@ -585,7 +585,7 @@
         {
           "id": "settings-language",
           "term": "Lingua e aspetto",
-          "desc": "Feedback tattile attivo o disattivo, inglese o italiano su Android 13 e successivi, e il tema scuro del telefono."
+          "desc": "Feedback tattile attivo o disattivo, e inglese o italiano su Android 13 e successivi. L'app segue il tema chiaro o scuro del telefono."
         },
         {
           "id": "settings-storage",
@@ -703,7 +703,7 @@
           {
             "id": "google-play",
             "q": "Perché non è su Google Play?",
-            "a": "Google Play consente l'accesso a tutti i file solo ad alcuni tipi di app, come i gestori di file, quindi Anteater si scarica direttamente come APK da GitHub. Per ora pubblicarla su Google Play non è un obiettivo. Poiché l'app non ha il permesso di rete, non può cercare aggiornamenti da sola, quindi ogni tanto guarda la pagina delle release.",
+            "a": "Google Play consente l'accesso a tutti i file solo ad alcuni tipi di app, come i gestori di file, quindi Anteater si scarica direttamente come APK da GitHub. Per ora pubblicare l'app su Google Play non è un obiettivo. Poiché l'app non ha il permesso di rete, non può cercare aggiornamenti da sola, quindi ogni tanto guarda la pagina delle release.",
             "link": {
               "label": "Come installare e controllare il download",
               "to": "home#install"
@@ -712,7 +712,7 @@
           {
             "id": "network",
             "q": "Invia qualcosa da qualche parte?",
-            "a": "No. Anteater non ha il permesso di rete, quindi Android non le lascia collegare nulla. Le tue foto, i tuoi video e i dati che ne ricava restano sul telefono.",
+            "a": "No. Anteater non ha il permesso di rete, quindi Android non permette all'app di collegarsi a nulla. Le tue foto, i tuoi video e i dati che ne ricava restano sul telefono.",
             "link": {
               "label": "L'elenco dei permessi",
               "to": "home#privacy"
