@@ -267,29 +267,40 @@
     "second": "Google Play allows that permission only for a few kinds of apps, such as file managers, so Anteater is a direct APK download on GitHub. The app has no network permission, so it cannot send anything anywhere."
   },
   "install": {
-    "title": "Install",
-    "copy": "Copy",
-    "copied": "Copied",
+    "title": "Install Anteater",
+    "lead": "Anteater is a direct download from GitHub, not from an app store.",
+    "download": "Download latest APK",
+    "requirements": "Requires Android 11 or newer. Free software under GPL-3.0.",
+    "stepsLabel": "Install steps",
     "steps": [
       {
         "title": "Download the APK",
-        "before": "Get the latest release from the ",
-        "link": "GitHub releases page",
-        "after": ". To check the download, compare its SHA-256 digest:"
+        "body": "Use the button above on your phone. The file comes from the latest release on GitHub."
       },
       {
         "title": "Allow unknown apps",
-        "body": "Open the downloaded file. When Android asks to allow installs from your browser or file manager, confirm."
+        "body": "Open the file. When Android asks to allow installs from your browser or file manager, confirm."
       },
       {
-        "title": "Grant storage access",
-        "body": "On first launch, Android sends you to a system screen. Turn on All files access for Anteater."
+        "title": "Allow All files access",
+        "body": "On first launch, Android opens a system screen. Turn on All files access for Anteater."
       },
       {
         "title": "Scan and review",
-        "body": "Tap Scan now for photos and Scan videos for videos. After that, Anteater also scans new files once a night while the phone charges. Then open a category to review it, or recompress large photos from the Compress tab."
+        "body": "Tap Scan now, then open a category to review what it found."
       }
-    ]
+    ],
+    "verify": {
+      "title": "Check the download",
+      "body": "Each release has a SHA-256 file. Save it next to the APK, then run this command in that folder on a computer. It prints OK when the file is intact.",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyLabel": "Copy the command"
+    },
+    "play": {
+      "text": "Not on Google Play: Anteater needs All files access, which Google Play allows only for a few kinds of apps. ",
+      "link": "Why it is not on Google Play"
+    }
   },
   "source": {
     "title": "Source code and license",
