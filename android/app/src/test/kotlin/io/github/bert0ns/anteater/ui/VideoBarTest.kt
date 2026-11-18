@@ -8,16 +8,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.down
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.moveBy
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.up
 import androidx.test.core.app.ApplicationProvider
 import io.github.bert0ns.anteater.model.MediaRef
 import io.github.bert0ns.anteater.model.MediaType
@@ -149,6 +154,53 @@ class VideoBarTest {
         compose.waitForIdle()
 
         assertEquals(listOf("/sdcard/Movies/two.mp4"), viewPlayers.single().paths)
+    }
+
+    @Test
+    fun `a swipe that is mostly sideways, a little askew, pages and leaves the bar alone`() {
+        open()
+        compose.onNodeWithTag("fullSize").performTouchInput {
+            swipe(Offset(width * 0.9f, height * 0.4f), Offset(width * 0.9f - 250f, height * 0.4f + 45f), durationMillis = 150)
+        }
+        compose.waitForIdle()
+
+        assertEquals(listOf("/sdcard/Movies/two.mp4"), viewPlayers.single().paths)
+        assertBar(shown = true)
+    }
+
+    @Test
+    fun `a finger on the seek bar holds the bar, and a seek starts the wait again`() {
+        open()
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithContentDescription("Position in the video").performTouchInput {
+            down(center)
+            repeat(5) { moveBy(Offset(20f, 0f)) }
+        }
+        compose.mainClock.advanceTimeBy(2_000)
+        assertBar(shown = true)
+
+        compose.onNodeWithContentDescription("Position in the video").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(600)
+        assertBar(shown = true)
+        playAboutASecond()
+        assertBar(shown = false)
+    }
+
+    @Test
+    fun `a screen reader that turns on while the bar is hidden brings it back, and it stays when the screen reader goes`() {
+        open()
+        playAboutASecond()
+        assertBar(shown = false)
+
+        setTouchExploration(true)
+        assertBar(shown = true)
+        setTouchExploration(false)
+        compose.waitForIdle()
+        assertBar(shown = true)
+    }
+
+    private fun setTouchExploration(on: Boolean) = compose.runOnUiThread {
+        shadowOf(ApplicationProvider.getApplicationContext<Context>().getSystemService(AccessibilityManager::class.java)).setTouchExplorationEnabled(on)
     }
 
     @Test

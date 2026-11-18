@@ -36,6 +36,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pinch
+import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
@@ -567,7 +568,7 @@ class CategoryScreenTest {
     }
 
     @Test
-    fun `a tap on a photo still closes the view and a horizontal swipe still pages, with the bar hidden`() {
+    fun `a tap on a photo still closes the view, and a horizontal swipe still pages and brings the bar of the next photo`() {
         compose.setContent { CategoryScreen(page, 3, emptySet(), false, {}, { _, _ -> }, {}) }
 
         openFullSize("img1.jpg")
@@ -575,9 +576,7 @@ class CategoryScreenTest {
         compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
         compose.waitForIdle()
         compose.onNodeWithTag("fullSize").assertExists()
-        compose.onNodeWithTag("fullSize").performTouchInput { swipeUp() }
-        compose.waitForIdle()
-        compose.onNodeWithText("Album2").assertExists()
+        compose.onNodeWithText("Album2").assertExists() // each page starts with its bar
 
         compose.onNodeWithTag("fullSize").performTouchInput { click() }
         compose.waitForIdle()
@@ -598,6 +597,49 @@ class CategoryScreenTest {
         compose.onNodeWithTag("fullSize").performTouchInput { swipeUp() }
         compose.waitForIdle()
         compose.onNodeWithText("Album1").assertExists()
+    }
+
+    @Test
+    fun `a swipe that is mostly sideways, a little askew, pages and leaves the bar alone`() {
+        compose.setContent { CategoryScreen(page, 3, emptySet(), false, {}, { _, _ -> }, {}) }
+
+        openFullSize("img1.jpg")
+        compose.onNodeWithTag("fullSize").performTouchInput {
+            swipe(Offset(width * 0.9f, height * 0.4f), Offset(width * 0.9f - 250f, height * 0.4f + 45f), durationMillis = 150)
+        }
+        compose.waitForIdle()
+
+        compose.onNodeWithText("Album2").assertExists()
+    }
+
+    @Test
+    fun `a photo hidden by a swipe, then zoomed, pans on a swipe up and the bar stays hidden`() {
+        compose.setContent { CategoryScreen(page, 3, emptySet(), false, {}, { _, _ -> }, {}) }
+
+        openFullSize("img1.jpg")
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("fullSize").performTouchInput {
+            pinch(center - Offset(50f, 0f), center - Offset(150f, 0f), center + Offset(50f, 0f), center + Offset(150f, 0f))
+        }
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeUp() }
+        compose.waitForIdle()
+
+        compose.onNodeWithText("Album1").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a swipe hides the bar of a photo and the next photo has its bar`() {
+        compose.setContent { CategoryScreen(page, 3, emptySet(), false, {}, { _, _ -> }, {}) }
+
+        openFullSize("img1.jpg")
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Album1").assertDoesNotExist()
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+
+        compose.onNodeWithText("Album2").assertExists()
     }
 
     @Test
