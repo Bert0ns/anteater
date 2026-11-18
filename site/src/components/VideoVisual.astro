@@ -1,0 +1,342 @@
+---
+import { Image } from "astro:assets";
+import type { ImageMetadata } from "astro";
+import { formatLength, videoMeta, type videoIds } from "../lib/category-cards";
+import { formatSize } from "../lib/storage-map";
+import type { Lang } from "../i18n";
+
+interface Props {
+  id: (typeof videoIds)[number];
+  images: ImageMetadata[];
+  lang: Lang;
+}
+
+const { id, images, lang } = Astro.props;
+const [first] = images;
+const meta = videoMeta[id].map((m) => ({ length: formatLength(m.seconds), size: formatSize(m.bytes, lang) }));
+const size = { width: 560, quality: 70, alt: "", loading: "lazy", decoding: "async" } as const;
+// The takes are three crops of one picture.
+const crops = ["20% 50%", "50% 50%", "80% 50%"];
+---
+
+<div class={`vis vis-${id.slice(7)}`}>
+  {
+    id === "videos-largest" && (
+      <>
+        <div class="tile back m" style="--from: translateY(40%); --to: none">
+          <Image src={first} {...size} />
+        </div>
+        <div class="tile mid m" style="--from: translateY(20%); --to: none">
+          <Image src={first} {...size} />
+        </div>
+        <div class="tile front">
+          <Image src={first} {...size} />
+          <span class="play"></span>
+          <span class="badge len">{meta[0].length}</span>
+          <span class="badge big">{meta[0].size}</span>
+        </div>
+      </>
+    )
+  }
+
+  {
+    id === "videos-exact" && (
+      <>
+        <div class="tile pair m" style="--from: translateY(-50%); --to: translate(-8%, -12%); --op-to: 0.5">
+          <Image src={first} {...size} />
+          <span class="mark"></span>
+        </div>
+        <div class="tile pair m" style="--from: translateY(50%); --to: translate(4%, 8%)">
+          <Image src={first} {...size} />
+          <span class="play"></span>
+          <span class="badge len">{meta[0].length}</span>
+          <span class="badge big">{meta[0].size}</span>
+        </div>
+      </>
+    )
+  }
+
+  {
+    id === "videos-similar" && (
+      <>
+        <div class="tile orig">
+          <Image src={first} {...size} />
+          <span class="play"></span>
+          <span class="badge len">{meta[0].length}</span>
+          <span class="badge big">{meta[0].size}</span>
+        </div>
+        <div class="tile copy m" style="--from: translateX(6%); --to: translate(-6%, -4%) scale(0.88); --op-to: 0.6">
+          <Image src={first} {...size} />
+          <span class="badge big">{meta[1].size}</span>
+          <span class="mark"></span>
+        </div>
+      </>
+    )
+  }
+
+  {
+    id === "videos-quality" && (
+      <div class="tile single">
+        <Image src={first} {...size} />
+        <div class="soft m" style="--op-from: 0; --op-to: 1">
+          <Image src={first} {...size} />
+        </div>
+        <span class="veil m" style="--op-from: 0; --op-to: 0.7"></span>
+        <span class="play"></span>
+        <span class="badge len">{meta[0].length}</span>
+        <span class="badge big">{meta[0].size}</span>
+      </div>
+    )
+  }
+
+  {
+    id === "videos-forwarded" && (
+      <>
+        <div class="bubble m" style="--from: translateX(-6%); --to: none">
+          <Image src={first} {...size} />
+          <span class="play"></span>
+          <span class="badge len">{meta[0].length}</span>
+          <span class="badge big">{meta[0].size}</span>
+        </div>
+        <span class="fwd m" style="--from: translateX(-120%) scale(0.6); --op-from: 0; --to: none">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 5l6 6-6 6" /><path d="M20 11H9a5 5 0 0 0-5 5v2" /></svg>
+        </span>
+      </>
+    )
+  }
+
+  {
+    id === "videos-takes" &&
+      meta.map((m, i) => (
+        <div
+          class="tile take m"
+          style={`--from: none; --to: translateY(${(i - 1) * 62}%); --delay: ${i === 1 ? 0 : 0.04}s; z-index: ${3 - i}`}
+        >
+          <Image src={first} {...size} style={`object-position: ${crops[i]}`} />
+          <span class="badge len">{m.length}</span>
+        </div>
+      ))
+  }
+
+  {
+    id === "videos-short" && (
+      <div class="tile single">
+        <Image src={first} {...size} />
+        <span class="play"></span>
+        <span class="badge len short">{meta[0].length}</span>
+        <span class="badge big">{meta[0].size}</span>
+        <span class="track"><span class="bar m" style="--from: scaleX(0); --to: none"></span></span>
+      </div>
+    )
+  }
+</div>
+
+<style>
+  .vis {
+    --shade: color-mix(in srgb, var(--bg) 60%, transparent);
+    position: relative;
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    background: var(--bg);
+    isolation: isolate;
+  }
+
+  .vis img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* A video tile: a 16:9 frame, a play mark, and a length and a size badge */
+  .tile {
+    position: absolute;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: var(--radius-s);
+    box-shadow:
+      0 0 0 1px var(--shade),
+      0 0.5rem 1rem var(--shade);
+  }
+
+  .play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--bg) 70%, transparent);
+    box-shadow: 0 0 0 1px var(--line-strong);
+    transform: translate(-50%, -50%);
+  }
+
+  .play::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0.8rem;
+    height: 0.9rem;
+    background: var(--text);
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+    transform: translate(-35%, -50%);
+  }
+
+  .badge {
+    position: absolute;
+    bottom: 0.4rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--bg) 80%, transparent);
+    color: var(--text);
+    font-size: var(--step--1);
+    font-weight: 600;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .badge.len {
+    left: 0.4rem;
+  }
+
+  .badge.big {
+    right: 0.4rem;
+  }
+
+  /* The red dot marks a video the app would move to the trash. */
+  .mark {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--bg);
+  }
+
+  /* Largest videos: the biggest one in front, smaller ones behind it */
+  .back {
+    left: 20%;
+    top: 5%;
+    width: 60%;
+  }
+
+  .mid {
+    left: 13%;
+    top: 17%;
+    width: 74%;
+  }
+
+  .front {
+    left: 6%;
+    top: 31%;
+    width: 88%;
+    z-index: 1;
+  }
+
+  /* Exact copies */
+  .pair {
+    left: 20%;
+    top: 29%;
+    width: 60%;
+  }
+
+  /* Similar copies: the camera original and the smaller copy beside it */
+  .orig {
+    left: 5%;
+    top: 10%;
+    width: 72%;
+  }
+
+  .copy {
+    left: 46%;
+    top: 46%;
+    width: 48%;
+  }
+
+  .copy .badge.big {
+    right: auto;
+    left: 0.4rem;
+  }
+
+  .single {
+    left: 8%;
+    top: 17%;
+    width: 84%;
+  }
+
+  /* Blurry, too dark or too bright: the left half goes soft and the right half goes dark */
+  .soft {
+    position: absolute;
+    inset: 0;
+    clip-path: inset(0 50% 0 0);
+  }
+
+  .soft img {
+    filter: blur(0.5rem);
+    transform: scale(1.12);
+  }
+
+  .veil {
+    position: absolute;
+    inset: 0 0 0 50%;
+    background: var(--bg);
+  }
+
+  /* Forwarded */
+  .bubble {
+    position: absolute;
+    left: 8%;
+    top: 22%;
+    width: 66%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: var(--radius-m) var(--radius-m) var(--radius-m) var(--radius-s);
+    box-shadow: 0 0.5rem 1rem var(--shade);
+  }
+
+  .fwd {
+    position: absolute;
+    left: 78%;
+    top: 40%;
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 0 0 1px var(--line-strong);
+  }
+
+  /* Takes of one moment: three takes, one under the other, each a little different */
+  .take {
+    left: 22%;
+    top: 29%;
+    width: 56%;
+  }
+
+  /* Short clips: a clip that ends almost at once */
+  .badge.short {
+    color: var(--bg);
+    background: var(--text);
+  }
+
+  .track {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 0.25rem;
+    background: var(--shade);
+  }
+
+  .bar {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    transform-origin: left;
+  }
+</style>

@@ -1,5 +1,6 @@
 ---
 import Base from "../layouts/Base.astro";
+import CategoryCards from "./CategoryCards.astro";
 import FeatureList from "./FeatureList.astro";
 import Install from "./Install.astro";
 import Privacy from "./Privacy.astro";
@@ -16,8 +17,7 @@ const { lang } = Astro.props;
 const t = strings[lang];
 const repo = "https://github.com/Bert0ns/anteater";
 // The home page keeps a short version of these. Each links to its part of the features page.
-const sections = ["photos", "videos", "compress"] as const;
-const anchors = { photos: "clean", videos: "videos", compress: "compress" } as const;
+const sections = ["compress"] as const;
 const features = pagePath(lang, "features");
 ---
 
@@ -41,9 +41,12 @@ const features = pagePath(lang, "features");
     <Privacy lang={lang} />
     <Safety lang={lang} />
 
+    <CategoryCards lang={lang} group="photos" />
+    <CategoryCards lang={lang} group="videos" />
+
     {
       sections.map((key) => (
-        <section id={anchors[key]}>
+        <section id={key}>
           <h2>{t[key].title}</h2>
           <p>{t[key].intro}</p>
           <FeatureList items={t[key].items} />

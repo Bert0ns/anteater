@@ -87,40 +87,40 @@
     "intro": "Anteater analizza la tua memoria, comprese le cartelle che le app della galleria ignorano, come quella di WhatsApp. La scheda Foto di Pulisci elenca nove categorie, e ognuna si apre in una griglia con le foto suggerite già segnate.",
     "items": [
       {
-        "term": "Copie identiche",
-        "desc": "Lo stesso file salvato due volte. Anteater segna le copie in più."
+        "id": "photos-exact",
+        "line": "Lo stesso file due volte. La copia in più è segnata."
       },
       {
-        "term": "Copie simili",
-        "desc": "Copie ricompresse, ridimensionate o modificate di una stessa foto. Suggerisce di tenere la migliore."
+        "id": "photos-similar",
+        "line": "Copie modificate o ridimensionate di una foto. Resta la migliore."
       },
       {
-        "term": "Raffiche",
-        "desc": "Foto scattate a pochi secondi di distanza. Suggerisce di tenere lo scatto più nitido."
+        "id": "photos-bursts",
+        "line": "Scatti a pochi secondi l'uno dall'altro. Resta il più nitido."
       },
       {
-        "term": "Sfocate",
-        "desc": "Foto in cui il soggetto non è a fuoco. I ritratti con lo sfondo sfocato non vengono segnalati."
+        "id": "photos-blurry",
+        "line": "Il soggetto non è a fuoco. Gli sfondi sfocati vanno bene."
       },
       {
-        "term": "Troppo scure o troppo chiare",
-        "desc": "Scatti in tasca, fotogrammi neri e foto sovraesposte."
+        "id": "photos-exposure",
+        "line": "Scatti in tasca, fotogrammi neri e foto sovraesposte."
       },
       {
-        "term": "Screenshot",
-        "desc": "Catture dello schermo."
+        "id": "photos-screenshots",
+        "line": "Catture dello schermo tra le tue foto."
       },
       {
-        "term": "Documenti e appunti",
-        "desc": "Slide, lavagne, scrittura a mano, scontrini e pagine stampate."
+        "id": "photos-documents",
+        "line": "Slide, lavagne, scrittura a mano e scontrini."
       },
       {
-        "term": "Inoltrate",
-        "desc": "Meme e immagini di saluti dalle app di messaggistica."
+        "id": "photos-forwarded",
+        "line": "Meme e immagini di saluti dalle app di messaggistica."
       },
       {
-        "term": "Sticker di WhatsApp",
-        "desc": "File nelle cartelle degli sticker delle app di messaggistica."
+        "id": "photos-stickers",
+        "line": "Gli sticker che le app di messaggistica lasciano in giro."
       }
     ],
     "more": "Ogni categoria nel dettaglio"
@@ -130,32 +130,32 @@
     "intro": "La scheda Video ha il suo pulsante Scansiona i video, i suoi conteggi e il suo totale. I video grandi vengono per primi.",
     "items": [
       {
-        "term": "Video più grandi",
-        "desc": "Tutti i video che non hai ancora controllato, dal più grande."
+        "id": "videos-largest",
+        "line": "Ogni video non ancora controllato, dal più grande."
       },
       {
-        "term": "Copie identiche",
-        "desc": "Lo stesso video salvato due volte."
+        "id": "videos-exact",
+        "line": "Lo stesso video salvato due volte."
       },
       {
-        "term": "Copie simili",
-        "desc": "Una copia ricompressa o più piccola di un video, come quella che WhatsApp tiene nella cartella Sent. Anteater tiene l'originale della fotocamera."
+        "id": "videos-similar",
+        "line": "Una copia più piccola e ricompressa. Resta l'originale della fotocamera."
       },
       {
-        "term": "Sfocati, troppo scuri o troppo chiari",
-        "desc": "Video fuori fuoco o esposti male, con soglie tutte loro."
+        "id": "videos-quality",
+        "line": "Video fuori fuoco o esposti male."
       },
       {
-        "term": "Inoltrati",
-        "desc": "Video nelle cartelle delle app di messaggistica, compresa Sent."
+        "id": "videos-forwarded",
+        "line": "Video dalle cartelle delle app di messaggistica, Sent compresa."
       },
       {
-        "term": "Riprese dello stesso momento",
-        "desc": "Più riprese registrate una dopo l'altra. Nessuna è preselezionata, perché Anteater non sa dire quale sia la migliore."
+        "id": "videos-takes",
+        "line": "Più riprese dello stesso momento. Scegli tu quale tenere."
       },
       {
-        "term": "Clip brevi",
-        "desc": "Clip sotto i 15 secondi, come una ripresa venuta male, una registrazione in tasca o una clip senza audio in una cartella di chat. I primi riquadri sullo schermo si ripetono senza audio, così decidi a colpo d'occhio."
+        "id": "videos-short",
+        "line": "Clip sotto i 15 secondi, come una ripresa venuta male."
       }
     ],
     "more": "Ogni categoria di video nel dettaglio"

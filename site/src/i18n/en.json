@@ -87,40 +87,40 @@
     "intro": "Anteater scans your storage, including folders that gallery apps skip, such as WhatsApp's. The Photos tab of Clean lists nine categories, and each opens into a grid with the suggested photos already marked.",
     "items": [
       {
-        "term": "Exact copies",
-        "desc": "The same file saved twice. Anteater marks the extra ones."
+        "id": "photos-exact",
+        "line": "The same file twice. The extra one is marked."
       },
       {
-        "term": "Similar copies",
-        "desc": "Recompressed, resized or edited copies of one photo. It suggests keeping the best one."
+        "id": "photos-similar",
+        "line": "Edited or resized copies of one photo. The best one stays."
       },
       {
-        "term": "Bursts",
-        "desc": "Photos taken a few seconds apart. It suggests keeping the sharpest shot."
+        "id": "photos-bursts",
+        "line": "Shots a few seconds apart. The sharpest one stays."
       },
       {
-        "term": "Blurry",
-        "desc": "Photos where the subject is out of focus. Portraits with a soft background are not flagged."
+        "id": "photos-blurry",
+        "line": "The subject is out of focus. Soft backgrounds are fine."
       },
       {
-        "term": "Too dark or too bright",
-        "desc": "Pocket shots, black frames and blown-out photos."
+        "id": "photos-exposure",
+        "line": "Pocket shots, black frames and blown-out photos."
       },
       {
-        "term": "Screenshots",
-        "desc": "Screen captures."
+        "id": "photos-screenshots",
+        "line": "Screen captures among your photos."
       },
       {
-        "term": "Documents and notes",
-        "desc": "Slides, whiteboards, handwriting, receipts and printed pages."
+        "id": "photos-documents",
+        "line": "Slides, whiteboards, handwriting and receipts."
       },
       {
-        "term": "Forwarded",
-        "desc": "Memes and greeting images from messaging apps."
+        "id": "photos-forwarded",
+        "line": "Memes and greeting images from messaging apps."
       },
       {
-        "term": "WhatsApp stickers",
-        "desc": "Files in the sticker folders of messaging apps."
+        "id": "photos-stickers",
+        "line": "The stickers that messaging apps leave behind."
       }
     ],
     "more": "Every category in detail"
@@ -130,32 +130,32 @@
     "intro": "The Videos tab has its own Scan videos button, its own counts and its own total. Large videos come first.",
     "items": [
       {
-        "term": "Largest videos",
-        "desc": "Every video you have not reviewed yet, biggest first."
+        "id": "videos-largest",
+        "line": "Every video you have not reviewed yet, biggest first."
       },
       {
-        "term": "Exact copies",
-        "desc": "The same video saved twice."
+        "id": "videos-exact",
+        "line": "The same video saved twice."
       },
       {
-        "term": "Similar copies",
-        "desc": "A recompressed or smaller copy of a video, such as the one WhatsApp keeps in its Sent folder. Anteater keeps the camera original."
+        "id": "videos-similar",
+        "line": "A smaller, recompressed copy. The camera original stays."
       },
       {
-        "term": "Blurry, too dark or too bright",
-        "desc": "Videos that are out of focus or badly exposed, with thresholds of their own."
+        "id": "videos-quality",
+        "line": "Videos that are out of focus or badly exposed."
       },
       {
-        "term": "Forwarded",
-        "desc": "Videos in the folders of messaging apps, Sent included."
+        "id": "videos-forwarded",
+        "line": "Videos from messaging app folders, Sent included."
       },
       {
-        "term": "Takes of one moment",
-        "desc": "Several takes recorded one after the other. None is preselected, because Anteater cannot tell which is best."
+        "id": "videos-takes",
+        "line": "Several takes of one moment. You pick which one to keep."
       },
       {
-        "term": "Short clips",
-        "desc": "Clips under 15 seconds, such as a failed take, a pocket recording or a silent clip in a chat folder. The first tiles on screen loop muted, so you can decide at a glance."
+        "id": "videos-short",
+        "line": "Clips under 15 seconds, such as a failed take."
       }
     ],
     "more": "Every video category in detail"
