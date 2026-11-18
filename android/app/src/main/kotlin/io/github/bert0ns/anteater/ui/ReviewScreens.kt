@@ -68,6 +68,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -578,6 +579,13 @@ internal fun FullSizeViewer(
     val pageChanged by rememberUpdatedState(onPage)
     LaunchedEffect(pager) { snapshotFlow { pager.settledPage }.drop(1).collect { pageChanged(it) } }
     val bar = remember { FullSizeBarState() }
+    val touchExploration = rememberTouchExploration()
+    SideEffect { bar.screenReader = touchExploration }
+    // Each page starts with its bar: the one a swipe hid or a video's playing hid is not the next page's.
+    LaunchedEffect(pager.currentPage, touchExploration) {
+        bar.hidden = false
+        bar.pinned = false
+    }
     Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false)) {
         CompositionLocalProvider(LocalFullSizeBar provides bar) {
             Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -630,9 +638,8 @@ internal fun BoxScope.FullSizeToggle(checked: Boolean, label: String, checkedCol
  */
 @Composable
 internal fun BoxScope.FullSizeBar(path: String, favorite: Boolean, heart: @Composable () -> Unit = { if (favorite) FavoriteHeart() }, playback: VideoPlayback? = null, content: @Composable ColumnScope.() -> Unit) {
-    val touchExploration = rememberTouchExploration()
-    if (playback != null) BarAutoHide(playback, touchExploration)
-    AnimatedVisibility(!LocalFullSizeBar.current.hidden || touchExploration, Modifier.align(Alignment.BottomStart), enter = fadeIn(), exit = fadeOut()) {
+    if (playback != null) BarAutoHide(playback)
+    AnimatedVisibility(LocalFullSizeBar.current.shown, Modifier.align(Alignment.BottomStart), enter = fadeIn(), exit = fadeOut()) {
         Column(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.7f)).windowInsetsPadding(WindowInsets.safeDrawing).padding(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(File(path).parentFile?.name.orEmpty(), Modifier.weight(1f), color = Color.White, style = MaterialTheme.typography.labelMedium)
@@ -719,6 +726,11 @@ internal fun ZoomableImage(path: String, onClose: () -> Unit) {
                             event.changes.forEach { it.consume() }
                         }
                     } while (event.changes.any { it.pressed })
+                    // A pinch that ends a hair above the fit scale is at it, so a vertical drag is a swipe and not a pan.
+                    if (scale < FIT_SNAP) {
+                        scale = 1f
+                        offset = Offset.Zero
+                    }
                 }
             }
             .clickable(onClick = onClose)

@@ -122,8 +122,13 @@ internal fun Modifier.zoomGestures(zoom: Zoom, onTap: (() -> Unit)? = null) = th
                     event.changes.forEach { if (it.pressed) it.consume() }
                 }
             } while (event.changes.any { it.pressed })
+            // A pinch that ends a hair above the fit scale is at it, so a vertical drag is a swipe and not a pan.
+            if (zoom.scale < FIT_SNAP) zoom.reset()
         }
     }
+
+/** The scale under which a pinch that lets go is the whole photo again. */
+internal const val FIT_SNAP = 1.01f
 
 /** The preview file keeps its name from one photo to the next, so the file's date is what tells Coil it changed. */
 internal fun previewCacheKey(file: File) = "${file.path}:${file.lastModified()}"
