@@ -11,12 +11,12 @@
     "trash": "Cestino",
     "settings": "Opzioni",
     "install": "Installazione",
-    "source": "Codice",
     "otherLanguage": "English",
     "otherLanguageTitle": "Read in English",
-    "themeToggle": "Cambia tema",
-    "themeToLight": "Passa al tema chiaro",
-    "themeToDark": "Passa al tema scuro"
+    "label": "Principale",
+    "otherLanguageShort": "EN",
+    "download": "Scarica",
+    "menu": "Menu"
   },
   "hero": {
     "title": "Trova le foto e i video che puoi eliminare",
@@ -300,6 +300,14 @@
   "footer": {
     "license": "Anteater • GNU GPLv3",
     "releases": "Release",
-    "design": "Progettazione"
+    "design": "Progettazione",
+    "tagline": "Trova le foto e i video che puoi eliminare. Tutto avviene sul telefono.",
+    "sections": "Esplora",
+    "project": "Progetto",
+    "licenseLink": "Licenza",
+    "privacy": "Nessun tracker, nessun cookie, nessuna richiesta a terzi."
+  },
+  "a11y": {
+    "skip": "Vai al contenuto"
   }
 }

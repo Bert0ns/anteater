@@ -1,0 +1,89 @@
+/* The design tokens of the site. VISUAL-SYSTEM.md in site/ explains how to use them, and
+   scripts/check-contrast.mjs reads the colours below and fails the build if a pair drops under
+   WCAG AA. Dark only: there is no light theme. */
+:root {
+  color-scheme: dark;
+
+  /* Colour. Taken from logo.png: the tile, the cream body and the red dot. */
+  --bg: #121619;
+  --surface: #1b2024;
+  --raised: #232a2f;
+  --line: #2c3338;
+  --line-strong: #3a4249;
+  --text: #f4f1ea;
+  --text-muted: #b7b4ab;
+  --text-dim: #8f8e87;
+  /* The red dot. For shapes and icons. Body text in this red is under 4.5:1, so use --accent-text. */
+  --accent: #e53935;
+  --accent-text: #ff6b66;
+
+  /* Fonts */
+  --font-display: "Bricolage Grotesque", "Bricolage Grotesque Fallback", Arial, sans-serif;
+  --font-text: "Instrument Sans", "Instrument Sans Fallback", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* Type scale, fluid from a 360 px phone to a 1440 px screen. */
+  --step--1: clamp(0.8125rem, 0.79rem + 0.12vw, 0.9rem);
+  --step-0: clamp(1rem, 0.96rem + 0.2vw, 1.125rem);
+  --step-1: clamp(1.15rem, 1.08rem + 0.35vw, 1.35rem);
+  --step-2: clamp(1.4rem, 1.25rem + 0.75vw, 1.9rem);
+  --step-3: clamp(1.75rem, 1.45rem + 1.5vw, 2.75rem);
+  --step-4: clamp(2.2rem, 1.6rem + 3vw, 4rem);
+  --step-5: clamp(2.6rem, 1.5rem + 5.5vw, 5.75rem);
+
+  /* Spacing, on a 4 px base. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4.5rem;
+  --space-9: 6.5rem;
+  --space-10: 9rem;
+
+  /* Layout */
+  --gutter: clamp(1rem, 4vw, 2.5rem);
+  --container: 75rem;
+  --prose: 42rem;
+  --header-height: 4rem;
+
+  /* Radius */
+  --radius-s: 0.5rem;
+  --radius-m: 0.875rem;
+  --radius-l: 1.5rem;
+  --radius-pill: 999px;
+
+  /* Motion. The rules are in VISUAL-SYSTEM.md. */
+  --dur-instant: 100ms;
+  --dur-fast: 180ms;
+  --dur-base: 320ms;
+  --dur-slow: 560ms;
+  --dur-hero: 1000ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.64, 0, 0.78, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* Motion off. Animations and transitions finish at once, so every element is in its end state,
+   and nothing scrolls smoothly. A demo that needs more, such as a looping animation, stops itself. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-instant: 0.01ms;
+    --dur-fast: 0.01ms;
+    --dur-base: 0.01ms;
+    --dur-slow: 0.01ms;
+    --dur-hero: 0.01ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -11,12 +11,12 @@
     "trash": "Trash",
     "settings": "Settings",
     "install": "Install",
-    "source": "Source",
     "otherLanguage": "Italiano",
     "otherLanguageTitle": "Leggi in italiano",
-    "themeToggle": "Toggle theme",
-    "themeToLight": "Switch to light theme",
-    "themeToDark": "Switch to dark theme"
+    "label": "Main",
+    "otherLanguageShort": "IT",
+    "download": "Download",
+    "menu": "Menu"
   },
   "hero": {
     "title": "Find the photos and videos you can delete",
@@ -300,6 +300,14 @@
   "footer": {
     "license": "Anteater • GNU GPLv3",
     "releases": "Releases",
-    "design": "Design"
+    "design": "Design",
+    "tagline": "Finds the photos and videos you can delete. Everything runs on your phone.",
+    "sections": "Explore",
+    "project": "Project",
+    "licenseLink": "License",
+    "privacy": "No trackers, no cookies, no third-party requests."
+  },
+  "a11y": {
+    "skip": "Skip to content"
   }
 }
