@@ -294,8 +294,7 @@
       "title": "Controlla il download",
       "body": "Ogni release ha un file SHA-256. Salvalo accanto all'APK, poi esegui questo comando in quella cartella su un computer. Stampa OK se il file è integro.",
       "copy": "Copia",
-      "copied": "Copiato",
-      "copyLabel": "Copia il comando"
+      "copied": "Copiato"
     },
     "play": {
       "text": "Non è su Google Play: Anteater ha bisogno dell'accesso a tutti i file, che Google Play consente solo ad alcuni tipi di app. ",
