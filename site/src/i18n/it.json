@@ -200,11 +200,11 @@
     "steps": [
       {
         "title": "Segnati",
-        "body": "Anteater segna le foto e i video di cui secondo lui puoi fare a meno. Nulla si sposta finché non premi il pulsante sotto la griglia, e con un tocco ne tieni uno qualsiasi. Se una pagina segna un preferito della galleria, l'app chiede conferma prima di spostarlo."
+        "body": "Anteater segna le foto e i video di cui secondo lui puoi fare a meno. Nulla si sposta finché non premi il pulsante sotto la griglia, e con un tocco ne tieni uno qualsiasi. I preferiti della galleria partono non segnati, e se ne segni uno l'app chiede conferma prima di spostarlo."
       },
       {
         "title": "Nel cestino per 30 giorni",
-        "body": "Il pulsante sposta i file in una cartella cestino sul telefono, e ognuno mostra i giorni che restano. 30 giorni è il valore predefinito. Nelle impostazioni scegli 7, 14, 60 o 90."
+        "body": "Il pulsante sposta i file in una cartella cestino sul telefono, e ognuno mostra i giorni che restano. 30 giorni è il valore predefinito. In Opzioni scegli 7, 14, 60 o 90."
       },
       {
         "title": "Eliminati quando lo dici tu",
