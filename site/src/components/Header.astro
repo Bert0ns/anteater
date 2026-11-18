@@ -1,0 +1,69 @@
+---
+import { homePath, otherLang, strings, type Lang } from "../i18n";
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = strings[lang];
+const other = otherLang(lang);
+const home = homePath(lang);
+const repo = "https://github.com/Bert0ns/anteater";
+// The anchors live on the home page, so the links work from other pages too.
+const links = [
+  { href: `${home}#clean`, label: t.nav.photos },
+  { href: `${home}#videos`, label: t.nav.videos },
+  { href: `${home}#compress`, label: t.nav.compress },
+  { href: `${home}#trash`, label: t.nav.trash },
+  { href: `${home}#settings`, label: t.nav.settings },
+  { href: `${home}#install`, label: t.nav.install },
+];
+---
+
+<div class="site-header">
+  <div class="container">
+    <div class="header-bar">
+      <a href={home} class="brand">
+        <img class="brand-mark" src="/logo.png" width="28" height="28" alt="" />
+        <span class="brand-name">Anteater</span>
+      </a>
+
+      <nav class="header-nav" aria-label={t.nav.label}>
+        <ul>
+          {links.map((link) => <li><a href={link.href}>{link.label}</a></li>)}
+        </ul>
+      </nav>
+
+      <div class="header-actions">
+        <a href={homePath(other)} class="lang-switch" lang={other} hreflang={other} aria-label={t.nav.otherLanguageTitle} title={t.nav.otherLanguageTitle}>
+          <span class="lang-long" aria-hidden="true">{t.nav.otherLanguage}</span>
+          <span class="lang-short" aria-hidden="true">{t.nav.otherLanguageShort}</span>
+        </a>
+        <a href={`${repo}/releases/latest`} class="btn btn-primary btn-small"><span class="dot" aria-hidden="true"></span>{t.nav.download}</a>
+        <details class="menu">
+          <summary aria-label={t.nav.menu}><span class="menu-icon" aria-hidden="true"></span></summary>
+          <nav class="menu-panel" aria-label={t.nav.label}>
+            <ul>
+              {links.map((link) => <li><a href={link.href}>{link.label}</a></li>)}
+            </ul>
+          </nav>
+        </details>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Without JavaScript the menu still opens and closes. This closes it after a tap on a link or Escape.
+  const menu = document.querySelector<HTMLDetailsElement>(".menu");
+  menu?.addEventListener("click", (event) => {
+    if ((event.target as Element).closest(".menu-panel a")) menu.open = false;
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && menu?.open) {
+      menu.open = false;
+      menu.querySelector("summary")?.focus();
+    }
+  });
+</script>

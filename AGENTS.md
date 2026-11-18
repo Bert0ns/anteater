@@ -27,7 +27,7 @@ The deterministic checks must pass before a PR is ready, and a red check means i
 - `android/`: `./gradlew ktlintCheck testDebugUnitTest lintDebug assembleDebug :baselineprofile:compileNonMinifiedReleaseKotlin`, and `./gradlew ktlintFormat` fixes the formatting
 - Gradle builds from several worktrees on one machine fight over the shared Gradle caches and the CPU, and fail on cache lock timeouts. Run Gradle through `flock`, so they wait in a queue: `flock /tmp/cribrum-gradle.lock ./gradlew ...`. The Android build and its Robolectric tests need JDK 21. The lock keeps its old name, `cribrum-gradle.lock`, on purpose, so that every worktree and agent still shares one queue.
 - Run the checks once, in one Gradle call, not several Gradle runs in parallel. If a run takes more than 30 minutes, look at `ps` and `uptime` for a stuck or starved build instead of waiting on it.
-- `site/`: `npm ci && npm run check`, with the Node version in `site/.nvmrc`. It builds the site, checks that `en.json` and `it.json` have the same keys, and checks the internal links of the built pages. The three run alone as `npm run build`, `npm run check:i18n` and `npm run check:links`.
+- `site/`: `npm ci && npm run check`, with the Node version in `site/.nvmrc`. It builds the site, checks that `en.json` and `it.json` have the same keys, checks the internal links of the built pages, and checks the colour contrast of the tokens. The four run alone as `npm run build`, `npm run check:i18n`, `npm run check:links` and `npm run check:contrast`.
 - `python3 lab/scripts/check_parity.py` checks that lab and android agree on detector ids, versions and thresholds. When you change one side, change the other, and bump the detector version if its output changes.
 
 CI runs `lab`, `android`, `parity`, `site` and `commit-format` on every PR, and branch protection on `main` requires them to pass.
@@ -108,4 +108,4 @@ Rebase and merge keep every commit, so every commit in a PR must follow the form
 
 - `lab/`: Python 3.12+, `src/` layout, tests under `lab/tests/` (pytest).
 - `android/`: Kotlin + Jetpack Compose, with tests under `android/app/src/test/` (JUnit and Robolectric).
-- `site/`: Astro, building static files, with English at `/` and Italian at `/it/`. The strings live in `site/src/i18n/`.
+- `site/`: Astro, building static files, with English at `/` and Italian at `/it/`. The strings live in `site/src/i18n/`. Read [`site/VISUAL-SYSTEM.md`](site/VISUAL-SYSTEM.md) before styling anything: tokens, type, layout and the motion rules.

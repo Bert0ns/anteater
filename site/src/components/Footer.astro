@@ -1,0 +1,59 @@
+---
+import { homePath, strings, type Lang } from "../i18n";
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = strings[lang];
+const home = homePath(lang);
+const repo = "https://github.com/Bert0ns/anteater";
+const sections = [
+  { href: `${home}#clean`, label: t.nav.photos },
+  { href: `${home}#videos`, label: t.nav.videos },
+  { href: `${home}#compress`, label: t.nav.compress },
+  { href: `${home}#trash`, label: t.nav.trash },
+  { href: `${home}#settings`, label: t.nav.settings },
+  { href: `${home}#install`, label: t.nav.install },
+];
+const project = [
+  { href: repo, label: "GitHub" },
+  { href: `${repo}/releases/latest`, label: t.footer.releases },
+  { href: `${repo}/blob/main/docs/design.md`, label: t.footer.design },
+  { href: `${repo}/blob/main/LICENSE`, label: t.footer.licenseLink },
+];
+---
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-about">
+        <a href={home} class="brand">
+          <img class="brand-mark" src="/logo.png" width="28" height="28" alt="" />
+          <span>Anteater</span>
+        </a>
+        <p>{t.footer.tagline}</p>
+      </div>
+
+      <nav aria-label={t.footer.sections}>
+        <h2 class="footer-heading">{t.footer.sections}</h2>
+        <ul class="footer-list">
+          {sections.map((link) => <li><a href={link.href}>{link.label}</a></li>)}
+        </ul>
+      </nav>
+
+      <nav aria-label={t.footer.project}>
+        <h2 class="footer-heading">{t.footer.project}</h2>
+        <ul class="footer-list">
+          {project.map((link) => <li><a href={link.href} target="_blank" rel="noopener noreferrer">{link.label}</a></li>)}
+        </ul>
+      </nav>
+    </div>
+
+    <div class="footer-bottom">
+      <p>{t.footer.license}</p>
+      <p>{t.footer.privacy}</p>
+    </div>
+  </div>
+</footer>

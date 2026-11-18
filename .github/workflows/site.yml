@@ -47,6 +47,8 @@ jobs:
         run: npm run check:i18n
       - if: steps.changed.outputs.run
         run: npm run check:links
+      - if: steps.changed.outputs.run
+        run: npm run check:contrast
       - if: steps.changed.outputs.run && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
