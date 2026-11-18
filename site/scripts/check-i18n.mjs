@@ -5,10 +5,19 @@ import { readFileSync } from "node:fs";
 const dir = new URL("../src/i18n/", import.meta.url);
 const files = { en: "en.json", it: "it.json" };
 
-// Flattens nested objects and arrays into dotted paths, such as "photos.items.0.term".
+// Flattens nested objects and arrays into dotted paths, such as "photos.items.0.term". An empty
+// container, or an array in one file where the other has an object, changes the keys, and an
+// empty string is an error.
 function keys(value, prefix = "") {
-  if (value === null || typeof value !== "object") return [prefix];
-  return Object.entries(value).flatMap(([k, v]) => keys(v, prefix ? `${prefix}.${k}` : k));
+  if (typeof value === "string") {
+    if (value.trim() === "") throw new Error(`Empty translation at "${prefix}"`);
+    return [prefix];
+  }
+  if (value === null || typeof value !== "object") throw new Error(`"${prefix}" is not a string, an array or an object`);
+  const tag = Array.isArray(value) ? "[]" : "{}";
+  const entries = Object.entries(value);
+  if (entries.length === 0) return [`${prefix}${tag}`];
+  return [`${prefix}${tag}`, ...entries.flatMap(([k, v]) => keys(v, prefix ? `${prefix}.${k}` : k))];
 }
 
 const sets = Object.fromEntries(

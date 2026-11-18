@@ -9,7 +9,7 @@
     "videos": "Video",
     "compress": "Comprimi",
     "trash": "Cestino",
-    "settings": "Impostazioni",
+    "settings": "Opzioni",
     "install": "Installazione",
     "source": "Codice",
     "otherLanguage": "English",
@@ -71,8 +71,8 @@
         "alt": "Schermata del cestino con i giorni rimasti su ogni foto e un pulsante per svuotarlo"
       },
       {
-        "caption": "Impostazioni",
-        "alt": "Impostazioni con la conservazione del cestino, le cartelle escluse, la mappa dell'archiviazione, il feedback tattile e gli interruttori della scansione notturna"
+        "caption": "Opzioni",
+        "alt": "Schermata Opzioni con la conservazione del cestino, le cartelle escluse, la mappa dell'archiviazione, il feedback tattile e gli interruttori della scansione notturna"
       },
       {
         "caption": "Mappa dell'archiviazione",
@@ -86,7 +86,7 @@
     "items": [
       {
         "term": "Copie identiche",
-        "desc": "Lo stesso file salvato due volte. Anteater segna quelle in più."
+        "desc": "Lo stesso file salvato due volte. Anteater segna le copie in più."
       },
       {
         "term": "Copie simili",
@@ -210,7 +210,7 @@
     ]
   },
   "settings": {
-    "title": "Impostazioni e mappa dell'archiviazione",
+    "title": "Opzioni e mappa dell'archiviazione",
     "items": [
       {
         "term": "Conservazione del cestino",

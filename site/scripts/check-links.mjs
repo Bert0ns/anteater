@@ -2,7 +2,7 @@
 // file that exists, and every #fragment to an id on the target page. External links are not
 // requested, so the check never depends on the network.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const dist = resolve(dirname(fileURLToPath(import.meta.url)), "../dist");
@@ -31,7 +31,7 @@ function idsOf(file) {
 // The file a URL path points to inside dist/, or null if there is none.
 function target(path) {
   const file = join(dist, path);
-  if (!file.startsWith(dist)) return null;
+  if (file !== dist && !file.startsWith(dist + sep)) return null;
   if (existsSync(file) && statSync(file).isFile()) return file;
   const index = join(file, "index.html");
   return existsSync(index) ? index : null;
@@ -48,11 +48,20 @@ for (const page of htmlFiles(dist)) {
     for (const part of m[1].split(",")) refs.push(part.trim().split(/\s+/)[0]);
   }
   for (const ref of refs) {
-    if (!ref || /^([a-z][a-z0-9+.-]*:|\/\/)/i.test(ref)) continue;
+    if (/^([a-z][a-z0-9+.-]*:|\/\/)/i.test(ref)) continue;
     count++;
+    if (ref === "") {
+      errors.push(`${relative(dist, page)}: an href or src is empty`);
+      continue;
+    }
     const [pathAndQuery, fragment] = ref.split("#");
     const path = pathAndQuery.split("?")[0];
-    const abs = path.startsWith("/") ? path : new URL(path || ".", `http://x${pageUrl.replace(/\/?$/, "/")}`).pathname;
+    const abs = new URL(path || ".", `http://x${pageUrl.replace(/\/?$/, "/")}`).pathname;
+    // The site uses trailing slashes, and a page link without one is redirected by the host.
+    if (path !== "" && !abs.endsWith("/") && !/\.[a-z0-9]+$/i.test(abs)) {
+      errors.push(`${relative(dist, page)}: ${ref} needs a trailing slash`);
+      continue;
+    }
     const file = path === "" ? page : target(decodeURIComponent(abs));
     if (!file) {
       errors.push(`${relative(dist, page)}: ${ref} does not exist`);
