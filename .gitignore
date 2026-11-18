@@ -23,3 +23,8 @@ local.properties
 # OS / editors
 .DS_Store
 .vscode/
+
+# Site
+site/node_modules/
+site/dist/
+site/.astro/

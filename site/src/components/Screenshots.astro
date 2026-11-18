@@ -1,0 +1,36 @@
+---
+import { Image } from "astro:assets";
+import { strings, type Lang } from "../i18n";
+import home from "../../screenshots/home.png";
+import category from "../../screenshots/category.png";
+import group from "../../screenshots/group.png";
+import fullSize from "../../screenshots/full-size.png";
+import videos from "../../screenshots/videos.png";
+import shortClips from "../../screenshots/short-clips.png";
+import videoFullSize from "../../screenshots/video-full-size.png";
+import compress from "../../screenshots/compress.png";
+import compressSummary from "../../screenshots/compress-summary.png";
+import trash from "../../screenshots/trash.png";
+import settings from "../../screenshots/settings.png";
+import storageMap from "../../screenshots/storage-map.png";
+
+interface Props {
+  lang: Lang;
+}
+
+// The order matches `screenshots.items` in the string files.
+const images = [home, category, group, fullSize, videos, shortClips, videoFullSize, compress, compressSummary, trash, settings, storageMap];
+const t = strings[Astro.props.lang].screenshots;
+---
+
+<div class="screenshots" aria-label={t.label}>
+  {
+    t.items.map((item, i) => (
+      <figure class="screenshot-figure">
+        <Image src={images[i]} alt={item.alt} class="screenshot-img" width={411} height={891} loading="lazy" />
+        <figcaption class="screenshot-caption">{item.caption}</figcaption>
+      </figure>
+    ))
+  }
+</div>
+<p class="screenshots-note">{t.note}</p>

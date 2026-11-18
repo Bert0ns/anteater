@@ -1,0 +1,19 @@
+{
+  "name": "anteater-site",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check:i18n": "node scripts/check-i18n.mjs",
+    "check:links": "node scripts/check-links.mjs",
+    "check": "npm run build && npm run check:i18n && npm run check:links"
+  },
+  "dependencies": {
+    "astro": "^7.4.12"
+  }
+}

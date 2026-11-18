@@ -1,6 +1,6 @@
 ---
 name: Routine, dependency update
-about: Update the Gradle, uv and skills dependencies in one PR.
+about: Update the Gradle, uv, npm and skills dependencies in one PR.
 title: "routine-dependencies: "
 labels: routine-dependencies
 ---
@@ -17,14 +17,15 @@ This is a routine. Run it from this issue body alone. Read `AGENTS.md` first.
 
 - Android. Compare each version in `android/gradle/libs.versions.toml` and the Gradle wrapper with the latest release on Google Maven, Maven Central and the Gradle plugin portal.
 - Lab. Run `uv lock --upgrade` in `lab/` and read the lock diff. Raise a floor in `lab/pyproject.toml` only when the code needs the newer version.
+- Site. Run `npm outdated` in `site/`, and `npm update` for what stays inside the ranges of `package.json`. Raise a range in `package.json` for a new minor or major release of Astro only when the site builds with it. `site/.nvmrc` follows the newest Node release that Astro supports and GitHub Actions has.
 - Skills. Run `npx skills update -p` from the repo root. This is the one allowed way to change `.agents/skills/` and `skills-lock.json`.
 
 Leave these alone, because changing them changes results and the golden fixtures depend on them. They are the pinned model revisions and SHA-256 values for MobileCLIP2, YuNet and PP-OCRv4, and the ktlint version pinned in CI.
 
 ## Output
 
-- If something is outdated, open one PR with every update that passes. Use one commit per ecosystem, with the scope `android`, `lab` or `skills` and the type `build` (`chore` for skills). The body lists each old and new version.
-- Run the checks in `AGENTS.md` for each side you touched, plus `python3 lab/scripts/check_parity.py`. A skills update also needs the parity check and no changes outside `.agents/skills/` and `skills-lock.json`.
+- If something is outdated, open one PR with every update that passes. Use one commit per ecosystem, with the scope `android`, `lab`, `site` or `skills` and the type `build` (`chore` for skills). The body lists each old and new version.
+- Run the checks in `AGENTS.md` for each side you touched (for the site, `npm run check`), plus `python3 lab/scripts/check_parity.py`. A skills update also needs the parity check and no changes outside `.agents/skills/` and `skills-lock.json`.
 - A major upgrade, or an update that makes a check fail, stays out of the PR and gets one new issue with the error. Do not put `routine-dependencies` on it.
 - Nothing outdated means no PR and no issue.
 
