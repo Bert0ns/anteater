@@ -1,0 +1,118 @@
+---
+interface Props {
+  title: string;
+  line: string;
+  href: string;
+}
+
+const { title, line, href } = Astro.props;
+---
+
+<!-- The whole card is the link: the one in the title stretches over it. The visual is decoration. -->
+<div class="cat">
+  <div class="cat-visual" aria-hidden="true"><slot /></div>
+  <div class="cat-body">
+    <h3><a href={href}>{title}</a></h3>
+    <p>{line}</p>
+  </div>
+</div>
+
+<style>
+  .cat {
+    position: relative;
+    display: grid;
+    align-content: start;
+    height: 100%;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    background: var(--surface);
+    overflow: hidden;
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out);
+  }
+
+  .cat:is(:hover, :focus-within) {
+    border-color: var(--line-strong);
+    background: var(--raised);
+  }
+
+  .cat:has(a:focus-visible) {
+    outline: 2px solid var(--accent-text);
+    outline-offset: 3px;
+  }
+
+  .cat-body {
+    padding: var(--space-4) var(--space-5) var(--space-5);
+  }
+
+  .cat h3 {
+    margin-bottom: var(--space-1);
+  }
+
+  .cat h3 a {
+    text-decoration: none;
+  }
+
+  .cat h3 a:focus-visible {
+    outline: none;
+  }
+
+  .cat h3 a::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+
+  .cat p {
+    font-size: var(--step--1);
+    line-height: 1.5;
+  }
+
+  /* The list item around the card is the container (see CategoryCards). A card that spans two columns puts the visual beside the text, so it keeps the size of the others. */
+  @container card (min-width: 36rem) {
+    .cat {
+      grid-template-columns: 1fr 1fr;
+      align-items: center;
+    }
+
+    .cat-body {
+      padding: var(--space-5) var(--space-6);
+    }
+
+    .cat h3 {
+      font-size: var(--step-2);
+    }
+
+    .cat p {
+      font-size: var(--step-0);
+    }
+  }
+</style>
+
+<!-- The motion of the visuals. A part of a visual that moves has the class "m" and sets its end state in
+     --to (a transform) and --op-to (an opacity), and where it starts in --from and --op-from.
+     The card shows the end state, which is what a phone, a reduced-motion setting or a browser without
+     :hover sees. Only a pointer that can hover, with motion allowed, starts from the "from" state and
+     moves to the end state on hover or focus. Only transform and opacity change. -->
+<style is:global>
+  .cat .m {
+    transform: var(--to, none);
+    opacity: var(--op-to, 1);
+  }
+
+  @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    .cat .m {
+      transform: var(--from, none);
+      opacity: var(--op-from, 1);
+      transition:
+        transform var(--dur-slow) var(--ease-out) var(--delay, 0s),
+        opacity var(--dur-base) var(--ease-out) var(--delay, 0s);
+    }
+
+    .cat:is(:hover, :focus-within) .m {
+      transform: var(--to, none);
+      opacity: var(--op-to, 1);
+    }
+  }
+</style>

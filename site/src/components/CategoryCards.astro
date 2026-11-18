@@ -1,0 +1,97 @@
+---
+import CategoryCard from "./CategoryCard.astro";
+import PhotoVisual from "./PhotoVisual.astro";
+import VideoVisual from "./VideoVisual.astro";
+import { cardImages, photoIds, videoIds } from "../lib/category-cards";
+import { pagePath, strings, type Lang } from "../i18n";
+
+interface Props {
+  lang: Lang;
+  group: "photos" | "videos";
+}
+
+const { lang, group } = Astro.props;
+const t = strings[lang];
+const features = pagePath(lang, "features");
+// The title of a card is the name of the category on the features page, so the two always agree.
+const names = new Map(t.features[group].items.map((item) => [item.id, item.term]));
+const lines = new Map(t[group].items.map((item) => [item.id, item.line]));
+const ids = group === "photos" ? photoIds : videoIds;
+// The first section keeps the id "clean" that the Photos links of the header and the footer point at.
+const sectionId = group === "photos" ? "clean" : "videos";
+---
+
+<section id={sectionId} class="cards" aria-labelledby={`${group}-title`}>
+  <h2 id={`${group}-title`}>{t[group].title}</h2>
+  <p>{t[group].intro}</p>
+
+  <ul class={`grid grid-${group}`} role="list">
+    {
+      ids.map((id) => (
+        <li class={id === "videos-largest" || id === "videos-takes" ? "feature" : undefined}>
+          <CategoryCard title={names.get(id) ?? id} line={lines.get(id) ?? ""} href={`${features}#${id}`}>
+            {group === "photos" ? (
+              <PhotoVisual id={id as (typeof photoIds)[number]} images={cardImages[id]} />
+            ) : (
+              <VideoVisual id={id as (typeof videoIds)[number]} images={cardImages[id]} lang={lang} />
+            )}
+          </CategoryCard>
+        </li>
+      ))
+    }
+  </ul>
+
+  <p><a class="text-link" href={`${features}#${group}`}>{t[group].more}</a></p>
+</section>
+
+<style>
+  /* The cards use the full width, so the heading sits above them instead of in a column. */
+  :global(.sections) > .cards {
+    display: block;
+  }
+
+  :global(.sections) > .cards > h2 {
+    position: static;
+    margin-bottom: var(--space-4);
+  }
+
+  :global(.sections) > .cards > p {
+    max-width: var(--prose);
+  }
+
+  .grid {
+    display: grid;
+    gap: var(--space-4);
+    margin: var(--space-6) 0;
+    list-style: none;
+  }
+
+  li {
+    min-width: 0;
+    container: card / inline-size;
+  }
+
+  @media (min-width: 40rem) {
+    .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-5);
+    }
+
+    /* Two columns: the two wide video cards and a last odd card take the full row. */
+    .feature,
+    li:last-child:nth-child(odd) {
+      grid-column: span 2;
+    }
+  }
+
+  @media (min-width: 56.25rem) {
+    .grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    /* Three columns: 9 photo cards fill three rows, and 7 video cards with two wide ones do too. */
+    li:last-child:nth-child(odd) {
+      grid-column: auto;
+    }
+  }
+</style>
