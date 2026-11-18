@@ -1,0 +1,546 @@
+---
+import StorageMapTile from "./StorageMapTile.astro";
+import {
+  buildViews,
+  childHue,
+  direct,
+  formatCount,
+  formatSize,
+  MAP_HEIGHT,
+  MAP_WIDTH,
+  storageMap,
+  type Folder,
+  type Info,
+  type Tile,
+} from "../lib/storage-map";
+import { strings, type Lang } from "../i18n";
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = strings[lang].storageMap;
+const plural = new Intl.PluralRules(lang);
+const fill = (text: string, values: Record<string, string>) => text.replace(/\{(\w+)\}/g, (_, name) => values[name] ?? "");
+
+function summary(size: number, count: number): string {
+  const form = plural.select(count) === "one" ? t.summary.one : t.summary.other;
+  return fill(form, { size: formatSize(size, lang), count: formatCount(count, lang) });
+}
+
+function videoLine(size: number, count: number): string {
+  if (count === 0) return "";
+  const form = plural.select(count) === "one" ? t.video.one : t.video.other;
+  return fill(form, { size: formatSize(size, lang), count: formatCount(count, lang) });
+}
+
+const views = buildViews(storageMap);
+const viewOf = new Map(views.map((v) => [v.folder.path, v.id]));
+const holder = { left: 0, top: 0, width: MAP_WIDTH, height: MAP_HEIGHT };
+
+/** The card text of a folder, or of the files that sit directly in it, as the app words it. */
+function describe({ folder, isDirectFiles }: Pick<Tile, "folder" | "isDirectFiles">): Info {
+  const own = direct(folder);
+  const size = isDirectFiles ? own.size : folder.size;
+  const count = isDirectFiles ? own.count : folder.count;
+  const found = summary(size, count);
+  const details = isDirectFiles ? fill(t.direct, { summary: found }) : found;
+  const name = folder.path === "" ? t.root : folder.name;
+  return {
+    name,
+    details,
+    video: isDirectFiles ? videoLine(own.videoSize, own.videoCount) : videoLine(folder.videoSize, folder.videoCount),
+    label: isDirectFiles ? details : `${name}, ${details}`,
+    open: isDirectFiles ? undefined : viewOf.get(folder.path),
+  };
+}
+
+const hueOf = (parentHue: number, folder: Folder, parent: Folder) => childHue(parentHue, parent.children.indexOf(folder));
+---
+
+<section id="storage-map" class="storage-map" data-storage-map aria-labelledby="storage-map-title">
+  <h2 id="storage-map-title">{t.title}</h2>
+
+  <div class="sm">
+    <p class="sm-lead">{t.lead}</p>
+    <p class="sm-hint">{t.hint}</p>
+    <p class="sm-example"><span class="sm-badge">{t.badge}</span>{t.note}</p>
+
+    {
+      views.map((view) => {
+        const info = describe({ folder: view.folder, isDirectFiles: false });
+        const root = view.parent === null;
+        return (
+          <div
+            class="sm-view"
+            data-view={view.id}
+            data-parent={view.parent ?? undefined}
+            data-name={info.name}
+            data-details={info.details}
+            data-video={info.video}
+            hidden={!root}
+          >
+            <div class="sm-card">
+              <div class="sm-card-text">
+                <h3 class="sm-name" tabindex="-1">{info.name}</h3>
+                <p class="sm-details">{info.details}</p>
+                <p class="sm-video">{info.video}</p>
+              </div>
+              <div class="sm-actions">
+                <button type="button" class="btn btn-secondary btn-small" data-act="back" hidden>{t.back}</button>
+                <button type="button" class="btn btn-primary btn-small" data-act="open" hidden>
+                  <span class="dot" aria-hidden="true" />{t.open}
+                </button>
+              </div>
+            </div>
+
+            <div
+              class="sm-canvas"
+              data-group={root ? t.root : fill(t.foldersIn, { name: view.folder.name })}
+            >
+              <div class="sm-tiles" aria-hidden="true">
+                {view.tiles.map((tile) => <StorageMapTile tile={tile} holder={holder} describe={describe} />)}
+              </div>
+            </div>
+
+            <ul class="sm-list" role="list" aria-label={root ? t.root : fill(t.foldersIn, { name: view.folder.name })}>
+              {
+                view.folder.children.map((child) => {
+                  const row = describe({ folder: child, isDirectFiles: false });
+                  return (
+                    <li class="sm-row" data-key={child.path} data-open={row.open} style={`--h:${hueOf(view.hue, child, view.folder).toFixed(1)};--depth:0`}>
+                      <div class="sm-row-body">
+                        <span class="sm-chip" aria-hidden="true" />
+                        <span class="sm-row-name">{child.name}</span>
+                        <span class="sm-row-sum">{row.details}</span>
+                      </div>
+                    </li>
+                  );
+                })
+              }
+            </ul>
+          </div>
+        );
+      })
+    }
+
+    <p class="sm-app">{t.appNote}</p>
+    <noscript><style is:inline>.storage-map .sm-view[hidden]{display:grid !important}</style></noscript>
+  </div>
+</section>
+
+<script>
+  // Without this script the page shows every view one after the other, as plain blocks and lists. With
+  // it, one view shows at a time: a block or a row selects its folder, a second press opens it, and
+  // Back (or Escape) zooms out, as in the app.
+  const map = document.querySelector<HTMLElement>("[data-storage-map]");
+  if (map) enhance(map);
+
+  function enhance(map: HTMLElement) {
+    const views = new Map<string, HTMLElement>();
+    map.querySelectorAll<HTMLElement>(".sm-view").forEach((view) => views.set(view.dataset.view!, view));
+    const stack: { view: HTMLElement; key: string | null }[] = [];
+    let current = views.get("v0")!;
+    let selected: string | null = null;
+
+    for (const view of views.values()) {
+      // A button over each top-level block. The tiles underneath are decoration, and these are what
+      // the keyboard and a screen reader reach.
+      const hits = document.createElement("div");
+      hits.className = "sm-hits";
+      hits.setAttribute("role", "group");
+      hits.setAttribute("aria-label", view.querySelector<HTMLElement>(".sm-canvas")!.dataset.group!);
+      view.querySelectorAll<HTMLElement>(".sm-tiles > .sm-tile").forEach((tile) => {
+        const hit = document.createElement("button");
+        hit.type = "button";
+        hit.className = "sm-hit";
+        hit.dataset.key = tile.dataset.key;
+        hit.setAttribute("aria-label", tile.dataset.label!);
+        hit.setAttribute("aria-pressed", "false");
+        Object.assign(hit.style, { left: tile.style.left, top: tile.style.top, width: tile.style.width, height: tile.style.height });
+        hits.append(hit);
+      });
+      view.querySelector(".sm-canvas")!.append(hits);
+
+      // Each row becomes a button, which selects and opens its folder like the block does.
+      view.querySelectorAll<HTMLElement>(".sm-row-body").forEach((body) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = body.className;
+        button.setAttribute("aria-pressed", "false");
+        button.append(...body.childNodes);
+        body.replaceWith(button);
+      });
+    }
+
+    const tileOf = (key: string) => current.querySelector<HTMLElement>(`.sm-tiles > .sm-tile[data-key="${CSS.escape(key)}"]`);
+    const text = (view: HTMLElement, cls: string, value: string) => (view.querySelector(`.${cls}`)!.textContent = value);
+
+    // Shows the card of the selection, or of the open folder when nothing is selected.
+    function render() {
+      const source = selected ? tileOf(selected) : current;
+      if (!source) return;
+      text(current, "sm-name", source.dataset.name!);
+      text(current, "sm-details", source.dataset.details!);
+      text(current, "sm-video", source.dataset.video ?? "");
+      current.toggleAttribute("data-selected", selected !== null);
+      current.querySelectorAll<HTMLElement>("[data-key]").forEach((el) => {
+        const on = el.dataset.key === selected;
+        el.classList.toggle("is-selected", on);
+        // A block's button is the element itself, and a row's is inside it. The tiles have none.
+        const button = el instanceof HTMLButtonElement ? el : el.querySelector("button");
+        button?.setAttribute("aria-pressed", String(on));
+      });
+      const openable = selected !== null && !!tileOf(selected)?.dataset.open;
+      current.querySelector<HTMLElement>('[data-act="open"]')!.hidden = !openable;
+      current.querySelector<HTMLElement>('[data-act="back"]')!.hidden = stack.length === 0;
+    }
+
+    // `from` is the block the move starts at or ends at, so the new view grows out of it or shrinks back into it.
+    function zoom(to: HTMLElement, from: HTMLElement | null, inward: boolean) {
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches || !to.animate) return;
+      const canvas = to.querySelector<HTMLElement>(".sm-canvas")!;
+      const duration = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--dur-base")) || 320;
+      const rect = from ? { x: parseFloat(from.style.left), y: parseFloat(from.style.top), w: parseFloat(from.style.width), h: parseFloat(from.style.height) } : null;
+      // The center of the block, as a shift from the center of the map, and how much of the map it covers.
+      const shiftX = rect ? ((rect.x + rect.w / 2 - 50) / 100) * canvas.offsetWidth : 0;
+      const shiftY = rect ? ((rect.y + rect.h / 2 - 50) / 100) * canvas.offsetHeight : 0;
+      const scale = rect ? Math.max(0.25, Math.max(rect.w, rect.h) / 100) : 0.9;
+      const small = `translate(${shiftX}px, ${shiftY}px) scale(${scale})`;
+      const big = "scale(1.15)";
+      canvas.animate(
+        { opacity: [0, 1], transform: [inward ? small : big, "none"] },
+        { duration, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+      );
+    }
+
+    function show(view: HTMLElement) {
+      current.hidden = true;
+      current = view;
+      current.hidden = false;
+      selected = null;
+    }
+
+    function open(key: string) {
+      const target = views.get(tileOf(key)?.dataset.open ?? "");
+      if (!target) return;
+      const from = tileOf(key);
+      stack.push({ view: current, key });
+      show(target);
+      render();
+      zoom(current, from, true);
+      current.querySelector<HTMLElement>(".sm-name")!.focus({ preventScroll: true });
+    }
+
+    function back() {
+      const last = stack.pop();
+      if (!last) return;
+      show(last.view);
+      render();
+      const hit = last.key ? current.querySelector<HTMLElement>(`.sm-hit[data-key="${CSS.escape(last.key)}"]`) : null;
+      zoom(current, last.key ? tileOf(last.key) : null, false);
+      hit?.focus({ preventScroll: true });
+    }
+
+    // The first press selects, the second opens when the folder has subfolders and deselects when it has none.
+    function press(key: string) {
+      if (selected === key && tileOf(key)?.dataset.open) return open(key);
+      selected = selected === key ? null : key;
+      render();
+    }
+
+    map.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement;
+      const pressed = target.closest<HTMLElement>("button.sm-hit, .sm-row button");
+      if (pressed) {
+        const key = pressed.closest<HTMLElement>("[data-key]")?.dataset.key;
+        if (key) press(key);
+        return;
+      }
+      const act = target.closest<HTMLElement>("[data-act]")?.dataset.act;
+      if (act === "back") back();
+      if (act === "open" && selected) open(selected);
+    });
+
+    map.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && stack.length > 0) {
+        event.preventDefault();
+        back();
+      }
+    });
+
+    render();
+  }
+</script>
+
+<!-- Global, because the script adds buttons that Astro's scoping would not reach. Every rule starts
+     with .storage-map. -->
+<style is:global>
+  .storage-map {
+    /* The colour of a block comes from its hue, set per block, and these three. Light enough that the
+       page's dark ink reads on every hue (4.5:1 or more up to four levels deep), muted enough not to
+       compete with the red dot. Each level inside a block is a little lighter. */
+    --map-sat: 32%;
+    --map-light: 62%;
+    --map-step: 3%;
+  }
+
+  .storage-map [hidden],
+  .storage-map .sm-view[hidden] {
+    display: none;
+  }
+
+  .storage-map .sm {
+    display: grid;
+    gap: var(--space-4);
+    align-content: start;
+  }
+
+  .storage-map .sm p {
+    margin: 0;
+  }
+
+  .storage-map .sm-lead {
+    max-width: 38rem;
+    font-size: var(--step-1);
+    line-height: 1.5;
+  }
+
+  .storage-map .sm-hint,
+  .storage-map .sm-example,
+  .storage-map .sm-app {
+    font-size: var(--step--1);
+    color: var(--text-dim);
+  }
+
+  .storage-map .sm-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-right: var(--space-2);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-pill);
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .storage-map .sm-badge::before {
+    content: "";
+    width: 0.5em;
+    height: 0.5em;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .storage-map .sm-view {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  /* The card above the map. Its height does not depend on the selection, so the map stays put. */
+  .storage-map .sm-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3) var(--space-4);
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    background: var(--surface);
+  }
+
+  .storage-map .sm-card-text {
+    flex: 1 1 14rem;
+    min-width: 0;
+  }
+
+  .storage-map .sm-name {
+    font-size: var(--step-1);
+    overflow-wrap: anywhere;
+  }
+
+  .storage-map .sm-name:focus-visible {
+    outline-offset: 2px;
+  }
+
+  .storage-map .sm-details,
+  .storage-map .sm-video {
+    min-height: 1lh;
+    font-size: var(--step--1);
+  }
+
+  .storage-map .sm-details {
+    min-height: 2lh;
+  }
+
+  .storage-map .sm-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    min-height: 2.25rem;
+  }
+
+  .storage-map .sm-canvas {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    border-radius: var(--radius-m);
+    background: var(--bg);
+    overflow: hidden;
+  }
+
+  .storage-map .sm-tiles,
+  .storage-map .sm-hits {
+    position: absolute;
+    inset: 0;
+  }
+
+  .storage-map .sm-tile {
+    position: absolute;
+    border-radius: 3px;
+    background: color-mix(
+      in srgb,
+      hsl(var(--h) var(--map-sat) calc(var(--map-light) + var(--depth) * var(--map-step))) calc(var(--keep, 100) * 1%),
+      var(--bg)
+    );
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+
+  /* The gap between neighbours: a page-coloured frame inside each block, over the blocks it holds. */
+  .storage-map .sm-tile::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 1.5px solid var(--bg);
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  .storage-map .sm-tile[data-depth="0"] {
+    container-type: size;
+  }
+
+  /* The name of a top-level block, when it has room, as in the app. */
+  .storage-map .sm-label {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    max-width: 100%;
+    padding: var(--space-1) var(--space-2);
+    overflow: hidden;
+    font-size: var(--step--1);
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--bg);
+  }
+
+  @container (min-width: 3.5rem) and (min-height: 1.75rem) {
+    .storage-map .sm-label {
+      display: block;
+    }
+  }
+
+  /* With a block selected, the others fade into the page colour. The names stay at full strength,
+     and turn light, since the faded blocks are dark. */
+  .storage-map .sm-view[data-selected] .sm-tile[data-depth="0"]:not(.is-selected) {
+    --keep: 35;
+  }
+
+  .storage-map .sm-view[data-selected] .sm-tile[data-depth="0"]:not(.is-selected) .sm-label {
+    color: var(--text);
+  }
+
+  .storage-map .sm-hit {
+    position: absolute;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    cursor: pointer;
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .storage-map .sm-hit:hover {
+    background: color-mix(in srgb, var(--bg) 14%, transparent);
+  }
+
+  .storage-map .sm-hit[aria-pressed="true"] {
+    box-shadow:
+      inset 0 0 0 3px var(--bg),
+      inset 0 0 0 5px var(--text);
+  }
+
+  .storage-map .sm-hit:focus-visible {
+    outline: 3px solid var(--accent-text);
+    outline-offset: -3px;
+  }
+
+  .storage-map .sm-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: var(--space-1);
+    list-style: none;
+  }
+
+  .storage-map .sm-row-body {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--space-3);
+    align-items: center;
+    width: 100%;
+    padding: var(--space-3) var(--space-4);
+    border: 0;
+    border-radius: var(--radius-s);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+  }
+
+  .storage-map button.sm-row-body {
+    cursor: pointer;
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .storage-map button.sm-row-body:hover {
+    background: var(--surface);
+  }
+
+  .storage-map button.sm-row-body[aria-pressed="true"] {
+    background: var(--raised);
+  }
+
+  .storage-map .sm-chip {
+    grid-row: 1 / span 2;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 4px;
+    background: hsl(var(--h) var(--map-sat) var(--map-light));
+  }
+
+  .storage-map .sm-row-name {
+    overflow: hidden;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+  }
+
+  .storage-map .sm-row-sum {
+    grid-column: 2;
+    font-size: var(--step--1);
+    line-height: 1.3;
+    color: var(--text-muted);
+  }
+
+  @media (min-width: 40rem) {
+    .storage-map .sm-details {
+      min-height: 1lh;
+    }
+  }
+</style>

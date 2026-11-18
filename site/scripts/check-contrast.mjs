@@ -49,4 +49,43 @@ for (const [fg, bg, min] of pairs) {
   if (!ok) failed = true;
   console.log(`${ok ? "ok  " : "FAIL"} ${r.toFixed(2).padStart(5)}:1 (min ${min})  --${fg} ${color[fg]} on --${bg} ${color[bg]}`);
 }
+
+// The storage map colours its blocks by hue, so its names are checked over every hue and depth the
+// map can draw: the page's dark ink on a block, and the light ink on a block faded to 35%.
+const map = readFileSync(new URL("../src/components/StorageMap.astro", import.meta.url), "utf8");
+const mapVar = (name) => parseFloat(map.match(new RegExp(`--${name}:\\s*([\\d.]+)%`))?.[1]);
+const [sat, light, step] = ["map-sat", "map-light", "map-step"].map(mapVar);
+if ([sat, light, step].some(Number.isNaN)) {
+  console.error("--map-sat, --map-light or --map-step not found in StorageMap.astro");
+  process.exit(1);
+}
+function hsl(h, s, l) {
+  s /= 100;
+  l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => {
+    const k = (n + h / 30) % 12;
+    return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
+  };
+  return "#" + [f(0), f(8), f(4)].map((v) => v.toString(16).padStart(2, "0")).join("");
+}
+function mix(hex, other, share) {
+  const c = (h, i) => parseInt(h.slice(i, i + 2), 16);
+  return "#" + [1, 3, 5].map((i) => Math.round(c(hex, i) * share + c(other, i) * (1 - share)).toString(16).padStart(2, "0")).join("");
+}
+let worstDark = Infinity;
+let worstLight = Infinity;
+for (let rank = 0; rank < 12; rank++) {
+  const hue = (210 + rank * 137.5) % 360;
+  for (let depth = 0; depth <= 4; depth++) {
+    const block = hsl(hue, sat, light + depth * step);
+    worstDark = Math.min(worstDark, ratio(color.bg, block));
+    worstLight = Math.min(worstLight, ratio(color.text, mix(block, color.bg, 0.35)));
+  }
+}
+for (const [label, r] of [["--bg on a map block", worstDark], ["--text on a faded map block", worstLight]]) {
+  const ok = r >= TEXT;
+  if (!ok) failed = true;
+  console.log(`${ok ? "ok  " : "FAIL"} ${r.toFixed(2).padStart(5)}:1 (min ${TEXT})  ${label}, worst of 12 hues and 5 depths`);
+}
 if (failed) process.exit(1);

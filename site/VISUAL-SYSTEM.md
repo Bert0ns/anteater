@@ -52,6 +52,10 @@ put a colour on a new background.
 | `--accent` on `--surface` (shape) | 3.89 |
 | `--accent` on `--text` (the dot in the button) | 3.75 |
 
+The storage map colours each block by hue, so it has no fixed pair. Its `--map-sat`, `--map-light` and
+`--map-step` live in `StorageMap.astro`, and `check:contrast` checks the page's dark ink on a block, and
+the light ink on a faded block, over twelve hues and five depths.
+
 ## Fonts
 
 Both are variable, OFL-1.1, and hosted on the site. Nothing loads from a font CDN.

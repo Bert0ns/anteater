@@ -253,7 +253,7 @@
     ]
   },
   "settings": {
-    "title": "Opzioni e mappa dell'archiviazione",
+    "title": "Opzioni",
     "items": [
       {
         "term": "Conservazione del cestino",
@@ -266,10 +266,6 @@
       {
         "term": "Cartelle escluse",
         "desc": "Cartelle lasciate fuori dal controllo e dalla mappa. Puoi escluderne una anche dalla vista a schermo intero."
-      },
-      {
-        "term": "Mappa dell'archiviazione",
-        "desc": "Una treemap dello spazio di foto e video, cartella per cartella. Tocca un blocco per vedere la dimensione e il numero di file, aprirlo o escludere la cartella."
       },
       {
         "term": "Scansione notturna",
@@ -308,6 +304,27 @@
     "firstCode": ".nomedia",
     "firstAfter": ", come i contenuti inviati di WhatsApp. Anteater chiede l'accesso a tutti i file, per poter leggere quelle cartelle e gestire il suo cestino.",
     "second": "Google Play consente quel permesso solo ad alcuni tipi di app, come i gestori di file, quindi Anteater si scarica direttamente come APK da GitHub. L'app non ha il permesso di rete, quindi non può inviare nulla da nessuna parte."
+  },
+  "storageMap": {
+    "title": "Mappa dell'archiviazione",
+    "lead": "Dove va lo spazio, cartella per cartella. Ogni blocco è una cartella, grande quanto lo spazio che occupano le sue foto e i suoi video.",
+    "badge": "Esempio",
+    "note": "Le cartelle e i numeri sono inventati per questa demo. Non vengono da un telefono.",
+    "hint": "Clicca o tocca un blocco per vedere la dimensione e il numero di file. Cliccalo di nuovo per aprire la cartella.",
+    "appNote": "Nell'app la stessa mappa permette di escludere una cartella dal controllo.",
+    "root": "Tutte le cartelle esplorate",
+    "summary": {
+      "one": "{size} • {count} file",
+      "other": "{size} • {count} file"
+    },
+    "video": {
+      "one": "Video: {size} • {count} video",
+      "other": "Video: {size} • {count} video"
+    },
+    "direct": "File in questa cartella • {summary}",
+    "open": "Mostra il contenuto",
+    "back": "Indietro",
+    "foldersIn": "Cartelle in {name}"
   },
   "install": {
     "title": "Installa Anteater",

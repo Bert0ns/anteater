@@ -253,7 +253,7 @@
     ]
   },
   "settings": {
-    "title": "Settings and storage map",
+    "title": "Settings",
     "items": [
       {
         "term": "Trash retention",
@@ -266,10 +266,6 @@
       {
         "term": "Excluded folders",
         "desc": "Folders left out of the review and the map. You can also exclude one from the full size view."
-      },
-      {
-        "term": "Storage map",
-        "desc": "A treemap of the photo and video space, folder by folder. Tap a block for its size and file count, open it, or exclude the folder."
       },
       {
         "term": "Night scan",
@@ -308,6 +304,27 @@
     "firstCode": ".nomedia",
     "firstAfter": " file, such as WhatsApp's sent media. Anteater asks for All files access, so it can read those folders and manage its trash.",
     "second": "Google Play allows that permission only for a few kinds of apps, such as file managers, so Anteater is a direct APK download on GitHub. The app has no network permission, so it cannot send anything anywhere."
+  },
+  "storageMap": {
+    "title": "Storage map",
+    "lead": "Where the space goes, folder by folder. Each block is a folder, as large as the space its photos and videos take.",
+    "badge": "Example",
+    "note": "The folders and numbers are made up for this demo. They do not come from a phone.",
+    "hint": "Click or tap a block to see its size and file count. Click it again to open the folder.",
+    "appNote": "In the app, the same map lets you exclude a folder from the review.",
+    "root": "All explored folders",
+    "summary": {
+      "one": "{size} • {count} file",
+      "other": "{size} • {count} files"
+    },
+    "video": {
+      "one": "Video: {size} • {count} video",
+      "other": "Video: {size} • {count} videos"
+    },
+    "direct": "Files in this folder • {summary}",
+    "open": "Show contents",
+    "back": "Back",
+    "foldersIn": "Folders in {name}"
   },
   "install": {
     "title": "Install Anteater",
