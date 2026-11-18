@@ -109,7 +109,14 @@ const hueOf = (parentHue: number, folder: Folder, parent: Folder) => childHue(pa
                 view.folder.children.map((child) => {
                   const row = describe({ folder: child, isDirectFiles: false });
                   return (
-                    <li class="sm-row" data-key={child.path} data-open={row.open} style={`--h:${hueOf(view.hue, child, view.folder).toFixed(1)};--depth:0`}>
+                    <li
+                      class="sm-row"
+                      data-key={child.path}
+                      data-name={row.name}
+                      data-details={row.details}
+                      data-video={row.video}
+                      data-open={row.open}
+                      style={`--h:${hueOf(view.hue, child, view.folder).toFixed(1)};--depth:0`}>
                       <div class="sm-row-body">
                         <span class="sm-chip" aria-hidden="true" />
                         <span class="sm-row-name">{child.name}</span>
@@ -126,6 +133,7 @@ const hueOf = (parentHue: number, folder: Folder, parent: Folder) => childHue(pa
     }
 
     <p class="sm-app">{t.appNote}</p>
+    <p class="sm-status" role="status"></p>
     <noscript><style is:inline>.storage-map .sm-view[hidden]{display:grid !important}</style></noscript>
   </div>
 </section>
@@ -174,7 +182,12 @@ const hueOf = (parentHue: number, folder: Folder, parent: Folder) => childHue(pa
       });
     }
 
-    const tileOf = (key: string) => current.querySelector<HTMLElement>(`.sm-tiles > .sm-tile[data-key="${CSS.escape(key)}"]`);
+    // The block of a folder, or its row when the block is too small to be drawn.
+    const tileOf = (key: string) => {
+      const k = CSS.escape(key);
+      return current.querySelector<HTMLElement>(`.sm-tiles > .sm-tile[data-key="${k}"], .sm-row[data-key="${k}"]`);
+    };
+    const status = map.querySelector<HTMLElement>(".sm-status")!;
     const text = (view: HTMLElement, cls: string, value: string) => (view.querySelector(`.${cls}`)!.textContent = value);
 
     // Shows the card of the selection, or of the open folder when nothing is selected.
@@ -202,15 +215,14 @@ const hueOf = (parentHue: number, folder: Folder, parent: Folder) => childHue(pa
       if (matchMedia("(prefers-reduced-motion: reduce)").matches || !to.animate) return;
       const canvas = to.querySelector<HTMLElement>(".sm-canvas")!;
       const duration = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--dur-base")) || 320;
-      const rect = from ? { x: parseFloat(from.style.left), y: parseFloat(from.style.top), w: parseFloat(from.style.width), h: parseFloat(from.style.height) } : null;
+      const rect = from?.style.left ? { x: parseFloat(from.style.left), y: parseFloat(from.style.top), w: parseFloat(from.style.width), h: parseFloat(from.style.height) } : null;
       // The center of the block, as a shift from the center of the map, and how much of the map it covers.
       const shiftX = rect ? ((rect.x + rect.w / 2 - 50) / 100) * canvas.offsetWidth : 0;
       const shiftY = rect ? ((rect.y + rect.h / 2 - 50) / 100) * canvas.offsetHeight : 0;
       const scale = rect ? Math.max(0.25, Math.max(rect.w, rect.h) / 100) : 0.9;
-      const small = `translate(${shiftX}px, ${shiftY}px) scale(${scale})`;
-      const big = "scale(1.15)";
+      const start = inward ? `translate(${shiftX}px, ${shiftY}px) scale(${scale})` : "scale(1.15)";
       canvas.animate(
-        { opacity: [0, 1], transform: [inward ? small : big, "none"] },
+        { opacity: [0, 1], transform: [start, "none"] },
         { duration, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
       );
     }
@@ -248,6 +260,9 @@ const hueOf = (parentHue: number, folder: Folder, parent: Folder) => childHue(pa
       if (selected === key && tileOf(key)?.dataset.open) return open(key);
       selected = selected === key ? null : key;
       render();
+      // The card is above the map, so a screen reader is told what it now says.
+      const now = selected ? tileOf(selected) : null;
+      status.textContent = now ? [now.dataset.name, now.dataset.details, now.dataset.video].filter(Boolean).join(". ") : "";
     }
 
     map.addEventListener("click", (event) => {
@@ -307,6 +322,15 @@ const hueOf = (parentHue: number, folder: Folder, parent: Folder) => childHue(pa
     line-height: 1.5;
   }
 
+  .storage-map .sm-status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
   .storage-map .sm-hint,
   .storage-map .sm-example,
   .storage-map .sm-app {
@@ -341,11 +365,8 @@ const hueOf = (parentHue: number, folder: Folder, parent: Folder) => childHue(pa
 
   /* The card above the map. Its height does not depend on the selection, so the map stays put. */
   .storage-map .sm-card {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--space-3) var(--space-4);
+    display: grid;
+    gap: var(--space-3);
     padding: var(--space-4) var(--space-5);
     border: 1px solid var(--line);
     border-radius: var(--radius-m);
@@ -353,7 +374,6 @@ const hueOf = (parentHue: number, folder: Folder, parent: Folder) => childHue(pa
   }
 
   .storage-map .sm-card-text {
-    flex: 1 1 14rem;
     min-width: 0;
   }
 
@@ -465,8 +485,9 @@ const hueOf = (parentHue: number, folder: Folder, parent: Folder) => childHue(pa
     transition: background-color var(--dur-fast) var(--ease-out);
   }
 
+  /* Lighter, never darker, so the dark name stays readable. */
   .storage-map .sm-hit:hover {
-    background: color-mix(in srgb, var(--bg) 14%, transparent);
+    background: color-mix(in srgb, var(--text) 14%, transparent);
   }
 
   .storage-map .sm-hit[aria-pressed="true"] {
@@ -475,9 +496,14 @@ const hueOf = (parentHue: number, folder: Folder, parent: Folder) => childHue(pa
       inset 0 0 0 5px var(--text);
   }
 
+  /* A dark ring and a light one, so it shows on every hue. The transparent outline is what a forced
+     colours mode draws, since it drops shadows. */
   .storage-map .sm-hit:focus-visible {
-    outline: 3px solid var(--accent-text);
-    outline-offset: -3px;
+    outline: 2px solid transparent;
+    outline-offset: -2px;
+    box-shadow:
+      inset 0 0 0 3px var(--bg),
+      inset 0 0 0 6px var(--text);
   }
 
   .storage-map .sm-list {
