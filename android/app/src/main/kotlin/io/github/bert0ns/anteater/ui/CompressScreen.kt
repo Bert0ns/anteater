@@ -325,7 +325,7 @@ private fun FullSize(photos: List<CompressibleImage>, start: CompressibleImage, 
             File(photo.path),
             zoom,
             next = photos.getOrNull(page + 1)?.let { File(it.path) },
-            modifier = Modifier.fillMaxSize().zoomGestures(zoom, onTap = onClose).semantics {
+            modifier = Modifier.fillMaxSize().swipeBar(LocalFullSizeBar.current).zoomGestures(zoom, onTap = onClose).semantics {
                 contentDescription = File(photo.path).name
                 onClick {
                     onClose()

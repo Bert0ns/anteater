@@ -1,5 +1,7 @@
 package io.github.bert0ns.anteater.ui
 
+import android.content.Context
+import android.view.accessibility.AccessibilityManager
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -34,8 +36,11 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pinch
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
+import androidx.compose.ui.test.swipeUp
+import androidx.test.core.app.ApplicationProvider
 import io.github.bert0ns.anteater.model.Category
 import io.github.bert0ns.anteater.model.MediaRef
 import io.github.bert0ns.anteater.model.MediaType
@@ -54,6 +59,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.io.File
 import java.time.DayOfWeek
@@ -535,6 +541,73 @@ class CategoryScreenTest {
             pinch(center - Offset(50f, 0f), center - Offset(150f, 0f), center + Offset(50f, 0f), center + Offset(150f, 0f))
         }
         compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
+
+        compose.onNodeWithText("Album1").assertExists()
+    }
+
+    @Test
+    fun `a swipe down on a photo at its fit scale hides the bar and a swipe up shows it, and the checkbox and the close button stay`() {
+        compose.setContent { CategoryScreen(page, 3, emptySet(), false, {}, { _, _ -> }, {}) }
+
+        openFullSize("img1.jpg")
+        compose.waitForIdle()
+        compose.onNodeWithText("Album1").assertExists()
+        compose.mainClock.advanceTimeBy(3_000) // a photo never hides the bar on its own
+        compose.onNodeWithText("Album1").assertExists()
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Album1").assertDoesNotExist()
+        toggle().assertExists()
+        compose.onNodeWithContentDescription("Close").assertExists()
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeUp() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Album1").assertExists()
+    }
+
+    @Test
+    fun `a tap on a photo still closes the view and a horizontal swipe still pages, with the bar hidden`() {
+        compose.setContent { CategoryScreen(page, 3, emptySet(), false, {}, { _, _ -> }, {}) }
+
+        openFullSize("img1.jpg")
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("fullSize").assertExists()
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeUp() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Album2").assertExists()
+
+        compose.onNodeWithTag("fullSize").performTouchInput { click() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("fullSize").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a vertical drag on a zoomed photo pans it and leaves the bar alone`() {
+        compose.setContent { CategoryScreen(page, 3, emptySet(), false, {}, { _, _ -> }, {}) }
+
+        openFullSize("img1.jpg")
+        compose.onNodeWithTag("fullSize").performTouchInput {
+            pinch(center - Offset(50f, 0f), center - Offset(150f, 0f), center + Offset(50f, 0f), center + Offset(150f, 0f))
+        }
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Album1").assertExists()
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeUp() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Album1").assertExists()
+    }
+
+    @Test
+    fun `with a touch exploration service on, a swipe does not hide the bar of a photo`() {
+        shadowOf(ApplicationProvider.getApplicationContext<Context>().getSystemService(AccessibilityManager::class.java)).setTouchExplorationEnabled(true)
+        compose.setContent { CategoryScreen(page, 3, emptySet(), false, {}, { _, _ -> }, {}) }
+
+        openFullSize("img1.jpg")
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        compose.waitForIdle()
 
         compose.onNodeWithText("Album1").assertExists()
     }
