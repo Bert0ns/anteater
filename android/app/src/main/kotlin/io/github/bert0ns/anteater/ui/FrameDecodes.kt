@@ -11,8 +11,8 @@ import kotlin.coroutines.cancellation.CancellationException
 /**
  * How many video frames decode at once, in the whole app (#478). Each decode is a `MediaMetadataRetriever` with a hardware
  * decoder of its own, and Coil's [VideoFrameDecoder] has no limit: a grid opened up to 13 at once folded and 28 unfolded,
- * beside the 2 loops, and Android killed up to 20 background apps for the memory. At 2 it killed none, and the first screen
- * of frames was no slower (#446).
+ * beside the 2 loops (#446). At 2 the phone keeps 150 to 400 MB more free and the first screen of frames comes in sooner
+ * (#499). Android still kills background apps as the grid opens, for the loops' decoders.
  */
 internal const val FRAME_DECODES = 2
 
