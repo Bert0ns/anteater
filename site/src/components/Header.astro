@@ -21,7 +21,7 @@ const links = [
 ];
 ---
 
-<div class="site-header">
+<header class="site-header">
   <div class="container">
     <div class="header-bar">
       <a href={home} class="brand">
@@ -36,9 +36,9 @@ const links = [
       </nav>
 
       <div class="header-actions">
-        <a href={homePath(other)} class="lang-switch" lang={other} hreflang={other} aria-label={t.nav.otherLanguageTitle} title={t.nav.otherLanguageTitle}>
-          <span class="lang-long" aria-hidden="true">{t.nav.otherLanguage}</span>
-          <span class="lang-short" aria-hidden="true">{t.nav.otherLanguageShort}</span>
+        <a href={homePath(other)} class="lang-switch" lang={other} hreflang={other} title={t.nav.otherLanguageTitle}>
+          <span class="lang-long">{t.nav.otherLanguage}</span>
+          <span class="lang-short">{t.nav.otherLanguageShort}</span>
         </a>
         <a href={`${repo}/releases/latest`} class="btn btn-primary btn-small"><span class="dot" aria-hidden="true"></span>{t.nav.download}</a>
         <details class="menu">
@@ -52,13 +52,17 @@ const links = [
       </div>
     </div>
   </div>
-</div>
+</header>
 
 <script>
-  // Without JavaScript the menu still opens and closes. This closes it after a tap on a link or Escape.
+  // Without JavaScript the menu still opens and closes. This closes it after a tap on a link, a tap
+  // outside it, or Escape.
   const menu = document.querySelector<HTMLDetailsElement>(".menu");
   menu?.addEventListener("click", (event) => {
     if ((event.target as Element).closest(".menu-panel a")) menu.open = false;
+  });
+  document.addEventListener("click", (event) => {
+    if (menu?.open && !menu.contains(event.target as Node)) menu.open = false;
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && menu?.open) {

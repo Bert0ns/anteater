@@ -60,8 +60,8 @@ Both are variable, OFL-1.1, and hosted on the site. Nothing loads from a font CD
 - **Text**: Instrument Sans, weights 400 to 700. Everything else.
 - **Mono**: the system monospace stack, for code.
 
-The files come from the `@fontsource-variable` packages and only the Latin subset ships, about 35 to
-40 KB each. It covers English and Italian, accented letters included. [`fonts.css`](src/styles/fonts.css)
+The files come from the `@fontsource-variable` packages and only the Latin subset ships, about 30 and
+41 KB. It covers English and Italian, accented letters included. [`fonts.css`](src/styles/fonts.css)
 declares them, and `Base.astro` preloads both. Each has a fallback face with the metrics of Arial, so the
 text does not move when the font arrives. If you add a language that needs more than Latin, add that
 subset's file to `fonts.css`.
@@ -74,8 +74,8 @@ Fluid, from a 360 px phone to a 1440 px screen. Use the steps, not pixel sizes.
 |---|---|---|
 | `--step--1` | 13 / 14 px | Notes, captions, nav, footer |
 | `--step-0` | 16 / 18 px | Body |
-| `--step-1` | 18 / 22 px | Lead paragraphs, small headings |
-| `--step-2` | 22 / 30 px | Subheadings |
+| `--step-1` | 19 / 22 px | Lead paragraphs, small headings |
+| `--step-2` | 23 / 30 px | Subheadings |
 | `--step-3` | 29 / 44 px | Section headings (`h2`) |
 | `--step-4` | 36 / 64 px | Big statements |
 | `--step-5` | 44 / 92 px | The page title (`h1`) |
@@ -179,7 +179,7 @@ if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
 
 | Kind | Normal | Reduced |
 |---|---|---|
-| State changes (hover, focus, press, the menu icon) | Transition of at most `--dur-fast` | The change is instant. Colours still change. |
+| State changes (hover, focus, press, the menu icon) | Transition of `--dur-fast`, or `--dur-base` for the menu icon | The change is instant. Colours still change. |
 | Reveal on scroll or on entry | Fade and a short rise, `--dur-slow` | No animation. The element is visible. |
 | Scroll-driven motion (parallax, pinned scenes) | Follows the scroll | Not used. The scene shows its end state. |
 | The hero demo and other timed sequences | Plays once, up to `--dur-hero` | Not started. The demo shows its end state. |
