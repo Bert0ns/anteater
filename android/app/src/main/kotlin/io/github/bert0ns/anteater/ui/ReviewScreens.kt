@@ -99,6 +99,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -590,6 +591,9 @@ internal fun FullSizeViewer(
     }
 }
 
+/** The room the close and share buttons take at the top left of the full size view: 8 dp, two 48 dp buttons, 8 dp between them, and 8 dp before the checkbox. */
+internal val TOP_START_CONTROLS = 120.dp
+
 /**
  * The checkbox at the top right of the full size view, with [label] saying what a tick means, as a tap on a tile
  * toggles it. A box and a label read as a control, where a colored chip read as a status.
@@ -597,7 +601,8 @@ internal fun FullSizeViewer(
 @Composable
 internal fun BoxScope.FullSizeToggle(checked: Boolean, label: String, checkedColor: Color, checkmarkColor: Color, onToggle: () -> Unit) {
     Row(
-        Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(8.dp)
+        // The start padding leaves the close and share buttons at the top left uncovered, whatever the width and the font scale.
+        Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(start = TOP_START_CONTROLS, top = 8.dp, end = 8.dp, bottom = 8.dp)
             .background(Color.Black.copy(alpha = 0.55f), CircleShape)
             .clip(CircleShape)
             .toggleable(checked, role = Role.Checkbox) { onToggle() }
@@ -607,7 +612,7 @@ internal fun BoxScope.FullSizeToggle(checked: Boolean, label: String, checkedCol
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Checkbox(checked, onCheckedChange = null, colors = CheckboxDefaults.colors(checkedColor = checkedColor, uncheckedColor = Color.White, checkmarkColor = checkmarkColor))
-        Text(label, color = Color.White, style = MaterialTheme.typography.labelLarge)
+        Text(label, Modifier.weight(1f, fill = false), color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
