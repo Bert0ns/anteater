@@ -122,6 +122,7 @@ The code names its heavy steps with `androidx.tracing`, so a Perfetto trace of t
 | `TiledImage.tile` | one `BitmapRegionDecoder.decodeRegion` of a `TiledImage`: a view's missing tiles are one decode of their bounding box, so it is one for the view, not for each tile |
 | `Video.start`, `Video.seek` | the full size player (`VideoPlayback`): from a new video's start, and from a seek, to the first frame the player draws (`onRenderedFirstFrame`). An async section, and only one of each is open at a time: a new start or seek ends the one before |
 | `Video.build`, `Video.stop`, `Video.detach`, `Video.release` | the full size player's calls: building it, `stop` and `clearMediaItems` when it moves to another video, `clearVideoSurfaceView` (which waits for the player to let go of the surface), and `release`. They run on the main thread, so each blocks it that long |
+| `Frame.wait`, `Frame.decode`, `Frame.retry` | one video frame's decode (`QueuedFrameDecoder`, every video frame the app shows): the wait for one of its 2 permits (`FRAME_DECODES`), still frames before slideshow frames, the decode holding it, and the second decode of a frame whose first one failed, which runs alone. Async sections, so how many `Frame.decode` overlap at one time is the parallelism. A load section (`Videos.tile`, `Review.slideshow`, ...) holds its frame's wait and decode |
 | `Clip.start` | a tile's loop (`ClipLoop`): from a play to the loop's first frame, like `Video.start` |
 | `Clip.build`, `Clip.detach`, `Clip.release` | the same calls for a tile's loop. The loops run on their own thread, not the main one |
 
@@ -184,6 +185,7 @@ It never taps a checkbox, the heart, "Exclude folder", Trash, Keep or Continue. 
 - `video grid open`, `video grid frames`, `slideshow frames`, `video frames at once`: from the first grid frame load to the end of the last one of the first screen, the still frames the grid loaded, the slideshow frames, and the most frame loads open together. A frame is one load of Coil's `VideoFrameDecoder`, with one `MediaMetadataRetriever` and one codec each;
 - `full size frame` and `full size strip`: the still frame of each full size page, and the strip's 5 frames under each video;
 - `video start` and `video seek`: each `Video.start` and `Video.seek`, the time to the first frame;
+- `frame waits`, `frame decodes`, `frame retries`: the `Frame.wait`, `Frame.decode` and `Frame.retry` sections, so a load's time splits into its wait for a permit and its decode, and a retry shows that a frame failed once;
 - `video build, stop, detach, release` and `clip start, build, detach, release`: the `Video.*` and `Clip.*` sections of the full size player and of the tiles' loops;
 - `grid frame loads after the full size view`: the grid frame loads that start after the full size player's release, where 0 means Back found every frame in the memory cache;
 - `main thread stalls`: the app's main thread slices over 50 ms, the longest first.

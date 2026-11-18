@@ -48,6 +48,9 @@ MediaMetadataRetriever and one codec each. "At once" is the most loads open at o
   full size strip      the strip's 5 frames under each video (*.fullSize.strip)
   video start          Video.start, from a video's play to the first frame the player draws
   video seek           Video.seek, from a seek to the first frame after it
+  frame waits, decodes, retries
+                       Frame.wait, Frame.decode and Frame.retry: a frame's wait for one of the 2
+                       decode permits, its decode, and the second decode of one that failed
   video build, stop, detach, release
                        the full size player's calls on the main thread, which block it that long
   clip start, build, detach, release
@@ -316,6 +319,9 @@ def video_lines(sections: list[Section], stalls: list[Section]) -> list[str]:
         f"full size strip: {spread(named(*VIDEO_STRIP))}",
         f"video start: {listed(sections, 'Video.start')}",
         f"video seek: {listed(sections, 'Video.seek')}",
+        f"frame waits: {spread(named('Frame.wait'))}",
+        f"frame decodes: {spread(named('Frame.decode'))}",
+        f"frame retries: {spread(named('Frame.retry'))}",
     ]
     for name in VIDEO_CALLS:
         lines.append(f"{name.lower().replace('.', ' ')}: {listed(sections, name)}")
@@ -349,6 +355,9 @@ def main() -> None:
                     *VIDEO_STRIP,
                     "Video.start",
                     "Video.seek",
+                    "Frame.wait",
+                    "Frame.decode",
+                    "Frame.retry",
                 )
             )
             calls = ", ".join(f"'{n}'" for n in (*VIDEO_CALLS, *CLIP_CALLS))
