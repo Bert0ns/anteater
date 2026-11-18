@@ -1,0 +1,184 @@
+---
+import Base from "../layouts/Base.astro";
+import FeatureList from "./FeatureList.astro";
+import Screenshots from "./Screenshots.astro";
+import { homePath, otherLang, strings, type Lang } from "../i18n";
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = strings[lang];
+const other = otherLang(lang);
+const repo = "https://github.com/Bert0ns/anteater";
+const installCommand = "sha256sum -c *.apk.sha256";
+const sections = ["photos", "videos", "compress", "trash", "settings", "expect"] as const;
+const anchors = { photos: "clean", videos: "videos", compress: "compress", trash: "trash", settings: "settings", expect: "expect" } as const;
+---
+
+<Base lang={lang}>
+  <div class="top-bar">
+    <a href={homePath(lang)} class="brand">
+      <img class="brand-mark" src="/logo.png" width="32" height="32" alt="" />
+      <span>Anteater</span>
+    </a>
+
+    <div class="nav-links">
+      <a href="#clean">{t.nav.photos}</a>
+      <a href="#videos">{t.nav.videos}</a>
+      <a href="#compress">{t.nav.compress}</a>
+      <a href="#trash">{t.nav.trash}</a>
+      <a href="#settings">{t.nav.settings}</a>
+      <a href="#install">{t.nav.install}</a>
+      <a href={repo} target="_blank" rel="noopener noreferrer">{t.nav.source}</a>
+      <a href={homePath(other)} lang={other} hreflang={other} title={t.nav.otherLanguageTitle}>{t.nav.otherLanguage}</a>
+      <button
+        class="theme-toggle"
+        id="theme-btn"
+        aria-label={t.nav.themeToggle}
+        title={t.nav.themeToggle}
+        data-to-light={t.nav.themeToLight}
+        data-to-dark={t.nav.themeToDark}
+      >
+        <svg id="theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <header class="hero">
+    <h1>{t.hero.title}</h1>
+    <p class="hero-lead">{t.hero.lead}</p>
+
+    <div class="cta-row">
+      <a href={`${repo}/releases/latest`} class="btn btn-primary">{t.hero.download}</a>
+      <a href={repo} class="btn btn-secondary" target="_blank" rel="noopener noreferrer">{t.hero.viewSource}</a>
+    </div>
+    <p class="meta-text">{t.hero.requirements}</p>
+    <p class="meta-text">{t.hero.caveat}</p>
+
+    <Screenshots lang={lang} />
+  </header>
+
+  <main>
+    {
+      sections.map((key) => (
+        <section id={anchors[key]}>
+          <h2>{t[key].title}</h2>
+          {"intro" in t[key] && <p>{t[key].intro}</p>}
+          <FeatureList items={t[key].items} />
+          {"outro" in t[key] && <p>{t[key].outro}</p>}
+        </section>
+      ))
+    }
+
+    <section id="permissions">
+      <h2>{t.permissions.title}</h2>
+      <p>{t.permissions.firstBefore}<code>{t.permissions.firstCode}</code>{t.permissions.firstAfter}</p>
+      <p>{t.permissions.second}</p>
+    </section>
+
+    <section id="install">
+      <h2>{t.install.title}</h2>
+      <ol class="steps">
+        {
+          t.install.steps.map((step, i) => (
+            <li class="step-item">
+              <span class="step-num">{i + 1}</span>
+              <div class="step-body">
+                <h3>{step.title}</h3>
+                {"body" in step ? (
+                  <p>{step.body}</p>
+                ) : (
+                  <>
+                    <p>
+                      {step.before}
+                      <a class="text-link" href={`${repo}/releases/latest`}>{step.link}</a>
+                      {step.after}
+                    </p>
+                    <div class="code-box">
+                      <code>{installCommand}</code>
+                      <button class="copy-btn" id="copy-btn" data-copied={t.install.copied} data-copy={t.install.copy} data-text={installCommand}>
+                        {t.install.copy}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </li>
+          ))
+        }
+      </ol>
+    </section>
+
+    <section id="source">
+      <h2>{t.source.title}</h2>
+      <p>
+        {t.source.before}<a class="text-link" href={`${repo}/blob/main/LICENSE`}>{t.source.license}</a>{t.source.after}<a class="text-link" href={repo} target="_blank" rel="noopener noreferrer">{repo}</a>
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <div>{t.footer.license}</div>
+    <div class="footer-nav">
+      <a href="#clean">{t.nav.photos}</a>
+      <a href="#videos">{t.nav.videos}</a>
+      <a href={repo} target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a href={`${repo}/releases/latest`} target="_blank" rel="noopener noreferrer">{t.footer.releases}</a>
+      <a href={`${repo}/blob/main/docs/design.md`} target="_blank" rel="noopener noreferrer">{t.footer.design}</a>
+    </div>
+  </footer>
+</Base>
+
+<script>
+  const themeBtn = document.getElementById("theme-btn");
+  const moon =
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
+  const sun =
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+
+  function getTheme(): string {
+    let stored: string | null = null;
+    try {
+      stored = localStorage.getItem("anteater-theme");
+    } catch {}
+    if (stored === "dark" || stored === "light") return stored;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  function setTheme(theme: string) {
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      localStorage.setItem("anteater-theme", theme);
+    } catch {}
+    if (!themeBtn) return;
+    themeBtn.innerHTML = theme === "dark" ? moon : sun;
+    themeBtn.title = (theme === "dark" ? themeBtn.dataset.toLight : themeBtn.dataset.toDark) ?? "";
+  }
+
+  setTheme(getTheme());
+  themeBtn?.addEventListener("click", () => {
+    const current = document.documentElement.getAttribute("data-theme") || getTheme();
+    setTheme(current === "dark" ? "light" : "dark");
+  });
+
+  const copyBtn = document.getElementById("copy-btn");
+  copyBtn?.addEventListener("click", () => {
+    navigator.clipboard.writeText(copyBtn.dataset.text ?? "");
+    copyBtn.textContent = copyBtn.dataset.copied ?? "";
+    setTimeout(() => {
+      copyBtn.textContent = copyBtn.dataset.copy ?? "";
+    }, 2000);
+  });
+</script>

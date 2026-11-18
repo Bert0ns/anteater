@@ -1,4 +1,4 @@
-<img src="site/logo.png" width="96" alt="Anteater app icon">
+<img src="site/public/logo.png" width="96" alt="Anteater app icon">
 
 # Anteater
 
@@ -181,6 +181,17 @@ uv run ruff format --check
 uv run pytest
 ```
 
+### Website
+
+Prerequisites: Node 24, as in `site/.nvmrc`.
+
+```bash
+cd site
+npm ci
+npm run check   # build, English and Italian keys, links
+npm run dev     # a local server with live reload
+```
+
 ### Parity verification
 
 From the repository root:
@@ -212,7 +223,7 @@ python3 lab/scripts/check_parity.py
 | [`lab/`](lab/) | Python lab: reference implementation of detectors and labeling tools |
 | [`android/`](android/) | Android app: Kotlin and Jetpack Compose |
 | [`fixtures/`](fixtures/) | Golden test images and videos for parity verification |
-| [`site/`](site/) | Website source files |
+| [`site/`](site/) | Website, built with Astro, in English and Italian |
 | [`docs/screenshots/`](docs/screenshots/) | Rendered application screenshots |
 
 ## Roadmap

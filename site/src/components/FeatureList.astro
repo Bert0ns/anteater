@@ -1,0 +1,18 @@
+---
+interface Props {
+  items: { term: string; desc: string }[];
+}
+
+const { items } = Astro.props;
+---
+
+<div class="feature-list">
+  {
+    items.map((item) => (
+      <div class="feature-row">
+        <div class="feature-term">{item.term}</div>
+        <div class="feature-desc">{item.desc}</div>
+      </div>
+    ))
+  }
+</div>

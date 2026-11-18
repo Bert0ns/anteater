@@ -4,11 +4,12 @@ Most of the code in this repository is written by AI coding agents. Read this fi
 
 ## Ground rules
 
-- Everything in English: code, identifiers, comments, docs, commit messages. The exceptions are `android/app/src/main/res/values-it/strings.xml`, which is Italian, and the Italian literals that tests hold as assertion data.
+- Everything in English: code, identifiers, comments, docs, commit messages. The exceptions are `android/app/src/main/res/values-it/strings.xml`, which is Italian, `site/src/i18n/it.json`, which is the Italian site, and the Italian literals that tests hold as assertion data.
 - Read [`docs/design.md`](docs/design.md) before starting. If a change contradicts a decision there, update the design doc in the same change and explain why.
 - Never commit image data or anything derived from personal images (embeddings, thumbnails, label files). Keep it under `lab/data/`, which is ignored by git.
 - Never write code that deletes files without going through the trash abstraction.
 - Every new user-facing string in `android/` needs its Italian translation in `values-it/strings.xml` in the same change, or `lintDebug` fails. Code, docs, commits and issues stay in English.
+- The site works the same way: every string goes in `site/src/i18n/en.json` and `it.json` in the same change, with the same keys, or the `site` job fails. Use the app's Italian terms for the same features, so the site and the app read alike.
 - Prefer `adb.exe` over `adb` when connecting to the phone, where available, since it is faster.
 
 ## Architecture rules
@@ -26,9 +27,10 @@ The deterministic checks must pass before a PR is ready, and a red check means i
 - `android/`: `./gradlew ktlintCheck testDebugUnitTest lintDebug assembleDebug :baselineprofile:compileNonMinifiedReleaseKotlin`, and `./gradlew ktlintFormat` fixes the formatting
 - Gradle builds from several worktrees on one machine fight over the shared Gradle caches and the CPU, and fail on cache lock timeouts. Run Gradle through `flock`, so they wait in a queue: `flock /tmp/cribrum-gradle.lock ./gradlew ...`. The Android build and its Robolectric tests need JDK 21. The lock keeps its old name, `cribrum-gradle.lock`, on purpose, so that every worktree and agent still shares one queue.
 - Run the checks once, in one Gradle call, not several Gradle runs in parallel. If a run takes more than 30 minutes, look at `ps` and `uptime` for a stuck or starved build instead of waiting on it.
+- `site/`: `npm ci && npm run check`, with the Node version in `site/.nvmrc`. It builds the site, checks that `en.json` and `it.json` have the same keys, and checks the internal links of the built pages. The three run alone as `npm run build`, `npm run check:i18n` and `npm run check:links`.
 - `python3 lab/scripts/check_parity.py` checks that lab and android agree on detector ids, versions and thresholds. When you change one side, change the other, and bump the detector version if its output changes.
 
-CI runs `lab`, `android`, `parity` and `commit-format` on every PR, and branch protection on `main` requires them to pass.
+CI runs `lab`, `android`, `parity`, `site` and `commit-format` on every PR, and branch protection on `main` requires them to pass.
 
 ## Skills
 
@@ -79,7 +81,7 @@ Routines that keep the codebase healthy are issue templates in [`.github/ISSUE_T
 |---|---|---|
 | `routine-drift` | `docs/design.md` against the code, and lab against android | Gemini 4 Hydrogen high or Sonnet 5.5 high |
 | `routine-hygiene` | Dead code, duplication and needless abstractions in what changed | Sonnet 5.5 high |
-| `routine-dependencies` | Gradle, uv and skills updates, in one PR | Sonnet 5.5 high |
+| `routine-dependencies` | Gradle, uv, npm and skills updates, in one PR | Sonnet 5.5 high |
 | `routine-audit` | A deep review of one area, chosen in rotation | Opus 5.5 xhigh or Gemini 4 Argon |
 
 The maintainer picks the model when opening the issue. Per-PR reviews stay with the `code-review` skill, and [Which model does the work](#which-model-does-the-work) says which model runs them.
@@ -106,3 +108,4 @@ Rebase and merge keep every commit, so every commit in a PR must follow the form
 
 - `lab/`: Python 3.12+, `src/` layout, tests under `lab/tests/` (pytest).
 - `android/`: Kotlin + Jetpack Compose, with tests under `android/app/src/test/` (JUnit and Robolectric).
+- `site/`: Astro, building static files, with English at `/` and Italian at `/it/`. The strings live in `site/src/i18n/`.

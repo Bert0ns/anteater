@@ -1,0 +1,305 @@
+{
+  "meta": {
+    "title": "Anteater - Pulizia di foto e video per Android",
+    "description": "Anteater trova foto sfocate, copie, clip brevi e altro disordine tra le foto e i video del tuo telefono Android. Funziona offline, e i file rimossi restano in un cestino da cui puoi ripristinarli.",
+    "ogDescription": "Trova il disordine in foto e video. Tutto avviene sul telefono, nulla viene eliminato senza la tua conferma, e i file rimossi restano in un cestino da cui puoi ripristinarli."
+  },
+  "nav": {
+    "photos": "Foto",
+    "videos": "Video",
+    "compress": "Comprimi",
+    "trash": "Cestino",
+    "settings": "Impostazioni",
+    "install": "Installazione",
+    "source": "Codice",
+    "otherLanguage": "English",
+    "otherLanguageTitle": "Read in English",
+    "themeToggle": "Cambia tema",
+    "themeToLight": "Passa al tema chiaro",
+    "themeToDark": "Passa al tema scuro"
+  },
+  "hero": {
+    "title": "Trova le foto e i video che puoi eliminare",
+    "lead": "Anteater trova le foto e i video del tuo telefono Android che puoi eliminare o comprimere: foto sfocate, copie, clip brevi, screenshot e i file che le app di messaggistica si lasciano dietro. Anteater suggerisce e tu decidi. Nulla viene eliminato senza la tua conferma, i file rimossi restano in un cestino da cui puoi ripristinarli, e niente lascia il telefono.",
+    "download": "Scarica l'ultimo APK",
+    "viewSource": "Vedi il codice su GitHub",
+    "requirements": "Richiede Android 11 o successivo. Software libero con licenza GPL-3.0.",
+    "caveat": "I suggerimenti sono tarati sulla libreria di una sola persona, quindi aspettati qualche errore e qualche mancanza. Le librerie nel cloud, come Google Photos, iOS e desktop, non sono coperte."
+  },
+  "screenshots": {
+    "label": "Screenshot dell'app",
+    "note": "Le immagini negli screenshot sono disegnate con il codice, e i numeri sono inventati.",
+    "items": [
+      {
+        "caption": "Categorie di foto",
+        "alt": "Scheda Foto di Pulisci con lo spazio che si può liberare e le categorie di foto, ciascuna con un numero e una dimensione"
+      },
+      {
+        "caption": "Griglia di controllo",
+        "alt": "La categoria Sfocate come griglia di foto, quasi tutte segnate per il cestino, con un pulsante Cestina sotto"
+      },
+      {
+        "caption": "Copie in gruppi",
+        "alt": "Copie simili in gruppi di tre foto, la copia migliore di ogni gruppo con l'etichetta Migliore e quasi tutte le altre segnate"
+      },
+      {
+        "caption": "A schermo intero, con il motivo",
+        "alt": "Una foto a schermo intero con il motivo per cui è stata segnalata e un'opzione per saltare la sua cartella d'ora in poi"
+      },
+      {
+        "caption": "Categorie di video",
+        "alt": "Scheda Video di Pulisci con Video più grandi e le categorie di video, ciascuna con un numero e una dimensione"
+      },
+      {
+        "caption": "Clip brevi",
+        "alt": "Pagina Clip brevi, una griglia di riquadri di video che mostrano la durata e la dimensione, segnati per il cestino"
+      },
+      {
+        "caption": "Video a schermo intero",
+        "alt": "Un video a schermo intero con i comandi di riproduzione e una striscia di cinque fotogrammi a cui saltare"
+      },
+      {
+        "caption": "Elenco di Comprimi",
+        "alt": "Scheda Comprimi con il cursore della qualità, le foto in ordine dalla più grande e tre selezionate"
+      },
+      {
+        "caption": "Prima e dopo",
+        "alt": "Riepilogo della compressione con un cursore che confronta l'originale e la copia, e ciò che la copia perde"
+      },
+      {
+        "caption": "Cestino",
+        "alt": "Schermata del cestino con i giorni rimasti su ogni foto e un pulsante per svuotarlo"
+      },
+      {
+        "caption": "Impostazioni",
+        "alt": "Impostazioni con la conservazione del cestino, le cartelle escluse, la mappa dell'archiviazione, il feedback tattile e gli interruttori della scansione notturna"
+      },
+      {
+        "caption": "Mappa dell'archiviazione",
+        "alt": "Mappa dell'archiviazione, una treemap delle cartelle con le loro dimensioni e il numero di file"
+      }
+    ]
+  },
+  "photos": {
+    "title": "Foto: cosa trova",
+    "intro": "Anteater analizza la tua memoria, comprese le cartelle che le app della galleria ignorano, come quella di WhatsApp. La scheda Foto di Pulisci elenca nove categorie. Una categoria si apre in una griglia con le foto suggerite già segnate. Toccane una per tenerla, tienila premuta per vederla a schermo intero e capire perché è stata segnalata, e premi il pulsante sotto la griglia per spostare nel cestino quelle segnate.",
+    "items": [
+      {
+        "term": "Copie identiche",
+        "desc": "Lo stesso file salvato due volte. Anteater segna quelle in più."
+      },
+      {
+        "term": "Copie simili",
+        "desc": "Copie ricompresse, ridimensionate o modificate di una stessa foto. Suggerisce di tenere la migliore."
+      },
+      {
+        "term": "Raffiche",
+        "desc": "Foto scattate a pochi secondi di distanza. Suggerisce di tenere lo scatto più nitido."
+      },
+      {
+        "term": "Sfocate",
+        "desc": "Foto in cui il soggetto non è a fuoco. I ritratti con lo sfondo sfocato non vengono segnalati."
+      },
+      {
+        "term": "Troppo scure o troppo chiare",
+        "desc": "Scatti in tasca, fotogrammi neri e foto sovraesposte."
+      },
+      {
+        "term": "Screenshot",
+        "desc": "Catture dello schermo."
+      },
+      {
+        "term": "Documenti e appunti",
+        "desc": "Slide, lavagne, scrittura a mano, scontrini e pagine stampate."
+      },
+      {
+        "term": "Inoltrate",
+        "desc": "Meme e immagini di saluti dalle app di messaggistica."
+      },
+      {
+        "term": "Sticker di WhatsApp",
+        "desc": "File nelle cartelle degli sticker delle app di messaggistica."
+      }
+    ],
+    "outro": "Copie identiche, copie simili e raffiche si aprono come gruppi. Anteater sceglie la copia migliore e la mostra accanto alle altre, e puoi cambiare quale tenere."
+  },
+  "videos": {
+    "title": "Video",
+    "intro": "La scheda Video ha il suo pulsante Scansiona i video, i suoi conteggi e il suo totale. Il riquadro di un video mostra un fotogramma, la durata e la dimensione, e tenendolo premuto il video si apre nell'app con una striscia di fotogrammi a cui saltare. I video grandi vengono per primi.",
+    "items": [
+      {
+        "term": "Video più grandi",
+        "desc": "Tutti i video che non hai ancora controllato, dal più grande."
+      },
+      {
+        "term": "Copie identiche",
+        "desc": "Lo stesso video salvato due volte."
+      },
+      {
+        "term": "Copie simili",
+        "desc": "La copia più piccola che WhatsApp tiene nella cartella Sent. Anteater tiene l'originale della fotocamera."
+      },
+      {
+        "term": "Sfocati, troppo scuri o troppo chiari",
+        "desc": "Video fuori fuoco o esposti male, con soglie tutte loro."
+      },
+      {
+        "term": "Inoltrati",
+        "desc": "Video nelle cartelle delle app di messaggistica, compresa Sent."
+      },
+      {
+        "term": "Riprese dello stesso momento",
+        "desc": "Più riprese registrate una dopo l'altra. Nessuna è preselezionata, perché Anteater non sa dire quale sia la migliore."
+      },
+      {
+        "term": "Clip brevi",
+        "desc": "Clip sotto i 15 secondi, come una ripresa venuta male, una registrazione in tasca o una clip senza audio in una cartella di chat. I primi riquadri sullo schermo si ripetono senza audio, così decidi a colpo d'occhio."
+      }
+    ]
+  },
+  "compress": {
+    "title": "Compressione delle foto",
+    "intro": "La scheda Comprimi ricomprime i JPEG grandi della fotocamera invece di eliminarli. Elenca le foto, dalla più grande, e non ne seleziona nessuna.",
+    "items": [
+      {
+        "term": "Tre livelli di qualità",
+        "desc": "Alta qualità mantiene la risoluzione piena. Bilanciato riduce a 50 MP le foto sopra i 50 MP, e Più piccolo riduce a 12 MP le foto sopra i 12 MP. In laboratorio, Bilanciato ha risparmiato in mediana il 47% sulle foto della fotocamera di un telefono."
+      },
+      {
+        "term": "Prima e dopo",
+        "desc": "Un cursore mostra l'originale accanto al vero risultato compresso, e ingrandisce fino al singolo pixel. Puoi controllare fino a tre foto prima di confermare."
+      },
+      {
+        "term": "Cosa tiene la copia",
+        "desc": "La data, il luogo e i dati della fotocamera restano, e resta anche la gain map Ultra HDR su Android 14 e successivi. Alcuni extra si perdono, come le informazioni sulla modalità di scatto. Il riepilogo li elenca prima che tu confermi. Se la foto era tra i preferiti della galleria, Android ti chiede di segnare di nuovo la copia come preferita."
+      },
+      {
+        "term": "In background",
+        "desc": "La compressione di più foto procede con una notifica e si mette in pausa mentre il telefono è molto caldo. I video non si possono ancora comprimere."
+      }
+    ]
+  },
+  "trash": {
+    "title": "Cosa succede ai tuoi file",
+    "intro": "Nulla viene eliminato senza la tua conferma. I file che rimuovi vanno in una cartella cestino sul telefono, e puoi ripristinarli finché non finisce il periodo di conservazione, 30 giorni per impostazione predefinita.",
+    "items": [
+      {
+        "term": "Dove vanno",
+        "desc": "Il pulsante sotto una pagina sposta i file in una cartella cestino sul telefono. Occupano ancora spazio finché non vengono eliminati definitivamente, e la cartella resta se disinstalli l'app."
+      },
+      {
+        "term": "Ripristina",
+        "desc": "Ripristina un file dal cestino e torna nella sua cartella originale. Non sovrascrive mai un altro file."
+      },
+      {
+        "term": "Eliminati definitivamente",
+        "desc": "Solo quando finisce il periodo di conservazione, quando elimini i file dal cestino o quando tocchi «Libera X ora». Gli ultimi due chiedono prima conferma."
+      },
+      {
+        "term": "Libera X ora",
+        "desc": "Dopo una pagina che cestina più di 1 GB, la barra con Annulla propone di liberare subito quello spazio. Chiede prima conferma, ed elimina solo i file di quella pagina."
+      },
+      {
+        "term": "Compressione",
+        "desc": "Anche l'originale di una foto compressa va nel cestino, e un solo pulsante annulla tutta la compressione."
+      },
+      {
+        "term": "Preferiti",
+        "desc": "Le foto e i video a cui hai messo il cuore nella galleria mostrano un cuore e partono non segnati. Una pagina che ne segna uno per il cestino chiede prima conferma."
+      }
+    ]
+  },
+  "settings": {
+    "title": "Impostazioni e mappa dell'archiviazione",
+    "items": [
+      {
+        "term": "Conservazione del cestino",
+        "desc": "30 giorni per impostazione predefinita. Scegli 7, 14, 60 o 90 giorni."
+      },
+      {
+        "term": "Soglie di rilevamento",
+        "desc": "Un cursore per la maggior parte delle categorie, con il numero di immagini da controllare che si aggiorna mentre lo sposti."
+      },
+      {
+        "term": "Cartelle escluse",
+        "desc": "Cartelle lasciate fuori dal controllo e dalla mappa. Puoi escluderne una anche dalla vista a schermo intero."
+      },
+      {
+        "term": "Mappa dell'archiviazione",
+        "desc": "Una treemap dello spazio di foto e video, cartella per cartella. Tocca un blocco per vedere la dimensione e il numero di file, aprirlo o escludere la cartella."
+      },
+      {
+        "term": "Scansione notturna",
+        "desc": "Analizza le nuove foto una volta a notte mentre il telefono si ricarica, e anche i nuovi video dopo che hai usato Scansiona i video. Due interruttori disattivano le due analisi. Con entrambi spenti, la scansione notturna si limita a svuotare il cestino scaduto."
+      },
+      {
+        "term": "Lingua e aspetto",
+        "desc": "Feedback tattile attivo o disattivo, inglese o italiano su Android 13 e successivi, e il tema scuro del telefono."
+      }
+    ]
+  },
+  "expect": {
+    "title": "Cosa aspettarsi",
+    "items": [
+      {
+        "term": "Semplice da usare",
+        "desc": "Apri una categoria, controlla cosa è segnato e premi un pulsante."
+      },
+      {
+        "term": "Preferisce mostrare troppo",
+        "desc": "Può capitarti di vedere una foto che vale la pena tenere, e la tieni con un tocco. Anteater preferisce mostrartela piuttosto che nasconderti il disordine."
+      },
+      {
+        "term": "Pensata per la privacy",
+        "desc": "Tutto avviene sul tuo telefono. Nulla viene caricato, e l'app non può collegarsi a una rete."
+      },
+      {
+        "term": "Nulla si perde per sbaglio",
+        "desc": "Nulla viene eliminato senza la tua conferma. I file nel cestino restano ripristinabili finché non finisce il periodo di conservazione."
+      }
+    ]
+  },
+  "permissions": {
+    "title": "Permessi",
+    "firstBefore": "Le app della galleria vedono solo le cartelle che Android indicizza, e saltano quelle con un file ",
+    "firstCode": ".nomedia",
+    "firstAfter": ", come i contenuti inviati di WhatsApp. Anteater chiede l'accesso a tutti i file, per poter leggere quelle cartelle e gestire il suo cestino.",
+    "second": "Google Play consente quel permesso solo ad alcuni tipi di app, come i gestori di file, quindi Anteater si scarica direttamente come APK da GitHub. L'app non ha il permesso di rete, quindi non può inviare nulla da nessuna parte."
+  },
+  "install": {
+    "title": "Installazione",
+    "copy": "Copia",
+    "copied": "Copiato",
+    "steps": [
+      {
+        "title": "Scarica l'APK",
+        "before": "Prendi l'ultima versione dalla ",
+        "link": "pagina delle release su GitHub",
+        "after": ". Per verificare il download, confronta il suo digest SHA-256:"
+      },
+      {
+        "title": "Consenti le app sconosciute",
+        "body": "Apri il file scaricato. Quando Android chiede di consentire le installazioni dal browser o dal gestore di file, conferma."
+      },
+      {
+        "title": "Concedi l'accesso all'archiviazione",
+        "body": "Al primo avvio, Android ti porta a una schermata di sistema. Attiva l'accesso a tutti i file per Anteater."
+      },
+      {
+        "title": "Scansiona e controlla",
+        "body": "Tocca Scansiona ora per le foto e Scansiona i video per i video. Dopo, Anteater analizza anche i nuovi file una volta a notte mentre il telefono si ricarica. Poi apri una categoria per controllarla, o ricomprimi le foto grandi dalla scheda Comprimi."
+      }
+    ]
+  },
+  "source": {
+    "title": "Codice sorgente e licenza",
+    "before": "Anteater è software libero con licenza ",
+    "license": "GNU General Public License v3.0",
+    "after": ". Il codice sorgente, i dettagli tecnici e le note di progettazione sono su GitHub: "
+  },
+  "footer": {
+    "license": "Anteater • GNU GPLv3",
+    "releases": "Release",
+    "design": "Progettazione"
+  }
+}

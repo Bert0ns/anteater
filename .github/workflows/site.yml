@@ -1,31 +1,70 @@
 name: site
 
+# The site job runs on every pull request, so it can be a required check. A workflow-level path
+# filter would leave a skipped required check pending forever. It skips its steps when nothing
+# the site builds from changed, and still reports success. A push to main that changes the site
+# also deploys it.
 on:
   push:
     branches: [main]
-    paths: ["site/**", ".github/workflows/site.yml"]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
 
 jobs:
+  site:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.changed.outputs.run }}
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: changed
+        working-directory: .
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if ! files=$(git diff --name-only "$BASE" HEAD) || grep -qE '^site/|^\.github/workflows/site\.yml$' <<< "$files"; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.changed.outputs.run
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: site/.nvmrc
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - if: steps.changed.outputs.run
+        run: npm ci
+      - if: steps.changed.outputs.run
+        run: npm run build
+      - if: steps.changed.outputs.run
+        run: npm run check:i18n
+      - if: steps.changed.outputs.run
+        run: npm run check:links
+      - if: steps.changed.outputs.run && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
   deploy:
+    needs: site
+    if: needs.site.outputs.run && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
       - id: deployment
         uses: actions/deploy-pages@v4

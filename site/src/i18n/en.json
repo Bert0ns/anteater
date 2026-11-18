@@ -1,0 +1,305 @@
+{
+  "meta": {
+    "title": "Anteater - Media Cleaner for Android",
+    "description": "Anteater finds blurry shots, duplicates, short clips and other clutter in the photos and videos on your Android phone. It works offline, and removed files wait in a trash you can restore from.",
+    "ogDescription": "Finds clutter in your photos and videos. Everything runs on the phone, nothing is deleted without your confirmation, and removed files wait in a trash you can restore from."
+  },
+  "nav": {
+    "photos": "Photos",
+    "videos": "Videos",
+    "compress": "Compress",
+    "trash": "Trash",
+    "settings": "Settings",
+    "install": "Install",
+    "source": "Source",
+    "otherLanguage": "Italiano",
+    "otherLanguageTitle": "Leggi in italiano",
+    "themeToggle": "Toggle theme",
+    "themeToLight": "Switch to light theme",
+    "themeToDark": "Switch to dark theme"
+  },
+  "hero": {
+    "title": "Find the photos and videos you can delete",
+    "lead": "Anteater finds the photos and videos on your Android phone that you can delete or recompress: blurry shots, duplicates, short clips, screenshots and files that messaging apps leave behind. It suggests and you decide. Nothing is deleted without your confirmation, removed files wait in a trash you can restore from, and nothing leaves the phone.",
+    "download": "Download latest APK",
+    "viewSource": "View source on GitHub",
+    "requirements": "Requires Android 11 or newer. Free software under GPL-3.0.",
+    "caveat": "The suggestions are tuned on one person's library, so expect some wrong ones and some misses. Cloud libraries such as Google Photos, iOS and desktop are not covered."
+  },
+  "screenshots": {
+    "label": "App screenshots",
+    "note": "The images in the screenshots are drawn in code, and the counts are made up.",
+    "items": [
+      {
+        "caption": "Photo categories",
+        "alt": "Photos tab of Clean with the space that can be freed and the photo categories, each with a count and a size"
+      },
+      {
+        "caption": "Review grid",
+        "alt": "Blurry category as a grid of photos, most of them marked for the trash, with a Trash button under it"
+      },
+      {
+        "caption": "Copies in groups",
+        "alt": "Similar copies as groups of three photos, the best copy of each group labelled Best and most of the others marked"
+      },
+      {
+        "caption": "Full size, with the reason",
+        "alt": "A photo at full size with the reason it was flagged and an option to skip its folder from now on"
+      },
+      {
+        "caption": "Video categories",
+        "alt": "Videos tab of Clean with Largest videos and the video categories, each with a count and a size"
+      },
+      {
+        "caption": "Short clips",
+        "alt": "Short clips page, a grid of video tiles that show the length and the size, marked for the trash"
+      },
+      {
+        "caption": "Video at full size",
+        "alt": "A video at full size with play controls and a strip of five frames to jump to"
+      },
+      {
+        "caption": "Compress list",
+        "alt": "Compress tab with the quality slider, the photos sorted largest first and three selected"
+      },
+      {
+        "caption": "Before and after",
+        "alt": "Compression summary with a slider that compares the original and the copy, and what the copy loses"
+      },
+      {
+        "caption": "Trash",
+        "alt": "Trash screen with the days left on each photo and a button to empty it"
+      },
+      {
+        "caption": "Settings",
+        "alt": "Settings with trash retention, excluded folders, the storage map, haptics and the night scan switches"
+      },
+      {
+        "caption": "Storage map",
+        "alt": "Storage map, a treemap of the folders with their sizes and file counts"
+      }
+    ]
+  },
+  "photos": {
+    "title": "Photos: what it finds",
+    "intro": "Anteater scans your storage, including folders that gallery apps skip, such as WhatsApp's. The Photos tab of Clean lists nine categories. A category opens into a grid with the suggested photos already marked. Tap one to keep it, hold it to see it at full size and why it was flagged, and press the button under the grid to move the marked ones to the trash.",
+    "items": [
+      {
+        "term": "Exact copies",
+        "desc": "The same file saved twice. Anteater marks the extra ones."
+      },
+      {
+        "term": "Similar copies",
+        "desc": "Recompressed, resized or edited copies of one photo. It suggests keeping the best one."
+      },
+      {
+        "term": "Bursts",
+        "desc": "Photos taken a few seconds apart. It suggests keeping the sharpest shot."
+      },
+      {
+        "term": "Blurry",
+        "desc": "Photos where the subject is out of focus. Portraits with a soft background are not flagged."
+      },
+      {
+        "term": "Too dark or too bright",
+        "desc": "Pocket shots, black frames and blown-out photos."
+      },
+      {
+        "term": "Screenshots",
+        "desc": "Screen captures."
+      },
+      {
+        "term": "Documents and notes",
+        "desc": "Slides, whiteboards, handwriting, receipts and printed pages."
+      },
+      {
+        "term": "Forwarded",
+        "desc": "Memes and greeting images from messaging apps."
+      },
+      {
+        "term": "WhatsApp stickers",
+        "desc": "Files in the sticker folders of messaging apps."
+      }
+    ],
+    "outro": "Exact copies, similar copies and bursts open as groups. Anteater picks the best copy and shows it beside the others, and you can change which one stays."
+  },
+  "videos": {
+    "title": "Videos",
+    "intro": "The Videos tab has its own Scan videos button, its own counts and its own total. A video tile shows a frame, the length and the size, and holding it opens the video in the app with a strip of frames to jump to. Large videos come first.",
+    "items": [
+      {
+        "term": "Largest videos",
+        "desc": "Every video you have not reviewed yet, biggest first."
+      },
+      {
+        "term": "Exact copies",
+        "desc": "The same video saved twice."
+      },
+      {
+        "term": "Similar copies",
+        "desc": "The smaller copy WhatsApp keeps in its Sent folder. Anteater keeps the camera original."
+      },
+      {
+        "term": "Blurry, too dark or too bright",
+        "desc": "Videos that are out of focus or badly exposed, with thresholds of their own."
+      },
+      {
+        "term": "Forwarded",
+        "desc": "Videos in the folders of messaging apps, Sent included."
+      },
+      {
+        "term": "Takes of one moment",
+        "desc": "Several takes recorded one after the other. None is preselected, because Anteater cannot tell which is best."
+      },
+      {
+        "term": "Short clips",
+        "desc": "Clips under 15 seconds, such as a failed take, a pocket recording or a silent clip in a chat folder. The first tiles on screen loop muted, so you can decide at a glance."
+      }
+    ]
+  },
+  "compress": {
+    "title": "Photo compression",
+    "intro": "The Compress tab recompresses large camera JPEGs instead of deleting them. It lists photos, largest first, and selects none.",
+    "items": [
+      {
+        "term": "Three quality levels",
+        "desc": "High quality keeps the full resolution. Balanced scales photos above 50 MP down to 50 MP, and Smallest scales photos above 12 MP down to 12 MP. In the lab, Balanced saved a median 47% on one phone's camera photos."
+      },
+      {
+        "term": "Before and after",
+        "desc": "A slider shows the original next to the real compressed result, and zooms down to single pixels. You can check up to three photos before you confirm."
+      },
+      {
+        "term": "What the copy keeps",
+        "desc": "The date, the place and the camera details stay, and so does the Ultra HDR gain map on Android 14 and newer. Some extras are lost, such as the shooting mode info. The summary lists them before you confirm. If the photo was a gallery favourite, Android asks you to mark the copy as a favourite again."
+      },
+      {
+        "term": "Background batches",
+        "desc": "A batch runs with a notification, and pauses while the phone is very hot. Videos cannot be compressed yet."
+      }
+    ]
+  },
+  "trash": {
+    "title": "What happens to your files",
+    "intro": "Nothing is deleted without your confirmation. Files you remove go to a trash folder on the phone, and you can restore them until the retention ends, 30 days by default.",
+    "items": [
+      {
+        "term": "Where it goes",
+        "desc": "The button under a page moves the files to a trash folder on the phone. They still take space until they are deleted for good, and the folder stays if you uninstall the app."
+      },
+      {
+        "term": "Restore",
+        "desc": "Restore a file from the trash and it goes back to its original folder. It never overwrites another file."
+      },
+      {
+        "term": "Deleted for good",
+        "desc": "Only when the retention ends, when you delete files from the trash, or when you tap \"Free X now\". The last two ask first."
+      },
+      {
+        "term": "Free X now",
+        "desc": "After a page that trashes more than 1 GB, the Undo snackbar offers to free that space right away. It asks first, and deletes only the files of that page."
+      },
+      {
+        "term": "Compression",
+        "desc": "The original of a compressed photo goes to the trash too, and one button undoes the whole batch."
+      },
+      {
+        "term": "Favourites",
+        "desc": "Photos and videos you hearted in the gallery show a heart and start unmarked. A page that marks one for the trash asks first."
+      }
+    ]
+  },
+  "settings": {
+    "title": "Settings and storage map",
+    "items": [
+      {
+        "term": "Trash retention",
+        "desc": "30 days by default. Choose 7, 14, 60 or 90 days."
+      },
+      {
+        "term": "Detection thresholds",
+        "desc": "A slider for most categories, with live counts of the candidates."
+      },
+      {
+        "term": "Excluded folders",
+        "desc": "Folders left out of the review and the map. You can also exclude one from the full size view."
+      },
+      {
+        "term": "Storage map",
+        "desc": "A treemap of the photo and video space, folder by folder. Tap a block for its size and file count, open it, or exclude the folder."
+      },
+      {
+        "term": "Night scan",
+        "desc": "Scans new photos once a night while the phone charges, and new videos too once you have run Scan videos. Two switches turn each one off. With both off, the night run only empties the expired trash."
+      },
+      {
+        "term": "Language and look",
+        "desc": "Haptics on or off, English or Italian on Android 13 and newer, and the phone's dark theme."
+      }
+    ]
+  },
+  "expect": {
+    "title": "What to expect",
+    "items": [
+      {
+        "term": "Simple to use",
+        "desc": "Open a category, check what is marked, and press one button."
+      },
+      {
+        "term": "It errs on showing too much",
+        "desc": "You may see a photo worth keeping, and you can keep it with a tap. Anteater would rather show it than hide clutter from you."
+      },
+      {
+        "term": "Private by design",
+        "desc": "Everything runs on your phone. Nothing is uploaded, and the app cannot connect to a network."
+      },
+      {
+        "term": "Nothing is lost by accident",
+        "desc": "Nothing is deleted without your confirmation. Trashed files stay restorable until the retention ends."
+      }
+    ]
+  },
+  "permissions": {
+    "title": "Permissions",
+    "firstBefore": "Gallery apps only see the folders Android indexes, and skip folders with a ",
+    "firstCode": ".nomedia",
+    "firstAfter": " file, such as WhatsApp's sent media. Anteater asks for All files access, so it can read those folders and manage its trash.",
+    "second": "Google Play allows that permission only for a few kinds of apps, such as file managers, so Anteater is a direct APK download on GitHub. The app has no network permission, so it cannot send anything anywhere."
+  },
+  "install": {
+    "title": "Install",
+    "copy": "Copy",
+    "copied": "Copied",
+    "steps": [
+      {
+        "title": "Download the APK",
+        "before": "Get the latest release from the ",
+        "link": "GitHub releases page",
+        "after": ". To check the download, compare its SHA-256 digest:"
+      },
+      {
+        "title": "Allow unknown apps",
+        "body": "Open the downloaded file. When Android asks to allow installs from your browser or file manager, confirm."
+      },
+      {
+        "title": "Grant storage access",
+        "body": "On first launch, Android sends you to a system screen. Turn on All files access for Anteater."
+      },
+      {
+        "title": "Scan and review",
+        "body": "Tap Scan now for photos and Scan videos for videos. After that, Anteater also scans new files once a night while the phone charges. Then open a category to review it, or recompress large photos from the Compress tab."
+      }
+    ]
+  },
+  "source": {
+    "title": "Source code and license",
+    "before": "Anteater is free software under the ",
+    "license": "GNU General Public License v3.0",
+    "after": ". The source, the technical details and the design notes are on GitHub: "
+  },
+  "footer": {
+    "license": "Anteater • GNU GPLv3",
+    "releases": "Releases",
+    "design": "Design"
+  }
+}
