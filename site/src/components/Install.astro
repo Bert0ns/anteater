@@ -1,5 +1,5 @@
 ---
-import { homePath, strings, type Lang } from "../i18n";
+import { strings, type Lang } from "../i18n";
 
 interface Props {
   lang: Lang;
@@ -50,7 +50,7 @@ const checkCommand = "sha256sum -c *.apk.sha256";
       </div>
     </div>
 
-    <p class="install-play">{t.play.text}<a href={`${homePath(lang)}#permissions`}>{t.play.link}</a></p>
+    <p class="install-play">{t.play.text}</p>
   </div>
 </section>
 

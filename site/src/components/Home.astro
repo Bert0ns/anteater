@@ -2,6 +2,8 @@
 import Base from "../layouts/Base.astro";
 import FeatureList from "./FeatureList.astro";
 import Install from "./Install.astro";
+import Privacy from "./Privacy.astro";
+import Safety from "./Safety.astro";
 import Screenshots from "./Screenshots.astro";
 import { strings, type Lang } from "../i18n";
 
@@ -12,8 +14,8 @@ interface Props {
 const { lang } = Astro.props;
 const t = strings[lang];
 const repo = "https://github.com/Bert0ns/anteater";
-const sections = ["photos", "videos", "compress", "trash", "settings", "expect"] as const;
-const anchors = { photos: "clean", videos: "videos", compress: "compress", trash: "trash", settings: "settings", expect: "expect" } as const;
+const sections = ["photos", "videos", "compress", "settings"] as const;
+const anchors = { photos: "clean", videos: "videos", compress: "compress", settings: "settings" } as const;
 ---
 
 <Base lang={lang}>
@@ -33,6 +35,9 @@ const anchors = { photos: "clean", videos: "videos", compress: "compress", trash
   </div>
 
   <div class="sections container">
+    <Privacy lang={lang} />
+    <Safety lang={lang} />
+
     {
       sections.map((key) => (
         <section id={anchors[key]}>
@@ -43,12 +48,6 @@ const anchors = { photos: "clean", videos: "videos", compress: "compress", trash
         </section>
       ))
     }
-
-    <section id="permissions">
-      <h2>{t.permissions.title}</h2>
-      <p>{t.permissions.firstBefore}<code>{t.permissions.firstCode}</code>{t.permissions.firstAfter}</p>
-      <p>{t.permissions.second}</p>
-    </section>
 
     <Install lang={lang} />
 
