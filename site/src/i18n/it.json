@@ -267,29 +267,40 @@
     "second": "Google Play consente quel permesso solo ad alcuni tipi di app, come i gestori di file, quindi Anteater si scarica direttamente come APK da GitHub. L'app non ha il permesso di rete, quindi non può inviare nulla da nessuna parte."
   },
   "install": {
-    "title": "Installazione",
-    "copy": "Copia",
-    "copied": "Copiato",
+    "title": "Installa Anteater",
+    "lead": "Anteater si scarica direttamente da GitHub, non da uno store di app.",
+    "download": "Scarica l'ultimo APK",
+    "requirements": "Richiede Android 11 o successivo. Software libero con licenza GPL-3.0.",
+    "stepsLabel": "Passaggi dell'installazione",
     "steps": [
       {
         "title": "Scarica l'APK",
-        "before": "Prendi l'ultima versione dalla ",
-        "link": "pagina delle release su GitHub",
-        "after": ". Per verificare il download, confronta il suo digest SHA-256:"
+        "body": "Usa il pulsante qui sopra dal telefono. Il file viene dall'ultima release su GitHub."
       },
       {
         "title": "Consenti le app sconosciute",
-        "body": "Apri il file scaricato. Quando Android chiede di consentire le installazioni dal browser o dal gestore di file, conferma."
+        "body": "Apri il file. Quando Android chiede di consentire le installazioni dal browser o dal gestore di file, conferma."
       },
       {
-        "title": "Concedi l'accesso all'archiviazione",
-        "body": "Al primo avvio, Android ti porta a una schermata di sistema. Attiva l'accesso a tutti i file per Anteater."
+        "title": "Concedi l'accesso a tutti i file",
+        "body": "Al primo avvio, Android apre una schermata di sistema. Attiva l'accesso a tutti i file per Anteater."
       },
       {
         "title": "Scansiona e controlla",
-        "body": "Tocca Scansiona ora per le foto e Scansiona i video per i video. Dopo, Anteater analizza anche i nuovi file una volta a notte mentre il telefono si ricarica. Poi apri una categoria per controllarla, o ricomprimi le foto grandi dalla scheda Comprimi."
+        "body": "Tocca Scansiona ora, poi apri una categoria per controllare cosa ha trovato."
       }
-    ]
+    ],
+    "verify": {
+      "title": "Controlla il download",
+      "body": "Ogni release ha un file SHA-256. Salvalo accanto all'APK, poi esegui questo comando in quella cartella su un computer. Stampa OK se il file è integro.",
+      "copy": "Copia",
+      "copied": "Copiato",
+      "copyLabel": "Copia il comando"
+    },
+    "play": {
+      "text": "Non è su Google Play: Anteater ha bisogno dell'accesso a tutti i file, che Google Play consente solo ad alcuni tipi di app. ",
+      "link": "Perché non è su Google Play"
+    }
   },
   "source": {
     "title": "Codice sorgente e licenza",
