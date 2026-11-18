@@ -73,9 +73,10 @@ class VideoBarTest {
         compose.waitForIdle()
         val bar = compose.onNodeWithContentDescription("Position in the video")
         if (shown) bar.assertExists() else bar.assertDoesNotExist()
-        // The checkbox and the close button never hide.
+        // The checkbox, the close button and the share button never hide.
         compose.onNodeWithText("Selected").assertExists()
         compose.onNodeWithContentDescription("Close").assertExists()
+        compose.onNodeWithContentDescription("Share").assertExists()
     }
 
     private fun playAboutASecond() {
