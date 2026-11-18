@@ -163,7 +163,7 @@ fun TrashScreen(
         FullSizeViewer(paths, start.file.path, onClose = close, image = image, onPage = { if (playback.loaded != paths.getOrNull(it)) playback.stop() }, shareable = false) { page ->
             val item = trashed.getOrNull(page) ?: return@FullSizeViewer
             FullSizeToggle(item.file.path in selected, stringResource(R.string.tile_selected), MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary) { onSelect(item) }
-            FullSizeBar(item.original.path, item.favorite) {
+            FullSizeBar(item.original.path, item.favorite, playback = playback.takeIf { item.isVideo }) {
                 if (item.isVideo) {
                     // A video whose length cannot be read is the placeholder with no controls, as in "Largest videos".
                     val read = rememberLengthRead(item.file)
