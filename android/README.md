@@ -176,7 +176,7 @@ Besides those it swipes to scroll the category, the Compress page, the trash and
 - opens the Videos tab, then the section, and waits for the first tiles;
 - 10 s idle, then flings over the grid;
 - a long press on the first tile, which opens its full size view without selecting or marking it;
-- 3 swipes to the next videos, 2 taps on frames of the strip, and a tap in the centre of the video to pause it and another to play it;
+- 3 swipes to the next videos, a swipe up that brings back the bar (it hides while a video plays) and keeps it, 2 taps on frames of the strip, and a tap in the centre of the video to pause it and another to play it;
 - Back twice: out of the full size view, then out of the section.
 
 It never taps a checkbox, the heart, "Exclude folder", Trash, Keep or Continue. At each step (`grid`, `grid-after-scroll`, `full-size-playing`, `full-size-after-paging`, `after-full-size` and `left-section`) it prints the app's memory summary from `dumpsys meminfo`, and saves the full `meminfo` and `dumpsys media.resource_manager` (the codecs in use) in a folder under `/tmp`, which it names on its last line (`kept:`) and which also holds the trace and the logcat. Keep them there: the logcat may hold a path. It prints the frames of the idle grid, of the flings and of the full size view and Back, from `dumpsys gfxinfo`, and the lines of `scripts/trace_times.py --videos` for the saved trace:

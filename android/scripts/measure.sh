@@ -29,7 +29,8 @@
 #   2. a long press on the first tile, which opens the full size view and selects or marks nothing;
 #   3. in the full size view, the centre of the video, which pauses it and plays it again, and two
 #      frames of the strip, which move the video there.
-# It also swipes to scroll the grid and to page to the next videos, and presses Back to close the
+# It also swipes to scroll the grid and to page to the next videos, swipes up once to bring back the
+# bar, which hides while a video plays (#473), and with it the strip, and presses Back to close the
 # view and to leave the section. It never taps a checkbox, the heart, "Exclude folder", Trash, Keep
 # or Continue. Its trace is larger (the scheduler, the frames and the codecs), and it keeps it in a
 # folder under /tmp, with the app's memory and the codecs in use at each step.
@@ -56,12 +57,15 @@ if [[ ${1:-} == --videos ]]; then
     videos=true
     shift
 fi
+[[ -z $by_hand ]] || ! $videos || { echo "measure: --by-hand and --videos do not go together" >&2; exit 1; }
 
 read -ra adb <<<"${ADB:-adb}"
 here=$(cd "$(dirname "$0")" && pwd)
 res=$here/../app/src/main/res
 package=io.github.bert0ns.anteater
 remote=/data/local/tmp/anteater-measure
+# --videos: perfetto may write its trace to a file in its own folder, and only there.
+video_trace=/data/misc/perfetto-traces/anteater-video.pftrace
 # The home's name of the category to open, in English and Italian.
 categories=("$@")
 if $videos; then
@@ -81,9 +85,12 @@ local_dir=${local_dir#./}
 cleanup() {
     if [[ $1 != 0 ]]; then
         [[ -z ${tracing:-} ]] || kill "$tracing" 2>/dev/null || true
+        # --videos: perfetto writes to a file on the phone, so killing adb leaves it tracing there.
+        [[ -z ${tracing:-} ]] || ! $videos || "${adb[@]}" shell pkill -x perfetto >/dev/null 2>&1 || true
         [[ -z ${started:-} ]] || "${adb[@]}" shell am force-stop "$package" >/dev/null 2>&1 || true
     fi
     "${adb[@]}" shell rm -rf "$remote" >/dev/null 2>&1 || true
+    ! $videos || "${adb[@]}" shell rm -f "$video_trace" >/dev/null 2>&1 || true
     rm -rf "$local_dir"
 }
 trap 'cleanup $?' EXIT
@@ -127,6 +134,7 @@ mapfile -t trash_empty < <(strings trash_empty)
 mapfile -t nav_videos < <(strings tab_videos)
 # A frame of the strip under a video: its label up to the time, "Go to ".
 mapfile -t go_to < <(strings video_go_to | sed 's/%1\$s.*//')
+mapfile -t share < <(strings share)
 app_name=$(strings app_name | head -n1)
 
 [[ $(shell dumpsys window) != *isKeyguardShowing=true* ]] || die "unlock the phone first"
@@ -161,8 +169,6 @@ duration_ms: $trace_ms
 CFG
 EOF
 # --videos: the scheduler, the frames and the codecs too, for over three minutes, too large to come back through a pipe.
-# perfetto may write it to a file in its own folder, and only there.
-video_trace=/data/misc/perfetto-traces/anteater-video.pftrace
 if $videos; then
     cat >"$local_dir/trace.sh" <<EOF
 cat <<CFG | perfetto --txt -c - -o $video_trace 2>/dev/null
@@ -308,11 +314,11 @@ snapshot() {
         sed -n "s/^ *\(Java Heap\|Native Heap\|Graphics\|Code\|Private Other\|TOTAL PSS\): *\([0-9]*\).*/$1 \1: \2 KB/p"
 }
 
-# --videos: whether the full size view of a video is open. Only it has the strip of frames.
+# --videos: whether the full size view is open. Only it has a Share button, which stays when the bar hides.
 video_open() {
     dump || return 1
     local label
-    for label in "${go_to[@]}"; do [[ -z $(node content-desc "$label" prefix) ]] || return 0; done
+    for label in "${share[@]}"; do [[ -z $(node content-desc "$label") ]] || return 0; done
     return 1
 }
 
@@ -367,6 +373,9 @@ video_run() {
         shell input -d "$display" swipe $((width * 17 / 20)) $((height / 2)) $((width * 3 / 20)) $((height / 2)) 200
         sleep 6
     done
+    # The bar, with the strip, hides while a video plays. A swipe up brings it back and keeps it until the pause.
+    shell input -d "$display" swipe $((width / 2)) $((height * 3 / 5)) $((width / 2)) $((height * 2 / 5)) 200
+    sleep 1
     tap_strip 3 || die "no strip of frames"
     sleep 4
     tap_strip 5 || die "no strip of frames"

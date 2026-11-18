@@ -157,6 +157,7 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
             seeking.begin()
             player.seekTo(atMs)
         } else {
+            seeking.end()
             starting.begin()
             player.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)), atMs)
             player.prepare()
