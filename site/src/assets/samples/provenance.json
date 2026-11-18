@@ -1,0 +1,65 @@
+{
+  "note": "AI-generated sample images for the anteater website demos (#486).",
+  "images": [
+    {
+      "file": "pet-cat-window.webp",
+      "model": "gemini-3.1-flash-image",
+      "date": "2026-11-18",
+      "prompt": "Candid handheld smartphone camera photo taken on a modern Android main 24mm lens, vertical 3:4 framing. A domestic brown tabby cat sitting on a sunlit oak windowsill looking slightly sideways toward an out-of-focus backyard garden outside. Sharp focus on the cat's fur, eyes, and whiskers, natural window light, balanced exposure, authentic slightly imperfect framing, subtle natural sensor grain, no studio lighting, no brands or logos, no people."
+    },
+    {
+      "file": "food-pasta-lunch.webp",
+      "model": "gemini-3.1-flash-image",
+      "date": "2026-11-18",
+      "prompt": "Casual overhead smartphone camera photo taken on a modern Android main 24mm lens, 4:3 framing. A ceramic bowl of homemade spaghetti with tomato sauce and fresh basil on a worn wooden kitchen table, next to a plain glass of water, a stainless fork, and a folded beige linen napkin. Soft natural daylight from a side window, sharp focus across the dish, balanced exposure, natural colors, no logos or brands, no people."
+    },
+    {
+      "file": "food-espresso-pastry.webp",
+      "model": "gemini-3.1-flash-image",
+      "date": "2026-11-18",
+      "prompt": "Casual 45-degree smartphone camera photo taken on a modern Android main 24mm lens, vertical 3:4 framing. An unbranded white ceramic espresso cup with simple microfoam and a flaky croissant on a plain saucer resting on a weathered stone outdoor table. Dappled morning sunlight, sharp focus, balanced exposure, authentic everyday snapshot look, no cafe branding, no logos, no text, no people."
+    },
+    {
+      "file": "landscape-coast-hills.webp",
+      "model": "gemini-3.1-flash-image",
+      "date": "2026-11-18",
+      "prompt": "Handheld smartphone camera photo taken on a modern Android main 24mm lens, 4:3 framing. A dirt footpath winding along grassy coastal hills overlooking calm blue sea under scattered white afternoon clouds. Natural daylight, sharp focus from foreground grass to the horizon, balanced exposure, realistic phone camera dynamic range, no people, no boats with readable names, no logos."
+    },
+    {
+      "file": "landscape-sunset-park.webp",
+      "model": "gemini-3.1-flash-image",
+      "date": "2026-11-18",
+      "prompt": "Handheld smartphone camera photo taken on a modern Android main 24mm lens, 4:3 framing. An empty gravel path in a city park lined with leafy plane trees and wooden benches in warm late-afternoon sunlight, casting long shadows across the ground. Sharp focus, balanced exposure, natural warm colors, no people, no signs with readable text, no logos."
+    },
+    {
+      "file": "street-cobblestone-alley.webp",
+      "model": "gemini-3.1-flash-image",
+      "date": "2026-11-18",
+      "prompt": "Everyday handheld smartphone camera photo taken on a modern Android main 24mm lens, vertical 3:4 framing. Looking down a narrow sunlit cobblestone side street with weathered cream and terracotta plaster walls, wooden window shutters, terracotta flower pots on doorsteps, and an unbranded bicycle leaning against a wall. Clear daylight, sharp focus, balanced exposure, no people, no readable street signs, no license plates, no logos."
+    },
+    {
+      "file": "street-crosswalk-rain.webp",
+      "model": "gemini-3.1-flash-image",
+      "date": "2026-11-18",
+      "prompt": "Handheld smartphone camera photo taken on a modern Android main 24mm lens, 4:3 framing. An empty wet asphalt street corner right after rain, showing crisp reflections of generic stone apartment facades and a plain green traffic light in dark puddles on the pavement. Overcast daylight, sharp focus, balanced exposure, no people, no cars with readable plates, no store signs or logos."
+    },
+    {
+      "file": "objects-books-plant.webp",
+      "model": "gemini-3.1-flash-image",
+      "date": "2026-11-18",
+      "prompt": "Casual smartphone camera photo taken on a modern Android main 24mm lens, vertical 3:4 framing. A small wooden shelf corner holding a neat stack of plain cloth-bound books with blank spines, a terracotta pot with a trailing green pothos plant, and a small speckled ceramic bowl. Soft indoor daylight, sharp focus, balanced exposure, authentic home snapshot look, no readable book titles, no logos."
+    },
+    {
+      "file": "doc-whiteboard-diagram.webp",
+      "model": "gemini-3.1-flash-image",
+      "date": "2026-11-18",
+      "prompt": "Slightly angled smartphone camera photo taken on a modern Android main 24mm lens, 4:3 framing. A wall-mounted white dry-erase board in a quiet room, covered with neat hand-drawn flowchart boxes connected by arrows, a small bar graph, and only the single digits \"1\", \"2\", \"3\" inside the boxes in blue and black dry-erase marker ink. Strictly no words, no letters, no text anywhere on the board. Natural overhead room light with a faint window reflection on one edge, sharp focus, no logos, no people."
+    },
+    {
+      "file": "forwarded-meme-cat.webp",
+      "model": "gemini-3.1-flash-image",
+      "date": "2026-11-18",
+      "prompt": "Square 1:1 internet reaction meme image made from a candid indoor smartphone photo. A startled fluffy gray cat sitting upright at a wooden kitchen table staring wide-eyed at a single tiny green pea in the middle of a large empty white dinner plate. Classic bold white sans-serif meme caption with thin black outline centered at the top reading only \"?!\" with no other words or letters. Simple, funny, everyday forwarded chat meme look, no watermarks, no brand logos, no people."
+    }
+  ]
+}
