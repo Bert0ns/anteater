@@ -5,6 +5,7 @@ import Install from "./Install.astro";
 import Privacy from "./Privacy.astro";
 import Safety from "./Safety.astro";
 import Screenshots from "./Screenshots.astro";
+import StorageMap from "./StorageMap.astro";
 import { strings, type Lang } from "../i18n";
 
 interface Props {
@@ -48,6 +49,8 @@ const anchors = { photos: "clean", videos: "videos", compress: "compress", setti
         </section>
       ))
     }
+
+    <StorageMap lang={lang} />
 
     <Install lang={lang} />
 

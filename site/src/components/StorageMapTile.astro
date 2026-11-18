@@ -1,0 +1,41 @@
+---
+// One block of the storage map, and the blocks inside it. The positions are percentages of the
+// block that holds them, so the map scales with its box and nothing needs measuring.
+import type { Info, MapRect, Tile } from "../lib/storage-map";
+
+interface Props {
+  tile: Tile;
+  /** The rectangle of the holder, in the units of the layout. */
+  holder: MapRect;
+  describe: (tile: Tile) => Info;
+}
+
+const { tile, holder, describe } = Astro.props;
+const pct = (value: number, of: number) => `${((value / of) * 100).toFixed(3)}%`;
+const style = [
+  `left:${pct(tile.rect.left - holder.left, holder.width)}`,
+  `top:${pct(tile.rect.top - holder.top, holder.height)}`,
+  `width:${pct(tile.rect.width, holder.width)}`,
+  `height:${pct(tile.rect.height, holder.height)}`,
+  `--h:${tile.hue.toFixed(1)}`,
+  `--depth:${tile.depth}`,
+].join(";");
+const top = tile.depth === 0;
+const info = top ? describe(tile) : undefined;
+const key = tile.folder.path + (tile.isDirectFiles ? "#files" : "");
+---
+
+<div
+  class="sm-tile"
+  style={style}
+  data-depth={tile.depth}
+  data-key={top ? key : undefined}
+  data-name={info?.name}
+  data-details={info?.details}
+  data-video={info?.video}
+  data-label={info?.label}
+  data-open={info?.open}
+>
+  {tile.children.map((child) => <Astro.self tile={child} holder={tile.rect} describe={describe} />)}
+  {top && !tile.isDirectFiles && <span class="sm-label">{tile.folder.name}</span>}
+</div>
