@@ -17,6 +17,26 @@ private val cookies = AtomicInteger()
 internal suspend fun <T> traceSuspend(name: String, block: suspend () -> T): T = traceAsync(name, cookies.incrementAndGet()) { block() }
 
 /**
+ * An async section called [name] for a step that starts in one call and ends in a callback, such as a player's start and its
+ * first frame. A [begin] while one is open ends that one first, so at most one is open. Not thread safe: one thread uses it.
+ */
+internal class OpenSection(private val name: String) {
+    private var cookie = 0
+
+    fun begin() {
+        end()
+        cookie = cookies.incrementAndGet()
+        Trace.beginAsyncSection(name, cookie)
+    }
+
+    fun end() {
+        if (cookie == 0) return
+        Trace.endAsyncSection(name, cookie)
+        cookie = 0
+    }
+}
+
+/**
  * Makes each load of the request an async section called [name], from the start of the request to its success, error
  * or cancel. The listener changes nothing the request does. A request that starts again before the last one ended
  * ends the oldest open section first, so every section that begins ends.

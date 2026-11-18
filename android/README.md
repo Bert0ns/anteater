@@ -120,6 +120,10 @@ The code names its heavy steps with `androidx.tracing`, so a Perfetto trace of t
 | `TiledImage.prefetch` | the load of the next photo's base image while the Compress full size view shows the current one (`FullSizeLoader.prefetch`), like `TiledImage.base`. It starts after the shown photo's base ends, and a swipe that lands on it finds the image in the cache, or waits for the prefetch to end, so its `TiledImage.base` is short |
 | `FullSize.placeholder.hit`, `FullSize.placeholder.miss` | a full size view's lookup of its file's grid tile in Coil's memory cache, a section of no length: a hit draws the tile at once, a miss leaves the view blank until the image arrives. Never a name |
 | `TiledImage.tile` | one `BitmapRegionDecoder.decodeRegion` of a `TiledImage`: a view's missing tiles are one decode of their bounding box, so it is one for the view, not for each tile |
+| `Video.start`, `Video.seek` | the full size player (`VideoPlayback`): from a new video's start, and from a seek, to the first frame the player draws (`onRenderedFirstFrame`). An async section, and only one of each is open at a time: a new start or seek ends the one before |
+| `Video.build`, `Video.stop`, `Video.detach`, `Video.release` | the full size player's calls: building it, `stop` and `clearMediaItems` when it moves to another video, `clearVideoSurfaceView` (which waits for the player to let go of the surface), and `release`. They run on the main thread, so each blocks it that long |
+| `Clip.start` | a tile's loop (`ClipLoop`): from a play to the loop's first frame, like `Video.start` |
+| `Clip.build`, `Clip.detach`, `Clip.release` | the same calls for a tile's loop. The loops run on their own thread, not the main one |
 
 Sections are per image at the finest, never per pixel or row. Perfetto shows the async sections on process tracks and the others on thread tracks, so a query for a name must read both.
 
@@ -166,6 +170,25 @@ Besides those it swipes to scroll the category, the Compress page, the trash and
 - `full size placeholder`: how many full size views found their grid tile (`FullSize.placeholder.hit`) and how many did not.
 - `grid tile loads after the first full size view`: the `Compress.tile`, `Review.tile` and `Trash.tile` loads that start after the first full size image of the trace. Open the view, swipe, press Back and touch nothing else: 0 means the grid kept its tiles in memory.
 - `zoom tile decodes`: how many `TiledImage.tile` decodes the zooms made and the slowest. One decode reads the bounding box of a view's missing tiles.
+
+**The Videos tab: `--videos [SECTION...]`.** `scripts/measure.sh --videos` measures one section of the Videos tab with its tiles moving, "Largest videos" by default or the video category named in its arguments (which must have something in it). It records a longer trace, 200 seconds long, with the scheduler, the frames and the codecs too, and does the following after the cold start:
+
+- opens the Videos tab, then the section, and waits for the first tiles;
+- 10 s idle, then flings over the grid;
+- a long press on the first tile, which opens its full size view without selecting or marking it;
+- 3 swipes to the next videos, 2 taps on frames of the strip, and a tap in the centre of the video to pause it and another to play it;
+- Back twice: out of the full size view, then out of the section.
+
+It never taps a checkbox, the heart, "Exclude folder", Trash, Keep or Continue. At each step (`grid`, `grid-after-scroll`, `full-size-playing`, `full-size-after-paging`, `after-full-size` and `left-section`) it prints the app's memory summary from `dumpsys meminfo`, and saves the full `meminfo` and `dumpsys media.resource_manager` (the codecs in use) in a folder under `/tmp`, which it names on its last line (`kept:`) and which also holds the trace and the logcat. Keep them there: the logcat may hold a path. It prints the frames of the idle grid, of the flings and of the full size view and Back, from `dumpsys gfxinfo`, and the lines of `scripts/trace_times.py --videos` for the saved trace:
+
+- `video grid open`, `video grid frames`, `slideshow frames`, `video frames at once`: from the first grid frame load to the end of the last one of the first screen, the still frames the grid loaded, the slideshow frames, and the most frame loads open together. A frame is one load of Coil's `VideoFrameDecoder`, with one `MediaMetadataRetriever` and one codec each;
+- `full size frame` and `full size strip`: the still frame of each full size page, and the strip's 5 frames under each video;
+- `video start` and `video seek`: each `Video.start` and `Video.seek`, the time to the first frame;
+- `video build, stop, detach, release` and `clip start, build, detach, release`: the `Video.*` and `Clip.*` sections of the full size player and of the tiles' loops;
+- `grid frame loads after the full size view`: the grid frame loads that start after the full size player's release, where 0 means Back found every frame in the memory cache;
+- `main thread stalls`: the app's main thread slices over 50 ms, the longest first.
+
+Last, `logcat <pattern>` counts the lines of the run's logcat for the codec and memory troubles: `reclaim`, `NO_MEMORY`, `CodecException`, `lowmemorykiller|lmkd`, `wrong thread`, `abandoned`, `MetadataRetriever|FrameDecoder` and `ExoPlaybackException`. `scripts/trace_times.py --videos TRACE [PACKAGE]` reads a trace of such a run again.
 
 Name a photo by its size in megapixels only, never by its name or path, and keep the trace in `/tmp`.
 

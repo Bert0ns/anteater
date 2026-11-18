@@ -6,6 +6,7 @@
 #
 # Usage: android/scripts/measure.sh [-h] [CATEGORY NAME...]
 #        android/scripts/measure.sh --by-hand SECONDS
+#        android/scripts/measure.sh --videos [VIDEO SECTION NAME...]
 #
 # Every tap it makes, and nothing else:
 #   1. the title of one category on the home (CATEGORY NAME, "Similar copies" by default);
@@ -21,6 +22,17 @@
 # --by-hand SECONDS makes no tap and no swipe at all. It starts the app cold and records a trace for
 # that long, while you use it, and prints the times of the full size view, its tile decodes and the
 # summary's previews from the trace.
+#
+# --videos measures one section of the Videos tab instead ("Largest videos" by default, or a video
+# category), with its tiles moving (docs/design.md §8). Every tap it makes, and nothing else:
+#   1. the "Videos" tab of Clean, then the title of the section;
+#   2. a long press on the first tile, which opens the full size view and selects or marks nothing;
+#   3. in the full size view, the centre of the video, which pauses it and plays it again, and two
+#      frames of the strip, which move the video there.
+# It also swipes to scroll the grid and to page to the next videos, and presses Back to close the
+# view and to leave the section. It never taps a checkbox, the heart, "Exclude folder", Trash, Keep
+# or Continue. Its trace is larger (the scheduler, the frames and the codecs), and it keeps it in a
+# folder under /tmp, with the app's memory and the codecs in use at each step.
 #
 # ADB overrides the adb command, e.g. a Windows adb.exe under WSL. The files it pushes and pulls
 # go through a temporary folder under the current directory, so such an adb can reach them.
@@ -39,6 +51,11 @@ if [[ ${1:-} == --by-hand ]]; then
     [[ $by_hand =~ ^[0-9]+$ ]] || { echo "measure: --by-hand needs a number of seconds" >&2; exit 1; }
     shift 2
 fi
+videos=false
+if [[ ${1:-} == --videos ]]; then
+    videos=true
+    shift
+fi
 
 read -ra adb <<<"${ADB:-adb}"
 here=$(cd "$(dirname "$0")" && pwd)
@@ -47,10 +64,15 @@ package=io.github.bert0ns.anteater
 remote=/data/local/tmp/anteater-measure
 # The home's name of the category to open, in English and Italian.
 categories=("$@")
-[[ ${#categories[@]} -gt 0 ]] || categories=("Similar copies" "Copie simili")
+if $videos; then
+    [[ ${#categories[@]} -gt 0 ]] || categories=("Largest videos" "Video più grandi")
+else
+    [[ ${#categories[@]} -gt 0 ]] || categories=("Similar copies" "Copie simili")
+fi
 # The trace covers the whole run: the cold start, then the category, Compress, the trash and the map.
 trace_ms=150000
 [[ -z $by_hand ]] || trace_ms=$((by_hand * 1000))
+! $videos || trace_ms=200000
 # How long a screen gets to load its first tiles before the script reads it or scrolls it.
 settle=6
 
@@ -83,6 +105,9 @@ strings() {
 # Only a category title may be tapped, never a button such as Trash or Skip.
 mapfile -t titles < <(strings category_exact_duplicate category_near_duplicate category_burst category_blurry \
     category_bad_exposure category_screenshot category_document category_forwarded category_sticker category_short_clips)
+# The Videos tab lists "Largest videos" and the categories with a video detector.
+! $videos || mapfile -t titles < <(strings videos_largest category_exact_duplicate category_near_duplicate category_blurry \
+    category_bad_exposure category_forwarded_videos category_takes category_short_clips)
 for name in "${categories[@]}"; do
     known=false
     for title in "${titles[@]}"; do [[ $name == "$title" ]] && known=true; done
@@ -99,6 +124,9 @@ mapfile -t trash_icon < <(strings trash)
 mapfile -t map_row < <(strings storage_map | sed 's/\\.*//')
 mapfile -t compress_none < <(strings compress_none)
 mapfile -t trash_empty < <(strings trash_empty)
+mapfile -t nav_videos < <(strings tab_videos)
+# A frame of the strip under a video: its label up to the time, "Go to ".
+mapfile -t go_to < <(strings video_go_to | sed 's/%1\$s.*//')
 app_name=$(strings app_name | head -n1)
 
 [[ $(shell dumpsys window) != *isKeyguardShowing=true* ]] || die "unlock the phone first"
@@ -132,6 +160,38 @@ data_sources { config { name: "linux.process_stats" } }
 duration_ms: $trace_ms
 CFG
 EOF
+# --videos: the scheduler, the frames and the codecs too, for over three minutes, too large to come back through a pipe.
+# perfetto may write it to a file in its own folder, and only there.
+video_trace=/data/misc/perfetto-traces/anteater-video.pftrace
+if $videos; then
+    cat >"$local_dir/trace.sh" <<EOF
+cat <<CFG | perfetto --txt -c - -o $video_trace 2>/dev/null
+buffers { size_kb: 131072 fill_policy: DISCARD }
+buffers { size_kb: 8192 fill_policy: DISCARD }
+write_into_file: true
+file_write_period_ms: 1000
+data_sources { config { name: "linux.ftrace" target_buffer: 0 ftrace_config {
+  atrace_apps: "$package"
+  atrace_categories: "am"
+  atrace_categories: "gfx"
+  atrace_categories: "view"
+  atrace_categories: "video"
+  atrace_categories: "dalvik"
+  ftrace_events: "sched/sched_switch"
+  ftrace_events: "sched/sched_waking"
+  ftrace_events: "power/cpu_frequency"
+  ftrace_events: "task/task_newtask"
+  ftrace_events: "task/task_rename"
+  buffer_size_kb: 16384
+  drain_period_ms: 250
+} } }
+data_sources { config { name: "linux.process_stats" target_buffer: 1 process_stats_config { scan_all_processes_on_start: true } } }
+data_sources { config { name: "android.surfaceflinger.frametimeline" target_buffer: 1 } }
+duration_ms: $trace_ms
+CFG
+EOF
+    shell rm -f "$video_trace" >/dev/null 2>&1 || true
+fi
 shell mkdir -p "$remote"
 "${adb[@]}" push -q "$local_dir/trace.sh" "$remote/trace.sh" >/dev/null
 
@@ -189,6 +249,14 @@ category_open() {
     return 1
 }
 
+# Prints the frames that gfxinfo counted since its last reset, under the label $1.
+frames() {
+    local stats
+    stats=$(shell dumpsys gfxinfo "$package" framestats)
+    sed -n -e "s/^Total frames rendered: /$1 frames: /p" -e "s/^Janky frames: [0-9]* (\(.*\))/$1 janky frames: \1/p" \
+        -e "s/^90th percentile: /$1 p90: /p" -e "s/^99th percentile: /$1 p99: /p" <<<"$stats" | head -n4
+}
+
 # Swipes long and fast enough to be flings, never taps on a tile: five down the screen and five back up. Prints the
 # frames that gfxinfo counted meanwhile, under the label $1.
 scroll() {
@@ -201,17 +269,16 @@ scroll() {
         shell input -d "$display" swipe $((width / 2)) $((height / 4)) $((width / 2)) $((height * 3 / 4)) 150
         sleep 1
     done
-    local frames
-    frames=$(shell dumpsys gfxinfo "$package" framestats)
-    sed -n -e "s/^Total frames rendered: /$1 frames: /p" -e "s/^Janky frames: [0-9]* (\(.*\))/$1 janky frames: \1/p" \
-        -e "s/^90th percentile: /$1 p90: /p" -e "s/^99th percentile: /$1 p99: /p" <<<"$frames" | head -n4
+    frames "$1"
 }
 
 # Waits for perfetto to end its trace, and pulls it. Not in a subshell, since only this shell can wait for perfetto.
 pull_trace() {
     wait "$tracing"
     tracing=
-    "${adb[@]}" pull -q "$remote/trace.pftrace" "$local_dir/trace.pftrace" >/dev/null
+    local from=$remote/trace.pftrace
+    ! $videos || from=$video_trace
+    "${adb[@]}" pull -q "$from" "$local_dir/trace.pftrace" >/dev/null
     [[ -s $local_dir/trace.pftrace ]] || die "perfetto wrote no trace"
 }
 
@@ -230,6 +297,107 @@ tap_tab() {
     tap_text "${labels[@]}" || die "no tab named ${labels[*]}"
 }
 
+# --videos: saves the app's memory (dumpsys meminfo) and the codecs in use (dumpsys media.resource_manager) at the step
+# that $1 names into the kept folder, and prints the memory summary, PSS in KB.
+snapshot() {
+    local mem
+    mem=$(shell dumpsys meminfo "$package")
+    printf '%s\n' "$mem" >"$keep/meminfo-$1.txt"
+    shell dumpsys media.resource_manager >"$keep/codecs-$1.txt" 2>/dev/null || true
+    sed -n '/App Summary/,/TOTAL PSS/p' <<<"$mem" |
+        sed -n "s/^ *\(Java Heap\|Native Heap\|Graphics\|Code\|Private Other\|TOTAL PSS\): *\([0-9]*\).*/$1 \1: \2 KB/p"
+}
+
+# --videos: whether the full size view of a video is open. Only it has the strip of frames.
+video_open() {
+    dump || return 1
+    local label
+    for label in "${go_to[@]}"; do [[ -z $(node content-desc "$label" prefix) ]] || return 0; done
+    return 1
+}
+
+# --videos: taps frame $1 (from 1) of the strip, whose labels start with "Go to".
+tap_strip() {
+    dump || return 1
+    local label frame
+    for label in "${go_to[@]}"; do
+        frame=$(grep -o '<node [^>]*' "$local_dir/ui.xml" | grep -F -- "content-desc=\"$label" | sed -n "${1}p" || true)
+        if [[ $frame =~ bounds=\"\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\] ]]; then
+            shell input -d "$display" tap $(((BASH_REMATCH[1] + BASH_REMATCH[3]) / 2)) $(((BASH_REMATCH[2] + BASH_REMATCH[4]) / 2))
+            return 0
+        fi
+    done
+    return 1
+}
+
+# --videos: the run after the cold start, from the Videos tab to the section, its grid, the full size view and back.
+video_run() {
+    echo "display: ${width}x${height}"
+    local since label opened=false tile x y
+    since=$(shell "date '+%m-%d %H:%M:%S.000'")
+    wait_home
+    tap_text "${nav_videos[@]}" || die "no Videos tab"
+    sleep 2
+    tap_text "${categories[@]}" || die "no section named ${categories[*]} on the Videos tab"
+    sleep 8
+    dump || die "could not read the section"
+    for label in "${back[@]}"; do [[ -z $(node content-desc "$label") ]] || opened=true; done
+    $opened || die "$tapped did not open: it may have nothing in it"
+    snapshot grid
+    # The tiles move while nothing else does: how many frames that draws, and how smoothly.
+    shell dumpsys gfxinfo "$package" reset >/dev/null
+    sleep 10
+    frames "grid idle"
+    scroll "grid scroll"
+    sleep 6
+    snapshot grid-after-scroll
+
+    # A long press on the first tile opens it full size. A tap would select or mark it, so a view that does not open stops the run.
+    dump || die "could not read the grid"
+    tile=$(grep -o '<node [^>]*' "$local_dir/ui.xml" | grep -F 'long-clickable="true"' | head -n1 || true)
+    [[ $tile =~ bounds=\"\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\] ]] || die "no tile to open"
+    x=$(((BASH_REMATCH[1] + BASH_REMATCH[3]) / 2)) y=$(((BASH_REMATCH[2] + BASH_REMATCH[4]) / 2))
+    shell dumpsys gfxinfo "$package" reset >/dev/null
+    shell input -d "$display" swipe "$x" "$y" "$x" "$y" 1000
+    sleep 6
+    video_open || die "the full size view did not open: check that the first tile is not selected or marked"
+    snapshot full-size-playing
+    # The next three videos, a swipe each, then two frames of the strip, a pause and a play.
+    for _ in 1 2 3; do
+        shell input -d "$display" swipe $((width * 17 / 20)) $((height / 2)) $((width * 3 / 20)) $((height / 2)) 200
+        sleep 6
+    done
+    tap_strip 3 || die "no strip of frames"
+    sleep 4
+    tap_strip 5 || die "no strip of frames"
+    sleep 4
+    shell input -d "$display" tap $((width / 2)) $((height / 2))
+    sleep 2
+    shell input -d "$display" tap $((width / 2)) $((height / 2))
+    sleep 4
+    snapshot full-size-after-paging
+    shell input -d "$display" keyevent KEYCODE_BACK
+    sleep 8
+    frames "full size and back"
+    ! video_open || die "Back did not close the full size view"
+    snapshot after-full-size
+    shell input -d "$display" keyevent KEYCODE_BACK
+    sleep 5
+    snapshot left-section
+
+    (( SECONDS - traced_from < trace_ms / 1000 - 5 )) || die "the trace ended before the run did: raise trace_ms"
+    pull_trace
+    cp "$local_dir/trace.pftrace" "$keep/trace.pftrace"
+    uv run --quiet "$here/trace_times.py" --videos "$local_dir/trace.pftrace" "$package"
+    # The codec and memory troubles of #438, by kind. Their lines stay in the kept folder, since one may hold a path.
+    shell "logcat -d -T '$since'" >"$keep/logcat.txt" || true
+    for label in 'reclaim' 'NO_MEMORY' 'CodecException' 'lowmemorykiller|lmkd' 'wrong thread' 'abandoned' 'MetadataRetriever|FrameDecoder' 'ExoPlaybackException'; do
+        echo "logcat $label: $(grep -c -E -- "$label" "$keep/logcat.txt" || true)"
+    done
+    echo "kept: $keep"
+}
+
+! $videos || keep=$(mktemp -d /tmp/anteater-video.XXXXXX)
 shell am force-stop "$package"
 started=true
 "${adb[@]}" shell sh "$remote/trace.sh" &
@@ -243,6 +411,11 @@ done
 [[ ! $(shell getprop debug.atrace.tags.enableflags) =~ ^(0x)?0*$ ]] || die "perfetto did not start tracing"
 cold=$(shell am start -W -n "$package/.MainActivity" | sed -n 's/^TotalTime: //p')
 echo "cold start: ${cold:-unknown} ms"
+
+if $videos; then
+    video_run
+    exit 0
+fi
 
 if [[ -n $by_hand ]]; then
     echo "by hand: the trace ends in $by_hand s, and the script touches nothing"
