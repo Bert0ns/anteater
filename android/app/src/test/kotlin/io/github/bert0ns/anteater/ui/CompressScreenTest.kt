@@ -634,6 +634,24 @@ class CompressScreenTest {
     }
 
     @Test
+    fun `in the full screen photo, once zoomed, a swipe up pans and does not bring the bar back`() {
+        show(model(big, middle))
+        awaitText("2 photos, largest first")
+        tile("IMG_1.jpg").performTouchInput { longClick() }
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        compose.waitForIdle()
+        compose.onNodeWithText("DCIM").assertDoesNotExist()
+
+        compose.onNodeWithTag("fullSize").performTouchInput {
+            pinch(Offset(center.x - 10, center.y), Offset(center.x + 10, center.y), Offset(center.x - 60, center.y), Offset(center.x + 60, center.y))
+        }
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeUp() }
+        compose.waitForIdle()
+
+        compose.onNodeWithText("DCIM").assertDoesNotExist()
+    }
+
+    @Test
     fun `a screen reader opens the photo full screen with an action`() {
         show(model(big))
         awaitText("1 photo, largest first")

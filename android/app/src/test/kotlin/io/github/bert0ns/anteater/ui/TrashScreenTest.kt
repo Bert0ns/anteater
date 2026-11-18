@@ -26,7 +26,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeUp
 import io.github.bert0ns.anteater.model.MediaRef
 import io.github.bert0ns.anteater.model.MediaType
 import io.github.bert0ns.anteater.trash.TrashedImage
@@ -323,6 +325,30 @@ class TrashScreenTest {
         compose.onNodeWithContentDescription("Close").performClick()
         compose.waitForIdle()
         assertTrue(players.made.single().released)
+    }
+
+    @Test
+    fun `the bar a playing video hid is back on the photo after it, and a swipe on the photo hides it`() {
+        val players = Players()
+        val video = clip.copy(file = File("/sdcard/.anteater-trash/q/clip.mp4"))
+        ShadowMediaMetadataRetriever.addMetadata(video.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "102000")
+        compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { TrashScreen(listOf(video, trashed[0]), emptySet(), {}, { _, _ -> }, {}, {}) } }
+        compose.onNodeWithContentDescription("clip.mp4", substring = true).performTouchInput { longClick() }
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(1_200)
+        compose.waitForIdle()
+        compose.onNodeWithText("27 days left").assertDoesNotExist() // the video's bar faded out
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+
+        compose.onNodeWithText("27 days left").assertExists()
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        compose.waitForIdle()
+        compose.onNodeWithText("27 days left").assertDoesNotExist()
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeUp() }
+        compose.waitForIdle()
+        compose.onNodeWithText("27 days left").assertExists()
     }
 
     @Test
