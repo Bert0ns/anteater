@@ -13,9 +13,9 @@ const [first, second = first] = images;
 // Each picture is drawn once at this width. The tiles are never wider than a card.
 const size = { width: 560, quality: 70, alt: "", loading: "lazy", decoding: "async" } as const;
 const burst = [
-  { to: "translateX(-46%) rotate(-14deg)", delay: "0.09s" },
-  { to: "translateX(-16%) rotate(-5deg)", delay: "0.06s" },
-  { to: "translateX(16%) rotate(5deg)", delay: "0.03s" },
+  { to: "translateX(-46%) rotate(-14deg)", delay: "calc(var(--dur-instant) * 0.9)" },
+  { to: "translateX(-16%) rotate(-5deg)", delay: "calc(var(--dur-instant) * 0.6)" },
+  { to: "translateX(16%) rotate(5deg)", delay: "calc(var(--dur-instant) * 0.3)" },
   { to: "translateX(46%) rotate(14deg)", delay: "0s" },
 ];
 ---
@@ -24,8 +24,9 @@ const burst = [
   {
     id === "photos-exact" && (
       <>
-        <div class="tile t-exact m" style="--from: translateX(-55%); --to: translate(-9%, -5%); --op-to: 0.5">
+        <div class="tile t-exact m" style="--from: translateX(-55%); --to: translate(-9%, -5%)">
           <Image src={first} {...size} />
+          <span class="dim m" style="--op-from: 0; --op-to: 0.5"></span>
           <span class="mark"></span>
         </div>
         <div class="tile t-exact m" style="--from: translateX(55%); --to: translate(4%, 4%)">
@@ -38,15 +39,17 @@ const burst = [
   {
     id === "photos-similar" && (
       <>
-        <div class="tile t-similar left m" style="--to: translateX(12%) scale(0.88); --op-to: 0.55">
+        <div class="tile t-similar left m" style="--to: translateX(12%) scale(0.88)">
           <Image src={first} {...size} />
+          <span class="dim m" style="--op-from: 0; --op-to: 0.45"></span>
           <span class="mark"></span>
         </div>
         <div class="tile t-similar mid m" style="--to: scale(1.06)">
           <Image src={first} {...size} />
         </div>
-        <div class="tile t-similar right m" style="--to: translateX(-12%) scale(0.88); --op-to: 0.55">
+        <div class="tile t-similar right m" style="--to: translateX(-12%) scale(0.88)">
           <Image src={first} {...size} />
+          <span class="dim m" style="--op-from: 0; --op-to: 0.45"></span>
           <span class="mark"></span>
         </div>
       </>
@@ -172,6 +175,13 @@ const burst = [
     border-radius: 50%;
     background: var(--accent);
     box-shadow: 0 0 0 2px var(--bg);
+  }
+
+  /* A veil over a copy the app would remove. It dims the picture and leaves the red dot at full strength. */
+  .dim {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
   }
 
   .fill {

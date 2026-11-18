@@ -42,8 +42,9 @@ const crops = ["20% 50%", "50% 50%", "80% 50%"];
   {
     id === "videos-exact" && (
       <>
-        <div class="tile pair m" style="--from: translateY(-50%); --to: translate(-8%, -12%); --op-to: 0.5">
+        <div class="tile pair m" style="--from: translateY(-50%); --to: translate(-8%, -12%)">
           <Image src={first} {...size} />
+          <span class="dim m" style="--op-from: 0; --op-to: 0.5"></span>
           <span class="mark"></span>
         </div>
         <div class="tile pair m" style="--from: translateY(50%); --to: translate(4%, 8%)">
@@ -65,8 +66,9 @@ const crops = ["20% 50%", "50% 50%", "80% 50%"];
           <span class="badge len">{meta[0].length}</span>
           <span class="badge big">{meta[0].size}</span>
         </div>
-        <div class="tile copy m" style="--from: translateX(6%); --to: translate(-6%, -4%) scale(0.88); --op-to: 0.6">
+        <div class="tile copy m" style="--from: translateX(6%); --to: translate(-6%, -4%) scale(0.88)">
           <Image src={first} {...size} />
+          <span class="dim m" style="--op-from: 0; --op-to: 0.45"></span>
           <span class="badge big">{meta[1].size}</span>
           <span class="mark"></span>
         </div>
@@ -110,7 +112,7 @@ const crops = ["20% 50%", "50% 50%", "80% 50%"];
       meta.map((m, i) => (
         <div
           class="tile take m"
-          style={`--from: none; --to: translateY(${(i - 1) * 62}%); --delay: ${i === 1 ? 0 : 0.04}s; z-index: ${3 - i}`}
+          style={`--from: none; --to: translateY(${(i - 1) * 62}%); --delay: ${i === 1 ? "0s" : "calc(var(--dur-instant) * 0.4)"}; z-index: ${3 - i}`}
         >
           <Image src={first} {...size} style={`object-position: ${crops[i]}`} />
           <span class="badge len">{m.length}</span>
@@ -157,6 +159,13 @@ const crops = ["20% 50%", "50% 50%", "80% 50%"];
     box-shadow:
       0 0 0 1px var(--shade),
       0 0.5rem 1rem var(--shade);
+  }
+
+  /* A veil over a copy the app would remove. It dims the picture and leaves the dot and the badge at full strength. */
+  .dim {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
   }
 
   .play {
