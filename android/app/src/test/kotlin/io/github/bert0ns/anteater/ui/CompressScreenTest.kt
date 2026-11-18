@@ -43,7 +43,9 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pinch
 import androidx.compose.ui.test.swipe
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
@@ -612,6 +614,23 @@ class CompressScreenTest {
         compose.onNodeWithTag("fullSize").assertDoesNotExist()
         tile("IMG_1.jpg").assertIsSelected()
         tile("IMG_2.jpg").assertIsNotSelected()
+    }
+
+    @Test
+    fun `in the full screen photo a swipe down hides the bar and a swipe up shows it, with the checkbox in place`() {
+        show(model(big, middle))
+        awaitText("2 photos, largest first")
+        tile("IMG_1.jpg").performTouchInput { longClick() }
+        compose.onNodeWithText("DCIM").assertExists()
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        compose.waitForIdle()
+        compose.onNodeWithText("DCIM").assertDoesNotExist()
+        compose.onNodeWithText("Selected").assertExists()
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeUp() }
+        compose.waitForIdle()
+        compose.onNodeWithText("DCIM").assertExists()
     }
 
     @Test

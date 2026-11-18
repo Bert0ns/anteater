@@ -577,18 +577,21 @@ internal fun FullSizeViewer(
     ClearFullSizeImagesOnExit()
     val pageChanged by rememberUpdatedState(onPage)
     LaunchedEffect(pager) { snapshotFlow { pager.settledPage }.drop(1).collect { pageChanged(it) } }
+    val bar = remember { FullSizeBarState() }
     Dialog(onClose, DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
-            HorizontalPager(pager, Modifier.fillMaxSize().testTag("fullSize"), key = { paths[it] }) { page ->
-                CompositionLocalProvider(LocalPageSettled provides (page == pager.currentPage && !pager.isScrollInProgress)) { image(page) }
-            }
-            overlay(pager.currentPage)
-            // A tap on an image closes the view too, but nothing showed that. A video's tap plays and pauses, so this is its only way out.
-            Row(Modifier.align(Alignment.TopStart).windowInsetsPadding(WindowInsets.safeDrawing).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                IconButton(onClose, Modifier.background(Color.Black.copy(alpha = 0.55f), CircleShape)) {
-                    Icon(Icons.Default.Close, stringResource(R.string.close), tint = Color.White)
+        CompositionLocalProvider(LocalFullSizeBar provides bar) {
+            Box(Modifier.fillMaxSize().background(Color.Black)) {
+                HorizontalPager(pager, Modifier.fillMaxSize().testTag("fullSize"), key = { paths[it] }) { page ->
+                    CompositionLocalProvider(LocalPageSettled provides (page == pager.currentPage && !pager.isScrollInProgress)) { image(page) }
                 }
-                if (shareable) paths.getOrNull(pager.currentPage)?.let { ShareButton(it) }
+                overlay(pager.currentPage)
+                // A tap on an image closes the view too, but nothing showed that. A video's tap plays and pauses, so this is its only way out.
+                Row(Modifier.align(Alignment.TopStart).windowInsetsPadding(WindowInsets.safeDrawing).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IconButton(onClose, Modifier.background(Color.Black.copy(alpha = 0.55f), CircleShape)) {
+                        Icon(Icons.Default.Close, stringResource(R.string.close), tint = Color.White)
+                    }
+                    if (shareable) paths.getOrNull(pager.currentPage)?.let { ShareButton(it) }
+                }
             }
         }
     }
@@ -622,14 +625,14 @@ internal fun BoxScope.FullSizeToggle(checked: Boolean, label: String, checkedCol
 /**
  * The dark translucent bar at the bottom of the full size view, readable on a white image: [content], then the folder
  * of [path] and a favourite's [heart]. The folder's name is enough to place a photo, where its path took two lines.
- * With a [playback], for a video, the bar fades out while the video plays and a swipe on it hides or shows the bar
- * ([BarAutoHide], #473), and a touch exploration service keeps it on screen.
+ * A vertical swipe on the page hides or shows the bar ([swipeBar], #473). With a [playback], for a video, it also fades out while
+ * the video plays ([BarAutoHide]). A touch exploration service keeps it on screen.
  */
 @Composable
 internal fun BoxScope.FullSizeBar(path: String, favorite: Boolean, heart: @Composable () -> Unit = { if (favorite) FavoriteHeart() }, playback: VideoPlayback? = null, content: @Composable ColumnScope.() -> Unit) {
     val touchExploration = rememberTouchExploration()
     if (playback != null) BarAutoHide(playback, touchExploration)
-    AnimatedVisibility(playback == null || !playback.barHidden || touchExploration, Modifier.align(Alignment.BottomStart), enter = fadeIn(), exit = fadeOut()) {
+    AnimatedVisibility(!LocalFullSizeBar.current.hidden || touchExploration, Modifier.align(Alignment.BottomStart), enter = fadeIn(), exit = fadeOut()) {
         Column(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.7f)).windowInsetsPadding(WindowInsets.safeDrawing).padding(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(File(path).parentFile?.name.orEmpty(), Modifier.weight(1f), color = Color.White, style = MaterialTheme.typography.labelMedium)
@@ -691,7 +694,7 @@ private val FavoriteOutline: ImageVector by lazy {
     }
 }
 
-/** Pinch zooms. A drag pans only while zoomed, so at scale 1 it is left to the pager to change page. */
+/** Pinch zooms. A drag pans only while zoomed, so at scale 1 it is left to the pager to change page, or, up and down, to [swipeBar]. */
 @Composable
 internal fun ZoomableImage(path: String, onClose: () -> Unit) {
     var scale by remember { mutableFloatStateOf(1f) }
@@ -703,6 +706,7 @@ internal fun ZoomableImage(path: String, onClose: () -> Unit) {
         fullSize = true,
         contentScale = ContentScale.Fit,
         modifier = Modifier.fillMaxSize()
+            .swipeBar(LocalFullSizeBar.current)
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)

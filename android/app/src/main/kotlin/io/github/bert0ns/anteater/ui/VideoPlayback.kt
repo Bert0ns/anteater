@@ -5,11 +5,9 @@ import android.content.Context
 import android.net.Uri
 import android.os.Looper
 import android.view.SurfaceView
-import android.view.accessibility.AccessibilityManager
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,7 +43,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -121,12 +118,6 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
         private set
     var muted by mutableStateOf(startMuted)
         private set
-
-    /**
-     * Whether the bar of the full size view is out of the way, so the video shows whole. [BarAutoHide] sets it while the video plays, and a
-     * vertical swipe on a [VideoPage] sets it at any time. The view reads it with [barShown], which a screen reader overrides.
-     */
-    var barHidden by mutableStateOf(false)
 
     /** The video whose last play failed. A video that does not play is a line of text, never a crash. */
     var failed by mutableStateOf<String?>(null)
@@ -254,49 +245,9 @@ internal fun rememberVideoPlayback(startMuted: Boolean = true): VideoPlayback {
 }
 
 /**
- * Hides the bar of the full size view [BAR_HIDE_DELAY_MS] after the video starts to play, and shows it again when the video
- * pauses, ends or gives way to another, so a tap, which pauses, brings the controls back (#473). A swipe up while it plays
- * keeps the bar until the next pause. It never hides the bar on its own while a touch exploration service such as TalkBack runs
- * ([touchExploration]), whose user could not reach the controls.
- */
-@Composable
-internal fun BarAutoHide(playback: VideoPlayback, touchExploration: Boolean) {
-    LaunchedEffect(playback.playing, playback.loaded, touchExploration) {
-        if (!playback.playing) {
-            playback.barHidden = false
-        } else if (!touchExploration) {
-            delay(BAR_HIDE_DELAY_MS)
-            playback.barHidden = true
-        }
-    }
-}
-
-/** Whether TalkBack or another touch exploration service is on, kept up to date while it changes. */
-@Composable
-internal fun rememberTouchExploration(): Boolean {
-    val manager = LocalContext.current.getSystemService(AccessibilityManager::class.java)
-    var on by remember { mutableStateOf(manager?.isTouchExplorationEnabled == true) }
-    DisposableEffect(manager) {
-        val listener = AccessibilityManager.TouchExplorationStateChangeListener { on = it }
-        manager?.addTouchExplorationStateChangeListener(listener)
-        onDispose { manager?.removeTouchExplorationStateChangeListener(listener) }
-    }
-    return on
-}
-
-/** A vertical drag on a video: up shows the bar, down hides it, wherever it ends. A horizontal one is left to the pager. */
-private fun Modifier.swipeBar(playback: VideoPlayback) = pointerInput(playback) {
-    var dragged = 0f
-    detectVerticalDragGestures(
-        onDragStart = { dragged = 0f },
-        onDragEnd = { if (dragged != 0f) playback.barHidden = dragged > 0 },
-    ) { _, dy -> dragged += dy }
-}
-
-/**
  * The page of a video in the full size view: its frame, which starts the video once the pager comes to rest on the page
  * ([LocalPageSettled]), and a play button over it. A page that is swiped past starts nothing. A tap pauses the video and
- * plays it again, and the close button closes the view. A vertical swipe shows or hides the bar ([swipeBar]). A video that is [unreadable] is the placeholder, which a tap
+ * plays it again, and the close button closes the view. A vertical swipe shows or hides the bar ([swipeBar]), as on a photo. A video that is [unreadable] is the placeholder, which a tap
  * closes, and never plays. [autoplay] is false while the page cannot yet tell whether the video is readable. A video that fails to play keeps its frame, and the play button tries it again.
  */
 @Composable
@@ -316,7 +267,7 @@ internal fun VideoPage(file: File, section: String, playback: VideoPlayback, unr
             R.string.video_play
         },
     )
-    Box(Modifier.fillMaxSize().swipeBar(playback).clickable(onClickLabel = tap, onClick = if (unreadable) onClose else ({ playback.toggle(file) }))) {
+    Box(Modifier.fillMaxSize().swipeBar(LocalFullSizeBar.current).clickable(onClickLabel = tap, onClick = if (unreadable) onClose else ({ playback.toggle(file) }))) {
         VideoFrame(file, section, Modifier.fillMaxSize(), ContentScale.Fit, unreadable)
         if (showing) VideoSurface(playback)
         if (!unreadable && !(showing && playback.playing)) {
@@ -417,7 +368,6 @@ internal fun VideoControls(playback: VideoPlayback, file: File, section: String,
 }
 
 private const val POSITION_INTERVAL_MS = 250L
-private const val BAR_HIDE_DELAY_MS = 1_000L
 private const val STRIP_ASPECT = 16f / 9f
 
 // Material's Pause, Volume up and Volume off, which material-icons-extended holds and the app does not depend on.
