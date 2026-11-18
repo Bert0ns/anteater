@@ -318,6 +318,9 @@ internal fun VideoControls(playback: VideoPlayback, file: File, section: String,
             delay(POSITION_INTERVAL_MS)
         }
     }
+    val bar = LocalFullSizeBar.current
+    // A finger on the seek bar holds the bar, also when the bar goes while it is down.
+    DisposableEffect(bar) { onDispose { bar.holding = false } }
     Column {
         if (playback.failed == file.path) {
             Text(stringResource(R.string.video_play_failed), color = Color.White, style = MaterialTheme.typography.bodyMedium)
@@ -332,11 +335,16 @@ internal fun VideoControls(playback: VideoPlayback, file: File, section: String,
                 val seek = stringResource(R.string.video_seek)
                 Slider(
                     dragging ?: (position.toFloat() / total),
-                    { dragging = it },
+                    {
+                        dragging = it
+                        bar.holding = true
+                    },
                     Modifier.weight(1f).semantics { contentDescription = seek },
                     onValueChangeFinished = {
                         dragging?.let { playback.seekTo(file, (it * total).toLong()) }
                         dragging = null
+                        bar.holding = false
+                        bar.touched()
                     },
                     colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.3f)),
                 )
@@ -344,7 +352,10 @@ internal fun VideoControls(playback: VideoPlayback, file: File, section: String,
             } else {
                 Box(Modifier.weight(1f))
             }
-            IconButton(playback::toggleMute) {
+            IconButton({
+                playback.toggleMute()
+                bar.touched()
+            }) {
                 Icon(if (playback.muted) SoundOff else SoundOn, stringResource(if (playback.muted) R.string.video_unmute else R.string.video_mute), tint = Color.White)
             }
         }
@@ -356,7 +367,10 @@ internal fun VideoControls(playback: VideoPlayback, file: File, section: String,
                         file,
                         "$section.strip",
                         Modifier.weight(1f).aspectRatio(STRIP_ASPECT).clip(MaterialTheme.shapes.extraSmall)
-                            .clickable(role = Role.Button) { playback.seekTo(file, ms) }
+                            .clickable(role = Role.Button) {
+                                playback.seekTo(file, ms)
+                                bar.touched()
+                            }
                             .semantics { contentDescription = label },
                         atMillis = ms,
                         small = true,
