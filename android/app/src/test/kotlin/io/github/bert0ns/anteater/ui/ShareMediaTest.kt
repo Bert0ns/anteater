@@ -29,21 +29,34 @@ import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
-import org.robolectric.shadows.ShadowToast
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
-/** A MediaStore that knows the images in [rows] (path to row id and MIME type) and nothing else. */
-class ShareMedia : ContentProvider() {
+/** A MediaStore that knows the [images] and the [videos] (path to row id and MIME type) and nothing else, or throws when [failing]. */
+class FakeMediaStore : ContentProvider() {
     companion object {
-        var rows: Map<String, Pair<Long, String>> = emptyMap()
+        var images: Map<String, Pair<Long, String>> = emptyMap()
+        var videos: Map<String, Pair<Long, String>> = emptyMap()
+        var failing = false
+
+        /** The queries wait here, when set, so a test holds the lookup of a share in flight. */
+        var gate: CountDownLatch? = null
+        val queries = AtomicInteger()
     }
+
+    private fun table(uri: Uri) = if ("video" in uri.pathSegments) videos else images
 
     override fun onCreate() = true
     override fun query(uri: Uri, projection: Array<String>?, selection: String?, args: Array<String>?, order: String?): Cursor {
-        val cursor = MatrixCursor(arrayOf(MediaStore.MediaColumns._ID))
-        if ("images" in uri.pathSegments) args?.firstOrNull()?.let { rows[it] }?.let { cursor.addRow(arrayOf(it.first)) }
-        return cursor
+        queries.incrementAndGet()
+        gate?.await(10, TimeUnit.SECONDS)
+        if (failing) throw SecurityException("The volume is gone")
+        return MatrixCursor(arrayOf(MediaStore.MediaColumns._ID)).apply {
+            args?.firstOrNull()?.let { table(uri)[it] }?.let { addRow(arrayOf(it.first)) }
+        }
     }
-    override fun getType(uri: Uri): String? = rows.values.firstOrNull { it.first == ContentUris.parseId(uri) }?.second
+    override fun getType(uri: Uri): String? = table(uri).values.firstOrNull { it.first == ContentUris.parseId(uri) }?.second
     override fun insert(uri: Uri, values: ContentValues?): Uri? = null
     override fun delete(uri: Uri, selection: String?, args: Array<String>?) = 0
     override fun update(uri: Uri, values: ContentValues?, selection: String?, args: Array<String>?) = 0
@@ -58,11 +71,16 @@ class ShareMediaTest {
     // An activity starts the sheet, as in the app: an application context would need a new task flag.
     private val activity get() = compose.activity
     private val photo = "/sdcard/DCIM/Camera/holiday.jpg"
+    private val clip = "/sdcard/DCIM/Camera/holiday.mp4"
 
     @Before
     fun store() {
-        ShareMedia.rows = mapOf(photo to (42L to "image/jpeg"))
-        Robolectric.setupContentProvider(ShareMedia::class.java, MediaStore.AUTHORITY)
+        FakeMediaStore.images = mapOf(photo to (42L to "image/jpeg"))
+        FakeMediaStore.videos = mapOf(clip to (7L to "video/mp4"))
+        FakeMediaStore.failing = false
+        FakeMediaStore.gate = null
+        FakeMediaStore.queries.set(0)
+        Robolectric.setupContentProvider(FakeMediaStore::class.java, MediaStore.AUTHORITY)
     }
 
     private fun sent(): Intent? = shadowOf(activity).nextStartedActivity
@@ -80,6 +98,24 @@ class ShareMediaTest {
         assertEquals(ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, 42), uri)
         assertEquals("content", uri.scheme)
         assertTrue(send.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+    }
+
+    @Test
+    fun `a video is shared by its row in the video table, with a video type`() {
+        assertTrue(runBlocking { shareMedia(activity, clip) })
+
+        val send = sent()!!.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)!!
+        assertEquals("video/mp4", send.type)
+        assertEquals(ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, 7), send.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java))
+    }
+
+    @Test
+    fun `a MediaStore that throws is not shared, and no sheet opens`() {
+        FakeMediaStore.failing = true
+
+        assertFalse(runBlocking { shareMedia(activity, photo) })
+
+        assertNull(sent())
     }
 
     @Test
@@ -103,18 +139,26 @@ class ShareMediaTest {
     }
 
     @Test
-    fun `the share button says so when the file cannot be shared`() {
-        val none = "/sdcard/DCIM/.hidden/none.jpg"
-        compose.setContent { FullSizeViewer(listOf(none), none, onClose = {}, image = {}) {} }
+    fun `a second tap while the first share is being prepared opens nothing more`() {
+        val gate = CountDownLatch(1)
+        FakeMediaStore.gate = gate
+        compose.setContent { FullSizeViewer(listOf(photo), photo, onClose = {}, image = {}) {} }
 
         compose.onNodeWithContentDescription("Share").performClick()
+        compose.onNodeWithContentDescription("Share").performClick()
+        gate.countDown()
         compose.waitUntil {
-            shadowOf(Looper.getMainLooper()).idle() // the toast is made on the main thread, which this test thread is
-            ShadowToast.getLatestToast() != null
+            shadowOf(Looper.getMainLooper()).idle()
+            shadowOf(activity).peekNextStartedActivity() != null
+        }
+        compose.onNodeWithContentDescription("Share").performClick() // free again once the sheet opened
+        compose.waitUntil {
+            shadowOf(Looper.getMainLooper()).idle()
+            FakeMediaStore.queries.get() >= 2
         }
 
-        assertEquals("Can't share this file", ShadowToast.getTextOfLatestToast())
-        assertNull(sent())
+        assertNotNull(sent())
+        assertEquals(2, FakeMediaStore.queries.get()) // one for each share, not three
     }
 
     @Test
