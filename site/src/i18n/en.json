@@ -179,6 +179,49 @@
       }
     ]
   },
+  "privacy": {
+    "title": "Nothing leaves your phone",
+    "lead": "Anteater has no network permission. Without it Android does not let an app connect to anything, so your photos, your videos and the data Anteater makes from them have nowhere to go. This is the list of what it asks for, and one permission is missing from it.",
+    "listLabel": "what the app asks for",
+    "why": {
+      "MANAGE_EXTERNAL_STORAGE": "All files access. Reads the folders gallery apps skip, such as WhatsApp's, and moves files to the trash.",
+      "FOREGROUND_SERVICE": "Lets a long scan finish, with a notification showing.",
+      "FOREGROUND_SERVICE_DATA_SYNC": "The kind of background work a scan is.",
+      "FOREGROUND_SERVICE_MEDIA_PROCESSING": "The same for a batch of compression, on Android 15 and newer.",
+      "POST_NOTIFICATIONS": "Shows the progress of a scan or a compression batch."
+    },
+    "missing": "Not asked for. The app cannot connect to a network.",
+    "libraries": "Android libraries the app uses add a few small permissions of their own, such as keeping the phone awake during a scan, starting the night scan after a reboot and reading whether the phone is online. None of them lets the app connect.",
+    "check": "Read the manifest on GitHub"
+  },
+  "safety": {
+    "title": "Nothing is lost by accident",
+    "lead": "Anteater suggests and you decide. A file never goes from your gallery to deleted in one step.",
+    "steps": [
+      {
+        "title": "Marked",
+        "body": "Anteater marks the photos and videos it thinks you can do without. Nothing moves until you press the button under the grid, and a tap keeps any of them. If a page marks a favourite from your gallery, the app asks before it moves it."
+      },
+      {
+        "title": "In the trash for 30 days",
+        "body": "The button moves the files to a trash folder on the phone, and each one shows its days left. 30 days is the default. Choose 7, 14, 60 or 90 in Settings."
+      },
+      {
+        "title": "Gone when you say so",
+        "body": "Files are deleted for good when you empty the trash, when you tap \"Free X now\", or when the days you chose run out. The first two ask you first."
+      }
+    ],
+    "also": [
+      {
+        "title": "Back where it was",
+        "body": "Restore a file from the trash and it returns to its original folder. It never overwrites another file."
+      },
+      {
+        "title": "Free X now",
+        "body": "A page that trashes more than 1 GB offers \"Free X now\" next to Undo. It asks first, and it deletes only the files of that page."
+      }
+    ]
+  },
   "trash": {
     "title": "What happens to your files",
     "intro": "Nothing is deleted without your confirmation. Files you remove go to a trash folder on the phone, and you can restore them until the retention ends, 30 days by default.",
@@ -297,8 +340,7 @@
       "copied": "Copied"
     },
     "play": {
-      "text": "Not on Google Play: Anteater needs All files access, which Google Play allows only for a few kinds of apps. ",
-      "link": "Why it is not on Google Play"
+      "text": "Not on Google Play: Anteater needs All files access, which Google Play allows only for a few kinds of apps."
     }
   },
   "source": {

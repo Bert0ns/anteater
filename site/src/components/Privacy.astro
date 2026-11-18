@@ -1,0 +1,167 @@
+---
+import { strings, type Lang } from "../i18n";
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = strings[lang].privacy;
+const manifest = "https://github.com/Bert0ns/anteater/blob/main/android/app/src/main/AndroidManifest.xml";
+// The permissions of android/app/src/main/AndroidManifest.xml, in its order. ManifestTest fails the app
+// build if INTERNET comes back, so the list ends where the manifest removes it.
+const permissions = [
+  "MANAGE_EXTERNAL_STORAGE",
+  "FOREGROUND_SERVICE",
+  "FOREGROUND_SERVICE_DATA_SYNC",
+  "FOREGROUND_SERVICE_MEDIA_PROCESSING",
+  "POST_NOTIFICATIONS",
+] as const;
+---
+
+<section id="privacy" class="privacy" aria-labelledby="privacy-title">
+  <h2 id="privacy-title">{t.title}</h2>
+  <p class="privacy-lead">{t.lead}</p>
+
+  <figure class="manifest">
+    <figcaption class="manifest-file"><code>AndroidManifest.xml</code> · {t.listLabel}</figcaption>
+    <ul class="perm-list">
+      {
+        permissions.map((name) => (
+          <li class="perm">
+            <code class="perm-name">{name}</code>
+            <span class="perm-why">{t.why[name]}</span>
+          </li>
+        ))
+      }
+      <li class="perm perm-missing">
+        <code class="perm-name"><s>INTERNET</s></code>
+        <span class="perm-why"><span class="perm-dot" aria-hidden="true"></span>{t.missing}</span>
+      </li>
+    </ul>
+  </figure>
+
+  <p class="privacy-note">{t.libraries}</p>
+  <p><a class="text-link" href={manifest} target="_blank" rel="noopener noreferrer">{t.check}</a></p>
+</section>
+
+<style>
+  .privacy-lead {
+    font-size: var(--step-1);
+    line-height: 1.5;
+  }
+
+  .manifest {
+    margin: var(--space-5) 0 var(--space-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  .manifest-file {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--line);
+    font-size: var(--step--1);
+    color: var(--text-dim);
+  }
+
+  .perm-list {
+    list-style: none;
+  }
+
+  .perm {
+    display: grid;
+    gap: var(--space-1) var(--space-5);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .perm:last-child {
+    border-bottom: 0;
+  }
+
+  .perm-name {
+    min-width: 0;
+    font-size: var(--step--1);
+    overflow-wrap: anywhere;
+  }
+
+  .perm-why {
+    font-size: var(--step--1);
+    line-height: 1.5;
+    color: var(--text-muted);
+  }
+
+  /* The proof: the one permission a network needs is the one that is not here. */
+  .perm-missing {
+    margin: var(--space-2);
+    padding: var(--space-3) var(--space-3);
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--radius-s);
+  }
+
+  .perm-missing:last-child {
+    border-bottom: 1px dashed var(--line-strong);
+  }
+
+  .perm-missing .perm-name {
+    color: var(--text-dim);
+  }
+
+  .perm-missing .perm-why {
+    color: var(--text);
+  }
+
+  .perm-dot {
+    display: inline-block;
+    width: 0.6em;
+    height: 0.6em;
+    margin-right: var(--space-2);
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .privacy-note {
+    font-size: var(--step--1);
+    color: var(--text-dim);
+  }
+
+  @media (min-width: 40rem) {
+    .perm {
+      grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+      align-items: baseline;
+    }
+  }
+
+  /* The rows come in one after the other as the card scrolls into view, and the dot lands last. Without
+     scroll-driven animations, with reduced motion or without JS, the card is the finished list. */
+  @media (prefers-reduced-motion: no-preference) {
+    @supports (animation-timeline: view()) {
+      .perm {
+        animation: perm-in var(--dur-slow) var(--ease-out) both;
+        animation-timeline: view();
+        animation-range: entry 0% entry 60%;
+      }
+
+      .perm-dot {
+        animation: dot-in var(--dur-base) var(--ease-out) both;
+        animation-timeline: view();
+        animation-range: entry 40% entry 100%;
+      }
+    }
+  }
+
+  @keyframes perm-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.75rem);
+    }
+  }
+
+  @keyframes dot-in {
+    from {
+      transform: scale(0);
+    }
+  }
+</style>

@@ -179,6 +179,49 @@
       }
     ]
   },
+  "privacy": {
+    "title": "Nulla esce dal telefono",
+    "lead": "Anteater non ha il permesso di rete. Senza, Android non lascia collegare un'app a nulla, quindi le tue foto, i tuoi video e i dati che Anteater ne ricava non hanno dove andare. Questa è la lista di ciò che chiede, e un permesso manca.",
+    "listLabel": "ciò che l'app chiede",
+    "why": {
+      "MANAGE_EXTERNAL_STORAGE": "Accesso a tutti i file. Legge le cartelle che la galleria salta, come quelle di WhatsApp, e sposta i file nel cestino.",
+      "FOREGROUND_SERVICE": "Lascia finire una scansione lunga, con una notifica visibile.",
+      "FOREGROUND_SERVICE_DATA_SYNC": "Il tipo di lavoro in background di una scansione.",
+      "FOREGROUND_SERVICE_MEDIA_PROCESSING": "Lo stesso per una compressione, da Android 15 in poi.",
+      "POST_NOTIFICATIONS": "Mostra l'avanzamento di una scansione o di una compressione."
+    },
+    "missing": "Non richiesto. L'app non può collegarsi a una rete.",
+    "libraries": "Le librerie Android usate dall'app aggiungono qualche piccolo permesso, come tenere acceso il telefono durante una scansione, far partire la scansione notturna dopo un riavvio e leggere se il telefono è online. Nessuno permette all'app di collegarsi.",
+    "check": "Leggi il manifest su GitHub"
+  },
+  "safety": {
+    "title": "Nulla si perde per sbaglio",
+    "lead": "Anteater suggerisce e decidi tu. Un file non passa mai dalla galleria all'eliminazione in un solo passo.",
+    "steps": [
+      {
+        "title": "Segnati",
+        "body": "Anteater segna le foto e i video di cui secondo lui puoi fare a meno. Nulla si sposta finché non premi il pulsante sotto la griglia, e con un tocco ne tieni uno qualsiasi. Se una pagina segna un preferito della galleria, l'app chiede conferma prima di spostarlo."
+      },
+      {
+        "title": "Nel cestino per 30 giorni",
+        "body": "Il pulsante sposta i file in una cartella cestino sul telefono, e ognuno mostra i giorni che restano. 30 giorni è il valore predefinito. Nelle impostazioni scegli 7, 14, 60 o 90."
+      },
+      {
+        "title": "Eliminati quando lo dici tu",
+        "body": "I file vengono eliminati definitivamente quando svuoti il cestino, quando tocchi «Libera X ora» o quando finiscono i giorni che hai scelto. I primi due chiedono prima conferma."
+      }
+    ],
+    "also": [
+      {
+        "title": "Di nuovo al suo posto",
+        "body": "Ripristina un file dal cestino e torna nella sua cartella originale. Non sovrascrive mai un altro file."
+      },
+      {
+        "title": "Libera X ora",
+        "body": "Una pagina che cestina più di 1 GB propone «Libera X ora» accanto ad Annulla. Chiede prima conferma, ed elimina solo i file di quella pagina."
+      }
+    ]
+  },
   "trash": {
     "title": "Cosa succede ai tuoi file",
     "intro": "Nulla viene eliminato senza la tua conferma. I file che rimuovi vanno in una cartella cestino sul telefono, e puoi ripristinarli finché non finisce il periodo di conservazione, 30 giorni per impostazione predefinita.",
@@ -297,8 +340,7 @@
       "copied": "Copiato"
     },
     "play": {
-      "text": "Non è su Google Play: Anteater ha bisogno dell'accesso a tutti i file, che Google Play consente solo ad alcuni tipi di app. ",
-      "link": "Perché non è su Google Play"
+      "text": "Non è su Google Play: Anteater ha bisogno dell'accesso a tutti i file, che Google Play consente solo ad alcuni tipi di app."
     }
   },
   "source": {
