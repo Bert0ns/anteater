@@ -561,6 +561,7 @@ class CategoryScreenTest {
         compose.onNodeWithText("Album1").assertDoesNotExist()
         toggle().assertExists()
         compose.onNodeWithContentDescription("Close").assertExists()
+        compose.onNodeWithContentDescription("Share").assertExists()
 
         compose.onNodeWithTag("fullSize").performTouchInput { swipeUp() }
         compose.waitForIdle()
