@@ -63,6 +63,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
+import androidx.tracing.trace
 import androidx.window.core.layout.WindowSizeClass
 import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
@@ -79,6 +80,7 @@ import coil3.video.videoFrameMillis
 import coil3.video.videoFrameOption
 import io.github.bert0ns.anteater.R
 import io.github.bert0ns.anteater.model.MediaRef
+import io.github.bert0ns.anteater.tracing.OpenSection
 import io.github.bert0ns.anteater.tracing.traced
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -137,6 +139,9 @@ internal class ClipLoop(private val positions: MutableMap<String, Long> = HashMa
     private var surface: Surface? = null
     private var path: String? = null
 
+    /** From a play to the loop's first frame (android/README.md). */
+    private val starting = OpenSection("Clip.start")
+
     var videoSize by mutableStateOf<VideoSize?>(null)
         private set
     var failed by mutableStateOf(false)
@@ -147,7 +152,10 @@ internal class ClipLoop(private val positions: MutableMap<String, Long> = HashMa
             if (size.width > 0 && size.height > 0) main.post { videoSize = size }
         }
 
+        override fun onRenderedFirstFrame() = starting.end()
+
         override fun onPlayerError(error: PlaybackException) {
+            starting.end()
             main.post { failed = true }
         }
     }
@@ -159,7 +167,8 @@ internal class ClipLoop(private val positions: MutableMap<String, Long> = HashMa
     fun play(file: File, endMs: Long?) {
         loops.post {
             path = file.path
-            val player = player ?: create(clipLoops).also {
+            starting.begin()
+            val player = player ?: trace("Clip.build") { create(clipLoops) }.also {
                 it.addListener(listener)
                 it.volume = 0f
                 it.repeatMode = Player.REPEAT_MODE_ONE
@@ -181,8 +190,9 @@ internal class ClipLoop(private val positions: MutableMap<String, Long> = HashMa
             player?.run {
                 path?.let { positions[it] = currentPosition }
                 removeListener(listener)
-                release()
+                trace("Clip.release") { release() }
             }
+            starting.end()
             player = null
         }
     }
@@ -198,7 +208,7 @@ internal class ClipLoop(private val positions: MutableMap<String, Long> = HashMa
     override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean {
         loops.post {
             // Waits for the codec to let go of the surface, so only then are the surface and its texture released.
-            surface?.let { player?.clearVideoSurface(it) }
+            surface?.let { surface -> player?.let { trace("Clip.detach") { it.clearVideoSurface(surface) } } }
             surface?.release()
             surface = null
             texture.release()

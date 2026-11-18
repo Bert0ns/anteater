@@ -4,7 +4,7 @@
 # ///
 """Prints the times of a Perfetto trace of Anteater, one line each.
 
-Usage: uv run android/scripts/trace_times.py [--by-hand] TRACE [PACKAGE]
+Usage: uv run android/scripts/trace_times.py [--by-hand | --videos] TRACE [PACKAGE]
 
 measure.sh calls it on the trace it records: a cold start, the home, one category, then the
 Compress page, the trash and the storage map, each opened from the home. The section names are in
@@ -35,6 +35,27 @@ the Compress summary (measure.sh --by-hand). Each lists the sections of the whol
   grid tile loads after the first full size view
                        Compress.tile, Review.tile and Trash.tile loads that start after the first view
   zoom tile decodes    TiledImage.tile, one for each view of a zoom
+
+--videos prints the lines of a video section instead (measure.sh --videos): its grid, whose tiles
+move, then the full size view. A video frame is a load of Coil's VideoFrameDecoder, one
+MediaMetadataRetriever and one codec each. "At once" is the most loads open at one time.
+
+  video grid open      the first grid frame load to the end of the last one of the first screen
+  video grid frames    the grid's still frames (Videos.tile, Review.tile, Trash.videoTile)
+  slideshow frames     Review.slideshow, the 8 frames of each tile that shows a slideshow
+  video frames at once all the loads above and the full size view's, the most open together
+  full size frame      the still frame of each full size page (Videos.fullSize, Review.fullSize, ...)
+  full size strip      the strip's 5 frames under each video (*.fullSize.strip)
+  video start          Video.start, from a video's play to the first frame the player draws
+  video seek           Video.seek, from a seek to the first frame after it
+  video build, stop, detach, release
+                       the full size player's calls on the main thread, which block it that long
+  clip start, build, detach, release
+                       the same for the loops of the tiles, on their own thread
+  grid frame loads after the full size view
+                       grid frame loads that start after the full size player's release: 0 means
+                       Back found every frame in the memory cache
+  main thread stalls   the app's main thread slices over 50 ms, the longest first
 """
 
 import sys
@@ -183,9 +204,9 @@ def screen_lines(label: str, tiles: Tiles | None) -> list[str]:
     ]
 
 
-def listed(sections: list[Section], name: str) -> str:
-    """The durations of the sections called [name], in order, or unknown."""
-    durs = [s.dur for s in sections if s.name == name]
+def listed(sections: list[Section], *names: str) -> str:
+    """The durations of the sections called one of [names], in order, or unknown."""
+    durs = [s.dur for s in sections if s.name in names]
     return ", ".join(ms(d) for d in durs) if durs else "unknown"
 
 
@@ -220,13 +241,129 @@ def by_hand_lines(sections: list[Section]) -> list[str]:
     ]
 
 
+VIDEO_GRID = ("Videos.tile", "Review.tile", "Trash.videoTile")
+VIDEO_FULL_SIZE = ("Videos.fullSize", "Review.fullSize", "Trash.fullSize")
+VIDEO_STRIP = tuple(f"{name}.strip" for name in VIDEO_FULL_SIZE)
+VIDEO_CALLS = ("Video.build", "Video.stop", "Video.detach", "Video.release")
+CLIP_CALLS = ("Clip.start", "Clip.build", "Clip.detach", "Clip.release")
+
+# Every section the video lines read, besides the main thread's slices.
+VIDEO_QUERY = (
+    "with "
+    + SECTIONS
+    + """
+select name, ts, dur from sections
+  where dur >= 0 and (name in ({names}) or name in ({calls}))
+  order by ts
+"""
+)
+
+# The main thread's top level slices over 50 ms: a frame, an input or a message that held it that long.
+STALLS_QUERY = """
+select s.name, s.ts, s.dur from slice s
+  join thread_track t on s.track_id = t.id join thread using (utid) join process using (upid)
+  where process.name = '{package}' and thread.tid = process.pid and s.depth = 0 and s.dur > 50000000
+  order by s.dur desc
+"""
+
+
+def at_once(loads: list[Section]) -> int:
+    """The most of [loads] open at one time: a sweep of the starts (+1) and ends (-1), the end first at a tie."""
+    edges = sorted(
+        [(t.ts, 1) for t in loads] + [(t.end, -1) for t in loads],
+        key=lambda e: (e[0], e[1]),
+    )
+    open_now = most = 0
+    for _, step in edges:
+        open_now += step
+        most = max(most, open_now)
+    return most
+
+
+def spread(loads: list[Section]) -> str:
+    """How many, the median, the 90th percentile, the slowest and the most at once, or none."""
+    if not loads:
+        return "none"
+    durs = sorted(s.dur for s in loads)
+    p90 = durs[min(len(durs) - 1, (len(durs) * 9) // 10)]
+    return (
+        f"{len(durs)}, median {ms(durs[len(durs) // 2])}, p90 {ms(p90)}, "
+        f"the slowest {ms(durs[-1])}, at most {at_once(loads)} at once"
+    )
+
+
+def video_lines(sections: list[Section], stalls: list[Section]) -> list[str]:
+    def named(*names: str) -> list[Section]:
+        return [s for s in sections if s.name in names]
+
+    grid = named(*VIDEO_GRID)
+    lines = []
+    if grid:
+        screen = [t for t in grid if t.ts - grid[0].ts < FIRST_SCREEN_NS]
+        lines.append(
+            f"video grid open: {ms(max(t.end for t in screen) - screen[0].ts)}, "
+            f"{len(screen)} frames, the slowest {ms(max(t.dur for t in screen))}, "
+            f"at most {at_once(screen)} at once"
+        )
+    else:
+        lines.append("video grid open: unknown")
+    every = named(*VIDEO_GRID, "Review.slideshow", *VIDEO_FULL_SIZE, *VIDEO_STRIP)
+    lines += [
+        f"video grid frames: {spread(grid)}",
+        f"slideshow frames: {spread(named('Review.slideshow'))}",
+        f"video frames at once: {at_once(every)}",
+        f"full size frame: {listed(sections, *VIDEO_FULL_SIZE)}",
+        f"full size strip: {spread(named(*VIDEO_STRIP))}",
+        f"video start: {listed(sections, 'Video.start')}",
+        f"video seek: {listed(sections, 'Video.seek')}",
+    ]
+    for name in VIDEO_CALLS:
+        lines.append(f"{name.lower().replace('.', ' ')}: {listed(sections, name)}")
+    for name in CLIP_CALLS:
+        lines.append(f"{name.lower().replace('.', ' ')}: {spread(named(name))}")
+    releases = [s.ts for s in sections if s.name == "Video.release"]
+    after = (
+        str(sum(1 for s in grid if s.ts > max(releases))) if releases else "unknown"
+    )
+    lines.append(f"grid frame loads after the full size view: {after}")
+    longest = ", ".join(f"{s.name} {ms(s.dur)}" for s in stalls[:8])
+    lines.append(f"main thread stalls: {len(stalls)}{': ' + longest if stalls else ''}")
+    return lines
+
+
 def main() -> None:
     args = sys.argv[1:]
     by_hand = "--by-hand" in args
-    args = [a for a in args if a != "--by-hand"]
+    videos = "--videos" in args
+    args = [a for a in args if a not in ("--by-hand", "--videos")]
     trace = args[0]
     package = args[1] if len(args) > 1 else "io.github.bert0ns.anteater"
     with TraceProcessor(trace=trace) as tp:
+        if videos:
+            quoted = ", ".join(
+                f"'{n}'"
+                for n in (
+                    *VIDEO_GRID,
+                    "Review.slideshow",
+                    *VIDEO_FULL_SIZE,
+                    *VIDEO_STRIP,
+                    "Video.start",
+                    "Video.seek",
+                )
+            )
+            calls = ", ".join(f"'{n}'" for n in (*VIDEO_CALLS, *CLIP_CALLS))
+            found = [
+                Section(r.name, r.ts, r.dur)
+                for r in tp.query(
+                    VIDEO_QUERY.format(package=package, names=quoted, calls=calls)
+                )
+            ]
+            stalls = [
+                Section(r.name, r.ts, r.dur)
+                for r in tp.query(STALLS_QUERY.format(package=package))
+            ]
+            print(*video_lines(found, stalls), sep="\n")
+            return
         row = next(iter(tp.query(HOME_QUERY.format(package=package))))
         sections = [
             Section(r.name, r.ts, r.dur)

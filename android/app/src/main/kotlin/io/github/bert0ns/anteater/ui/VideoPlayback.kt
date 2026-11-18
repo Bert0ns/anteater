@@ -61,7 +61,9 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.tracing.trace
 import io.github.bert0ns.anteater.R
+import io.github.bert0ns.anteater.tracing.OpenSection
 import kotlinx.coroutines.delay
 import java.io.File
 
@@ -123,8 +125,17 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
     var failed by mutableStateOf<String?>(null)
         private set
 
+    /** From a new video's start, and from a seek, to the first frame the player draws (android/README.md). */
+    private val starting = OpenSection("Video.start")
+    private val seeking = OpenSection("Video.seek")
+
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) = sync()
+
+        override fun onRenderedFirstFrame() {
+            starting.end()
+            seeking.end()
+        }
 
         override fun onPlayerError(error: PlaybackException) {
             val path = loaded
@@ -135,7 +146,7 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
 
     /** Plays [file] from [atMs], or moves to it when the player already holds it. A video that is not loaded replaces the one that is. */
     fun play(file: File, atMs: Long = 0) {
-        val player = player ?: create().also {
+        val player = player ?: trace("Video.build") { create() }.also {
             it.addListener(listener)
             it.sound()
             (it as? ExoPlayer)?.setHandleAudioBecomingNoisy(true)
@@ -143,8 +154,11 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
         }
         failed = null
         if (loaded == file.path) {
+            seeking.begin()
             player.seekTo(atMs)
         } else {
+            seeking.end()
+            starting.begin()
             player.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)), atMs)
             player.prepare()
             loaded = file.path
@@ -170,6 +184,7 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
     /** Moves [file] to [ms], and starts it there when it is not the video loaded. */
     fun seekTo(file: File, ms: Long) {
         if (loaded != file.path) return play(file, ms)
+        seeking.begin()
         player?.seekTo(ms)
         sync()
     }
@@ -195,9 +210,13 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
     /** Lets go of the video and keeps the player for the next one. */
     fun stop() {
         player?.run {
-            stop()
-            clearMediaItems()
+            trace("Video.stop") {
+                stop()
+                clearMediaItems()
+            }
         }
+        starting.end()
+        seeking.end()
         loaded = null
         playing = false
         positionMs = 0
@@ -209,7 +228,7 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
     fun release() {
         player?.run {
             removeListener(listener)
-            release()
+            trace("Video.release") { release() }
         }
         player = null
         stop()
@@ -220,7 +239,8 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
     }
 
     fun detach(view: SurfaceView) {
-        player?.clearVideoSurfaceView(view)
+        // It waits for the player to let go of the surface.
+        player?.let { trace("Video.detach") { it.clearVideoSurfaceView(view) } }
     }
 
     /** Reads the player's state into what the screen shows. */
