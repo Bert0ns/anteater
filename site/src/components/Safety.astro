@@ -14,11 +14,11 @@ const t = strings[lang].safety;
   <h2 id="safety-title">{t.title}</h2>
   <p class="safety-lead">{t.lead}</p>
 
-  <ol class="flow">
+  <ol class="flow" role="list">
     {
-      t.steps.map((step) => (
+      t.steps.map((step, i) => (
         <li class="flow-step">
-          <span class="flow-num" aria-hidden="true" />
+          <span class="flow-num" aria-hidden="true">{i + 1}</span>
           <div class="flow-body">
             <h3>{step.title}</h3>
             <p>{step.body}</p>
@@ -53,7 +53,6 @@ const t = strings[lang].safety;
     gap: var(--space-6);
     margin: var(--space-6) 0;
     list-style: none;
-    counter-reset: step;
   }
 
   /* The rail behind the numbers. The red one fills as the list scrolls into view, and is full without it. */
@@ -83,7 +82,6 @@ const t = strings[lang].safety;
     display: grid;
     grid-template-columns: var(--num) minmax(0, 1fr);
     gap: var(--space-4);
-    counter-increment: step;
   }
 
   .flow-num {
@@ -99,10 +97,6 @@ const t = strings[lang].safety;
     font-weight: 700;
     line-height: 1;
     color: var(--accent-text);
-  }
-
-  .flow-num::before {
-    content: counter(step);
   }
 
   .flow-body {

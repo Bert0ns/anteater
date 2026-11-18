@@ -200,7 +200,7 @@
     "steps": [
       {
         "title": "Marked",
-        "body": "Anteater marks the photos and videos it thinks you can do without. Nothing moves until you press the button under the grid, and a tap keeps any of them. If a page marks a favourite from your gallery, the app asks before it moves it."
+        "body": "Anteater marks the photos and videos it thinks you can do without. Nothing moves until you press the button under the grid, and a tap keeps any of them. Favourites from your gallery start unmarked, and if you mark one, the app asks before it moves it."
       },
       {
         "title": "In the trash for 30 days",
