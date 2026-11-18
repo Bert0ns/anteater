@@ -106,8 +106,13 @@ aligned with `text-wrap: pretty`.
   switch and a Download button. Under 900 px the links move into a `<details>` menu, which works
   without JavaScript. A small script closes it after a tap on a link or on Escape. The switch shows the
   full name on a wide screen and `IT` or `EN` on a phone.
-- The section links point at `/#id` or `/it/#id`, so they work from any page. When a sub-issue adds or
-  renames a section, change the `links` list in `Header.astro` and `Footer.astro`.
+- The section links point at `/#id` or `/it/#id`, so they work from any page. The Features and FAQ
+  links point at their own pages and carry `aria-current="page"` on them. The header keeps six links,
+  the most that fit in the bar at 900 px with the Italian labels, and the footer has the full list.
+  When a sub-issue adds or renames a section, change the `links` list in `Header.astro` and
+  `Footer.astro`.
+- `Base.astro` takes a `page` (`home`, `features` or `faq`), which sets the canonical URL, the `hreflang`
+  tags, the meta strings and the language switch. A new page adds its name to `Page` in `i18n/index.ts`.
 - The footer has the logo and a line about the app, two link lists and a bottom row with the licence
   and the privacy line.
 - Every string is in `src/i18n/en.json` and `it.json`, under `nav`, `footer` and `a11y`.

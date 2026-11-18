@@ -4,16 +4,18 @@ import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import displayFont from "@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2?url";
 import textFont from "@fontsource-variable/instrument-sans/files/instrument-sans-latin-wght-normal.woff2?url";
-import { homePath, languages, otherLang, strings, type Lang } from "../i18n";
+import { languages, otherLang, pagePath, strings, type Lang, type Page } from "../i18n";
 
 interface Props {
   lang: Lang;
+  page?: Page;
 }
 
-const { lang } = Astro.props;
+const { lang, page = "home" } = Astro.props;
 const t = strings[lang];
+const meta = page === "home" ? t.meta : t[page].meta;
 const site = Astro.site!.origin;
-const canonical = site + homePath(lang);
+const canonical = site + pagePath(lang, page);
 const other = otherLang(lang);
 ---
 
@@ -22,17 +24,17 @@ const other = otherLang(lang);
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{t.meta.title}</title>
-    <meta name="description" content={t.meta.description} />
-    <meta property="og:title" content={t.meta.title} />
-    <meta property="og:description" content={t.meta.ogDescription} />
+    <title>{meta.title}</title>
+    <meta name="description" content={meta.description} />
+    <meta property="og:title" content={meta.title} />
+    <meta property="og:description" content={meta.ogDescription} />
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonical} />
     <meta property="og:locale" content={lang === "en" ? "en_US" : "it_IT"} />
     <meta property="og:locale:alternate" content={other === "en" ? "en_US" : "it_IT"} />
     <link rel="canonical" href={canonical} />
-    {languages.map((l) => <link rel="alternate" hreflang={l} href={site + homePath(l)} />)}
-    <link rel="alternate" hreflang="x-default" href={site + homePath("en")} />
+    {languages.map((l) => <link rel="alternate" hreflang={l} href={site + pagePath(l, page)} />)}
+    <link rel="alternate" hreflang="x-default" href={site + pagePath("en", page)} />
     <meta name="theme-color" content="#121619" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="preload" href={displayFont} as="font" type="font/woff2" crossorigin />
@@ -40,7 +42,7 @@ const other = otherLang(lang);
   </head>
   <body>
     <a class="skip-link" href="#main">{t.a11y.skip}</a>
-    <Header lang={lang} />
+    <Header lang={lang} page={page} />
     <slot />
     <Footer lang={lang} />
   </body>

@@ -11,6 +11,14 @@ if (!existsSync(dist)) {
   process.exit(1);
 }
 
+// Pages that must exist, so a page that stops building fails here and not by being silently unchecked.
+const pages = ["", "features/", "faq/", "it/", "it/features/", "it/faq/"];
+const missing = pages.filter((page) => !existsSync(join(dist, page, "index.html")));
+if (missing.length > 0) {
+  console.error(`missing pages in dist/: ${missing.join(", ")}`);
+  process.exit(1);
+}
+
 function* htmlFiles(dir) {
   for (const name of readdirSync(dir)) {
     const path = join(dir, name);

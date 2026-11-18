@@ -1,0 +1,87 @@
+---
+import Base from "../layouts/Base.astro";
+import { pagePath, strings, type Lang, type Page } from "../i18n";
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = strings[lang].faq;
+
+// An answer links to a page and an anchor, written as "features#scan". The path depends on the language.
+function href(to: string): string {
+  const [page, anchor] = to.split("#");
+  return `${pagePath(lang, page as Page)}#${anchor}`;
+}
+---
+
+<Base lang={lang} page="faq">
+  <main id="main">
+    <div class="page-head container">
+      <h1>{t.title}</h1>
+      <p class="page-lead">{t.lead}</p>
+      <nav class="toc" aria-label={t.toc}>
+        <ul>
+          {t.groups.map((group) => <li><a href={`#${group.id}`}>{group.title}</a></li>)}
+        </ul>
+      </nav>
+    </div>
+
+    <div class="sections container">
+      {
+        t.groups.map((group) => (
+          <section id={group.id} aria-labelledby={`${group.id}-title`}>
+            <h2 id={`${group.id}-title`}>{group.title}</h2>
+            <div class="qa-list">
+              {group.items.map((item) => (
+                <div class="qa" id={item.id}>
+                  <h3>{item.q}</h3>
+                  <p>{item.a}</p>
+                  {"link" in item && (
+                    <p class="qa-link">
+                      <a class="text-link" href={href(item.link.to)}>{item.link.label}</a>
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        ))
+      }
+    </div>
+  </main>
+</Base>
+
+<style>
+  .qa-list {
+    display: grid;
+  }
+
+  .qa {
+    padding: var(--space-5) 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .qa:first-child {
+    padding-top: 0;
+  }
+
+  .qa h3 {
+    margin-bottom: var(--space-2);
+  }
+
+  .qa p {
+    max-width: var(--prose);
+  }
+
+  .qa .qa-link {
+    margin-top: var(--space-2);
+    font-size: var(--step--1);
+  }
+
+  /* A question reached by its link, such as /faq/#google-play, shows in red. */
+  .qa:target h3 {
+    color: var(--accent-text);
+  }
+</style>

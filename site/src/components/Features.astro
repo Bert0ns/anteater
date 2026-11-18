@@ -1,0 +1,59 @@
+---
+import Base from "../layouts/Base.astro";
+import FeatureList from "./FeatureList.astro";
+import { homePath, pagePath, strings, type Lang } from "../i18n";
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = strings[lang].features;
+const home = homePath(lang);
+// The sections that are a title, a paragraph and a list. They run in the order a user meets them.
+const listed = ["scan", "photos", "review", "videos", "compress", "trash", "settings"] as const;
+const toc = [
+  ...listed.map((id) => ({ id, label: t[id].nav })),
+  { id: "storage-map", label: t.storageMap.nav },
+  { id: "permissions", label: t.permissions.nav },
+];
+---
+
+<Base lang={lang} page="features">
+  <main id="main">
+    <div class="page-head container">
+      <h1>{t.title}</h1>
+      <p class="page-lead">{t.lead}</p>
+      <nav class="toc" aria-label={t.toc}>
+        <ul>
+          {toc.map((item) => <li><a href={`#${item.id}`}>{item.label}</a></li>)}
+        </ul>
+      </nav>
+    </div>
+
+    <div class="sections container">
+      {
+        listed.map((id) => (
+          <section id={id} aria-labelledby={`${id}-title`}>
+            <h2 id={`${id}-title`}>{t[id].title}</h2>
+            {"intro" in t[id] && <p>{t[id].intro}</p>}
+            <FeatureList items={t[id].items} />
+          </section>
+        ))
+      }
+
+      <section id="storage-map" aria-labelledby="storage-map-title">
+        <h2 id="storage-map-title">{t.storageMap.title}</h2>
+        <p>{t.storageMap.body}</p>
+        <p><a class="text-link" href={`${home}#storage-map`}>{t.storageMap.link}</a></p>
+      </section>
+
+      <section id="permissions" aria-labelledby="permissions-title">
+        <h2 id="permissions-title">{t.permissions.title}</h2>
+        <p>{t.permissions.body}</p>
+        <p><a class="text-link" href={`${home}#privacy`}>{t.permissions.listLink}</a></p>
+        <p><a class="text-link" href={`${pagePath(lang, "faq")}#all-files-access`}>{t.permissions.whyLink}</a></p>
+      </section>
+    </div>
+  </main>
+</Base>
