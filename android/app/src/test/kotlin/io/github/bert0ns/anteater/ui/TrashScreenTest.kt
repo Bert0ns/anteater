@@ -120,6 +120,16 @@ class TrashScreenTest {
     }
 
     @Test
+    fun `the full size view of a trashed image has no share button`() {
+        compose.setContent { TrashScreen(trashed, emptySet(), onSelect = {}, onSelectAll = { _, _ -> }, onRestore = {}, onDelete = {}) }
+
+        compose.onNodeWithContentDescription("a.jpg. 27 days left").performTouchInput { longClick() }
+
+        compose.onNodeWithContentDescription("Close").assertExists()
+        compose.onAllNodesWithContentDescription("Share").assertCountEquals(0)
+    }
+
+    @Test
     fun `a screen reader hears which images are selected`() {
         compose.setContent {
             var selected by remember { mutableStateOf(emptySet<String>()) }

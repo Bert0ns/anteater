@@ -505,6 +505,8 @@
     </plurals>
     <!-- Comprimi -->
     <string name="close">Chiudi</string>
+    <string name="share">Condividi</string>
+    <string name="share_failed">Impossibile condividere questo file</string>
     <string name="action_select">Seleziona</string>
     <string name="action_deselect">Deseleziona</string>
     <string name="compress_formats_open">Cosa si può comprimere</string>

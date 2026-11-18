@@ -557,6 +557,7 @@ private fun FullSize(
  * [paths] from [start], with [image] in each page, the review's zoomable image unless the screen
  * has its own. [overlay] draws over it what is specific to the screen, for the page the pager is on. [onPage] hears each page
  * the pager comes to rest on, so a video that plays can stop; a drag that comes back to the same page tells it nothing. A page learns from [LocalPageSettled] that the pager came to rest on it.
+ * A share button next to the close one sends the page's file to the system share sheet (#474), unless [shareable] is off.
  */
 @Composable
 internal fun FullSizeViewer(
@@ -565,6 +566,7 @@ internal fun FullSizeViewer(
     onClose: () -> Unit,
     image: @Composable (page: Int) -> Unit = { ZoomableImage(paths[it], onClose) },
     onPage: (Int) -> Unit = {},
+    shareable: Boolean = true,
     overlay: @Composable BoxScope.(page: Int) -> Unit,
 ) {
     val pager = rememberPagerState(paths.indexOf(start).coerceAtLeast(0)) { paths.size }
@@ -578,10 +580,12 @@ internal fun FullSizeViewer(
             }
             overlay(pager.currentPage)
             // A tap on an image closes the view too, but nothing showed that. A video's tap plays and pauses, so this is its only way out.
-            IconButton(
-                onClose,
-                Modifier.align(Alignment.TopStart).windowInsetsPadding(WindowInsets.safeDrawing).padding(8.dp).background(Color.Black.copy(alpha = 0.55f), CircleShape),
-            ) { Icon(Icons.Default.Close, stringResource(R.string.close), tint = Color.White) }
+            Row(Modifier.align(Alignment.TopStart).windowInsetsPadding(WindowInsets.safeDrawing).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                IconButton(onClose, Modifier.background(Color.Black.copy(alpha = 0.55f), CircleShape)) {
+                    Icon(Icons.Default.Close, stringResource(R.string.close), tint = Color.White)
+                }
+                if (shareable) paths.getOrNull(pager.currentPage)?.let { ShareButton(it) }
+            }
         }
     }
 }
