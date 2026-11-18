@@ -359,7 +359,7 @@ private fun FullSize(videos: List<VideoItem>, start: VideoItem, selected: Set<St
                 onFavorite(item.video, it)
             }
         }
-        FullSizeBar(item.video.path, item.isFavorite, heart = heart) {
+        FullSizeBar(item.video.path, item.isFavorite, heart = heart, playback = playback) {
             val file = File(item.video.path)
             val length = item.durationMs ?: if (item.unreadable) null else rememberLengthMillis(file, "${item.video.path}|${item.video.size}|${item.video.mtimeNs}")
             VideoControls(playback, file, "Videos.fullSize", length, item.unreadable)

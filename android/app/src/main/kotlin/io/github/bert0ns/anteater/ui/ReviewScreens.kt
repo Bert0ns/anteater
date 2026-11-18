@@ -4,6 +4,9 @@ package io.github.bert0ns.anteater.ui
 
 import android.text.format.Formatter
 import androidx.annotation.StringRes
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -533,7 +536,7 @@ private fun FullSize(
                 onFavorite(current.image, it)
             }
         }
-        FullSizeBar(current.image.path, current.isFavorite, heart = heart) {
+        FullSizeBar(current.image.path, current.isFavorite, heart = heart, playback = playback.takeIf { video }) {
             if (video) {
                 val file = File(current.image.path)
                 val key = "${current.image.path}|${current.image.size}|${current.image.mtimeNs}"
@@ -619,15 +622,21 @@ internal fun BoxScope.FullSizeToggle(checked: Boolean, label: String, checkedCol
 /**
  * The dark translucent bar at the bottom of the full size view, readable on a white image: [content], then the folder
  * of [path] and a favourite's [heart]. The folder's name is enough to place a photo, where its path took two lines.
+ * With a [playback], for a video, the bar fades out while the video plays and a swipe on it hides or shows the bar
+ * ([BarAutoHide], #473), and a touch exploration service keeps it on screen.
  */
 @Composable
-internal fun BoxScope.FullSizeBar(path: String, favorite: Boolean, heart: @Composable () -> Unit = { if (favorite) FavoriteHeart() }, content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().background(Color.Black.copy(alpha = 0.7f)).windowInsetsPadding(WindowInsets.safeDrawing).padding(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(File(path).parentFile?.name.orEmpty(), Modifier.weight(1f), color = Color.White, style = MaterialTheme.typography.labelMedium)
-            heart()
+internal fun BoxScope.FullSizeBar(path: String, favorite: Boolean, heart: @Composable () -> Unit = { if (favorite) FavoriteHeart() }, playback: VideoPlayback? = null, content: @Composable ColumnScope.() -> Unit) {
+    val touchExploration = rememberTouchExploration()
+    if (playback != null) BarAutoHide(playback, touchExploration)
+    AnimatedVisibility(playback == null || !playback.barHidden || touchExploration, Modifier.align(Alignment.BottomStart), enter = fadeIn(), exit = fadeOut()) {
+        Column(Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.7f)).windowInsetsPadding(WindowInsets.safeDrawing).padding(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(File(path).parentFile?.name.orEmpty(), Modifier.weight(1f), color = Color.White, style = MaterialTheme.typography.labelMedium)
+                heart()
+            }
+            content()
         }
-        content()
     }
 }
 
