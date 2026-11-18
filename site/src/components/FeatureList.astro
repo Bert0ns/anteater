@@ -1,6 +1,6 @@
 ---
 interface Props {
-  items: { term: string; desc: string }[];
+  items: { id?: string; term: string; desc: string }[];
 }
 
 const { items } = Astro.props;
@@ -9,10 +9,17 @@ const { items } = Astro.props;
 <div class="feature-list">
   {
     items.map((item) => (
-      <div class="feature-row">
+      <div class="feature-row" id={item.id}>
         <div class="feature-term">{item.term}</div>
         <div class="feature-desc">{item.desc}</div>
       </div>
     ))
   }
 </div>
+
+<style>
+  /* A row reached by its link, such as /features/#photos-blurry, shows its term in red. */
+  .feature-row:target .feature-term {
+    color: var(--accent-text);
+  }
+</style>

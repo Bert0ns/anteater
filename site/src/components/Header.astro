@@ -1,22 +1,24 @@
 ---
-import { homePath, otherLang, strings, type Lang } from "../i18n";
+import { homePath, otherLang, pagePath, strings, type Lang, type Page } from "../i18n";
 
 interface Props {
   lang: Lang;
+  page?: Page;
 }
 
-const { lang } = Astro.props;
+const { lang, page = "home" } = Astro.props;
 const t = strings[lang];
 const other = otherLang(lang);
 const home = homePath(lang);
 const repo = "https://github.com/Bert0ns/anteater";
-// The anchors live on the home page, so the links work from other pages too.
+// The anchors live on the home page, so the links work from other pages too. The header keeps six
+// links so that it fits at 900 px, and the footer has the full list.
 const links = [
   { href: `${home}#clean`, label: t.nav.photos },
   { href: `${home}#videos`, label: t.nav.videos },
   { href: `${home}#compress`, label: t.nav.compress },
-  { href: `${home}#trash`, label: t.nav.trash },
-  { href: `${home}#settings`, label: t.nav.settings },
+  { href: pagePath(lang, "features"), label: t.nav.features, current: page === "features" },
+  { href: pagePath(lang, "faq"), label: t.nav.faq, current: page === "faq" },
   { href: `${home}#install`, label: t.nav.install },
 ];
 ---
@@ -31,12 +33,12 @@ const links = [
 
       <nav class="header-nav" aria-label={t.nav.label}>
         <ul>
-          {links.map((link) => <li><a href={link.href}>{link.label}</a></li>)}
+          {links.map((link) => <li><a href={link.href} aria-current={link.current ? "page" : undefined}>{link.label}</a></li>)}
         </ul>
       </nav>
 
       <div class="header-actions">
-        <a href={homePath(other)} class="lang-switch" lang={other} hreflang={other} title={t.nav.otherLanguageTitle}>
+        <a href={pagePath(other, page)} class="lang-switch" lang={other} hreflang={other} title={t.nav.otherLanguageTitle}>
           <span class="lang-long">{t.nav.otherLanguage}</span>
           <span class="lang-short">{t.nav.otherLanguageShort}</span>
         </a>
@@ -45,7 +47,7 @@ const links = [
           <summary aria-label={t.nav.menu}><span class="menu-icon" aria-hidden="true"></span></summary>
           <nav class="menu-panel" aria-label={t.nav.label}>
             <ul>
-              {links.map((link) => <li><a href={link.href}>{link.label}</a></li>)}
+              {links.map((link) => <li><a href={link.href} aria-current={link.current ? "page" : undefined}>{link.label}</a></li>)}
             </ul>
           </nav>
         </details>

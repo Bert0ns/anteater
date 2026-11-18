@@ -6,7 +6,7 @@ import Privacy from "./Privacy.astro";
 import Safety from "./Safety.astro";
 import Screenshots from "./Screenshots.astro";
 import StorageMap from "./StorageMap.astro";
-import { strings, type Lang } from "../i18n";
+import { pagePath, strings, type Lang } from "../i18n";
 
 interface Props {
   lang: Lang;
@@ -15,8 +15,10 @@ interface Props {
 const { lang } = Astro.props;
 const t = strings[lang];
 const repo = "https://github.com/Bert0ns/anteater";
-const sections = ["photos", "videos", "compress", "settings"] as const;
-const anchors = { photos: "clean", videos: "videos", compress: "compress", settings: "settings" } as const;
+// The home page keeps a short version of these. Each links to its part of the features page.
+const sections = ["photos", "videos", "compress"] as const;
+const anchors = { photos: "clean", videos: "videos", compress: "compress" } as const;
+const features = pagePath(lang, "features");
 ---
 
 <Base lang={lang}>
@@ -43,9 +45,9 @@ const anchors = { photos: "clean", videos: "videos", compress: "compress", setti
       sections.map((key) => (
         <section id={anchors[key]}>
           <h2>{t[key].title}</h2>
-          {"intro" in t[key] && <p>{t[key].intro}</p>}
+          <p>{t[key].intro}</p>
           <FeatureList items={t[key].items} />
-          {"outro" in t[key] && <p>{t[key].outro}</p>}
+          <p><a class="text-link" href={`${features}#${key}`}>{t[key].more}</a></p>
         </section>
       ))
     }

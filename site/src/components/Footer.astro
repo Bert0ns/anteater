@@ -1,5 +1,5 @@
 ---
-import { homePath, strings, type Lang } from "../i18n";
+import { homePath, pagePath, strings, type Lang } from "../i18n";
 
 interface Props {
   lang: Lang;
@@ -9,12 +9,15 @@ const { lang } = Astro.props;
 const t = strings[lang];
 const home = homePath(lang);
 const repo = "https://github.com/Bert0ns/anteater";
+const features = pagePath(lang, "features");
 const sections = [
   { href: `${home}#clean`, label: t.nav.photos },
   { href: `${home}#videos`, label: t.nav.videos },
   { href: `${home}#compress`, label: t.nav.compress },
   { href: `${home}#trash`, label: t.nav.trash },
-  { href: `${home}#settings`, label: t.nav.settings },
+  { href: features, label: t.nav.features },
+  { href: `${features}#settings`, label: t.nav.settings },
+  { href: pagePath(lang, "faq"), label: t.nav.faq },
   { href: `${home}#install`, label: t.nav.install },
 ];
 const project = [

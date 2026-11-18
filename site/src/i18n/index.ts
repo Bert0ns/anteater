@@ -12,6 +12,13 @@ export function homePath(lang: Lang): string {
   return lang === "en" ? "/" : `/${lang}/`;
 }
 
+export type Page = "home" | "features" | "faq";
+
+/** The path of a page in a language: `/features/` in English, `/it/features/` in Italian. */
+export function pagePath(lang: Lang, page: Page): string {
+  return page === "home" ? homePath(lang) : `${homePath(lang)}${page}/`;
+}
+
 export function otherLang(lang: Lang): Lang {
   return lang === "en" ? "it" : "en";
 }
