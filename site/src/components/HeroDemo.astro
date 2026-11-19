@@ -1,6 +1,6 @@
 ---
 import { Image } from "astro:assets";
-import { categories, formatMb, loadImage, rows, summarize, tiles } from "../lib/hero-demo";
+import { loadScreenshot, SCREEN_HEIGHT, SCREEN_WIDTH, screenIds } from "../lib/hero-demo";
 import { strings, type Lang } from "../i18n";
 
 interface Props {
@@ -10,142 +10,88 @@ interface Props {
 const { lang } = Astro.props;
 const t = strings[lang].hero.demo;
 const repo = "https://github.com/Bert0ns/anteater";
-const fill = (text: string, values: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? ""));
 
-const summary = summarize();
-// A no-break space keeps the number and its unit together.
-const size = `${formatMb(summary.mb, lang)}\u00a0MB`;
-const shown = categories.filter((category) => summary.counts[category] > 0);
-// The text alternative lists the categories with their counts, as the legend does.
-const alt = fill(t.alt, {
-  total: summary.total,
-  marked: summary.marked,
-  size,
-  categories: shown.map((category) => `${t.categories[category].toLowerCase()} ${summary.counts[category]}`).join(", "),
-});
-
-const images = await Promise.all(tiles.map((tile) => loadImage(tile.file)));
+const screens = screenIds.map((id, i) => ({
+  id,
+  index: i,
+  image: loadScreenshot(lang, id),
+  copy: t.screens[id],
+  initial: i === 0,
+}));
 ---
 
-<figure class="demo" data-hero-demo data-lang={lang} data-total={summary.mb} aria-label={t.label}>
-  <figcaption class="sr-only">{alt}</figcaption>
-
-  <div class="phone-wrap" aria-hidden="true">
+<figure class="demo" data-hero-demo aria-label={t.label}>
+  <div class="phone-wrap">
     <div class="phone">
-      <div class="screen" data-screen>
-        <div class="statusbar">
-          <i class="sb-time"></i>
-          <i class="sb-camera"></i>
-          <span class="sb-icons"><i></i><i></i></span>
-        </div>
-
-        <div class="appbar">
-          <span class="scan-pill" data-pill>{t.scan}</span>
-          <span class="meter">
-            <span class="meter-top">
-              <i class="meter-dot" data-home></i>
-              <b class="meter-value" data-counter>{formatMb(summary.mb, lang)}</b>
-              <span class="meter-unit">MB</span>
-            </span>
-            <span class="meter-label">{t.counter}</span>
-          </span>
-        </div>
-
-        <div class="grid-wrap">
-          <ul class="grid ghost" aria-hidden="true">
-            {Array.from({ length: rows * 3 }, () => <li />)}
-          </ul>
-          <ul class="grid" data-grid>
-            {
-              tiles.map((tile, i) => (
-                <li class="tile" data-flagged={tile.category ? "" : undefined} data-category={tile.category} data-mb={tile.mb}>
-                  {tile.treatment === "screenshot" ? (
-                    <div class="tile-media shot">
-                      <span class="shot-status">
-                        <i />
-                        <i />
-                      </span>
-                      <span class="shot-head">
-                        <i class="shot-avatar" />
-                        <i class="shot-line" />
-                      </span>
-                      <Image src={images[i]} alt="" width={240} height={180} loading="eager" class="shot-img" />
-                      <i class="shot-line" />
-                      <i class="shot-line is-short" />
-                      <span class="shot-nav">
-                        <i />
-                      </span>
-                    </div>
-                  ) : (
-                    <div class="tile-media">
-                      <Image
-                        src={images[i]}
-                        alt=""
-                        width={240}
-                        height={300}
-                        loading="eager"
-                        class:list={["tile-img", tile.treatment && `is-${tile.treatment}`]}
-                      />
-                    </div>
-                  )}
-                  {tile.category && (
-                    <span class="mark">
-                      <svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true">
-                        <path fill="currentColor" d="M9 3h6l1 1h4v2H4V4h4l1-1Zm-3 5h12l-1 13H7L6 8Z" />
-                      </svg>
-                    </span>
-                  )}
-                </li>
-              ))
-            }
-          </ul>
-          <div class="beam" data-beam></div>
-        </div>
-
-        <div class="snackbar">{fill(t.snackbar, { count: summary.marked, size })}</div>
-
-        <nav class="bottom-nav">
-          <span class="nav-item is-active"><i class="nav-icon"></i>{t.nav.clean}</span>
-          <span class="nav-item"><i class="nav-icon"></i>{t.nav.compress}</span>
-          <span class="nav-item"><i class="nav-icon"></i>{t.nav.settings}</span>
-        </nav>
-
-        <div class="eater" data-eater><i class="eater-dot"></i></div>
+      <div class="screen" style={`aspect-ratio: ${SCREEN_WIDTH} / ${SCREEN_HEIGHT};`}>
+        {
+          screens.map((s) => (
+            <div
+              class:list={["panel", s.initial && "is-active"]}
+              id={`hero-panel-${s.id}`}
+              role="tabpanel"
+              aria-labelledby={`hero-tab-${s.id}`}
+              data-panel={s.id}
+            >
+              <Image
+                src={s.image}
+                alt={s.copy.alt}
+                width={SCREEN_WIDTH}
+                height={SCREEN_HEIGHT}
+                widths={[320, 640]}
+                sizes="(min-width: 56.25rem) 288px, 260px"
+                format="webp"
+                loading={s.initial ? "eager" : "lazy"}
+                fetchpriority={s.initial ? "high" : undefined}
+                decoding="async"
+                class="shot"
+              />
+            </div>
+          ))
+        }
       </div>
     </div>
   </div>
 
   <div class="side">
-    <ul class="legend" aria-hidden="true" data-legend>
+    <div class="tabs" role="tablist" aria-label={t.tabsLabel}>
       {
-        shown.map((category) => (
-          <li class="legend-item" data-category={category}>
-            <i class="legend-dot"></i>
-            <span class="legend-name">{t.categories[category]}</span>
-            <span class="legend-count">{summary.counts[category]}</span>
-          </li>
+        screens.map((s) => (
+          <button
+            type="button"
+            class="tab"
+            id={`hero-tab-${s.id}`}
+            role="tab"
+            aria-selected={s.initial ? "true" : "false"}
+            aria-controls={`hero-panel-${s.id}`}
+            tabindex={s.initial ? "0" : "-1"}
+            data-tab={s.id}
+          >
+            <span class="tab-dot" aria-hidden="true" />
+            <span class="tab-label">{s.copy.tab}</span>
+          </button>
         ))
       }
-    </ul>
+    </div>
 
-    <div class="actions">
-      <button type="button" class="btn btn-secondary btn-small replay" data-replay hidden>
-        <svg viewBox="0 0 24 24" width="1.1em" height="1.1em" aria-hidden="true">
-          <path
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5"></path>
-        </svg>
-        {t.replay}
-      </button>
+    <div class="captions">
+      {
+        screens.map((s) => (
+          <p class:list={["caption", s.initial && "is-active"]} data-caption={s.id}>
+            {s.copy.caption}
+          </p>
+        ))
+      }
     </div>
 
     <p class="note">
       {t.note}{" "}
-      <a class="text-link" href={`${repo}/tree/main/site/src/assets/samples`} target="_blank" rel="noopener noreferrer">{t.noteLink}</a>
+      <a
+        class="text-link"
+        href={`${repo}/blob/main/site/src/assets/samples/provenance.json`}
+        target="_blank"
+        rel="noopener noreferrer">{t.noteLink}</a
+      >
     </p>
   </div>
 </figure>
@@ -156,827 +102,306 @@ const images = await Promise.all(tiles.map((tile) => loadImage(tile.file)));
     flex-wrap: wrap;
     align-items: center;
     justify-content: center;
-    gap: var(--space-6) var(--space-7);
+    gap: var(--space-5) var(--space-7);
   }
 
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
-  /* The phone. Everything inside is sized in cqw, a hundredth of the phone's width, so that it is one
-     drawing at every width. The text in it is never under 12 px. */
   .phone-wrap {
-    container-type: inline-size;
     flex: none;
-    width: clamp(17rem, 24vw, 20rem);
+    width: clamp(15.5rem, 23vw, 18.5rem);
   }
 
   .phone {
-    padding: 2.4cqw;
-    border: 0.9cqw solid var(--line-strong);
-    border-radius: 12cqw;
+    padding: var(--space-2);
+    border: 2px solid var(--line-strong);
+    border-radius: calc(var(--radius-l) + var(--space-2));
     background: var(--bg);
+    box-shadow: 0 var(--space-5) var(--space-7) color-mix(in srgb, var(--bg) 75%, transparent);
   }
 
   .screen {
     position: relative;
-    display: flex;
-    flex-direction: column;
+    display: grid;
     overflow: hidden;
-    border-radius: 9.6cqw;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-l);
     background: var(--surface);
-    color: var(--text);
-    font-size: max(0.75rem, 4.4cqw);
-    line-height: 1.2;
   }
 
-  .statusbar {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 8cqw;
-    padding: 0 7cqw;
-  }
-
-  .sb-time {
-    width: 7cqw;
-    height: 2cqw;
-    border-radius: var(--radius-pill);
-    background: var(--line-strong);
-  }
-
-  .sb-camera {
-    position: absolute;
-    left: 50%;
-    top: 2.4cqw;
-    width: 3cqw;
-    height: 3cqw;
-    margin-left: -1.5cqw;
-    border-radius: 50%;
-    background: var(--bg);
-  }
-
-  .sb-icons {
-    display: flex;
-    gap: 1.4cqw;
-  }
-
-  .sb-icons i {
-    width: 3.2cqw;
-    height: 2cqw;
-    border-radius: 0.6cqw;
-    background: var(--line-strong);
-  }
-
-  .appbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 2cqw;
-    padding: 1.6cqw 4.6cqw 3.4cqw;
-  }
-
-  .scan-pill {
-    display: inline-flex;
-    align-items: center;
-    height: 10cqw;
-    padding: 0 4.8cqw;
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-pill);
-    font-weight: 600;
-    white-space: nowrap;
-  }
-
-  .meter {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 0.8cqw;
-    text-align: right;
-  }
-
-  .meter-top {
-    display: inline-flex;
-    align-items: center;
-    gap: 1.4cqw;
-  }
-
-  .meter-dot {
-    width: 3cqw;
-    height: 3cqw;
-    border-radius: 50%;
-    background: var(--accent);
-  }
-
-  .meter-value {
-    min-width: 4ch;
-    font-family: var(--font-display);
-    font-size: 8.4cqw;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-  }
-
-  .meter-unit {
-    color: var(--text-muted);
-    font-weight: 600;
-  }
-
-  .meter-label {
-    color: var(--text-muted);
-  }
-
-  /* The grid is drawn over an invisible copy that has the tiles of the visible rows. When the flagged
-     tiles go, the phone keeps its height, so nothing under it moves. Tiles under the last row are
-     clipped until they slide up. */
-  .grid-wrap {
-    position: relative;
-    display: grid;
-    padding: 0 3.2cqw 3.2cqw;
-    overflow: clip;
-  }
-
-  .grid-wrap > .grid {
+  .panel {
     grid-area: 1 / 1;
-    align-self: start;
-  }
-
-  /* The real grid has no height of its own, so the tiles below the last row overflow and are clipped
-     instead of making the phone taller. */
-  .grid-wrap > .grid:not(.ghost) {
-    height: 0;
-  }
-
-  .ghost {
+    opacity: 0;
     visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity var(--dur-base) var(--ease-out),
+      visibility 0s linear var(--dur-base);
   }
 
-  .ghost li {
-    aspect-ratio: 4 / 5;
+  .panel.is-active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition:
+      opacity var(--dur-base) var(--ease-out),
+      visibility 0s linear 0s;
   }
 
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1.6cqw;
-    list-style: none;
-  }
-
-  .tile {
-    position: relative;
-    aspect-ratio: 4 / 5;
-    border-radius: 2.4cqw;
-  }
-
-  /* The end state: the scan has found the flagged tiles, the red dot has eaten them, and the rest has
-     moved up. A browser without scripting, or with reduced motion, shows this. */
-  .tile[data-flagged] {
-    display: none;
-  }
-
-  .tile-media {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    border-radius: inherit;
-    background: var(--raised);
-  }
-
-  .tile-media :global(img) {
+  .shot {
     display: block;
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
 
-  /* The variants are the same source image with a filter, a crop or a frame. The filter is fixed, and
-     never animated. */
-  .tile-media :global(.is-blur) {
-    filter: blur(2.2cqw);
-    transform: scale(1.14);
-  }
-
-  .tile-media :global(.is-dark) {
-    filter: brightness(0.3) saturate(0.8);
-  }
-
-  .tile-media :global(.is-bright) {
-    filter: brightness(1.9) contrast(0.7) saturate(0.6);
-  }
-
-  .tile-media :global(.is-crop) {
-    transform: scale(1.2) translate(-4%, 3%);
-  }
-
-  /* A screenshot of a post: the photo between a status bar and a navigation bar. */
-  .shot {
-    display: flex;
-    flex-direction: column;
-    gap: 1.6cqw;
-    padding: 0 0 0;
-    background: var(--text);
-  }
-
-  .shot i {
-    display: block;
-    border-radius: var(--radius-pill);
-    background: var(--line-strong);
-  }
-
-  .shot-status {
-    display: flex;
-    justify-content: space-between;
-    padding: 1.4cqw 2cqw 0;
-  }
-
-  .shot-status i {
-    width: 4cqw;
-    height: 1.2cqw;
-  }
-
-  .shot-head {
-    display: flex;
-    align-items: center;
-    gap: 1.4cqw;
-    padding: 0 2cqw;
-  }
-
-  .shot-avatar {
-    flex: none;
-    width: 3.6cqw;
-    height: 3.6cqw;
-  }
-
-  .shot-head .shot-line {
-    flex: 1;
-  }
-
-  .shot-line {
-    height: 1.4cqw;
-    margin: 0 2cqw;
-  }
-
-  .shot-head .shot-line {
-    margin: 0;
-  }
-
-  .shot-line.is-short {
-    width: 40%;
-  }
-
-  .shot .shot-img {
-    flex: none;
-    width: 100%;
-    height: auto;
-    aspect-ratio: 4 / 3;
-  }
-
-  .shot-nav {
-    display: flex;
-    justify-content: center;
-    margin-top: auto;
-    padding: 1.4cqw 0 1.6cqw;
-  }
-
-  .shot-nav i {
-    width: 40%;
-    height: 1cqw;
-  }
-
-  .tile::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border: 0.7cqw solid var(--accent);
-    border-radius: inherit;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .mark {
-    position: absolute;
-    top: 1.6cqw;
-    right: 1.6cqw;
+  .side {
+    flex: 1 1 16rem;
+    max-width: 19rem;
+    min-width: 0;
     display: grid;
-    place-items: center;
-    width: 8cqw;
-    height: 8cqw;
-    padding: 1.6cqw;
-    border-radius: 2cqw;
-    background: var(--accent);
-    color: var(--text);
-    opacity: 0;
-    transform: scale(0.4);
+    gap: var(--space-4);
   }
 
-  .beam {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 0;
-    background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--text) 18%, transparent) 50%, transparent);
-    opacity: 0;
-    pointer-events: none;
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
   }
 
-  .beam::after {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 0;
-    right: 0;
-    height: 0.5cqw;
-    margin-top: -0.25cqw;
-    background: var(--text);
-  }
-
-  .snackbar {
-    position: absolute;
-    left: 3.2cqw;
-    right: 3.2cqw;
-    bottom: 24cqw;
-    padding: 3cqw 3.6cqw;
-    border-radius: 2.4cqw;
-    background: var(--text);
-    color: var(--bg);
-    font-weight: 500;
+  .tab {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 2.25rem;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-text);
+    font-size: var(--step--1);
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
     transition:
-      opacity var(--dur-base) var(--ease-out),
+      background-color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out);
+  }
+
+  .tab:hover {
+    background: var(--surface);
+    border-color: var(--text-dim);
+    color: var(--text);
+  }
+
+  .tab[aria-selected="true"] {
+    background: var(--text);
+    border-color: var(--text);
+    color: var(--bg);
+  }
+
+  .tab-dot {
+    flex: none;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--line-strong);
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
       transform var(--dur-base) var(--ease-out);
   }
 
-  .bottom-nav {
-    display: flex;
-    justify-content: space-around;
-    margin-top: auto;
-    padding: 2.6cqw 2cqw 4.4cqw;
-    border-top: 1px solid var(--line);
-    background: var(--raised);
+  .tab:hover .tab-dot {
+    background: var(--text-dim);
   }
 
-  .nav-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1.2cqw;
-    color: var(--text-muted);
+  .tab[aria-selected="true"] .tab-dot {
+    background: var(--accent);
   }
 
-  .nav-item.is-active {
-    color: var(--text);
-    font-weight: 600;
-  }
-
-  .nav-icon {
+  /* Every caption occupies the same grid cell so switching tabs never changes the height. */
+  .captions {
     display: grid;
-    place-items: center;
-    width: 12cqw;
-    height: 6.4cqw;
-    border-radius: var(--radius-pill);
   }
 
-  .nav-icon::before {
-    content: "";
-    width: 3.2cqw;
-    height: 3.2cqw;
-    border: 0.5cqw solid var(--text-dim);
-    border-radius: 0.9cqw;
-  }
-
-  .is-active .nav-icon {
-    background: var(--line-strong);
-  }
-
-  .is-active .nav-icon::before {
-    border: 0;
-    border-radius: 50%;
-    background: var(--accent);
-  }
-
-  /* The red dot that eats the tiles. It starts in the counter, goes out, and comes back to it. */
-  .eater {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 11cqw;
-    height: 11cqw;
+  .caption {
+    grid-area: 1 / 1;
+    margin: 0;
+    font-size: var(--step-0);
+    color: var(--text);
     opacity: 0;
-    pointer-events: none;
-    transition: transform var(--dur-base) var(--ease-in-out);
+    visibility: hidden;
+    transition:
+      opacity var(--dur-fast) var(--ease-out),
+      visibility 0s linear var(--dur-fast);
   }
 
-  .eater-dot {
-    display: block;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    background: var(--accent);
-  }
-
-  /* The side: the legend, the replay button and the note. */
-  .side {
-    flex: 1 1 16rem;
-    max-width: 17rem;
-    min-width: 0;
-  }
-
-  .legend {
-    list-style: none;
-  }
-
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding-block: var(--space-2);
-    border-bottom: 1px solid var(--line);
-    font-weight: 500;
-  }
-
-  .legend-dot {
-    position: relative;
-    flex: none;
-    width: 0.9rem;
-    height: 0.9rem;
-    border: 1.5px solid var(--line-strong);
-    border-radius: 50%;
-  }
-
-  .legend-dot::after {
-    content: "";
-    position: absolute;
-    inset: 2px;
-    border-radius: 50%;
-    background: var(--accent);
-  }
-
-  .legend-name {
-    flex: 1;
-    min-width: 0;
-    line-height: 1.25;
-  }
-
-  .legend-count {
-    min-width: 1.75rem;
-    padding: 0.1rem 0.5rem;
-    border-radius: var(--radius-pill);
-    background: var(--surface);
-    color: var(--text-muted);
-    font-size: var(--step--1);
-    font-variant-numeric: tabular-nums;
-    text-align: center;
-  }
-
-  /* The space is reserved, so the button appearing does not move anything. */
-  .actions {
-    display: flex;
-    align-items: center;
-    min-height: 2.25rem;
-    margin-top: var(--space-4);
-  }
-
-  .replay[hidden] {
-    display: none;
-  }
-
-  .replay svg {
-    flex: none;
+  .caption.is-active {
+    opacity: 1;
+    visibility: visible;
+    transition:
+      opacity var(--dur-fast) var(--ease-out),
+      visibility 0s linear 0s;
   }
 
   .note {
-    margin-top: var(--space-3);
+    margin: 0;
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--line);
     font-size: var(--step--1);
     color: var(--text-dim);
   }
 
-  /* The demo where it can run: scripting is on and motion is allowed. Everything above is the end
-     state, which the other browsers keep. Here the flagged tiles are in the grid again and the
-     counter, the legend and the snackbar wait for the script. The flagged tiles stay in the layout
-     for good, invisible once eaten, and the kept ones slide over them with transform, so the page
-     never shifts. */
-  @media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
-    .demo .tile[data-flagged] {
-      display: block;
+  @media (scripting: none) {
+    .tabs {
+      display: none;
     }
 
-    .demo:not([data-state]) .meter-value {
-      visibility: hidden;
-    }
-
-    .demo:not(.is-trashed) .snackbar {
-      opacity: 0;
-      transform: translateY(1.5rem);
-    }
-
-    .demo .legend-item:not(.is-lit) {
-      color: var(--text-dim);
-    }
-
-    .demo .legend-item:not(.is-lit) .legend-dot::after {
-      opacity: 0;
-      transform: scale(0.2);
-    }
-
-    .demo .legend-item:not(.is-lit) .legend-count {
-      opacity: 0;
-    }
-
-    .legend-dot::after,
-    .legend-count {
-      transition:
-        transform var(--dur-base) var(--ease-out),
-        opacity var(--dur-base) var(--ease-out);
-    }
-
-    .tile {
-      transition:
-        transform var(--dur-fast) var(--ease-in),
-        opacity var(--dur-fast) var(--ease-in);
-    }
-
-    .tile::after {
-      transition: opacity var(--dur-base) var(--ease-out);
-    }
-
-    .mark {
-      transition:
-        transform var(--dur-base) var(--ease-out),
-        opacity var(--dur-base) var(--ease-out);
-    }
-
-    .tile.is-marked::after {
-      opacity: 1;
-    }
-
-    .tile.is-marked .mark {
-      opacity: 1;
-      transform: none;
-    }
-
-    .tile.is-marked .tile-media {
-      animation: pop var(--dur-base) var(--ease-out);
-    }
-
-    .tile.is-eaten {
-      opacity: 0;
-      transform: scale(0.2);
-    }
-
-    .scan-pill {
-      transition:
-        transform var(--dur-instant) var(--ease-out),
-        opacity var(--dur-instant) var(--ease-out);
-    }
-
-    .scan-pill.is-pressed {
-      transform: scale(0.94);
-      opacity: 0.7;
-    }
-
-    .beam {
-      transition:
-        transform var(--dur-base) var(--ease-in-out),
-        opacity var(--dur-fast) var(--ease-out);
-    }
-  }
-
-  @keyframes pop {
-    50% {
-      transform: scale(1.06);
+    .panel:not(.is-active),
+    .caption:not(.is-active) {
+      display: none;
     }
   }
 </style>
 
 <script>
-  // The demo runs once when it scrolls into view, and again when the reader presses the button. It only
-  // changes classes and moves things with transform and opacity, so nothing on the page shifts. Without
-  // this script, or with reduced motion, the markup and the CSS already show the end state.
-  const demo = document.querySelector<HTMLElement>("[data-hero-demo]");
-  if (demo && matchMedia("(scripting: enabled)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches) setup(demo);
+  document.querySelectorAll<HTMLElement>("[data-hero-demo]").forEach(setup);
 
   function setup(demo: HTMLElement) {
-    const q = <T extends HTMLElement>(selector: string) => demo.querySelector<T>(selector)!;
-    const screen = q("[data-screen]");
-    const grid = q("[data-grid]");
-    const ghost = q(".ghost");
-    const beam = q("[data-beam]");
-    const pill = q("[data-pill]");
-    const home = q("[data-home]");
-    const eater = q("[data-eater]");
-    const counter = q("[data-counter]");
-    const replay = q<HTMLButtonElement>("[data-replay]");
-    const tiles = [...grid.querySelectorAll<HTMLElement>(".tile")];
-    const legend = new Map([...demo.querySelectorAll<HTMLElement>(".legend-item")].map((item) => [item.dataset.category!, item]));
-    const total = Number(demo.dataset.total);
-    const number = new Intl.NumberFormat(demo.dataset.lang, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    const tabs = [...demo.querySelectorAll<HTMLButtonElement>("[data-tab]")];
+    const panels = new Map(
+      [...demo.querySelectorAll<HTMLElement>("[data-panel]")].map((el) => [el.dataset.panel!, el]),
+    );
+    const captions = new Map(
+      [...demo.querySelectorAll<HTMLElement>("[data-caption]")].map((el) => [el.dataset.caption!, el]),
+    );
+    if (tabs.length === 0) return;
 
-    // The durations are the tokens of tokens.css, so the demo follows them.
+    let activeIndex = 0;
+    let timer = 0;
+    let stopped = false;
+    let paused = false;
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+
     const style = getComputedStyle(demo);
-    // The build can write 180ms as .18s, so the unit is read.
     const ms = (token: string) => {
       const value = style.getPropertyValue(token).trim();
       return parseFloat(value) * (value.endsWith("ms") ? 1 : 1000);
     };
-    const dur = { instant: ms("--dur-instant"), fast: ms("--dur-fast"), base: ms("--dur-base"), slow: ms("--dur-slow") };
-    const ease = { out: style.getPropertyValue("--ease-out").trim(), inOut: style.getPropertyValue("--ease-in-out").trim() };
-    const sleep = (time: number) => new Promise((resolve) => setTimeout(resolve, time));
+    const stepDelay = Math.max(ms("--dur-hero") * 3.2, 3200);
 
-    let value = 0;
-    let displayed = 0;
-    let raf = 0;
-    let running = false;
-    const show = (mb: number) => {
-      displayed = mb;
-      counter.textContent = number.format(mb);
-    };
-
-    // Tweens the counter to a value. It changes text and never the layout, because the number has a
-    // fixed width.
-    function climb(to: number, time: number) {
-      cancelAnimationFrame(raf);
-      const from = displayed;
-      value = to;
-      const start = performance.now();
-      const step = (now: number) => {
-        const k = Math.min(1, (now - start) / time);
-        show(from + (to - from) * (1 - Math.pow(1 - k, 3)));
-        if (k < 1) raf = requestAnimationFrame(step);
-      };
-      raf = requestAnimationFrame(step);
-    }
-
-    const centre = (el: HTMLElement) => {
-      const box = el.getBoundingClientRect();
-      const base = screen.getBoundingClientRect();
-      return { x: box.left - base.left + box.width / 2, y: box.top - base.top + box.height / 2 };
-    };
-
-    // Places the red dot with its centre on a point. A scale of 1 is the full dot, and the scale of the
-    // counter's dot makes it the same size.
-    function place(point: { x: number; y: number }, scale: number) {
-      const half = eater.offsetWidth / 2;
-      eater.style.transform = `translate(${point.x - half}px, ${point.y - half}px) scale(${scale})`;
-    }
-
-    function reset() {
-      cancelAnimationFrame(raf);
-      tiles.forEach((tile) => {
-        tile.getAnimations().forEach((animation) => animation.cancel());
-        tile.classList.remove("is-marked", "is-eaten");
-      });
-      legend.forEach((item) => {
-        item.classList.remove("is-lit");
-        item.querySelector(".legend-count")!.textContent = "0";
-      });
-      beam.style.opacity = "0";
-      eater.style.opacity = "0";
-      home.style.opacity = "1";
-      value = 0;
-      show(0);
-    }
-
-    async function play() {
-      if (running) return;
-      running = true;
-      replay.disabled = true;
-      reset();
-      demo.classList.remove("is-trashed");
-      demo.dataset.state = "playing";
-      grid.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur.base, easing: ease.out });
-      await Promise.all([sleep(dur.slow), imagesReady()]);
-
-      // The reader taps Scan now.
-      pill.classList.add("is-pressed");
-      await sleep(dur.fast);
-      pill.classList.remove("is-pressed");
-
-      // The scan runs down the grid, a row at a time. A flagged tile in the row is marked as the beam
-      // reaches it, and the row of its category in the legend lights up.
-      const rows = new Map<number, HTMLElement[]>();
-      const shown = ghost.offsetHeight;
-      tiles.forEach((tile) => {
-        if (tile.offsetTop + tile.offsetHeight > shown + 1) return;
-        const top = Math.round(tile.offsetTop);
-        rows.set(top, [...(rows.get(top) ?? []), tile]);
-      });
-      const first = [...rows.values()][0][0];
-      beam.style.height = `${first.offsetHeight}px`;
-      beam.style.transition = "none";
-      beam.style.transform = `translateY(${-first.offsetHeight}px)`;
-      void beam.offsetWidth;
-      beam.style.transition = "";
-      beam.style.opacity = "1";
-      for (const [top, row] of rows) {
-        beam.style.transform = `translateY(${top}px)`;
-        await sleep(dur.base / 2);
-        for (const tile of row) {
-          if (!("flagged" in tile.dataset)) continue;
-          tile.classList.add("is-marked");
-          const item = legend.get(tile.dataset.category!)!;
-          item.classList.add("is-lit");
-          const count = item.querySelector(".legend-count")!;
-          count.textContent = String(Number(count.textContent) + 1);
-        }
-        await sleep(dur.base / 2);
-      }
-      beam.style.transform = `translateY(${shown}px)`;
-      beam.style.opacity = "0";
-      await sleep(dur.base);
-
-      // The red dot leaves the counter and eats the marked tiles, one after the other.
-      const full = eater.offsetWidth;
-      const small = home.offsetWidth / full;
-      eater.style.transition = "none";
-      place(centre(home), small);
-      void eater.offsetWidth;
-      eater.style.transition = "";
-      eater.style.opacity = "1";
-      home.style.opacity = "0";
-      let hop = dur.base;
-      for (const tile of tiles.filter((tile) => "flagged" in tile.dataset)) {
-        eater.style.transitionDuration = `${hop}ms`;
-        place(centre(tile), 1);
-        await sleep(hop);
-        hop = dur.fast;
-        tile.classList.add("is-eaten");
-        eater.firstElementChild!.animate([{ transform: "scale(1)" }, { transform: "scale(1.3)" }, { transform: "scale(1)" }], {
-          duration: dur.fast,
-          easing: ease.out,
-        });
-        climb(value + Number(tile.dataset.mb ?? 0), dur.base);
-        await sleep(dur.fast * 0.6);
-      }
-      await sleep(dur.fast * 0.6);
-
-      // It goes back to the counter and becomes its dot again.
-      eater.style.transitionDuration = `${dur.base}ms`;
-      place(centre(home), small);
-      await sleep(dur.base);
-      eater.style.opacity = "0";
-      home.style.opacity = "1";
-      eater.style.transitionDuration = "";
-      cancelAnimationFrame(raf);
-      show(total);
-
-      // The grid closes the gaps. The kept tiles are measured with the flagged ones hidden for a
-      // moment, and then they slide there with transform and stay there. The layout does not change.
-      const kept = tiles.filter((tile) => !("flagged" in tile.dataset));
-      const gone = tiles.filter((tile) => "flagged" in tile.dataset);
-      const before = kept.map((tile) => tile.getBoundingClientRect());
-      gone.forEach((tile) => (tile.style.display = "none"));
-      const after = kept.map((tile) => tile.getBoundingClientRect());
-      gone.forEach((tile) => (tile.style.display = ""));
-      demo.classList.add("is-trashed");
-      kept.forEach((tile, i) =>
-        tile.animate(
-          [{ transform: "none" }, { transform: `translate(${after[i].left - before[i].left}px, ${after[i].top - before[i].top}px)` }],
-          { duration: dur.slow, easing: ease.out, fill: "forwards" },
-        ),
-      );
-      await sleep(dur.slow);
-      demo.dataset.state = "done";
-
-      running = false;
-      replay.disabled = false;
-    }
-
-    // The images are lazy, so the demo waits for them, and for no longer than a second and a half.
-    function imagesReady() {
-      const loaded = [...grid.querySelectorAll("img")].map((img) => {
+    function warmImages() {
+      demo.querySelectorAll<HTMLImageElement>("img[loading='lazy']").forEach((img) => {
         img.loading = "eager";
-        return img.complete ? Promise.resolve() : img.decode().catch(() => {});
       });
-      return Promise.race([Promise.all(loaded), sleep(1500)]);
     }
 
-    // The start state: a scan that has not run. The counter shows 0 until the dot has eaten something.
-    demo.dataset.state = "idle";
-    show(0);
-    replay.hidden = false;
-    replay.addEventListener("click", play);
+    function activate(index: number, focusTab = false) {
+      activeIndex = (index + tabs.length) % tabs.length;
+      const targetId = tabs[activeIndex].dataset.tab!;
 
-    // The first run starts when the phone is in view, so that a reader on a small screen, where it sits
-    // under the text, does not miss it.
-    if ("IntersectionObserver" in window) {
-      const observer = new IntersectionObserver(
-        (entries) => {
-          if (!entries.some((entry) => entry.isIntersecting)) return;
-          observer.disconnect();
-          play();
-        },
-        { threshold: 0.6 },
-      );
-      observer.observe(screen);
-    } else {
-      play();
+      tabs.forEach((tab, i) => {
+        const selected = i === activeIndex;
+        tab.setAttribute("aria-selected", String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+        if (selected && focusTab) tab.focus();
+      });
+
+      panels.forEach((panel, id) => {
+        panel.classList.toggle("is-active", id === targetId);
+      });
+
+      captions.forEach((caption, id) => {
+        caption.classList.toggle("is-active", id === targetId);
+      });
+    }
+
+    function clearTimer() {
+      if (timer) {
+        window.clearTimeout(timer);
+        timer = 0;
+      }
+    }
+
+    function stopAuto() {
+      stopped = true;
+      clearTimer();
+    }
+
+    function scheduleNext(remaining: number) {
+      clearTimer();
+      if (stopped || paused || remaining <= 0 || reducedMotion.matches) return;
+      timer = window.setTimeout(() => {
+        if (stopped || paused || reducedMotion.matches) return;
+        activate(activeIndex + 1);
+        scheduleNext(remaining - 1);
+      }, stepDelay);
+    }
+
+    tabs.forEach((tab, i) => {
+      tab.addEventListener("click", () => {
+        warmImages();
+        stopAuto();
+        activate(i);
+      });
+
+      tab.addEventListener("keydown", (event) => {
+        let next = -1;
+        if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+          next = (i + 1) % tabs.length;
+        } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+          next = (i - 1 + tabs.length) % tabs.length;
+        } else if (event.key === "Home") {
+          next = 0;
+        } else if (event.key === "End") {
+          next = tabs.length - 1;
+        }
+        if (next >= 0) {
+          event.preventDefault();
+          warmImages();
+          stopAuto();
+          activate(next, true);
+        }
+      });
+    });
+
+    demo.addEventListener("pointerenter", () => {
+      paused = true;
+      clearTimer();
+    });
+    demo.addEventListener("pointerleave", () => {
+      paused = false;
+    });
+    demo.addEventListener("focusin", () => {
+      paused = true;
+      clearTimer();
+    });
+    demo.addEventListener("focusout", (event) => {
+      if (!demo.contains(event.relatedTarget as Node | null)) {
+        paused = false;
+      }
+    });
+
+    // Run a single auto-advance pass through the screens when the phone scrolls into view,
+    // unless reduced motion is set or the user takes over.
+    if (!reducedMotion.matches) {
+      const startCycle = () => {
+        warmImages();
+        scheduleNext(tabs.length - 1);
+      };
+      if ("IntersectionObserver" in window) {
+        const observer = new IntersectionObserver(
+          (entries) => {
+            if (!entries.some((entry) => entry.isIntersecting)) return;
+            observer.disconnect();
+            startCycle();
+          },
+          { threshold: 0.6 },
+        );
+        observer.observe(demo);
+      } else {
+        startCycle();
+      }
     }
   }
 </script>
