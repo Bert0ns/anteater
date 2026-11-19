@@ -4,11 +4,15 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
+import androidx.core.graphics.withSave
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.RandomAccessFile
@@ -16,14 +20,187 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Pictures drawn in code for the UI gallery: scenes, blurred scenes, screenshots, documents and stickers.
- * Nothing here comes from a photo or a file on a device.
+ * Pictures for the UI gallery and README screenshots: sample photos from `site/src/assets/samples` when
+ * `anteater.samples.dir` is set (`-PreadmeScreenshots`), or fast procedural drawings otherwise (`-PuiGallery`).
  */
 object GalleryPictures {
+    private val CAMERA_SAMPLES = listOf(
+        "pet-cat-window.webp",
+        "scene-fountain-pigeons.webp",
+        "food-pasta-lunch.webp",
+        "street-cobblestone-alley.webp",
+        "landscape-coast-hills.webp",
+        "food-espresso-pastry.webp",
+        "street-crosswalk-rain.webp",
+        "objects-books-plant.webp",
+        "landscape-sunset-park.webp",
+        "objects-desk-flatlay.webp",
+        "compression-foliage-detail.png",
+    )
+    private val COMPRESS_SAMPLES = listOf(
+        "compression-foliage-detail.png",
+        "objects-desk-flatlay.webp",
+        "pet-cat-window.webp",
+        "food-pasta-lunch.webp",
+        "landscape-coast-hills.webp",
+        "street-cobblestone-alley.webp",
+        "food-espresso-pastry.webp",
+        "scene-fountain-pigeons.webp",
+        "landscape-sunset-park.webp",
+        "street-crosswalk-rain.webp",
+        "objects-books-plant.webp",
+    )
+    private val DOCUMENT_SAMPLES = listOf(
+        "doc-receipt-cafe.webp",
+        "doc-whiteboard-diagram.webp",
+        "doc-handwritten-notes.webp",
+    )
+    private val FORWARDED_SAMPLES = listOf(
+        "forwarded-meme-cat.webp",
+        "forwarded-greeting-flowers.webp",
+    )
+    private const val STICKER_SAMPLE = "sticker-cartoon.webp"
+
+    private val sampleCache = mutableMapOf<String, Bitmap>()
+
+    private fun samplesDir(): File? = System.getProperty("anteater.samples.dir")
+        ?.takeIf { it.isNotBlank() }
+        ?.let(::File)
+        ?.takeIf { it.isDirectory }
+
+    private fun sample(dir: File, name: String): Bitmap = sampleCache.getOrPut(name) {
+        val file = File(dir, name)
+        checkNotNull(BitmapFactory.decodeFile(file.path)) { "cannot decode sample ${file.path}" }
+    }
+
     private fun hsv(h: Float, s: Float, v: Float) = Color.HSVToColor(floatArrayOf(((h % 360f) + 360f) % 360f, s, v))
 
-    /** A landscape or a still life: sky gradient, a sun, hills and a few shapes. [shift] moves the shapes, for near duplicates. */
+    /** A camera scene or still life. [shift] pans and zooms the crop so near-duplicate copies look like distinct takes. */
     fun scene(seed: Int, width: Int = 480, height: Int = 360, shift: Float = 0f, brightness: Float = 1f): Bitmap {
+        val dir = samplesDir() ?: return proceduralScene(seed, width, height, shift, brightness)
+        return sampleScene(dir, seed, width, height, shift, brightness)
+    }
+
+    private fun sampleScene(dir: File, seed: Int, width: Int, height: Int, shift: Float, brightness: Float): Bitmap {
+        if (seed in 5_000..5_099 && shift == 0f && brightness == 1f) {
+            return trashSample(dir, seed - 5_000, seed, width, height)
+        }
+        val (name, pass, fullFrame) = when (seed) {
+            in 11..99 -> {
+                val index = seed - 11
+                Triple(COMPRESS_SAMPLES[index.mod(COMPRESS_SAMPLES.size)], index / COMPRESS_SAMPLES.size, seed == 11)
+            }
+            in 2_000..2_999 -> {
+                val index = seed - 2_000
+                Triple(CAMERA_SAMPLES[(index + 4).mod(CAMERA_SAMPLES.size)], index / CAMERA_SAMPLES.size, false)
+            }
+            in 7_000..7_099 -> {
+                val index = seed - 7_000
+                Triple(CAMERA_SAMPLES[(index + 4).mod(CAMERA_SAMPLES.size)], index / CAMERA_SAMPLES.size, true)
+            }
+            in 7_100..7_499 -> {
+                val index = seed - 7_100
+                Triple(CAMERA_SAMPLES[(index + 8).mod(CAMERA_SAMPLES.size)], index / CAMERA_SAMPLES.size, false)
+            }
+            else -> {
+                val index = (seed % 1_000).let { if (it < 0) it + 1_000 else it }
+                Triple(CAMERA_SAMPLES[index.mod(CAMERA_SAMPLES.size)], index / CAMERA_SAMPLES.size, false)
+            }
+        }
+        val targetWidth = if (seed in 7_000..7_099) maxOf(width, 960) else width
+        val targetHeight = if (seed in 7_000..7_099) maxOf(height, 720) else height
+        return cropSample(
+            source = sample(dir, name),
+            width = targetWidth,
+            height = targetHeight,
+            seed = seed,
+            shift = shift,
+            brightness = brightness,
+            fullFrame = fullFrame,
+            flip = pass % 2 == 1,
+        )
+    }
+
+    private fun trashSample(dir: File, index: Int, seed: Int, width: Int, height: Int): Bitmap = when (index.mod(12)) {
+        0 -> cropSample(sample(dir, "doc-receipt-cafe.webp"), width, height, seed, fullFrame = true)
+        1 -> cropSample(sample(dir, "forwarded-meme-cat.webp"), width, height, seed, fullFrame = true)
+        2 -> blurred(cropSample(sample(dir, "pet-cat-window.webp"), width, height, seed))
+        3 -> cropSample(sample(dir, "doc-whiteboard-diagram.webp"), width, height, seed, fullFrame = true)
+        4 -> exposure(4_006, dark = true)
+        5 -> cropSample(sample(dir, "forwarded-greeting-flowers.webp"), width, height, seed, fullFrame = true)
+        6 -> sticker(seed, size = minOf(width, height))
+        7 -> cropSample(sample(dir, "doc-handwritten-notes.webp"), width, height, seed, fullFrame = true)
+        8 -> cropSample(sample(dir, "food-pasta-lunch.webp"), width, height, seed)
+        9 -> exposure(4_008, dark = false)
+        10 -> cropSample(sample(dir, "objects-desk-flatlay.webp"), width, height, seed)
+        else -> cropSample(sample(dir, "street-cobblestone-alley.webp"), width, height, seed)
+    }
+
+    private fun cropSample(
+        source: Bitmap,
+        width: Int,
+        height: Int,
+        seed: Int,
+        shift: Float = 0f,
+        brightness: Float = 1f,
+        fullFrame: Boolean = false,
+        flip: Boolean = false,
+    ): Bitmap {
+        val srcW = source.width.toFloat()
+        val srcH = source.height.toFloat()
+        val targetAspect = width.toFloat() / height.toFloat()
+        val srcAspect = srcW / srcH
+        val baseW = if (srcAspect > targetAspect) srcH * targetAspect else srcW
+        val baseH = if (srcAspect > targetAspect) srcH else srcW / targetAspect
+
+        val random = Random(seed)
+        val baseZoom = 0.85f + random.nextFloat() * 0.07f
+        val basePanX = 0.25f + random.nextFloat() * 0.50f
+        val basePanY = 0.25f + random.nextFloat() * 0.50f
+
+        val (zoom, panX, panY) = when {
+            fullFrame -> Triple(1f, 0.5f, 0.5f)
+            shift <= 0f -> Triple(baseZoom, basePanX, basePanY)
+            shift < 9f -> Triple(
+                (baseZoom - 0.09f).coerceAtLeast(0.72f),
+                (basePanX + 0.30f).coerceIn(0f, 1f),
+                (basePanY - 0.24f).coerceIn(0f, 1f),
+            )
+            else -> Triple(
+                (baseZoom + 0.08f).coerceAtMost(0.98f),
+                (basePanX - 0.30f).coerceIn(0f, 1f),
+                (basePanY + 0.26f).coerceIn(0f, 1f),
+            )
+        }
+
+        val cropW = baseW * zoom
+        val cropH = baseH * zoom
+        val left = ((srcW - cropW) * panX).toInt().coerceIn(0, (source.width - 1).coerceAtLeast(0))
+        val top = ((srcH - cropH) * panY).toInt().coerceIn(0, (source.height - 1).coerceAtLeast(0))
+        val right = (left + cropW.toInt()).coerceIn(left + 1, source.width)
+        val bottom = (top + cropH.toInt()).coerceIn(top + 1, source.height)
+
+        val effectiveBrightness = when {
+            shift <= 0f -> brightness
+            shift < 9f -> brightness * 0.91f
+            else -> brightness * 1.08f
+        }
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        if (effectiveBrightness != 1f) {
+            paint.colorFilter = ColorMatrixColorFilter(
+                ColorMatrix().apply { setScale(effectiveBrightness, effectiveBrightness, effectiveBrightness, 1f) },
+            )
+        }
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.withSave {
+            if (flip) scale(-1f, 1f, width / 2f, height / 2f)
+            drawBitmap(source, Rect(left, top, right, bottom), Rect(0, 0, width, height), paint)
+        }
+        return bitmap
+    }
+
+    private fun proceduralScene(seed: Int, width: Int, height: Int, shift: Float, brightness: Float): Bitmap {
         val random = Random(seed)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
@@ -62,10 +239,34 @@ object GalleryPictures {
         return bitmap
     }
 
-    /** A soft copy: shrunk by [factor] and stretched back with filtering, like a photo out of focus. */
+    /** A soft copy: shrunk and stretched back with filtering, like a photo out of focus. */
     fun blurred(source: Bitmap, factor: Int = 14): Bitmap {
+        if (samplesDir() != null && factor == 14) {
+            val smallW = 84
+            val smallH = (smallW * source.height / source.width.coerceAtLeast(1)).coerceAtLeast(2)
+            val midW = (smallW * 2).coerceAtMost(source.width)
+            val midH = (smallH * 2).coerceAtMost(source.height)
+            val downMid = Bitmap.createScaledBitmap(source, midW, midH, true)
+            val small = Bitmap.createScaledBitmap(downMid, smallW, smallH, true)
+            val upMid = Bitmap.createScaledBitmap(small, midW, midH, true)
+            return Bitmap.createScaledBitmap(upMid, source.width, source.height, true)
+        }
         val small = Bitmap.createScaledBitmap(source, (source.width / factor).coerceAtLeast(2), (source.height / factor).coerceAtLeast(2), true)
         return Bitmap.createScaledBitmap(small, source.width, source.height, true)
+    }
+
+    /** A document photo: receipt, whiteboard or handwritten notes when sample photos are available. */
+    fun document(seed: Int, width: Int = 480, height: Int = 360): Bitmap {
+        val dir = samplesDir() ?: return scene(seed, width, height, brightness = 0.95f)
+        val name = DOCUMENT_SAMPLES[seed.mod(DOCUMENT_SAMPLES.size)]
+        return cropSample(sample(dir, name), width, height, seed, fullFrame = true)
+    }
+
+    /** A forwarded messaging image: greeting or meme when sample photos are available. */
+    fun forwarded(seed: Int, width: Int = 480, height: Int = 360): Bitmap {
+        val dir = samplesDir() ?: return scene(seed, width, height)
+        val name = FORWARDED_SAMPLES[seed.mod(FORWARDED_SAMPLES.size)]
+        return cropSample(sample(dir, name), width, height, seed, fullFrame = true)
     }
 
     /** A phone screenshot: a status bar, a title bar and rows of an imaginary list. */
@@ -101,8 +302,20 @@ object GalleryPictures {
         return bitmap
     }
 
-    /** A flat-colored round face on a plain background: what a messaging sticker looks like. */
+    /** A messaging sticker: the cartoon cat sample on a soft backdrop when sample photos are available, or a drawn face. */
     fun sticker(seed: Int, size: Int = 256): Bitmap {
+        val dir = samplesDir()
+        if (dir != null) {
+            val source = sample(dir, STICKER_SAMPLE)
+            val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            val hue = (seed * 67f) % 360f
+            canvas.drawColor(hsv(hue + 200f, 0.24f, 0.24f))
+            val pad = size * 0.06f
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+            canvas.drawBitmap(source, null, RectF(pad, pad, size - pad, size - pad), paint)
+            return bitmap
+        }
         val random = Random(seed)
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
@@ -120,11 +333,12 @@ object GalleryPictures {
         return bitmap
     }
 
-    /** A dark or washed out frame: a scene with a flat, almost uniform tone. */
+    /** A dark or washed out frame: an underexposed or overexposed camera scene. */
     fun exposure(seed: Int, dark: Boolean): Bitmap {
-        val bitmap = scene(seed, brightness = if (dark) 0.22f else 1f)
+        val hasSamples = samplesDir() != null
+        val bitmap = scene(seed, brightness = if (dark) (if (hasSamples) 0.26f else 0.22f) else (if (hasSamples) 1.35f else 1f))
         if (!dark) {
-            Canvas(bitmap).drawColor(Color.argb(170, 255, 255, 255))
+            Canvas(bitmap).drawColor(Color.argb(if (hasSamples) 135 else 170, 255, 255, 255))
         }
         return bitmap
     }

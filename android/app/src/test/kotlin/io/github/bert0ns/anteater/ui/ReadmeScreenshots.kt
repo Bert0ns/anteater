@@ -21,7 +21,7 @@ import org.junit.rules.TemporaryFolder
 import org.junit.rules.TestRule
 import org.junit.runner.RunWith
 import org.junit.runners.model.Statement
-import org.robolectric.RobolectricTestRunner
+import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
@@ -29,14 +29,14 @@ import java.io.File
 import java.time.Instant
 
 /**
- * Renders the screens for the README and the website (docs/screenshots) on the JVM, driving the real
- * app over a drawn library (android/README.md). Every image is drawn in code, so no photo from a device
- * is involved. It runs only when `-PreadmeScreenshots` is set.
+ * Renders the screens for the README (`docs/screenshots`) and the website (`site/screenshots/en` and
+ * `site/screenshots/it`) on the JVM in dark mode at xhdpi (`822x1782`), driving the real app over a
+ * sample-photo library (`android/README.md`). It runs only when `-PreadmeScreenshots` is set.
  */
-@RunWith(RobolectricTestRunner::class)
+@RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [36], qualifiers = "en-w411dp-h891dp-notnight-mdpi", application = AnteaterApp::class)
-class ReadmeScreenshots {
+@Config(sdk = [36], qualifiers = "en-w411dp-h891dp-night-xhdpi", application = AnteaterApp::class)
+class ReadmeScreenshots(private val language: String) {
     private var written = false
 
     // WorkManager's background threads can race test teardown against Room after the screenshot is written.
@@ -65,11 +65,12 @@ class ReadmeScreenshots {
     val folder = TemporaryFolder()
 
     private val outputDirs: List<File> by lazy {
-        val dirsProperty = System.getProperty("anteater.screenshots.dirs")
+        val property = if (language == "it") "anteater.screenshots.it.dirs" else "anteater.screenshots.dirs"
+        val dirsProperty = System.getProperty(property)
         if (!dirsProperty.isNullOrBlank()) {
             dirsProperty.split(",").map { File(it.trim()) }
         } else {
-            listOfNotNull(System.getProperty("anteater.screenshots.dir")?.let(::File))
+            listOfNotNull(System.getProperty("anteater.screenshots.dir")?.let { File(it, language) })
         }
     }
 
@@ -111,7 +112,7 @@ class ReadmeScreenshots {
 
     private fun render(sceneId: String, fileName: String) {
         assumeTrue("set -PreadmeScreenshots to write the screenshots", outputDirs.isNotEmpty())
-        RuntimeEnvironment.setQualifiers("en-w411dp-h891dp-notnight-mdpi")
+        RuntimeEnvironment.setQualifiers("$language-w411dp-h891dp-night-xhdpi")
         val app = ApplicationProvider.getApplicationContext<AnteaterApp>()
         WorkManagerTestInitHelper.initializeTestWorkManager(
             app,
@@ -140,5 +141,11 @@ class ReadmeScreenshots {
         gallery.launch { Text("Anteater") }
         gallery.capture()
         gallery.close()
+    }
+
+    companion object {
+        @JvmStatic
+        @ParameterizedRobolectricTestRunner.Parameters(name = "{0}")
+        fun languages(): List<Array<Any>> = listOf(arrayOf("en"), arrayOf("it"))
     }
 }

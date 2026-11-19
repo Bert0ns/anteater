@@ -340,7 +340,7 @@ val scenes: List<Scene> = listOf(
         openCategory(model, R.string.category_blurry)
         val itemPath = model.state.value.page.flatMap { it.images }[1].image.path
         val targetFile = File(itemPath)
-        val large = GalleryPictures.scene(1_001, width = 1080, height = 810)
+        val large = GalleryPictures.blurred(GalleryPictures.scene(1_001, width = 1080, height = 810))
         GalleryPictures.write(targetFile, large, targetFile.length())
         described(str(R.string.selected_for_trash))[1].performTouchInput { longClick() }
         awaitTag("fullSize")
