@@ -129,7 +129,8 @@ aligned with `text-wrap: pretty`.
 | `--dur-slow` | 560 ms | Scroll reveals and a section entering |
 | `--dur-hero` | 1000 ms | The hero demo and other one-time sequences |
 
-Nothing runs longer than `--dur-hero`, except an animation tied to the scroll position.
+Nothing runs longer than `--dur-hero` per step, except an animation tied to the scroll position. A
+timed sequence such as the hero demo can chain short steps.
 
 ### Easing
 
@@ -191,7 +192,7 @@ if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
 | State changes (hover, focus, press, the menu icon) | Transition of `--dur-fast`, or `--dur-base` for the menu icon | The change is instant. Colours still change. |
 | Reveal on scroll or on entry | Fade and a short rise, `--dur-slow` | No animation. The element is visible. |
 | Scroll-driven motion (parallax, pinned scenes) | Follows the scroll | Not used. The scene shows its end state. |
-| The hero demo and other timed sequences | Plays once, up to `--dur-hero` | Not started. The demo shows its end state. |
+| The hero demo and other timed sequences | Plays once, up to `--dur-hero` per step | Not started. The demo shows its end state. |
 | Direct manipulation (dragging a slider, scrubbing) | Follows the pointer | The same. The user drives it, so it stays. |
 | Loops (pulsing, auto-cycling, marquees) | Not allowed. | Not allowed. A demo that needs a repeat gets a play button and a static frame to start on. |
 | View Transitions between pages | Cross-fade | A normal page load |
@@ -201,6 +202,34 @@ if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
 `tokens.css` also has a global safety net for reduced motion: every duration becomes 0.01 ms, loops
 stop after one run, and smooth scrolling is off. It does not replace the rules above. A demo still
 has to decide what its static end state is.
+
+## The hero demo
+
+`HeroDemo.astro` is a phone in HTML and CSS with a grid of the sample images. A scan runs down it, the
+photos it finds are marked by category, the logo's red dot eats them, and a counter climbs. Everything in
+it is data in [`src/lib/hero-demo.ts`](src/lib/hero-demo.ts): the tiles, their category, how a source
+image becomes its variant, and the size the counter adds for each. Adding images is a change to that list.
+
+- The variants are the same source image with a CSS filter, a crop or a frame (`blur`, `dark`, `bright`,
+  `crop`, `screenshot`). There are no extra image files. The filters are fixed and never animated.
+- Three tiles per row, and `rows` of them are visible. Flagged tiles go in the visible rows. Tiles after
+  them are photos to keep. They sit below the fold and slide up when the dot has eaten the flagged ones.
+- The categories and their names are the app's, in `hero.demo.categories`. The legend, the counts and the
+  text alternative are built from the data.
+- The phone is drawn in `cqw`, a hundredth of its width, so it is one drawing at every size. Its text
+  stays at 12 px or more.
+- The numbers are made up and the photos are AI generated. The note under the demo says so.
+
+Motion. Each step is one of the duration tokens, up to `--dur-slow`, and the whole sequence is about
+six seconds, so the demo is a chain of short animations and not one long one. The script reads the
+tokens from the page. It only changes classes and moves things with `transform` and `opacity`. The flagged
+tiles stay in the layout, invisible once eaten, and the kept tiles slide over them, so nothing on the page
+shifts. It starts when the phone is 60% in view, plays once, and the Replay button runs it again.
+
+The end state is the normal CSS: the flagged tiles are hidden, the legend is lit, and the snackbar is
+there. The start state lives in one `@media (scripting: enabled) and (prefers-reduced-motion:
+no-preference)` block. Without scripting or with reduced motion the demo is never started, the Replay
+button stays hidden, and the page shows the end state.
 
 ## Checks
 

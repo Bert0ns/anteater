@@ -2,10 +2,10 @@
 import Base from "../layouts/Base.astro";
 import CategoryCards from "./CategoryCards.astro";
 import FeatureList from "./FeatureList.astro";
+import Hero from "./Hero.astro";
 import Install from "./Install.astro";
 import Privacy from "./Privacy.astro";
 import Safety from "./Safety.astro";
-import Screenshots from "./Screenshots.astro";
 import StorageMap from "./StorageMap.astro";
 import { pagePath, strings, type Lang } from "../i18n";
 
@@ -23,19 +23,7 @@ const features = pagePath(lang, "features");
 
 <Base lang={lang}>
   <main id="main">
-  <div class="hero container">
-    <h1>{t.hero.title}</h1>
-    <p class="hero-lead">{t.hero.lead}</p>
-
-    <div class="cta-row">
-      <a href={`${repo}/releases/latest`} class="btn btn-primary"><span class="dot" aria-hidden="true"></span>{t.hero.download}</a>
-      <a href={repo} class="btn btn-secondary" target="_blank" rel="noopener noreferrer">{t.hero.viewSource}</a>
-    </div>
-    <p class="meta-text">{t.hero.requirements}</p>
-    <p class="meta-text">{t.hero.caveat}</p>
-
-    <Screenshots lang={lang} />
-  </div>
+  <Hero lang={lang} />
 
   <div class="sections container">
     <Privacy lang={lang} />

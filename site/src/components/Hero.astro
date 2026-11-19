@@ -1,0 +1,57 @@
+---
+import HeroDemo from "./HeroDemo.astro";
+import { pagePath, strings, type Lang } from "../i18n";
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = strings[lang].hero;
+const repo = "https://github.com/Bert0ns/anteater";
+---
+
+<div class="hero container">
+  <div class="hero-copy">
+    <h1>{t.title}</h1>
+    <p class="hero-lead">{t.lead}</p>
+
+    <div class="cta-row">
+      <a href={`${repo}/releases/latest`} class="btn btn-primary"><span class="dot" aria-hidden="true"></span>{t.download}</a>
+      <a href={repo} class="btn btn-secondary" target="_blank" rel="noopener noreferrer">{t.viewSource}</a>
+    </div>
+    <p class="meta-text">{t.requirements}</p>
+    <p class="meta-text">{t.faqBefore}<a class="text-link" href={pagePath(lang, "faq")}>{t.faqLink}</a></p>
+  </div>
+
+  <HeroDemo lang={lang} />
+</div>
+
+<style>
+  .hero {
+    display: grid;
+    gap: var(--space-7);
+    padding-block: var(--space-8) var(--space-7);
+  }
+
+  .hero-lead {
+    max-width: 38rem;
+    margin-top: var(--space-5);
+    font-size: var(--step-1);
+    line-height: 1.5;
+  }
+
+  /* From 900 px the text sits on the left and the demo on the right, and the title steps down a size
+     to fit in the column. */
+  @media (min-width: 56.25rem) {
+    .hero {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: var(--space-8);
+    }
+
+    h1 {
+      font-size: var(--step-4);
+    }
+  }
+</style>

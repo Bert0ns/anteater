@@ -507,22 +507,7 @@ code {
   }
 }
 
-/* Hero */
-.hero {
-  padding-block: var(--space-8) var(--space-7);
-}
-
-.hero h1 {
-  max-width: 16ch;
-}
-
-.hero-lead {
-  max-width: 38rem;
-  margin-top: var(--space-5);
-  font-size: var(--step-1);
-  line-height: 1.5;
-}
-
+/* The hero has its own styles, in Hero.astro. These two are shared with the install section. */
 .cta-row {
   display: flex;
   flex-wrap: wrap;

@@ -1,6 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import FeatureList from "./FeatureList.astro";
+import Screenshots from "./Screenshots.astro";
 import { homePath, pagePath, strings, type Lang } from "../i18n";
 
 interface Props {
@@ -29,6 +30,10 @@ const toc = [
           {toc.map((item) => <li><a href={`#${item.id}`}>{item.label}</a></li>)}
         </ul>
       </nav>
+    </div>
+
+    <div class="container">
+      <Screenshots lang={lang} />
     </div>
 
     <div class="sections container">
