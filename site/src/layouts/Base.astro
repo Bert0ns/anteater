@@ -5,6 +5,7 @@ import Footer from "../components/Footer.astro";
 import displayFont from "@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2?url";
 import textFont from "@fontsource-variable/instrument-sans/files/instrument-sans-latin-wght-normal.woff2?url";
 import { languages, otherLang, pagePath, strings, type Lang, type Page } from "../i18n";
+import { OG_HEIGHT, OG_WIDTH } from "../lib/og";
 
 interface Props {
   lang: Lang;
@@ -17,6 +18,7 @@ const meta = page === "home" ? t.meta : t[page].meta;
 const site = Astro.site!.origin;
 const canonical = site + pagePath(lang, page);
 const other = otherLang(lang);
+const ogImage = `${site}/og/${lang}.png`;
 ---
 
 <!doctype html>
@@ -26,17 +28,33 @@ const other = otherLang(lang);
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{meta.title}</title>
     <meta name="description" content={meta.description} />
+    <meta property="og:site_name" content="Anteater" />
     <meta property="og:title" content={meta.title} />
     <meta property="og:description" content={meta.ogDescription} />
     <meta property="og:type" content="website" />
     <meta property="og:url" content={canonical} />
     <meta property="og:locale" content={lang === "en" ? "en_US" : "it_IT"} />
     <meta property="og:locale:alternate" content={other === "en" ? "en_US" : "it_IT"} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content={String(OG_WIDTH)} />
+    <meta property="og:image:height" content={String(OG_HEIGHT)} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:alt" content={t.og.alt} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={meta.title} />
+    <meta name="twitter:description" content={meta.ogDescription} />
+    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content={t.og.alt} />
     <link rel="canonical" href={canonical} />
     {languages.map((l) => <link rel="alternate" hreflang={l} href={site + pagePath(l, page)} />)}
     <link rel="alternate" hreflang="x-default" href={site + pagePath("en", page)} />
+    <link rel="sitemap" href="/sitemap.xml" />
     <meta name="theme-color" content="#121619" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <link rel="preload" href={displayFont} as="font" type="font/woff2" crossorigin />
     <link rel="preload" href={textFont} as="font" type="font/woff2" crossorigin />
   </head>

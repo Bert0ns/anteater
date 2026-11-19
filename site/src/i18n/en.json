@@ -4,6 +4,12 @@
     "description": "Anteater finds blurry shots, duplicates, short clips and other clutter in the photos and videos on your Android phone. It works offline, and removed files wait in a trash you can restore from.",
     "ogDescription": "Finds clutter in your photos and videos. Everything runs on the phone, nothing is deleted without your confirmation, and removed files wait in a trash you can restore from."
   },
+  "og": {
+    "badge": "Android · Offline · GPL-3.0",
+    "headline": "Find the photos and videos you can delete",
+    "subtitle": "Blurry shots, duplicates, short clips, and JPEG compression. Nothing leaves the phone.",
+    "alt": "Anteater logo and summary: Find the photos and videos you can delete"
+  },
   "nav": {
     "photos": "Photos",
     "videos": "Videos",
