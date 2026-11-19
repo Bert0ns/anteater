@@ -205,31 +205,15 @@ has to decide what its static end state is.
 
 ## The hero demo
 
-`HeroDemo.astro` is a phone in HTML and CSS with a grid of the sample images. A scan runs down it, the
-photos it finds are marked by category, the logo's red dot eats them, and a counter climbs. Everything in
-it is data in [`src/lib/hero-demo.ts`](src/lib/hero-demo.ts): the tiles, their category, how a source
-image becomes its variant, and the size the counter adds for each. Adding images is a change to that list.
+`HeroDemo.astro` is a dark phone frame showing five real dark-theme screenshots of the Android app, with a pill tablist to switch between them. The screen list, dimensions and image loader live in [`src/lib/hero-demo.ts`](src/lib/hero-demo.ts), and the localized labels, captions and text alternatives live under `hero.demo` in `src/i18n/en.json` and `it.json`.
 
-- The variants are the same source image with a CSS filter, a crop or a frame (`blur`, `dark`, `bright`,
-  `crop`, `screenshot`). There are no extra image files. The filters are fixed and never animated.
-- Three tiles per row, and `rows` of them are visible. Flagged tiles go in the visible rows. Tiles after
-  them are photos to keep. They sit below the fold and slide up when the dot has eaten the flagged ones.
-- The categories and their names are the app's, in `hero.demo.categories`. The legend, the counts and the
-  text alternative are built from the data.
-- The phone is drawn in `cqw`, a hundredth of its width, so it is one drawing at every size. Its text
-  stays at 12 px or more.
-- The numbers are made up and the photos are AI generated. The note under the demo says so.
+- The screenshots come from `site/screenshots/en/*.png` on `/` and `site/screenshots/it/*.png` on `/it/` (`home`, `category`, `group`, `compress-summary` and `trash`), rendered at 822 × 1782 (`xhdpi`) and served as responsive WebP images (`widths={[320, 640]}`) through Astro `<Image>`.
+- The initial screen (`home.png`) loads eagerly with `fetchpriority="high"` for LCP, and the remaining four screens use `loading="lazy"` until the showcase enters view or the reader interacts with the tabs.
+- Every screenshot panel and every caption sits in a single CSS grid cell (`grid-area: 1 / 1`) with an explicit `822 / 1782` aspect ratio on the screen, so switching tabs never shifts the layout.
+- The tablist uses `role="tablist"`, `role="tab"`, `aria-selected`, `aria-controls` and `role="tabpanel"`, with click, tap and keyboard navigation (`ArrowLeft`, `ArrowRight`, `Home`, `End`).
+- The screenshots are rendered from the real app UI using AI-generated sample photos and made-up counts. The note under the showcase says so and links to `provenance.json`.
 
-Motion. Each step is one of the duration tokens, up to `--dur-slow`, and the whole sequence is about
-six seconds, so the demo is a chain of short animations and not one long one. The script reads the
-tokens from the page. It only changes classes and moves things with `transform` and `opacity`. The flagged
-tiles stay in the layout, invisible once eaten, and the kept tiles slide over them, so nothing on the page
-shifts. It starts when the phone is 60% in view, plays once, and the Replay button runs it again.
-
-The end state is the normal CSS: the flagged tiles are hidden, the legend is lit, and the snackbar is
-there. The start state lives in one `@media (scripting: enabled) and (prefers-reduced-motion:
-no-preference)` block. Without scripting or with reduced motion the demo is never started, the Replay
-button stays hidden, and the page shows the end state.
+Motion. Panels cross-fade over `--dur-base` and captions over `--dur-fast` with `--ease-out`, changing only `opacity` and `visibility`. When scripting is enabled and `prefers-reduced-motion: reduce` is not set, the showcase advances once through the five screens when it enters view, and pauses or stops as soon as the reader hovers, focuses or selects a tab. Under `prefers-reduced-motion: reduce`, auto-advance never runs and tab switches are instant. Without JavaScript (`@media (scripting: none)`), the tab pills are hidden and the phone shows the primary `home.png` screenshot with its caption.
 
 ## Checks
 
