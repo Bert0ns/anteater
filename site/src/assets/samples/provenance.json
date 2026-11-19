@@ -4,8 +4,8 @@
     {
       "file": "pet-cat-window.webp",
       "model": "gemini-3.1-flash-image",
-      "date": "2026-11-18",
-      "prompt": "Candid handheld smartphone camera photo taken on a modern Android main 24mm lens, vertical 3:4 framing. A domestic brown tabby cat sitting on a sunlit oak windowsill looking slightly sideways toward an out-of-focus backyard garden outside. Sharp focus on the cat's fur, eyes, and whiskers, natural window light, balanced exposure, authentic slightly imperfect framing, subtle natural sensor grain, no studio lighting, no brands or logos, no people."
+      "date": "2026-11-19",
+      "prompt": "Candid handheld smartphone camera photo taken on a modern Android main 24mm lens, vertical 3:4 framing. A domestic brown tabby cat sitting on a sunlit oak windowsill looking slightly sideways toward an out-of-focus green backyard garden outside. Clean, spotless clear window glass with no smudges, marks, or stickers. Sharp focus on the cat's fur, eyes, and whiskers, natural window light, balanced exposure, authentic slightly imperfect framing, subtle natural sensor grain, no studio lighting, no brands or logos, no people."
     },
     {
       "file": "food-pasta-lunch.webp",
@@ -50,16 +50,61 @@
       "prompt": "Casual smartphone camera photo taken on a modern Android main 24mm lens, vertical 3:4 framing. A small wooden shelf corner holding a neat stack of plain cloth-bound books with blank spines, a terracotta pot with a trailing green pothos plant, and a small speckled ceramic bowl. Soft indoor daylight, sharp focus, balanced exposure, authentic home snapshot look, no readable book titles, no logos."
     },
     {
+      "file": "objects-desk-flatlay.webp",
+      "model": "gemini-3.1-flash-image",
+      "date": "2026-11-19",
+      "prompt": "Casual top-down smartphone camera photo taken on a modern Android main 24mm lens, 4:3 framing. Everyday pocket items scattered naturally on a light oak tabletop: a plain kraft-cover spiral notebook, two unbranded pens, three completely blank smooth unmarked brass house keys on a plain steel ring, loosely coiled wired earphones, and matte dark sunglasses. Even indoor window light, sharp focus, balanced exposure, strictly no engravings, no stamped text, no logos, no brand names, no readable text anywhere.",
+      "edit_prompt": "Edit this photo slightly to fix the white wired earphones in the bottom right: remove the extra duplicate 3.5mm audio jack plug so the coiled cable has only ONE 3.5mm audio jack plug at one end and the two earbuds at the other end. Keep everything else in the scene identical: the light oak tabletop, the blank kraft spiral notebook, the two unbranded pens, the three completely blank unmarked brass keys, and the matte black sunglasses."
+    },
+    {
+      "file": "doc-receipt-cafe.webp",
+      "model": "gemini-3.1-flash-image",
+      "date": "2026-11-19",
+      "prompt": "Quick handheld top-down smartphone camera photo taken on a modern Android main 24mm lens, vertical 3:4 framing. A slightly crumpled white thermal paper cafe receipt lying flat on a clean empty warm oak cafe table, with only the wooden table surface visible around the receipt and no people or other objects in the background. The top edge of the receipt is folded back. Only the top item row shows crisp black dot-matrix thermal print reading \"ESPRESSO\" on the left and \"1.80\" on the right. Below it are five more rows where the right column shows crisp black prices \"2.40\", \"1.20\", \"5.40\", \"3.50\", \"2.80\", and the left column of those five rows is blank white paper with only light dotted leader lines \"........\" and zero words or letters. Strictly no other words anywhere, no header, no logo, no address, no total, sharp focus on paper texture."
+    },
+    {
       "file": "doc-whiteboard-diagram.webp",
       "model": "gemini-3.1-flash-image",
       "date": "2026-11-18",
       "prompt": "Slightly angled smartphone camera photo taken on a modern Android main 24mm lens, 4:3 framing. A wall-mounted white dry-erase board in a quiet room, covered with neat hand-drawn flowchart boxes connected by arrows, a small bar graph, and only the single digits \"1\", \"2\", \"3\" inside the boxes in blue and black dry-erase marker ink. Strictly no words, no letters, no text anywhere on the board. Natural overhead room light with a faint window reflection on one edge, sharp focus, no logos, no people."
     },
     {
+      "file": "doc-handwritten-notes.webp",
+      "model": "gemini-3.1-flash-image",
+      "date": "2026-11-19",
+      "prompt": "Casual handheld smartphone camera photo taken on a modern Android main 24mm lens, vertical 3:4 framing. An open lined paper notebook lying flat on a wooden desk with neat blue ballpoint pen study sketches across both pages: a hand-drawn triangle geometry diagram with angle arcs and single letters \"A\", \"B\", \"C\", a circle with radius \"r\", a small coordinate grid with axes \"x\" and \"y\", numeric equations like \"12 + 15 = 27\", and rows of abstract wavy ink loops and bullet dots representing unreadable shorthand with no actual letters or words, plus an unbranded blue click pen resting beside the center binding. Strictly no readable words, no sentences, no personal names, no dates, no logos, soft natural window light, sharp focus on the ink and paper grain."
+    },
+    {
+      "file": "forwarded-greeting-flowers.webp",
+      "model": "gemini-3.1-flash-image",
+      "date": "2026-11-19",
+      "prompt": "Square 1:1 cheerful forwarded chat greeting photo. Bright golden morning sunlight shining through yellow sunflowers in a glass jar next to a steaming unbranded ceramic coffee mug on a wooden porch rail, with warm sunlit bokeh and soft lens flare. Saturated cheerful colors typical of a saved messaging-app greeting image, sharp center focus, no text, no watermarks, no logos, no people."
+    },
+    {
       "file": "forwarded-meme-cat.webp",
       "model": "gemini-3.1-flash-image",
       "date": "2026-11-18",
       "prompt": "Square 1:1 internet reaction meme image made from a candid indoor smartphone photo. A startled fluffy gray cat sitting upright at a wooden kitchen table staring wide-eyed at a single tiny green pea in the middle of a large empty white dinner plate. Classic bold white sans-serif meme caption with thin black outline centered at the top reading only \"?!\" with no other words or letters. Simple, funny, everyday forwarded chat meme look, no watermarks, no brand logos, no people."
+    },
+    {
+      "file": "scene-fountain-pigeons.webp",
+      "model": "gemini-3.1-flash-image",
+      "date": "2026-11-19",
+      "prompt": "Handheld smartphone camera photo taken on a modern Android main 24mm lens, 4:3 framing. A weathered limestone town-square fountain spraying arcs of clear water into a stone basin in bright afternoon sunlight, with two gray pigeons mid-flutter near the wet rim and crisp frozen water droplets in the air. Softly blurred historic stone facades in the background, sharp focus on the fountain and birds, balanced exposure, no people, no readable signs or logos."
+    },
+    {
+      "file": "sticker-cartoon.webp",
+      "model": "gemini-3.1-flash-image",
+      "date": "2026-11-19",
+      "prompt": "Square 1:1 cartoon-style die-cut chat sticker illustration. A cheerful cartoon orange tabby cat standing upright giving a friendly thumbs-up gesture with one paw, clean bold dark outlines and bright flat cel-shaded colors, surrounded by a thick smooth white die-cut sticker border. Centered on a completely flat, uniform solid chroma-green (#00FF00) background with zero drop shadow, zero gradient, and zero texture so it can be cleanly keyed out. Strictly no text, no letters, no numbers, no logos."
+    },
+    {
+      "file": "compression-foliage-detail.png",
+      "model": "gemini-3.1-flash-image",
+      "date": "2026-11-19",
+      "role": "compression source",
+      "note": "Compression source for the #491 slider, saved as a lossless PNG at the full 1200x896 model output size with no resize or WebP re-encoding.",
+      "prompt": "High-detail daylight smartphone camera photo taken on a modern Android main camera at maximum resolution, 4:3 framing. A sun-dappled botanical garden corner featuring a rough weathered stone wall covered in dense dark-green ivy leaves, overlapping lacy green fern fronds, small white and purple wildflowers with fine stamens, and a woven natural wicker basket resting on mossy flagstones in the foreground, with a small patch of bright clear blue sky at the top edge. Extremely crisp micro-detail across leaves, bark, stone grain, and woven wicker, natural daylight, balanced exposure, no artificial sharpening or smoothing, no people, no logos or signs."
     }
   ]
 }
