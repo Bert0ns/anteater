@@ -9,7 +9,7 @@ interface Props {
 }
 
 const { id, images } = Astro.props;
-const [first, second = first] = images;
+const [first, second = first, third = second] = images;
 // Each picture is drawn once at this width. The tiles are never wider than a card.
 const size = { width: 560, quality: 70, alt: "", loading: "lazy", decoding: "async" } as const;
 const burst = [
@@ -106,21 +106,32 @@ const burst = [
 
   {
     id === "photos-documents" && (
-      <div class="doc">
-        <Image class="shot" src={first} {...size} />
-        <span class="scan m" style="--from: translateY(-100%); --to: translateY(0)"></span>
-        <span class="corner tl"></span>
-        <span class="corner tr"></span>
-        <span class="corner bl"></span>
-        <span class="corner br"></span>
-      </div>
+      <>
+        <div class="tile doc-side doc-left m" style="--from: rotate(-4deg); --to: translateX(-10%) rotate(-10deg)">
+          <Image src={second} {...size} />
+        </div>
+        <div class="tile doc-side doc-right m" style="--from: rotate(4deg); --to: translateX(10%) rotate(10deg)">
+          <Image src={third} {...size} />
+        </div>
+        <div class="doc">
+          <Image class="shot" src={first} {...size} />
+          <span class="scan m" style="--from: translateY(-100%); --to: translateY(0)"></span>
+          <span class="corner tl"></span>
+          <span class="corner tr"></span>
+          <span class="corner bl"></span>
+          <span class="corner br"></span>
+        </div>
+      </>
     )
   }
 
   {
     id === "photos-forwarded" && (
       <>
-        <div class="bubble m" style="--from: translateX(-6%); --to: none">
+        <div class="bubble back m" style="--from: translateX(-8%); --to: none">
+          <Image src={second} {...size} />
+        </div>
+        <div class="bubble front m" style="--from: translateX(-6%); --to: none; --delay: calc(var(--dur-instant) * 0.4)">
           <Image src={first} {...size} />
         </div>
         <span class="fwd m" style="--from: translateX(-120%) scale(0.6); --op-from: 0; --to: none">
@@ -305,12 +316,34 @@ const burst = [
     width: 40%;
   }
 
-  /* Documents: the picture inside the corners of a scan, with a line that has gone down it */
+  /* Documents: three documents fanned under the corners of a scan, with a line that has gone down it */
+  .doc-side {
+    top: 16%;
+    width: 32%;
+    height: 68%;
+    transform-origin: 50% 85%;
+  }
+
+  .doc-left {
+    left: 8%;
+  }
+
+  .doc-right {
+    right: 8%;
+  }
+
   .doc {
     position: absolute;
-    inset: 9% 13%;
+    left: 24%;
+    top: 13%;
+    z-index: 1;
+    width: 52%;
+    height: 74%;
     overflow: hidden;
     border-radius: var(--radius-s);
+    box-shadow:
+      0 0 0 1px var(--shade),
+      0 0.5rem 1rem var(--shade);
   }
 
   .scan {
@@ -351,22 +384,33 @@ const burst = [
     border-width: 0 2px 2px 0;
   }
 
-  /* Forwarded: a picture in a chat bubble, and the forward arrow beside it */
+  /* Forwarded: a meme and a greeting image in chat bubbles, and the forward arrow beside them */
   .bubble {
     position: absolute;
-    left: 14%;
-    top: 12%;
-    height: 76%;
     aspect-ratio: 1;
     overflow: hidden;
     border-radius: var(--radius-m) var(--radius-m) var(--radius-m) var(--radius-s);
     box-shadow: 0 0.5rem 1rem var(--shade);
   }
 
+  .bubble.back {
+    left: 11%;
+    top: 9%;
+    height: 54%;
+  }
+
+  .bubble.front {
+    left: 31%;
+    top: 31%;
+    z-index: 1;
+    height: 58%;
+  }
+
   .fwd {
     position: absolute;
-    left: 74%;
-    top: 40%;
+    left: 76%;
+    top: 44%;
+    z-index: 2;
     display: grid;
     place-items: center;
     width: 2.25rem;
@@ -377,16 +421,17 @@ const burst = [
     box-shadow: 0 0 0 1px var(--line-strong);
   }
 
-  /* Stickers: a cut-out with a white edge */
+  /* Stickers: a transparent die-cut sticker with its own white border */
   .sticker {
     position: absolute;
-    left: 29%;
-    top: 12%;
-    width: 42%;
-    height: 76%;
-    overflow: hidden;
-    border: 0.3rem solid var(--text);
-    border-radius: 46% 54% 50% 50% / 42% 44% 56% 58%;
-    box-shadow: 0 0.5rem 1rem var(--shade);
+    left: 14%;
+    top: 4%;
+    width: 72%;
+    height: 92%;
+    filter: drop-shadow(0 0.5rem 1rem var(--shade));
+  }
+
+  .sticker img {
+    object-fit: contain;
   }
 </style>

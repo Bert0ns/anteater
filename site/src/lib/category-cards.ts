@@ -1,12 +1,17 @@
 import type { ImageMetadata } from "astro";
+import booksPlant from "../assets/samples/objects-books-plant.webp";
 import catWindow from "../assets/samples/pet-cat-window.webp";
 import coastHills from "../assets/samples/landscape-coast-hills.webp";
 import cobbleAlley from "../assets/samples/street-cobblestone-alley.webp";
 import crosswalkRain from "../assets/samples/street-crosswalk-rain.webp";
 import espressoPastry from "../assets/samples/food-espresso-pastry.webp";
-import booksPlant from "../assets/samples/objects-books-plant.webp";
+import fountainPigeons from "../assets/samples/scene-fountain-pigeons.webp";
+import greetingFlowers from "../assets/samples/forwarded-greeting-flowers.webp";
+import handwrittenNotes from "../assets/samples/doc-handwritten-notes.webp";
 import memeCat from "../assets/samples/forwarded-meme-cat.webp";
 import pastaLunch from "../assets/samples/food-pasta-lunch.webp";
+import receiptCafe from "../assets/samples/doc-receipt-cafe.webp";
+import stickerCartoon from "../assets/samples/sticker-cartoon.webp";
 import sunsetPark from "../assets/samples/landscape-sunset-park.webp";
 import whiteboard from "../assets/samples/doc-whiteboard-diagram.webp";
 
@@ -38,25 +43,23 @@ export type CardId = (typeof photoIds)[number] | (typeof videoIds)[number];
 /**
  * The picture of each card, and the one place to swap it. A card takes the images it lists, in order.
  * Exposure takes two: the first is darkened and the second is brightened.
- * Comments mark the images that the plan on #486 still has to deliver. When one lands, change the
- * import above and the line here.
  */
 export const cardImages: Record<CardId, ImageMetadata[]> = {
   "photos-exact": [espressoPastry],
   "photos-similar": [booksPlant],
-  "photos-bursts": [catWindow], // planned: scene-fountain-pigeons
+  "photos-bursts": [fountainPigeons],
   "photos-blurry": [crosswalkRain],
   "photos-exposure": [sunsetPark, coastHills],
   "photos-screenshots": [pastaLunch],
-  "photos-documents": [whiteboard], // planned: doc-receipt-cafe, doc-handwritten-notes
-  "photos-forwarded": [memeCat], // planned: forwarded-greeting-flowers
-  "photos-stickers": [catWindow], // planned: a dedicated sticker image
+  "photos-documents": [whiteboard, receiptCafe, handwrittenNotes],
+  "photos-forwarded": [memeCat, greetingFlowers],
+  "photos-stickers": [stickerCartoon],
   "videos-largest": [sunsetPark],
   "videos-exact": [cobbleAlley],
   "videos-similar": [coastHills],
   "videos-quality": [crosswalkRain],
   "videos-forwarded": [memeCat],
-  "videos-takes": [sunsetPark], // planned: scene-fountain-pigeons
+  "videos-takes": [fountainPigeons],
   "videos-short": [catWindow],
 };
 
