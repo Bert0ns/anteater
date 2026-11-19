@@ -70,7 +70,14 @@
   },
   "screenshots": {
     "label": "Screenshot dell'app",
-    "note": "Le immagini negli screenshot sono disegnate con il codice, e i numeri sono inventati.",
+    "note": "Screenshot reali dell'app realizzati con foto campione generate dall'IA (nessuna foto personale) e numeri inventati.",
+    "noteLink": "Vedi la provenienza dei campioni",
+    "openLabel": "Ingrandisci {caption}",
+    "dialogLabel": "Visualizzatore screenshot",
+    "close": "Chiudi",
+    "previous": "Screenshot precedente",
+    "next": "Screenshot successivo",
+    "counter": "{current} / {total}",
     "items": [
       {
         "caption": "Categorie di foto",
