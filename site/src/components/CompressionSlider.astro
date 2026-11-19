@@ -1,0 +1,642 @@
+---
+import { formatKb, getCompressionSample } from "../lib/compression-sample";
+import { strings, type Lang } from "../i18n";
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = strings[lang].compression;
+const sample = await getCompressionSample();
+const repo = "https://github.com/Bert0ns/anteater";
+const fill = (text: string, values: Record<string, string | number>) =>
+  text.replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? ""));
+
+const beforeSize = formatKb(sample.beforeBytes, lang);
+const afterSize = formatKb(sample.afterBytes, lang);
+const dims = fill(t.dims, { width: sample.width, height: sample.height });
+const saving = fill(t.saving, { percent: sample.savingPercent });
+const labNote = fill(t.labNote, { labPercent: sample.labMedianPercent });
+const initialValueText = fill(t.sliderValue, { percent: 50 });
+---
+
+<div class="cs" data-compression-slider data-zoom="1" style="--split: 50%; --tx: 0%; --ty: 0%; --zoom: 1;">
+  <div class="cs-meta">
+    <div class="cs-meta-grid">
+      <div class="cs-stat">
+        <span class="cs-stat-label">{t.beforeLabel}</span>
+        <span class="cs-stat-value">{beforeSize}</span>
+        <span class="cs-stat-sub">{dims}</span>
+      </div>
+      <div class="cs-stat">
+        <span class="cs-stat-label">{t.afterLabel}</span>
+        <span class="cs-stat-value">
+          {afterSize} <span class="cs-saving">{saving}</span>
+        </span>
+        <span class="cs-stat-sub">{t.levelLabel}</span>
+      </div>
+    </div>
+    <p class="cs-lab">{labNote}</p>
+  </div>
+
+  <div class="cs-stage">
+    <div
+      class="cs-frame"
+      data-frame
+      data-pan-label={t.panLabel}
+      style={`aspect-ratio: ${sample.width} / ${sample.height};`}
+    >
+      <div class="cs-layer">
+        <img
+          class="cs-img"
+          src="/samples/compression-before.jpg"
+          width={sample.width}
+          height={sample.height}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable="false"
+        />
+      </div>
+      <div class="cs-layer cs-layer-after">
+        <img
+          class="cs-img"
+          src="/samples/compression-after.jpg"
+          width={sample.width}
+          height={sample.height}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable="false"
+        />
+      </div>
+
+      <span class="cs-tag cs-tag-left" aria-hidden="true">{t.beforeLabel}</span>
+      <span class="cs-tag cs-tag-right" aria-hidden="true">{t.afterLabel}</span>
+
+      <input
+        class="cs-range"
+        type="range"
+        min="0"
+        max="100"
+        step="1"
+        value="50"
+        hidden
+        aria-label={t.sliderLabel}
+        aria-valuetext={initialValueText}
+        data-value-template={t.sliderValue}
+      />
+
+      <div class="cs-divider">
+        <span class="cs-line" aria-hidden="true"></span>
+        <button class="cs-handle" type="button" tabindex="-1" hidden aria-hidden="true" data-handle>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M9 7l-5 5 5 5M15 7l5 5-5 5"
+            ></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="cs-toolbar" hidden data-toolbar>
+      <p class="cs-hint">{t.hint}</p>
+      <div class="cs-zoom" role="group" aria-label={t.zoomGroup}>
+        {
+          ([1, 2, 4] as const).map((level) => (
+            <button
+              type="button"
+              class="cs-zoom-btn"
+              data-zoom-btn={level}
+              aria-pressed={level === 1 ? "true" : "false"}
+            >
+              {level}×
+            </button>
+          ))
+        }
+      </div>
+    </div>
+
+    <p class="cs-note">
+      {t.note}{" "}
+      <a class="text-link" href={`${repo}/tree/main/site/src/assets/samples`} target="_blank" rel="noopener noreferrer">
+        {t.noteLink}
+      </a>
+    </p>
+    <p class="cs-status" role="status" data-status data-zoom-template={t.zoomStatus}></p>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>("[data-compression-slider]").forEach(enhance);
+
+  function enhance(root: HTMLElement) {
+    const frame = root.querySelector<HTMLElement>("[data-frame]")!;
+    const range = root.querySelector<HTMLInputElement>(".cs-range")!;
+    const handle = root.querySelector<HTMLElement>("[data-handle]")!;
+    const toolbar = root.querySelector<HTMLElement>("[data-toolbar]")!;
+    const status = root.querySelector<HTMLElement>("[data-status]")!;
+    const zoomButtons = [...root.querySelectorAll<HTMLButtonElement>("[data-zoom-btn]")];
+
+    range.hidden = false;
+    handle.hidden = false;
+    toolbar.hidden = false;
+
+    let split = 50;
+    let zoom = 1;
+    let tx = 0;
+    let ty = 0;
+
+    const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+    const maxPan = (z: number) => ((z - 1) / 2) * 100;
+
+    function syncSplit(next: number) {
+      split = clamp(Math.round(next * 10) / 10, 0, 100);
+      const rounded = Math.round(split);
+      root.style.setProperty("--split", `${split}%`);
+      range.value = String(rounded);
+      const template = range.dataset.valueTemplate ?? "{percent}%";
+      range.setAttribute("aria-valuetext", template.replace("{percent}", String(rounded)));
+    }
+
+    function syncView() {
+      const limit = maxPan(zoom);
+      tx = clamp(tx, -limit, limit);
+      ty = clamp(ty, -limit, limit);
+      root.dataset.zoom = String(zoom);
+      root.style.setProperty("--zoom", String(zoom));
+      root.style.setProperty("--tx", `${tx}%`);
+      root.style.setProperty("--ty", `${ty}%`);
+
+      if (zoom > 1) {
+        frame.tabIndex = 0;
+        frame.setAttribute("role", "region");
+        frame.setAttribute("aria-label", frame.dataset.panLabel ?? "");
+      } else {
+        frame.removeAttribute("tabindex");
+        frame.removeAttribute("role");
+        frame.removeAttribute("aria-label");
+      }
+
+      zoomButtons.forEach((btn) => {
+        btn.setAttribute("aria-pressed", String(Number(btn.dataset.zoomBtn) === zoom));
+      });
+    }
+
+    function setZoom(nextZoom: number, focusX = 0.5, focusY = 0.5) {
+      const prevZoom = zoom;
+      zoom = nextZoom;
+      if (zoom === 1) {
+        tx = 0;
+        ty = 0;
+      } else if (prevZoom === 1) {
+        // Keep the clicked spot under the pointer when zooming in from 1x.
+        tx = -(zoom - 1) * (focusX - 0.5) * 100;
+        ty = -(zoom - 1) * (focusY - 0.5) * 100;
+      } else {
+        const scale = (zoom - 1) / (prevZoom - 1);
+        tx *= scale;
+        ty *= scale;
+      }
+      syncView();
+      const template = status.dataset.zoomTemplate ?? "Zoom {zoom}×";
+      status.textContent = template.replace("{zoom}", String(zoom));
+    }
+
+    function splitAtClientX(clientX: number) {
+      const rect = frame.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      syncSplit(((clientX - rect.left) / rect.width) * 100);
+    }
+
+    range.addEventListener("input", () => {
+      syncSplit(Number(range.value));
+    });
+
+    range.addEventListener("keydown", (event) => {
+      if (!event.shiftKey) return;
+      if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+        event.preventDefault();
+        syncSplit(split - 10);
+      } else if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+        event.preventDefault();
+        syncSplit(split + 10);
+      }
+    });
+
+    // When zoomed, arrow keys on the frame pan the photo and Escape returns to 1x.
+    frame.addEventListener("keydown", (event) => {
+      if (zoom <= 1) return;
+      const step = 15;
+      switch (event.key) {
+        case "ArrowLeft":
+          tx += step;
+          break;
+        case "ArrowRight":
+          tx -= step;
+          break;
+        case "ArrowUp":
+          ty += step;
+          break;
+        case "ArrowDown":
+          ty -= step;
+          break;
+        case "0":
+          tx = 0;
+          ty = 0;
+          break;
+        case "Escape":
+          setZoom(1);
+          zoomButtons[0]?.focus();
+          event.preventDefault();
+          return;
+        default:
+          return;
+      }
+      event.preventDefault();
+      syncView();
+    });
+
+    let mode: "split" | "pan" | null = null;
+    let activePointer = -1;
+    let lastX = 0;
+    let lastY = 0;
+
+    frame.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 && event.pointerType === "mouse") return;
+      const onHandle = (event.target as HTMLElement).closest("[data-handle]") !== null;
+      if (!onHandle && zoom > 1) {
+        mode = "pan";
+      } else {
+        mode = "split";
+        splitAtClientX(event.clientX);
+      }
+      activePointer = event.pointerId;
+      lastX = event.clientX;
+      lastY = event.clientY;
+      frame.classList.add("is-dragging");
+      frame.setPointerCapture(event.pointerId);
+    });
+
+    frame.addEventListener("pointermove", (event) => {
+      if (mode === null || event.pointerId !== activePointer) return;
+      if (mode === "split") {
+        splitAtClientX(event.clientX);
+      } else {
+        const rect = frame.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          tx += ((event.clientX - lastX) / rect.width) * 100;
+          ty += ((event.clientY - lastY) / rect.height) * 100;
+          syncView();
+        }
+      }
+      lastX = event.clientX;
+      lastY = event.clientY;
+    });
+
+    const endDrag = (event: PointerEvent) => {
+      if (event.pointerId !== activePointer) return;
+      mode = null;
+      activePointer = -1;
+      frame.classList.remove("is-dragging");
+    };
+    frame.addEventListener("pointerup", endDrag);
+    frame.addEventListener("pointercancel", endDrag);
+
+    frame.addEventListener("dblclick", (event) => {
+      if ((event.target as HTMLElement).closest("[data-handle]")) return;
+      if (zoom > 1) {
+        setZoom(1);
+      } else {
+        const rect = frame.getBoundingClientRect();
+        const fx = rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0.5;
+        const fy = rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0.5;
+        setZoom(2, fx, fy);
+      }
+    });
+
+    zoomButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const level = Number(btn.dataset.zoomBtn);
+        if (level !== zoom) setZoom(level);
+      });
+    });
+
+    syncSplit(50);
+    syncView();
+  }
+</script>
+
+<style>
+  .cs {
+    display: grid;
+    gap: var(--space-4);
+  }
+
+  .cs [hidden] {
+    display: none;
+  }
+
+  .cs-meta {
+    display: grid;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    background: var(--surface);
+  }
+
+  .cs-meta-grid {
+    display: grid;
+    gap: var(--space-3) var(--space-5);
+  }
+
+  .cs-stat {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .cs-stat-label {
+    font-size: var(--step--1);
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .cs-stat-value {
+    font-family: var(--font-display);
+    font-size: var(--step-1);
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--text);
+  }
+
+  .cs-saving {
+    margin-left: var(--space-2);
+    font-family: var(--font-text);
+    font-size: var(--step--1);
+    font-weight: 600;
+    color: var(--accent-text);
+    white-space: nowrap;
+  }
+
+  .cs-stat-sub {
+    font-size: var(--step--1);
+    color: var(--text-muted);
+  }
+
+  .cs-lab {
+    margin: 0;
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--line);
+    font-size: var(--step--1);
+    color: var(--text-dim);
+  }
+
+  .cs-stage {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .cs-frame {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    background: var(--bg);
+    user-select: none;
+    touch-action: pan-y;
+    cursor: ew-resize;
+  }
+
+  .cs[data-zoom="2"] .cs-frame,
+  .cs[data-zoom="4"] .cs-frame {
+    touch-action: none;
+    cursor: grab;
+  }
+
+  .cs-frame.is-dragging {
+    cursor: ew-resize;
+  }
+
+  .cs[data-zoom="2"] .cs-frame.is-dragging,
+  .cs[data-zoom="4"] .cs-frame.is-dragging {
+    cursor: grabbing;
+  }
+
+  .cs-frame:focus-visible {
+    outline: 2px solid var(--accent-text);
+    outline-offset: 3px;
+  }
+
+  .cs-layer {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .cs-layer-after {
+    position: absolute;
+    inset: 0;
+    clip-path: inset(0 0 0 var(--split, 50%));
+  }
+
+  .cs-img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform-origin: center center;
+    transform: translate3d(var(--tx, 0%), var(--ty, 0%), 0) scale(var(--zoom, 1));
+  }
+
+  .cs[data-zoom="2"] .cs-img,
+  .cs[data-zoom="4"] .cs-img {
+    will-change: transform;
+  }
+
+  .cs[data-zoom="4"] .cs-img {
+    image-rendering: pixelated;
+  }
+
+  .cs-tag {
+    position: absolute;
+    top: var(--space-3);
+    z-index: 2;
+    padding: 2px var(--space-3);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-pill);
+    background: var(--bg);
+    color: var(--text);
+    font-size: var(--step--1);
+    font-weight: 600;
+    line-height: 1.4;
+    pointer-events: none;
+  }
+
+  .cs-tag-left {
+    left: var(--space-3);
+  }
+
+  .cs-tag-right {
+    right: var(--space-3);
+  }
+
+  .cs-range {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--split, 50%);
+    z-index: 4;
+    width: 44px;
+    height: 100%;
+    margin: 0;
+    transform: translateX(-50%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .cs-divider {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--split, 50%);
+    z-index: 3;
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
+  .cs-line {
+    display: block;
+    width: 2px;
+    height: 100%;
+    background: var(--text);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--bg) 65%, transparent);
+  }
+
+  .cs-handle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    transform: translate(-50%, -50%);
+    cursor: ew-resize;
+    touch-action: none;
+    pointer-events: auto;
+  }
+
+  .cs-handle svg {
+    width: 38px;
+    height: 38px;
+    padding: 8px;
+    border: 2px solid var(--text);
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--bg) 75%, transparent);
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
+      transform var(--dur-fast) var(--ease-out);
+  }
+
+  .cs-handle:hover svg {
+    background: var(--raised);
+  }
+
+  .cs-range:focus-visible ~ .cs-divider .cs-handle svg {
+    outline: 2px solid var(--accent-text);
+    outline-offset: 3px;
+  }
+
+  .cs-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+
+  .cs-hint {
+    margin: 0;
+    font-size: var(--step--1);
+    color: var(--text-muted);
+  }
+
+  .cs-zoom {
+    display: inline-flex;
+    gap: var(--space-2);
+  }
+
+  .cs-zoom-btn {
+    min-width: 2.75rem;
+    min-height: 2.25rem;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-text);
+    font-size: var(--step--1);
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      background-color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out);
+  }
+
+  .cs-zoom-btn:hover {
+    background: var(--surface);
+    border-color: var(--text-dim);
+    color: var(--text);
+  }
+
+  .cs-zoom-btn[aria-pressed="true"] {
+    background: var(--text);
+    border-color: var(--text);
+    color: var(--bg);
+  }
+
+  .cs-note {
+    margin: 0;
+    font-size: var(--step--1);
+    color: var(--text-dim);
+  }
+
+  .cs-status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  @media (min-width: 30rem) {
+    .cs-meta-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 56.25rem) {
+    .cs {
+      margin: var(--space-5) 0 var(--space-6);
+    }
+  }
+</style>

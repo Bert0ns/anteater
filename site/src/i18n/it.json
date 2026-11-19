@@ -214,6 +214,22 @@
     ],
     "more": "Livelli, formati e cosa perde la copia"
   },
+  "compression": {
+    "beforeLabel": "Originale",
+    "afterLabel": "Compressa",
+    "levelLabel": "Bilanciato: JPEG 85, fino a 50 MP",
+    "dims": "{width} × {height}",
+    "saving": "{percent}% più piccola",
+    "labNote": "In laboratorio, Bilanciato ha risparmiato in mediana il {labPercent}% (misurato sulle foto della fotocamera di un telefono).",
+    "sliderLabel": "Cursore di confronto",
+    "sliderValue": "{percent}%: originale a sinistra, copia compressa a destra",
+    "panLabel": "Foto ingrandita. Usa i tasti freccia per spostarti.",
+    "hint": "Trascina la linea per confrontare e ingrandisci per vedere i pixel.",
+    "zoomGroup": "Zoom",
+    "zoomStatus": "Zoom {zoom}×",
+    "note": "Foto campione generata e compressa in fase di build; entrambe le dimensioni sono misurate dai JPEG reali.",
+    "noteLink": "Vedi le immagini campione"
+  },
   "privacy": {
     "title": "Nulla esce dal telefono",
     "lead": "Anteater non ha il permesso di rete. Senza, Android non lascia collegare un'app a nulla, quindi le tue foto, i tuoi video e i dati che Anteater ne ricava non hanno dove andare. Questa è la lista di ciò che chiede, e un permesso manca.",
