@@ -61,7 +61,14 @@
   },
   "screenshots": {
     "label": "App screenshots",
-    "note": "The images in the screenshots are drawn in code, and the counts are made up.",
+    "note": "Real screenshots of the app rendered with AI-generated sample photos (no personal photos) and made-up counts.",
+    "noteLink": "See sample provenance",
+    "openLabel": "View {caption} larger",
+    "dialogLabel": "Screenshot viewer",
+    "close": "Close",
+    "previous": "Previous screenshot",
+    "next": "Next screenshot",
+    "counter": "{current} / {total}",
     "items": [
       {
         "caption": "Photo categories",
