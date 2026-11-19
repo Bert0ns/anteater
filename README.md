@@ -116,7 +116,7 @@ The Compress tab recompresses large camera JPEGs instead of deleting them. It li
   </tr>
 </table>
 
-The images in the screenshots are drawn in code, and the counts are made up.
+Real screenshots of the app rendered in the dark theme using [AI-generated sample photos](site/src/assets/samples/provenance.json) (no personal photos) and made-up counts.
 
 ## Technical architecture
 

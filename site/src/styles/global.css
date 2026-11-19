@@ -572,7 +572,8 @@ code {
   display: flex;
   gap: var(--space-4);
   margin-top: var(--space-7);
-  padding-bottom: var(--space-3);
+  margin-inline: calc(var(--space-1) * -1);
+  padding: var(--space-2) var(--space-1) var(--space-3);
   overflow-x: auto;
   scroll-snap-type: x proximity;
   scrollbar-width: thin;
@@ -584,13 +585,48 @@ code {
   scroll-snap-align: start;
 }
 
+.screenshot-trigger {
+  appearance: none;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-l);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: zoom-in;
+}
+
+.screenshot-trigger:focus-visible {
+  border-radius: var(--radius-l);
+}
+
+.screenshot-frame {
+  padding: var(--space-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  box-shadow: 0 0.75rem 1.75rem color-mix(in srgb, var(--bg) 70%, transparent);
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.screenshot-trigger:hover .screenshot-frame,
+.screenshot-trigger:focus-visible .screenshot-frame {
+  border-color: var(--text-dim);
+  transform: translateY(-2px);
+}
+
 .screenshot-img {
   display: block;
   width: 100%;
   height: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-l);
-  background: var(--surface);
+  aspect-ratio: 822 / 1782;
+  border-radius: calc(var(--radius-l) - var(--space-1));
+  background: var(--bg);
 }
 
 .screenshot-caption {
