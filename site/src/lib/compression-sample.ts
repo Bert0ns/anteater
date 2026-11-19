@@ -5,7 +5,6 @@ import sharp from "sharp";
 /** Matches Anteater's Balanced compression level (`Saving.kt`): JPEG 85, up to 50 MP, 4:2:0 libjpeg. */
 export const BEFORE_QUALITY = 95;
 export const BALANCED_QUALITY = 85;
-export const BALANCED_MAX_PIXELS = 50_000_000;
 export const LAB_MEDIAN_SAVING_PERCENT = 47;
 
 export interface CompressionSample {

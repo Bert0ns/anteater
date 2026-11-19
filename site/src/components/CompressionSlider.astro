@@ -82,7 +82,6 @@ const initialValueText = fill(t.sliderValue, { percent: 50 });
         max="100"
         step="1"
         value="50"
-        hidden
         aria-label={t.sliderLabel}
         aria-valuetext={initialValueText}
         data-value-template={t.sliderValue}
@@ -90,7 +89,7 @@ const initialValueText = fill(t.sliderValue, { percent: 50 });
 
       <div class="cs-divider">
         <span class="cs-line" aria-hidden="true"></span>
-        <button class="cs-handle" type="button" tabindex="-1" hidden aria-hidden="true" data-handle>
+        <span class="cs-handle" aria-hidden="true" data-handle>
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
             <path
               fill="none"
@@ -101,11 +100,11 @@ const initialValueText = fill(t.sliderValue, { percent: 50 });
               d="M9 7l-5 5 5 5M15 7l5 5-5 5"
             ></path>
           </svg>
-        </button>
+        </span>
       </div>
     </div>
 
-    <div class="cs-toolbar" hidden data-toolbar>
+    <div class="cs-toolbar" data-toolbar>
       <p class="cs-hint">{t.hint}</p>
       <div class="cs-zoom" role="group" aria-label={t.zoomGroup}>
         {
@@ -139,14 +138,8 @@ const initialValueText = fill(t.sliderValue, { percent: 50 });
   function enhance(root: HTMLElement) {
     const frame = root.querySelector<HTMLElement>("[data-frame]")!;
     const range = root.querySelector<HTMLInputElement>(".cs-range")!;
-    const handle = root.querySelector<HTMLElement>("[data-handle]")!;
-    const toolbar = root.querySelector<HTMLElement>("[data-toolbar]")!;
     const status = root.querySelector<HTMLElement>("[data-status]")!;
     const zoomButtons = [...root.querySelectorAll<HTMLButtonElement>("[data-zoom-btn]")];
-
-    range.hidden = false;
-    handle.hidden = false;
-    toolbar.hidden = false;
 
     let split = 50;
     let zoom = 1;
@@ -339,8 +332,12 @@ const initialValueText = fill(t.sliderValue, { percent: 50 });
     gap: var(--space-4);
   }
 
-  .cs [hidden] {
-    display: none;
+  @media (scripting: none) {
+    .cs-range,
+    .cs-handle,
+    .cs-toolbar {
+      display: none;
+    }
   }
 
   .cs-meta {
@@ -628,7 +625,7 @@ const initialValueText = fill(t.sliderValue, { percent: 50 });
     white-space: nowrap;
   }
 
-  @media (min-width: 30rem) {
+  @media (min-width: 40rem) {
     .cs-meta-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
