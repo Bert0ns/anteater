@@ -33,7 +33,6 @@
       "alt": "Demo dell'app. Un telefono mostra una griglia di {total} foto di esempio. Una scansione ne segna {marked}: {categories}. Un puntino rosso mangia poi le foto segnate, il contatore sale a {size} e le {marked} foto vanno nel cestino.",
       "scan": "Scansiona ora",
       "counter": "Da liberare",
-      "legend": "Cosa trova la scansione",
       "nav": {
         "clean": "Pulisci",
         "compress": "Comprimi",

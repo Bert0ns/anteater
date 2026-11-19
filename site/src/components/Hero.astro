@@ -42,16 +42,24 @@ const repo = "https://github.com/Bert0ns/anteater";
   }
 
   /* From 900 px the text sits on the left and the demo on the right, and the title steps down a size
-     to fit in the column. */
+     to fit in the column. Below 1152 px the two columns share space evenly so the legend wraps under
+     the phone rather than squeezing the copy. */
   @media (min-width: 56.25rem) {
     .hero {
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       align-items: center;
-      gap: var(--space-8);
+      gap: var(--space-7);
     }
 
     h1 {
       font-size: var(--step-4);
+    }
+  }
+
+  @media (min-width: 72rem) {
+    .hero {
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: var(--space-8);
     }
   }
 </style>
