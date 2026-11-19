@@ -41,13 +41,13 @@ export const tiles: Tile[] = [
   { file: "forwarded-meme-cat.webp", category: "forwarded", mb: 0.6 },
 ];
 
-// Only the images in use are loaded, so a file in the folder that no tile names is not shipped.
-const sources = import.meta.glob<{ default: ImageMetadata }>("../assets/samples/*.webp");
+// Load metadata eagerly to avoid dynamic-import warnings; Astro only emits images rendered by <Image>.
+const sources = import.meta.glob<{ default: ImageMetadata }>("../assets/samples/*.webp", { eager: true });
 
 export async function loadImage(file: string): Promise<ImageMetadata> {
-  const load = sources[`../assets/samples/${file}`];
-  if (!load) throw new Error(`hero demo: no sample image named "${file}" in src/assets/samples/`);
-  return (await load()).default;
+  const mod = sources[`../assets/samples/${file}`];
+  if (!mod) throw new Error(`hero demo: no sample image named "${file}" in src/assets/samples/`);
+  return mod.default;
 }
 
 export function summarize() {

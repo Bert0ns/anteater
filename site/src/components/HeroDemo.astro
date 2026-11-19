@@ -69,7 +69,7 @@ const images = await Promise.all(tiles.map((tile) => loadImage(tile.file)));
                         <i class="shot-avatar" />
                         <i class="shot-line" />
                       </span>
-                      <Image src={images[i]} alt="" width={240} height={180} class="shot-img" />
+                      <Image src={images[i]} alt="" width={240} height={180} loading="eager" class="shot-img" />
                       <i class="shot-line" />
                       <i class="shot-line is-short" />
                       <span class="shot-nav">
@@ -83,6 +83,7 @@ const images = await Promise.all(tiles.map((tile) => loadImage(tile.file)));
                         alt=""
                         width={240}
                         height={300}
+                        loading="eager"
                         class:list={["tile-img", tile.treatment && `is-${tile.treatment}`]}
                       />
                     </div>
@@ -759,7 +760,7 @@ const images = await Promise.all(tiles.map((tile) => loadImage(tile.file)));
   // changes classes and moves things with transform and opacity, so nothing on the page shifts. Without
   // this script, or with reduced motion, the markup and the CSS already show the end state.
   const demo = document.querySelector<HTMLElement>("[data-hero-demo]");
-  if (demo && !matchMedia("(prefers-reduced-motion: reduce)").matches) setup(demo);
+  if (demo && matchMedia("(scripting: enabled)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches) setup(demo);
 
   function setup(demo: HTMLElement) {
     const q = <T extends HTMLElement>(selector: string) => demo.querySelector<T>(selector)!;
@@ -789,21 +790,27 @@ const images = await Promise.all(tiles.map((tile) => loadImage(tile.file)));
     const sleep = (time: number) => new Promise((resolve) => setTimeout(resolve, time));
 
     let value = 0;
+    let displayed = 0;
+    let raf = 0;
     let running = false;
-    const show = (mb: number) => (counter.textContent = number.format(mb));
+    const show = (mb: number) => {
+      displayed = mb;
+      counter.textContent = number.format(mb);
+    };
 
     // Tweens the counter to a value. It changes text and never the layout, because the number has a
     // fixed width.
     function climb(to: number, time: number) {
-      const from = value;
+      cancelAnimationFrame(raf);
+      const from = displayed;
       value = to;
       const start = performance.now();
       const step = (now: number) => {
         const k = Math.min(1, (now - start) / time);
         show(from + (to - from) * (1 - Math.pow(1 - k, 3)));
-        if (k < 1) requestAnimationFrame(step);
+        if (k < 1) raf = requestAnimationFrame(step);
       };
-      requestAnimationFrame(step);
+      raf = requestAnimationFrame(step);
     }
 
     const centre = (el: HTMLElement) => {
@@ -820,6 +827,7 @@ const images = await Promise.all(tiles.map((tile) => loadImage(tile.file)));
     }
 
     function reset() {
+      cancelAnimationFrame(raf);
       tiles.forEach((tile) => {
         tile.getAnimations().forEach((animation) => animation.cancel());
         tile.classList.remove("is-marked", "is-eaten");
@@ -915,6 +923,7 @@ const images = await Promise.all(tiles.map((tile) => loadImage(tile.file)));
       eater.style.opacity = "0";
       home.style.opacity = "1";
       eater.style.transitionDuration = "";
+      cancelAnimationFrame(raf);
       show(total);
 
       // The grid closes the gaps. The kept tiles are measured with the flagged ones hidden for a

@@ -33,7 +33,6 @@
       "alt": "Demo of the app. A phone shows a grid of {total} sample photos. A scan marks {marked} of them: {categories}. A red dot then eats the marked photos, the counter climbs to {size} and the {marked} photos move to the trash.",
       "scan": "Scan now",
       "counter": "Can be freed",
-      "legend": "What the scan finds",
       "nav": {
         "clean": "Clean",
         "compress": "Compress",
