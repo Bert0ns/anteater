@@ -35,27 +35,36 @@
     "faqBefore": "Domande? ",
     "faqLink": "Leggi le FAQ",
     "demo": {
-      "label": "Demo della scansione",
-      "alt": "Demo dell'app. Un telefono mostra una griglia di {total} foto di esempio. Una scansione ne segna {marked}: {categories}. Un puntino rosso mangia poi le foto segnate, il contatore sale a {size} e le {marked} foto vanno nel cestino.",
-      "scan": "Scansiona ora",
-      "counter": "Da liberare",
-      "nav": {
-        "clean": "Pulisci",
-        "compress": "Comprimi",
-        "settings": "Opzioni"
+      "label": "Anteprima dell'app",
+      "tabsLabel": "Schermate dell'app",
+      "screens": {
+        "home": {
+          "tab": "Pulisci",
+          "caption": "Nove categorie di foto, con lo spazio che si può liberare.",
+          "alt": "Scheda Foto di Pulisci con 1,8 GB da liberare divisi in nove categorie di foto, ciascuna con il numero di file e la dimensione"
+        },
+        "category": {
+          "tab": "Sfocate",
+          "caption": "Le foto suggerite partono già segnate. Toccane una per tenerla.",
+          "alt": "Categoria Sfocate con una griglia a tre colonne di foto fuori fuoco segnate in rosso e il pulsante Cestina in basso"
+        },
+        "group": {
+          "tab": "Simili",
+          "caption": "Le copie sono divise in gruppi, con lo scatto migliore tenuto.",
+          "alt": "Copie simili raggruppate fianco a fianco, con la copia più nitida etichettata Migliore e le altre segnate per il cestino"
+        },
+        "compress-summary": {
+          "tab": "Comprimi",
+          "caption": "Confronta l'originale e il JPEG compresso prima di confermare.",
+          "alt": "Riepilogo della compressione con un cursore prima e dopo che confronta la foto originale e la copia JPEG più piccola"
+        },
+        "trash": {
+          "tab": "Cestino",
+          "caption": "I file rimossi restano 30 giorni nel cestino prima dell'eliminazione.",
+          "alt": "Schermata del cestino con i giorni rimasti su ogni foto rimossa e i pulsanti per ripristinare o svuotare il cestino"
+        }
       },
-      "categories": {
-        "exact": "Copie identiche",
-        "similar": "Copie simili",
-        "blurry": "Sfocate",
-        "exposure": "Troppo scure o troppo chiare",
-        "screenshot": "Screenshot",
-        "document": "Documenti e appunti",
-        "forwarded": "Inoltrate"
-      },
-      "snackbar": "{count} immagini spostate nel cestino, {size}",
-      "replay": "Riguarda la demo",
-      "note": "Le foto sono generate dall'IA e i numeri sono inventati.",
+      "note": "Screenshot reali dell'app. Le foto di esempio sono generate dall'IA e i numeri sono inventati.",
       "noteLink": "Vedi i prompt"
     }
   },
