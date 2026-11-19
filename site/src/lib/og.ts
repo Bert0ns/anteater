@@ -8,237 +8,162 @@ import { strings, type Lang } from "../i18n";
 export const OG_WIDTH = 1200;
 export const OG_HEIGHT = 630;
 
+// Mirrors site/src/styles/tokens.css (Satori renders standalone SVGs without CSS variables).
+const COLOR = {
+  bg: "#121619",
+  surface: "#1b2024",
+  line: "#2c3338",
+  lineStrong: "#3a4249",
+  text: "#f4f1ea",
+  textMuted: "#b7b4ab",
+  textDim: "#8f8e87",
+  accent: "#e53935",
+} as const;
+
 const require = createRequire(import.meta.url);
 
-function loadAsset(relPath: string): Buffer {
-  const fromSite = resolve(process.cwd(), relPath);
-  if (existsSync(fromSite)) return readFileSync(fromSite);
-  return readFileSync(resolve(process.cwd(), "site", relPath));
+function loadFont(specifier: string): Buffer {
+  return readFileSync(require.resolve(specifier));
 }
 
-const displayBold = readFileSync(
-  require.resolve("@fontsource/bricolage-grotesque/files/bricolage-grotesque-latin-700-normal.woff")
-);
-const textRegular = readFileSync(
-  require.resolve("@fontsource/instrument-sans/files/instrument-sans-latin-400-normal.woff")
-);
-const textMedium = readFileSync(
-  require.resolve("@fontsource/instrument-sans/files/instrument-sans-latin-500-normal.woff")
-);
-const textSemibold = readFileSync(
-  require.resolve("@fontsource/instrument-sans/files/instrument-sans-latin-600-normal.woff")
-);
+function loadLogoDataUri(): string {
+  const relPath = "src/assets/logo-mark.png";
+  const fromSite = resolve(process.cwd(), relPath);
+  const path = existsSync(fromSite) ? fromSite : resolve(process.cwd(), "site", relPath);
+  return `data:image/png;base64,${readFileSync(path).toString("base64")}`;
+}
 
-const logoDataUri = `data:image/png;base64,${loadAsset("src/assets/logo-mark.png").toString("base64")}`;
+const displayBold = loadFont("@fontsource/bricolage-grotesque/files/bricolage-grotesque-latin-700-normal.woff");
+const textRegular = loadFont("@fontsource/instrument-sans/files/instrument-sans-latin-400-normal.woff");
+const textMedium = loadFont("@fontsource/instrument-sans/files/instrument-sans-latin-500-normal.woff");
+const textSemibold = loadFont("@fontsource/instrument-sans/files/instrument-sans-latin-600-normal.woff");
+const logoDataUri = loadLogoDataUri();
+
+type SatoriElement = Exclude<Parameters<typeof satori>[0], string | number | boolean | Iterable<unknown> | null | undefined>;
+type Style = Record<string, string | number>;
+type Child = SatoriElement | string;
+
+function div(style: Style, children?: Child | Child[]): SatoriElement {
+  return { type: "div", key: null, props: children === undefined ? { style } : { style, children } };
+}
+
+function img(src: string, width: number, height: number): SatoriElement {
+  return { type: "img", key: null, props: { src, width, height } };
+}
 
 export async function renderOgImage(lang: Lang): Promise<Buffer> {
   const t = strings[lang].og;
 
-  const tree = {
-    type: "div",
-    props: {
-      style: {
-        width: `${OG_WIDTH}px`,
-        height: `${OG_HEIGHT}px`,
+  const header = div({ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }, [
+    div({ display: "flex", alignItems: "center", gap: "18px" }, [
+      div(
+        {
+          width: "64px",
+          height: "64px",
+          borderRadius: "16px",
+          backgroundColor: COLOR.surface,
+          border: `1px solid ${COLOR.lineStrong}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        },
+        img(logoDataUri, 46, 44)
+      ),
+      div(
+        {
+          fontFamily: "Bricolage Grotesque",
+          fontWeight: 700,
+          fontSize: "34px",
+          letterSpacing: "-0.025em",
+          color: COLOR.text,
+        },
+        "Anteater"
+      ),
+    ]),
+    div(
+      {
         display: "flex",
-        backgroundColor: "#121619",
-        color: "#f4f1ea",
+        alignItems: "center",
+        gap: "12px",
+        padding: "12px 22px",
+        borderRadius: "999px",
+        backgroundColor: COLOR.surface,
+        border: `1px solid ${COLOR.lineStrong}`,
+        fontSize: "20px",
+        fontWeight: 600,
+        color: COLOR.text,
+      },
+      [
+        div({ width: "12px", height: "12px", borderRadius: "999px", backgroundColor: COLOR.accent }),
+        div({}, t.badge),
+      ]
+    ),
+  ]);
+
+  const body = div({ display: "flex", flexDirection: "column", justifyContent: "center", gap: "22px" }, [
+    div(
+      {
+        fontFamily: "Bricolage Grotesque",
+        fontWeight: 700,
+        fontSize: "64px",
+        lineHeight: 1.06,
+        letterSpacing: "-0.03em",
+        color: COLOR.text,
+        maxWidth: "800px",
+      },
+      t.headline
+    ),
+    div(
+      {
         fontFamily: "Instrument Sans",
+        fontWeight: 400,
+        fontSize: "26px",
+        lineHeight: 1.45,
+        color: COLOR.textMuted,
+        maxWidth: "680px",
       },
-      children: {
-        type: "div",
-        props: {
-          style: {
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-            padding: "56px 72px",
-          },
-          children: [
-        // Header lockup: logo tile + wordmark on left, signature red-dot pill on right
-        {
-          type: "div",
-          props: {
-            style: {
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              width: "100%",
-            },
-            children: [
-              {
-                type: "div",
-                props: {
-                  style: {
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "18px",
-                  },
-                  children: [
-                    {
-                      type: "div",
-                      props: {
-                        style: {
-                          width: "64px",
-                          height: "64px",
-                          borderRadius: "16px",
-                          backgroundColor: "#1b2024",
-                          border: "1px solid rgba(244, 241, 234, 0.14)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        },
-                        children: {
-                          type: "img",
-                          props: {
-                            src: logoDataUri,
-                            width: 46,
-                            height: 44,
-                          },
-                        },
-                      },
-                    },
-                    {
-                      type: "div",
-                      props: {
-                        style: {
-                          fontFamily: "Bricolage Grotesque",
-                          fontWeight: 700,
-                          fontSize: "34px",
-                          letterSpacing: "-0.025em",
-                          color: "#f4f1ea",
-                        },
-                        children: "Anteater",
-                      },
-                    },
-                  ],
-                },
-              },
-              {
-                type: "div",
-                props: {
-                  style: {
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    padding: "12px 22px",
-                    borderRadius: "999px",
-                    backgroundColor: "#1b2024",
-                    border: "1px solid rgba(244, 241, 234, 0.16)",
-                    fontSize: "20px",
-                    fontWeight: 600,
-                    color: "#f4f1ea",
-                  },
-                  children: [
-                    {
-                      type: "div",
-                      props: {
-                        style: {
-                          width: "12px",
-                          height: "12px",
-                          borderRadius: "999px",
-                          backgroundColor: "#e53935",
-                        },
-                      },
-                    },
-                    {
-                      type: "div",
-                      props: {
-                        children: t.badge,
-                      },
-                    },
-                  ],
-                },
-              },
-            ],
-          },
-        },
+      t.subtitle
+    ),
+  ]);
 
-        // Center hero copy
-        {
-          type: "div",
-          props: {
-            style: {
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "center",
-              gap: "22px",
-              marginTop: "12px",
-              marginBottom: "12px",
-            },
-            children: [
-              {
-                type: "div",
-                props: {
-                  style: {
-                    fontFamily: "Bricolage Grotesque",
-                    fontWeight: 700,
-                    fontSize: "64px",
-                    lineHeight: 1.06,
-                    letterSpacing: "-0.03em",
-                    color: "#f4f1ea",
-                    maxWidth: "800px",
-                  },
-                  children: t.headline,
-                },
-              },
-              {
-                type: "div",
-                props: {
-                  style: {
-                    fontFamily: "Instrument Sans",
-                    fontWeight: 400,
-                    fontSize: "26px",
-                    lineHeight: 1.45,
-                    color: "#b7b4ab",
-                    maxWidth: "680px",
-                  },
-                  children: t.subtitle,
-                },
-              },
-            ],
-          },
-        },
-
-        // Footer hairline + URL
-        {
-          type: "div",
-          props: {
-            style: {
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              width: "100%",
-              paddingTop: "24px",
-              borderTop: "1px solid rgba(244, 241, 234, 0.12)",
-              fontSize: "20px",
-              fontWeight: 500,
-              color: "#8f8e87",
-            },
-            children: [
-              {
-                type: "div",
-                props: {
-                  children: "anteater.bertons.me",
-                },
-              },
-              {
-                type: "div",
-                props: {
-                  children: "github.com/Bert0ns/anteater",
-                },
-              },
-            ],
-          },
-        },
-      ],
-        },
-      },
+  const footer = div(
+    {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      width: "100%",
+      paddingTop: "24px",
+      borderTop: `1px solid ${COLOR.line}`,
+      fontSize: "20px",
+      fontWeight: 500,
+      color: COLOR.textDim,
     },
-  };
+    [div({}, "anteater.bertons.me"), div({}, "github.com/Bert0ns/anteater")]
+  );
 
-  const svg = await satori(tree as unknown as Parameters<typeof satori>[0], {
+  // Separate outer 1200x630 box from padded column so Satori's content-box padding does not overflow.
+  const tree = div(
+    {
+      width: `${OG_WIDTH}px`,
+      height: `${OG_HEIGHT}px`,
+      display: "flex",
+      backgroundColor: COLOR.bg,
+      color: COLOR.text,
+      fontFamily: "Instrument Sans",
+    },
+    div(
+      {
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        padding: "56px 72px",
+      },
+      [header, body, footer]
+    )
+  );
+
+  const svg = await satori(tree, {
     width: OG_WIDTH,
     height: OG_HEIGHT,
     fonts: [

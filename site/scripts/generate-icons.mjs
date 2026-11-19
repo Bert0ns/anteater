@@ -23,8 +23,8 @@ function buildIco(images) {
   for (let i = 0; i < count; i++) {
     const { size, data } = images[i];
     const base = 6 + i * 16;
-    header.writeUInt8(size === 256 ? 0 : size, base);
-    header.writeUInt8(size === 256 ? 0 : size, base + 1);
+    header.writeUInt8(size, base);
+    header.writeUInt8(size, base + 1);
     header.writeUInt8(0, base + 2);
     header.writeUInt8(0, base + 3);
     header.writeUInt16LE(1, base + 4);
