@@ -50,7 +50,7 @@ It keeps the debug build's application id and signature, so it installs over a d
 
 ### README screenshots
 
-`ReadmeScreenshots` renders the home, review pages, groups, the full size view, the compress page, the confirmation dialog, the trash, settings and the storage map on the JVM, with the real composables and theme, and every image drawn in code. `-PreadmeScreenshots` makes it write `docs/screenshots/*.png` and `site/screenshots/*.png`. Without the property Gradle leaves the test out, so a normal run leaves the files alone and CI does not depend on them:
+`ReadmeScreenshots` renders the home, review pages, groups, the full size view, the video tabs and review pages, the compress page, the confirmation dialog, the trash, settings and the storage map on the JVM in the dark theme at `xhdpi` (`822x1782`), with the real composables and theme, using the sample photos in `site/src/assets/samples/`. `-PreadmeScreenshots` makes it write `docs/screenshots/*.png` and `site/screenshots/en/*.png` in English, and `site/screenshots/it/*.png` in Italian. Without the property Gradle leaves the test out, so a normal run leaves the files alone and CI does not depend on them:
 
 ```bash
 ./gradlew -PreadmeScreenshots testDebugUnitTest --tests '*ReadmeScreenshots'

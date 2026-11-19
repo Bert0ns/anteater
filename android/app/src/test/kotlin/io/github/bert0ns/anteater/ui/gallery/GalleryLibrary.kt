@@ -117,15 +117,33 @@ fun GalleryWorld.library(pictures: Set<Category> = emptySet(), others: Boolean =
     }
     for (index in 0 until COUNTS.getValue(Category.DOCUMENT)) {
         val at = taken(index, 20)
-        row(DOWNLOAD, "scan_${STAMP.format(at)}.jpg", 3_000_000L, at, signal(Category.DOCUMENT, 0.9f - index * 0.005f, "text_coverage" to "0.${20 + index % 40}", "probability" to "0.4"))
+        val name = "scan_${STAMP.format(at)}.jpg"
+        val signal = signal(Category.DOCUMENT, 0.9f - index * 0.005f, "text_coverage" to "0.${20 + index % 40}", "probability" to "0.4")
+        if (drawn(Category.DOCUMENT) && index < 48) {
+            picture(DOWNLOAD, name, GalleryPictures.document(6_000 + index), 3_000_000L, at, signal)
+        } else {
+            row(DOWNLOAD, name, 3_000_000L, at, signal)
+        }
     }
     for (index in 0 until COUNTS.getValue(Category.FORWARDED)) {
         val at = taken(index, 30)
-        row(WHATSAPP, "IMG-${MESSAGE_DAY.format(at)}-WA${(1000 + index).toString().padStart(4, '0')}.jpg", 850_000L, at, signal(Category.FORWARDED, 0.8f - (index % 30) * 0.004f, "messaging_folder" to "yes", "probability" to "0.6"))
+        val name = "IMG-${MESSAGE_DAY.format(at)}-WA${(1000 + index).toString().padStart(4, '0')}.jpg"
+        val signal = signal(Category.FORWARDED, 0.8f - (index % 30) * 0.004f, "messaging_folder" to "yes", "probability" to "0.6")
+        if (drawn(Category.FORWARDED) && index < 48) {
+            picture(WHATSAPP, name, GalleryPictures.forwarded(6_100 + index), 850_000L, at, signal)
+        } else {
+            row(WHATSAPP, name, 850_000L, at, signal)
+        }
     }
     for (index in 0 until COUNTS.getValue(Category.STICKER)) {
         val at = taken(index, 60)
-        row(STICKERS, "${(500_000 + index * 37)}-$index.webp", 120_000L, at, signal(Category.STICKER, 1f))
+        val name = "${(500_000 + index * 37)}-$index.webp"
+        val signal = signal(Category.STICKER, 1f)
+        if (drawn(Category.STICKER) && index < 48) {
+            picture(STICKERS, name, GalleryPictures.sticker(6_200 + index), 120_000L, at, signal)
+        } else {
+            row(STICKERS, name, 120_000L, at, signal)
+        }
     }
 
     if (others) {
