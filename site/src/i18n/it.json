@@ -21,12 +21,38 @@
     "faq": "FAQ"
   },
   "hero": {
-    "title": "Trova le foto e i video che puoi eliminare",
-    "lead": "Anteater trova le foto e i video del tuo telefono Android che puoi eliminare o comprimere: foto sfocate, copie, clip brevi, screenshot e i file che le app di messaggistica si lasciano dietro. Anteater suggerisce e tu decidi. Nulla viene eliminato senza la tua conferma, i file rimossi restano in un cestino da cui puoi ripristinarli, e niente lascia il telefono.",
+    "title": "Il tuo telefono, senza il superfluo.",
+    "lead": "Anteater trova le foto sfocate, le copie, gli screenshot e i file inoltrati che si accumulano sul tuo telefono Android. Anteater suggerisce e tu decidi: nulla viene eliminato senza la tua conferma, i file rimossi restano in un cestino, e niente lascia il telefono.",
     "download": "Scarica l'ultimo APK",
     "viewSource": "Vedi il codice su GitHub",
     "requirements": "Richiede Android 11 o successivo. Software libero con licenza GPL-3.0.",
-    "caveat": "I suggerimenti sono tarati sulla libreria di una sola persona, quindi aspettati qualche errore e qualche mancanza. Le librerie nel cloud, come Google Photos, iOS e desktop, non sono coperte."
+    "faqBefore": "Domande? ",
+    "faqLink": "Leggi le FAQ",
+    "demo": {
+      "label": "Demo della scansione",
+      "alt": "Demo dell'app. Un telefono mostra una griglia di {total} foto di esempio. Una scansione ne segna {marked}: {categories}. Un puntino rosso mangia poi le foto segnate, il contatore sale a {size} e le {marked} foto vanno nel cestino.",
+      "scan": "Scansiona ora",
+      "counter": "Da liberare",
+      "legend": "Cosa trova la scansione",
+      "nav": {
+        "clean": "Pulisci",
+        "compress": "Comprimi",
+        "settings": "Opzioni"
+      },
+      "categories": {
+        "exact": "Copie identiche",
+        "similar": "Copie simili",
+        "blurry": "Sfocate",
+        "exposure": "Troppo scure o troppo chiare",
+        "screenshot": "Screenshot",
+        "document": "Documenti e appunti",
+        "forwarded": "Inoltrate"
+      },
+      "snackbar": "{count} immagini spostate nel cestino, {size}",
+      "replay": "Riguarda la demo",
+      "note": "Le foto sono generate dall'IA e i numeri sono inventati.",
+      "noteLink": "Vedi i prompt"
+    }
   },
   "screenshots": {
     "label": "Screenshot dell'app",
