@@ -332,14 +332,6 @@ const initialValueText = fill(t.sliderValue, { percent: 50 });
     gap: var(--space-4);
   }
 
-  @media (scripting: none) {
-    .cs-range,
-    .cs-handle,
-    .cs-toolbar {
-      display: none;
-    }
-  }
-
   .cs-meta {
     display: grid;
     gap: var(--space-3);
@@ -634,6 +626,18 @@ const initialValueText = fill(t.sliderValue, { percent: 50 });
   @media (min-width: 56.25rem) {
     .cs {
       margin: var(--space-5) 0 var(--space-6);
+    }
+  }
+
+  @media (scripting: none) {
+    .cs-frame {
+      cursor: default;
+    }
+
+    .cs-range,
+    .cs-handle,
+    .cs-toolbar {
+      display: none;
     }
   }
 </style>
