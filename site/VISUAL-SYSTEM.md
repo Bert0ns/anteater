@@ -208,12 +208,20 @@ has to decide what its static end state is.
 `HeroDemo.astro` is a dark phone frame showing five real dark-theme screenshots of the Android app, with a pill tablist to switch between them. The screen list, dimensions and image loader live in [`src/lib/hero-demo.ts`](src/lib/hero-demo.ts), and the localized labels, captions and text alternatives live under `hero.demo` in `src/i18n/en.json` and `it.json`.
 
 - The screenshots come from `site/screenshots/en/*.png` on `/` and `site/screenshots/it/*.png` on `/it/` (`home`, `category`, `group`, `compress-summary` and `trash`), rendered at 822 × 1782 (`xhdpi`) and served as responsive WebP images (`widths={[320, 640]}`) through Astro `<Image>`.
-- The initial screen (`home.png`) loads eagerly with `fetchpriority="high"` for LCP, and the remaining four screens use `loading="lazy"` until the showcase enters view or the reader interacts with the tabs.
+- The initial screen (`home.png`) loads eagerly with `fetchpriority="high"` for LCP, and the remaining four screens stay `loading="lazy"` until the reader hovers, focuses or selects a tab, or shortly before an automatic step.
 - Every screenshot panel and every caption sits in a single CSS grid cell (`grid-area: 1 / 1`) with an explicit `822 / 1782` aspect ratio on the screen, so switching tabs never shifts the layout.
 - The tablist uses `role="tablist"`, `role="tab"`, `aria-selected`, `aria-controls` and `role="tabpanel"`, with click, tap and keyboard navigation (`ArrowLeft`, `ArrowRight`, `Home`, `End`).
 - The screenshots are rendered from the real app UI using AI-generated sample photos and made-up counts. The note under the showcase says so and links to `provenance.json`.
 
 Motion. Panels cross-fade over `--dur-base` and captions over `--dur-fast` with `--ease-out`, changing only `opacity` and `visibility`. When scripting is enabled and `prefers-reduced-motion: reduce` is not set, the showcase advances once through the five screens when it enters view, and pauses or stops as soon as the reader hovers, focuses or selects a tab. Under `prefers-reduced-motion: reduce`, auto-advance never runs and tab switches are instant. Without JavaScript (`@media (scripting: none)`), the tab pills are hidden and the phone shows the primary `home.png` screenshot with its caption.
+
+## Features screenshots
+
+`Screenshots.astro` renders all 12 dark-theme screenshots on `/features/` (`site/screenshots/en/*.png`) and `/it/features/` (`site/screenshots/it/*.png`) in a horizontal scroll strip with phone-like rounded framing and an explicit `822 / 1782` aspect ratio.
+
+- Thumbnails use Astro `<Image>` (`widths={[280, 560]}`, `format="webp"`, `loading="lazy"`).
+- Progressive enhancement wraps each frame in a button that opens a native `<dialog>` lightbox displaying the full `822 x 1782` WebP image, caption and counter (`1 / 12`), with `ArrowLeft`, `ArrowRight`, `Escape`, backdrop click and focus restoration to the triggering card. Without JavaScript, the strip remains a plain, scrollable gallery with no broken controls.
+- Dialog entry motion runs only under `@media (prefers-reduced-motion: no-preference)`.
 
 ## Checks
 

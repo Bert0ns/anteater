@@ -279,6 +279,7 @@ const screens = screenIds.map((id, i) => ({
 
     let activeIndex = 0;
     let timer = 0;
+    let warmTimer = 0;
     let stopped = false;
     let paused = false;
     const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -289,6 +290,12 @@ const screens = screenIds.map((id, i) => ({
       return parseFloat(value) * (value.endsWith("ms") ? 1 : 1000);
     };
     const stepDelay = Math.max(ms("--dur-hero") * 3.2, 3200);
+
+    function warmImage(index: number) {
+      const targetId = tabs[(index + tabs.length) % tabs.length]?.dataset.tab;
+      const img = targetId ? panels.get(targetId)?.querySelector<HTMLImageElement>("img[loading='lazy']") : null;
+      if (img) img.loading = "eager";
+    }
 
     function warmImages() {
       demo.querySelectorAll<HTMLImageElement>("img[loading='lazy']").forEach((img) => {
@@ -321,6 +328,10 @@ const screens = screenIds.map((id, i) => ({
         window.clearTimeout(timer);
         timer = 0;
       }
+      if (warmTimer) {
+        window.clearTimeout(warmTimer);
+        warmTimer = 0;
+      }
     }
 
     function stopAuto() {
@@ -331,6 +342,10 @@ const screens = screenIds.map((id, i) => ({
     function scheduleNext(remaining: number) {
       clearTimer();
       if (stopped || paused || remaining <= 0 || reducedMotion.matches) return;
+      warmTimer = window.setTimeout(() => {
+        warmTimer = 0;
+        if (!stopped && !paused && !reducedMotion.matches) warmImage(activeIndex + 1);
+      }, stepDelay / 2);
       timer = window.setTimeout(() => {
         if (stopped || paused || reducedMotion.matches) return;
         activate(activeIndex + 1);
@@ -368,6 +383,7 @@ const screens = screenIds.map((id, i) => ({
     demo.addEventListener("pointerenter", () => {
       paused = true;
       clearTimer();
+      warmImages();
     });
     demo.addEventListener("pointerleave", () => {
       paused = false;
@@ -375,6 +391,7 @@ const screens = screenIds.map((id, i) => ({
     demo.addEventListener("focusin", () => {
       paused = true;
       clearTimer();
+      warmImages();
     });
     demo.addEventListener("focusout", (event) => {
       if (!demo.contains(event.relatedTarget as Node | null)) {
@@ -386,7 +403,6 @@ const screens = screenIds.map((id, i) => ({
     // unless reduced motion is set or the user takes over.
     if (!reducedMotion.matches) {
       const startCycle = () => {
-        warmImages();
         scheduleNext(tabs.length - 1);
       };
       if ("IntersectionObserver" in window) {

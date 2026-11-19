@@ -1,5 +1,5 @@
 ---
-import { Image } from "astro:assets";
+import { getImage, Image } from "astro:assets";
 import { strings, type Lang } from "../i18n";
 
 import enHome from "../../screenshots/en/home.png";
@@ -65,6 +65,9 @@ const itImages = [
 
 const { lang } = Astro.props;
 const images = lang === "it" ? itImages : enImages;
+const fullImages = await Promise.all(
+  images.map((src) => getImage({ src, width: 822, height: 1782, format: "webp" })),
+);
 const t = strings[lang].screenshots;
 const repo = "https://github.com/Bert0ns/anteater";
 const fill = (text: string, values: Record<string, string | number>) =>
@@ -78,7 +81,7 @@ const fill = (text: string, values: Record<string, string | number>) =>
         <figure
           class="screenshot-figure"
           data-screenshot-item
-          data-full-src={images[i].src}
+          data-full-src={fullImages[i].src}
           data-full-alt={item.alt}
           data-caption={item.caption}
           data-open-label={fill(t.openLabel, { caption: item.caption })}
@@ -92,6 +95,7 @@ const fill = (text: string, values: Record<string, string | number>) =>
               sizes="(min-width: 40rem) 240px, 62vw"
               width={822}
               height={1782}
+              format="webp"
               loading="lazy"
               decoding="async"
             />
