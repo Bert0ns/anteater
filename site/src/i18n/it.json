@@ -4,6 +4,12 @@
     "description": "Anteater trova foto sfocate, copie, clip brevi e altro disordine tra le foto e i video del tuo telefono Android. Funziona offline, e i file rimossi restano in un cestino da cui puoi ripristinarli.",
     "ogDescription": "Trova il disordine in foto e video. Tutto avviene sul telefono, nulla viene eliminato senza la tua conferma, e i file rimossi restano in un cestino da cui puoi ripristinarli."
   },
+  "og": {
+    "badge": "Android · Offline · GPL-3.0",
+    "headline": "Trova le foto e i video che puoi eliminare",
+    "subtitle": "Foto sfocate, copie, clip brevi e compressione JPEG. Niente lascia il telefono.",
+    "alt": "Logo e riepilogo di Anteater: Trova le foto e i video che puoi eliminare"
+  },
   "nav": {
     "photos": "Foto",
     "videos": "Video",

@@ -13,6 +13,7 @@ export function homePath(lang: Lang): string {
 }
 
 export type Page = "home" | "features" | "faq";
+export const pages: Page[] = ["home", "features", "faq"];
 
 /** The path of a page in a language: `/features/` in English, `/it/features/` in Italian. */
 export function pagePath(lang: Lang, page: Page): string {
