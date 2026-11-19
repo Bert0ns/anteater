@@ -214,6 +214,22 @@
     ],
     "more": "Levels, formats and what the copy loses"
   },
+  "compression": {
+    "beforeLabel": "Original",
+    "afterLabel": "Compressed",
+    "levelLabel": "Balanced: JPEG 85, up to 50 MP",
+    "dims": "{width} × {height}",
+    "saving": "{percent}% smaller",
+    "labNote": "In the lab, Balanced saved a median {labPercent}% (measured on one phone's camera photos).",
+    "sliderLabel": "Comparison slider",
+    "sliderValue": "{percent}%: original on the left, compressed copy on the right",
+    "panLabel": "Zoomed photo. Use arrow keys to move around.",
+    "hint": "Drag the line to compare, and zoom in to see the pixels.",
+    "zoomGroup": "Zoom",
+    "zoomStatus": "Zoom {zoom}×",
+    "note": "Generated sample photo compressed at build time; both sizes are measured from the real JPEGs.",
+    "noteLink": "See the sample images"
+  },
   "privacy": {
     "title": "Nothing leaves your phone",
     "lead": "Anteater has no network permission. Without it Android does not let an app connect to anything, so your photos, your videos and the data Anteater makes from them have nowhere to go. This is the list of what it asks for, and one permission is missing from it.",

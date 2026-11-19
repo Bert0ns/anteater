@@ -1,6 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import CategoryCards from "./CategoryCards.astro";
+import CompressionSlider from "./CompressionSlider.astro";
 import FeatureList from "./FeatureList.astro";
 import Hero from "./Hero.astro";
 import Install from "./Install.astro";
@@ -16,8 +17,6 @@ interface Props {
 const { lang } = Astro.props;
 const t = strings[lang];
 const repo = "https://github.com/Bert0ns/anteater";
-// The home page keeps a short version of these. Each links to its part of the features page.
-const sections = ["compress"] as const;
 const features = pagePath(lang, "features");
 ---
 
@@ -32,16 +31,13 @@ const features = pagePath(lang, "features");
     <CategoryCards lang={lang} group="photos" />
     <CategoryCards lang={lang} group="videos" />
 
-    {
-      sections.map((key) => (
-        <section id={key}>
-          <h2>{t[key].title}</h2>
-          <p>{t[key].intro}</p>
-          <FeatureList items={t[key].items} />
-          <p><a class="text-link" href={`${features}#${key}`}>{t[key].more}</a></p>
-        </section>
-      ))
-    }
+    <section id="compress">
+      <h2>{t.compress.title}</h2>
+      <p>{t.compress.intro}</p>
+      <CompressionSlider lang={lang} />
+      <FeatureList items={t.compress.items} />
+      <p><a class="text-link" href={`${features}#compress`}>{t.compress.more}</a></p>
+    </section>
 
     <StorageMap lang={lang} />
 
