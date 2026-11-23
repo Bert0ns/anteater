@@ -41,6 +41,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -84,6 +85,8 @@ import io.github.bert0ns.anteater.tracing.OpenSection
 import io.github.bert0ns.anteater.tracing.traced
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.roundToInt
@@ -324,12 +327,14 @@ internal fun LoopingClip(file: File, endMs: Long?, positions: MutableMap<String,
 internal fun videoColumns(): GridCells = GridCells.Fixed(if (currentWindowAdaptiveInfo().windowSizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND)) 4 else 2)
 
 /**
- * Which video tiles on screen move (docs/design.md §8, #457), by key: the ones in [loops] play their clip and the ones in
- * [slides] show the slideshow. It also keeps, for the life of the screen, the clips that failed to play and where each clip
- * was when its player was released, so it plays on from there. [players] counts the loops' players until their releases end.
+ * Which video tiles on screen move (docs/design.md §8, #457, #482), by key: the ones in [loops] play their clip and the ones
+ * in [slides] show the slideshow. A tile plays the file in [sources] for it: the video up to 1080p, or the preview [clips]
+ * made of a larger one. A tile with no source yet shows the slideshow. It also keeps, for the life of the screen, the clips
+ * that failed to play, the previews that could not be made, and where each clip was when its player was released, so it
+ * plays on from there. [players] counts the loops' players until their releases end.
  */
 @Stable
-internal class TileMotion(private val players: LoopPlayers) {
+internal class TileMotion(private val clips: Clips, private val players: LoopPlayers) {
     var loops by mutableStateOf(emptySet<Any>())
         private set
     var slides by mutableStateOf(emptySet<Any>())
@@ -337,30 +342,80 @@ internal class TileMotion(private val players: LoopPlayers) {
     var failed by mutableStateOf(emptySet<String>())
         private set
 
+    /** The file each moving tile loops, by key, once it has one. */
+    var sources by mutableStateOf(emptyMap<Any, File>())
+        private set
+
+    /** The tiles whose size did not read or whose preview could not be made: they keep the slideshow. */
+    var unmade by mutableStateOf(emptySet<Any>())
+        private set
+
+    /** The tiles that move, by key. */
+    var movers by mutableStateOf(emptyMap<Any, Mover>())
+        private set
+
     /** Where each clip was when its player was released. Only the loops' thread touches it (see [ClipLoop]). */
     private val positions = HashMap<String, Long>()
 
     /**
+     * Takes the tiles that move: a video up to 1080p loops its file at once, and a larger one the preview the cache holds,
+     * once it is found there. The others wait for [make]. A tile whose video and loop did not change keeps what it had, so a
+     * trash, a keep or a heart that changes the list restarts no loop and makes nothing again.
+     */
+    suspend fun find(movers: List<Mover>) {
+        val before = this.movers
+        val same = movers.filter { new -> before[new.video.path]?.let { it.video == new.video && it.loopEndMs == new.loopEndMs } == true }.mapTo(HashSet()) { it.video.path }
+        this.movers = movers.associateBy { it.video.path }
+        sources = movers.mapNotNull { mover ->
+            val key = mover.video.path
+            val source = if (mover.playsFile) File(key) else sources[key]?.takeIf { key in same }
+            source?.let { key to it }
+        }.toMap()
+        unmade = unmade.filterTo(HashSet()) { it in same }
+        for (mover in movers) {
+            val key = mover.video.path
+            if (key in sources || key in unmade) continue
+            clips.find(mover)?.let { sources = sources + (key to it) }
+        }
+    }
+
+    /** The first tile [onScreen], in grid order, that has nothing to loop yet and has not failed to get it. */
+    fun next(onScreen: List<Any>): Mover? = onScreen.firstOrNull { it in movers && it !in sources && it !in unmade }?.let(movers::get)
+
+    /** Gets [mover]'s tile something to loop, or leaves it on the slideshow when that fails. */
+    suspend fun make(mover: Mover) {
+        val key = mover.video.path
+        val made = clips.make(mover)
+        if (made != null) sources = sources + (key to made) else unmade = unmade + key
+    }
+
+    /**
      * Moves the [onScreen] tiles, in grid order. A tile that plays keeps its player for as long as it is on screen, scroll or
-     * not, and the places left free go to the first tiles on screen only once the grid is [settled], so a fling builds no
-     * player for the rows it passes. The others on screen show the slideshow.
+     * not, and the places left free go to the first tiles on screen that have something to loop, only once the grid is
+     * [settled], so a fling builds no player for the rows it passes. The others on screen show the slideshow.
      */
     fun update(onScreen: List<Any>, settled: Boolean, canPlay: Boolean) {
-        val kept = onScreen.filter { it in loops && it !in failed }
+        val playable = onScreen.filter { it in sources && it !in failed }
+        val kept = playable.filter { it in loops }
         loops = when {
             !canPlay -> emptySet()
             !settled -> kept.toSet()
-            else -> (kept + onScreen.filter { it !in kept && it !in failed }).take(LOOPING_CLIPS).toSet()
+            else -> (kept + playable.filter { it !in kept }).take(LOOPING_CLIPS).toSet()
         }
         slides = onScreen.toSet() - loops
     }
 
     /** The clip that plays, or the slideshow, over a moving tile's frame of [video], whose length is [durationMs] when known. */
     @Composable
-    fun Over(video: MediaRef, durationMs: Long?, endMs: Long?, modifier: Modifier) {
+    fun Over(video: MediaRef, durationMs: Long?, modifier: Modifier) {
         val file = File(video.path)
         when (video.path) {
-            in loops -> LoopingClip(file, endMs, positions, players, modifier, onFailed = { failed = failed + video.path })
+            in loops -> {
+                val source = sources[video.path] ?: return
+                // A preview holds only what the tile loops, so it plays whole.
+                val endMs = if (source == file) movers[video.path]?.endMs else null
+                LoopingClip(source, endMs, positions, players, modifier, onFailed = { failed = failed + video.path })
+            }
             in slides -> {
                 val length = durationMs ?: rememberLengthMillis(file, "${video.path}|${video.size}|${video.mtimeNs}")
                 if (length != null && length > 0) Slideshow(file, length, modifier)
@@ -369,22 +424,37 @@ internal class TileMotion(private val players: LoopPlayers) {
     }
 }
 
+/** Where the moving tiles' clips come from: the video, or its preview (#482). A test hands in others. */
+internal val LocalClips = staticCompositionLocalOf<(Context) -> Clips> { { VideoPreviews.get(it) } }
+
 /**
- * The [TileMotion] of a grid whose tiles in [movers] move, while they may: not while the system removes animations (read
- * when the screen opens), the full size view is [open] or the app is in the background. Unless [canPlay], they all show
- * the slideshow. [players] counts the loops' players, for the grid's full size view.
+ * The [TileMotion] of a grid whose [movers] move, while they may: not while the system removes animations (read when the
+ * screen opens), the full size view is [open] or the app is in the background. Unless [canPlay], they all show the
+ * slideshow. A tile on screen whose preview the job after a scan has not made gets one here, one at a time and only once
+ * the grid has settled, while the tiles may play. [players] counts the loops' players, for the grid's full size view.
  */
 @Composable
-internal fun rememberTileMotion(grid: LazyGridState, movers: Set<String>, open: Boolean, canPlay: Boolean, players: LoopPlayers): TileMotion {
+internal fun rememberTileMotion(grid: LazyGridState, movers: List<Mover>, open: Boolean, canPlay: Boolean, players: LoopPlayers): TileMotion {
     val context = LocalContext.current
     val animations = remember(context) { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f }
     val started = LocalLifecycleOwner.current.lifecycle.currentStateAsState().value.isAtLeast(Lifecycle.State.STARTED)
     val moves = animations && started && !open
-    val motion = remember(players) { TileMotion(players) }
-    LaunchedEffect(motion, grid, movers, moves, canPlay) {
-        // The tiles' keys are their paths. This emits when a tile comes or goes, the grid settles, or a clip fails.
-        snapshotFlow { Triple(grid.layoutInfo.visibleItemsInfo.map { it.key }.filter { it in movers }, grid.isScrollInProgress, motion.failed) }
-            .collect { (onScreen, scrolling, _) -> motion.update(if (moves) onScreen else emptyList(), !scrolling, canPlay) }
+    val clips = LocalClips.current
+    val motion = remember(context, clips, players) { TileMotion(clips(context.applicationContext), players) }
+    LaunchedEffect(motion, movers) { motion.find(movers) }
+    // The tiles' keys are their paths.
+    val onScreen = { grid.layoutInfo.visibleItemsInfo.map { it.key }.filter { it in motion.movers } }
+    LaunchedEffect(motion, grid, moves, canPlay) {
+        // This emits when a tile comes or goes, the grid settles, a clip fails or a tile gets something to loop.
+        snapshotFlow { Triple(onScreen(), grid.isScrollInProgress, motion.failed to motion.sources) }
+            .collect { (shown, scrolling, _) -> motion.update(if (moves) shown else emptyList(), !scrolling, canPlay) }
+    }
+    LaunchedEffect(motion, grid, movers, moves && canPlay) {
+        if (!moves || !canPlay) return@LaunchedEffect
+        while (true) {
+            val next = snapshotFlow { if (grid.isScrollInProgress) null else motion.next(onScreen()) }.filterNotNull().first()
+            motion.make(next)
+        }
     }
     return motion
 }

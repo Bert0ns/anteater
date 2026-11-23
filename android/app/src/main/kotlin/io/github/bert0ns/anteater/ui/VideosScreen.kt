@@ -192,7 +192,7 @@ fun VideosScreen(
     val grid = rememberLazyGridState()
     val scope = rememberCoroutineScope()
     // Every video moves, as in "Short clips", looping its first seconds, since these are the longest.
-    val movers = remember(shown) { shown.filterNot { it.unreadable }.map { it.video.path }.toSet() }
+    val movers = remember(shown) { shown.filterNot { it.unreadable }.map { Mover(it.video, it.pixels, it.durationMs, LONG_LOOP_MS) } }
     val loops = remember { LoopPlayers() }
     val motion = rememberTileMotion(grid, movers, fullSize != null, canPlay, loops)
     val chosen = videos.filter { it.video.path in selected }
@@ -317,7 +317,7 @@ private fun VideoTile(item: VideoItem, selected: Boolean, motion: TileMotion, on
             },
     ) {
         VideoFrame(File(path), "Videos.tile", Modifier.fillMaxSize(), unreadable = item.unreadable)
-        motion.Over(item.video, item.durationMs, LONG_LOOP_MS, Modifier.fillMaxSize())
+        motion.Over(item.video, item.durationMs, Modifier.fillMaxSize())
         // The description says all of this, so the visible texts stay out of the screen reader's way.
         Row(Modifier.align(Alignment.TopStart).clearAndSetSemantics {}.background(Color.Black.copy(alpha = 0.6f)).padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.PlayArrow, null, Modifier.size(16.dp), tint = Color.White)
