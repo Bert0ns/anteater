@@ -299,14 +299,26 @@ internal fun VideoPage(file: File, section: String, playback: VideoPlayback, unr
     }
 }
 
-/** The surface Media3 draws on, as large as the video's shape lets it be in the page. */
+/**
+ * The surface Media3 draws on, as large as the video's shape lets it be in the page. It is 1 dp until the player has drawn
+ * the first frame and so knows the video's size, which keeps the still frame under it in view until then.
+ */
 @Composable
 private fun VideoSurface(playback: VideoPlayback) {
     val size = playback.videoSize
     val shape = size?.let { Modifier.aspectRatio(it.width * it.pixelWidthHeightRatio / it.height) } ?: Modifier.size(1.dp)
     Box(Modifier.fillMaxSize(), Alignment.Center) {
         AndroidView(
-            factory = { SurfaceView(it) },
+            factory = { context ->
+                SurfaceView(context).apply {
+                    // A SurfaceView makes its surface only in a window's pre-draw pass that finds it laid out, and Compose lays
+                    // out a new AndroidView after that pass. Without another frame the surface would wait for whatever redraws
+                    // next, the position poll at worst, while the player skips the frames it has decoded (#479).
+                    addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
+                        if (holder.surface?.isValid != true) view.post(view::invalidate)
+                    }
+                }
+            },
             modifier = shape,
             onRelease = playback::detach,
             update = {
