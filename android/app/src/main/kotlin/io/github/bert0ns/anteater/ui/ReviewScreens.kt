@@ -360,6 +360,8 @@ fun CategoryScreen(
     val haptics = LocalHapticFeedback.current
     var askFavorites by remember { mutableStateOf(false) }
     var fullSize by remember { mutableStateOf<MediaRef?>(null) }
+    // The video tiles' loops, whose players the full size view waits for.
+    val loops = remember { LoopPlayers() }
     val images = page.flatMap { it.images }
     val toTrash = images.filter { it.image.path in marked }
     val favorites = toTrash.count { it.isFavorite }
@@ -398,7 +400,7 @@ fun CategoryScreen(
         val grid = rememberLazyGridState()
         LaunchedEffect(reviewOrder) { grid.scrollToItem(0) }
         val movers = remember(page, category, videos) { if (videos && category != null) movingTiles(category, page) else emptySet() }
-        val motion = rememberTileMotion(grid, movers, fullSize != null, canPlay)
+        val motion = rememberTileMotion(grid, movers, fullSize != null, canPlay, loops)
         // A short clip or a take loops whole, and the other videos, which can be long, their first seconds.
         val loopEndMs = if (category == Category.SHORT_CLIPS || category == Category.TAKES) null else LONG_LOOP_MS
         val columns = if (videos && category in SINGLE_VIDEO_CATEGORIES) videoColumns() else GridCells.Adaptive(110.dp)
@@ -483,7 +485,7 @@ fun CategoryScreen(
         if (fullSize != null && images.none { it.image == fullSize }) fullSize = null
     }
     fullSize?.let { start ->
-        FullSize(images, start, marked, onToggle, onExcludeFolder = {
+        FullSize(images, start, marked, onToggle, loops, onExcludeFolder = {
             fullSize = null
             haptics.performHapticFeedback(Haptic.KEEP.type)
             onExcludeFolder(it)
@@ -503,6 +505,8 @@ private fun FullSize(
     start: MediaRef,
     marked: Set<String>,
     onToggle: (MediaRef) -> Unit,
+    /** The grid's loops, which release their players before a video plays here. */
+    loops: LoopPlayers,
     onExcludeFolder: (MediaRef) -> Unit,
     onFavorite: (MediaRef, Boolean) -> Unit,
     onClose: () -> Unit,
@@ -510,7 +514,7 @@ private fun FullSize(
     val haptics = LocalHapticFeedback.current
     // A page holds one media type. The player is made when the first video plays, so an image page never makes one.
     val video = start.mediaType == MediaType.VIDEO
-    val playback = rememberVideoPlayback()
+    val playback = rememberVideoPlayback(loops = loops)
     val paths = items.map { it.image.path }
     LaunchedEffect(paths) { if (playback.loaded != null && playback.loaded !in paths) playback.stop() }
     val page: @Composable (Int) -> Unit = { page ->

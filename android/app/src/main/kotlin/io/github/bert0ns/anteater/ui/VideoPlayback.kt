@@ -105,10 +105,14 @@ internal fun stripTimes(durationMs: Long, count: Int = STRIP_FRAMES): List<Long>
  * turns the sound on and only then takes audio focus. The mute state is the view's, so the videos after an unmute play with
  * sound, and a view that opens again starts muted again.
  * Everything runs on the main thread, where the player is made: one player, made once and released when the view closes,
- * costs the view little, unlike the loops of a grid (`ClipLoop`).
+ * costs the view little, unlike the loops of a grid (`ClipLoop`). A video that is not loaded starts only once the grid's
+ * loops have released their players ([loops], #482), so the phone never runs their decoders and this one's together.
  */
-internal class VideoPlayback(startMuted: Boolean = false, private val create: () -> Player) {
+internal class VideoPlayback(startMuted: Boolean = false, private val loops: LoopPlayers = LoopPlayers(), private val create: () -> Player) {
     private var player: Player? = null
+
+    /** Counts the starts asked for, so a start that waits for the loops is dropped once another one, a pause, a stop or a release comes. */
+    private var starts = 0
 
     /** The path of the video the player holds, playing or paused, or null when it holds none. */
     var loaded by mutableStateOf<String?>(null)
@@ -159,8 +163,18 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
         }
     }
 
-    /** Plays [file] from [atMs], or moves to it when the player already holds it. A video that is not loaded replaces the one that is. */
+    /**
+     * Plays [file] from [atMs], or moves to it when the player already holds it. A video that is not loaded replaces the one
+     * that is, once the loops have released their players.
+     */
     fun play(file: File, atMs: Long = 0) {
+        failed = null
+        if (loaded == file.path) return load(file, atMs)
+        val start = ++starts
+        loops.afterRelease { if (start == starts) load(file, atMs) }
+    }
+
+    private fun load(file: File, atMs: Long) {
         val player = player ?: trace("Video.build") { create() }.also {
             it.addListener(listener)
             it.repeatMode = Player.REPEAT_MODE_ONE
@@ -168,7 +182,6 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
             (it as? ExoPlayer)?.setHandleAudioBecomingNoisy(true)
             player = it
         }
-        failed = null
         if (loaded == file.path) {
             seeking.begin()
             player.seekTo(atMs)
@@ -228,7 +241,9 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
         lockSpeed()
     }
 
+    /** Pauses the video, and drops a start that waits for the loops, so a video the app left behind never starts in the background. */
     fun pause() {
+        starts++
         player?.playWhenReady = false
     }
 
@@ -248,6 +263,7 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
 
     /** Lets go of the video and keeps the player for the next one. */
     fun stop() {
+        starts++
         player?.run {
             trace("Video.stop") {
                 stop()
@@ -307,12 +323,15 @@ internal fun heldSpeed(start: Float, upPx: Float, octavePx: Float): Float {
     return ((raw * 20f).roundToInt() / 20f).coerceIn(MIN_SPEED, MAX_SPEED)
 }
 
-/** The [VideoPlayback] of the full size view that calls this: it is released when the view leaves, and pauses when the app leaves the screen. */
+/**
+ * The [VideoPlayback] of the full size view that calls this: it is released when the view leaves, and pauses when the app
+ * leaves the screen. A video starts once the [loops] of the grid under the view have released their players.
+ */
 @Composable
-internal fun rememberVideoPlayback(startMuted: Boolean = true): VideoPlayback {
+internal fun rememberVideoPlayback(startMuted: Boolean = true, loops: LoopPlayers? = null): VideoPlayback {
     val context = LocalContext.current.applicationContext
     val factory = LocalPlayerFactory.current
-    val playback = remember(context, factory, startMuted) { VideoPlayback(startMuted) { factory(context, Looper.getMainLooper()) } }
+    val playback = remember(context, factory, startMuted, loops) { VideoPlayback(startMuted, loops ?: LoopPlayers()) { factory(context, Looper.getMainLooper()) } }
     DisposableEffect(playback) { onDispose { playback.release() } }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { playback.pause() }
     return playback
