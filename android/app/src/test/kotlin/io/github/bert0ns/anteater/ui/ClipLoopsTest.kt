@@ -447,6 +447,23 @@ class ClipLoopsTest {
         assertTrue(slideshows > 0)
     }
 
+    @Test
+    fun `the full size view's player starts only once the loops have released theirs`() {
+        show(page(clips(8)))
+        val loops = running.toList()
+        val busy = CountDownLatch(1)
+        Handler(clipLoops).post { busy.await(5, TimeUnit.SECONDS) } // releases that take their time
+
+        compose.onNodeWithContentDescription("clip1.mp4", substring = true).performTouchInput { longClick() }
+        compose.waitForIdle()
+        assertTrue(players.made.none { it.builtOn == Looper.getMainLooper().thread })
+
+        busy.countDown()
+        settle()
+        assertTrue(loops.all { it.released })
+        assertEquals(listOf("/sdcard/DCIM/Camera/clip1.mp4"), players.made.single { it.builtOn == Looper.getMainLooper().thread }.paths)
+    }
+
     private fun bestCopiesMove(category: Category) {
         show(copies(6), category = category)
 

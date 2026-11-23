@@ -193,7 +193,8 @@ fun VideosScreen(
     val scope = rememberCoroutineScope()
     // Every video moves, as in "Short clips", looping its first seconds, since these are the longest.
     val movers = remember(shown) { shown.filterNot { it.unreadable }.map { it.video.path }.toSet() }
-    val motion = rememberTileMotion(grid, movers, fullSize != null, canPlay)
+    val loops = remember { LoopPlayers() }
+    val motion = rememberTileMotion(grid, movers, fullSize != null, canPlay, loops)
     val chosen = videos.filter { it.video.path in selected }
     val favorites = chosen.count { it.isFavorite }
     val size = Formatter.formatShortFileSize(LocalContext.current, chosen.sumOf { it.video.size }).replace(' ', ' ')
@@ -270,7 +271,7 @@ fun VideosScreen(
         if (fullSize != null && shown.none { it.video.path == fullSize?.video?.path }) fullSize = null
     }
     fullSize?.let { start ->
-        FullSize(shown, start, selected, onToggle, onFavorite) { fullSize = null }
+        FullSize(shown, start, selected, onToggle, onFavorite, loops) { fullSize = null }
     }
 }
 
@@ -340,9 +341,9 @@ private fun VideoTile(item: VideoItem, selected: Boolean, motion: TileMotion, on
  * and the strip of frames in the bar, a swipe to another video stops it, and a heart makes the video a gallery favourite or takes that off (§8).
  */
 @Composable
-private fun FullSize(videos: List<VideoItem>, start: VideoItem, selected: Set<String>, onToggle: (String) -> Unit, onFavorite: (MediaRef, Boolean) -> Unit, onClose: () -> Unit) {
+private fun FullSize(videos: List<VideoItem>, start: VideoItem, selected: Set<String>, onToggle: (String) -> Unit, onFavorite: (MediaRef, Boolean) -> Unit, loops: LoopPlayers, onClose: () -> Unit) {
     val haptics = LocalHapticFeedback.current
-    val playback = rememberVideoPlayback()
+    val playback = rememberVideoPlayback(loops = loops)
     // A video that leaves the list while it plays leaves the pager's page where it was, so no swipe stops it.
     val paths = videos.map { it.video.path }
     LaunchedEffect(paths) { if (playback.loaded != null && playback.loaded !in paths) playback.stop() }

@@ -53,6 +53,26 @@ class ClipLoopTest {
     }
 
     @Test
+    fun `a loop counts its player from its play until its release has ended on the loops' thread`() {
+        val counting = LoopPlayers()
+        val loop = ClipLoop(players = counting) { players.factory(ApplicationProvider.getApplicationContext(), it) }
+        var started = false
+        loop.play(clip, null)
+        loop.play(clip, null) // the same player
+
+        counting.afterRelease { started = true }
+        flush()
+        assertFalse(started)
+
+        loop.release()
+        loop.release() // as a failed clip's tile does, and then its leaving
+        assertFalse(started) // the release has not run yet
+        flush()
+        assertTrue(started)
+        assertTrue(players.made.single().released)
+    }
+
+    @Test
     fun `a loop released before its view goes still releases the surface`() {
         loop.play(clip, null)
         val texture = SurfaceTexture(false)

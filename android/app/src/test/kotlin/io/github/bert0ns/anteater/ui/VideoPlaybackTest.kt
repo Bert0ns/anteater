@@ -12,6 +12,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.io.File
+import java.time.Duration
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
@@ -22,6 +23,101 @@ class VideoPlaybackTest {
     private val two = File("/sdcard/Movies/two.mp4")
 
     private fun idle() = shadowOf(android.os.Looper.getMainLooper()).idle()
+
+    private val loops = LoopPlayers()
+    private val waiting = VideoPlayback(loops = loops) { FakePlayer().also(players::add) }
+
+    @Test
+    fun `a video starts only once the grid's loops have released their players`() {
+        loops.taken()
+        loops.taken()
+
+        waiting.play(one)
+        assertTrue(players.isEmpty())
+        assertNull(waiting.loaded)
+
+        loops.released()
+        idle()
+        assertTrue(players.isEmpty())
+
+        loops.released()
+        idle()
+        assertEquals(one.path, waiting.loaded)
+        assertEquals(listOf(one.path), players.single().paths)
+        assertTrue(waiting.playing)
+    }
+
+    @Test
+    fun `a start that waits for the loops gives way to a later start, a pause, a stop or a release`() {
+        loops.taken()
+        waiting.play(one)
+        waiting.play(two)
+        loops.released()
+        idle()
+        assertEquals(listOf(two.path), players.single().paths)
+
+        loops.taken()
+        waiting.play(one)
+        waiting.stop()
+        loops.released()
+        idle()
+        assertNull(waiting.loaded)
+        assertEquals(emptyList<String>(), players.single().paths)
+
+        loops.taken()
+        waiting.play(one)
+        waiting.pause() // the app left the screen while the video waited
+        loops.released()
+        idle()
+        assertNull(waiting.loaded)
+        assertEquals(emptyList<String>(), players.single().paths)
+
+        loops.taken()
+        waiting.play(one)
+        waiting.release()
+        loops.released()
+        idle()
+        assertNull(waiting.loaded)
+        assertEquals(1, players.size)
+    }
+
+    @Test
+    fun `a video that waited for the loops still loops and starts at normal speed, and then takes the speed the user picks`() {
+        loops.taken()
+        waiting.setSpeed(2f) // picked on the video before, whose player is gone
+        waiting.play(one)
+        loops.released()
+        idle()
+
+        val player = players.single()
+        assertTrue(player.repeating)
+        assertEquals(1f, player.playbackSpeed)
+        assertEquals(1f, waiting.speed)
+
+        waiting.setSpeed(1.5f)
+        assertEquals(1.5f, player.playbackSpeed)
+    }
+
+    @Test
+    fun `a loaded video moves at once, whatever the loops hold`() {
+        waiting.play(one)
+        loops.taken()
+
+        waiting.seekTo(one, 6_100)
+
+        assertEquals(6_100, players.single().positionMs)
+    }
+
+    @Test
+    fun `a release that does not end holds the video back for 2 seconds at most`() {
+        loops.taken()
+        waiting.play(one)
+
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(Duration.ofMillis(RELEASE_WAIT_MS - 1))
+        assertNull(waiting.loaded)
+        shadowOf(android.os.Looper.getMainLooper()).idleFor(Duration.ofMillis(1))
+        assertEquals(one.path, waiting.loaded)
+    }
 
     @Test
     fun `nothing plays, and no player exists, until a video is asked for`() {

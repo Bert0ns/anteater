@@ -129,17 +129,58 @@ internal const val LONG_LOOP_MS = 10_000L
 /** The thread every loop's player lives on (#457): building, starting and releasing one blocks it, and not the main thread. */
 internal val clipLoops: Looper by lazy { HandlerThread("ClipLoops").apply { start() }.looper }
 
+/** How long the full size view waits at most for the loops to release their players: two releases of up to 500 ms each, and some room. */
+internal const val RELEASE_WAIT_MS = 2_000L
+
+/**
+ * The players the loops of a grid hold or have not finished releasing (#482), so its full size view's player starts only once
+ * they are gone: started beside them, it made Android reclaim 1 to 3 hardware decoders in every measured run. Everything runs
+ * on the main thread, and a release that ends on the loops' thread is posted back to it.
+ */
+internal class LoopPlayers {
+    private val main = Handler(Looper.getMainLooper())
+    private var live = 0
+    private val waiting = ArrayList<Runnable>()
+
+    /** A loop asked for a player. */
+    fun taken() {
+        live++
+    }
+
+    /** A loop's player is released, from any thread. */
+    fun released() {
+        main.post {
+            live--
+            if (live == 0) {
+                val ready = waiting.toList()
+                waiting.clear()
+                ready.forEach(Runnable::run)
+            }
+        }
+    }
+
+    /** Runs [start] once no loop holds a player, at once when none does, and after [RELEASE_WAIT_MS] at most. */
+    fun afterRelease(start: Runnable) {
+        if (live == 0) return start.run()
+        waiting += start
+        main.postDelayed({ if (waiting.remove(start)) start.run() }, RELEASE_WAIT_MS)
+    }
+}
+
 /**
  * A clip playing muted and in a loop in a tile, on a player made by [create] on [clipLoops]. Every call on the player is
  * posted there, and what the tile shows of it comes back to the main thread. The player draws on a [Surface] of the tile's
  * [TextureView], handed over on that thread too: Media3's own TextureView listener would call the player from the main thread,
  * and wait there for the codec to let go of the surface. [positions] holds where each clip was when its player was
  * released, and only that thread touches it: a release and the next play of the same clip are queued there in order, so
- * the play always finds where the release left it.
+ * the play always finds where the release left it. [players] counts the player from a play until its release has ended.
  */
-internal class ClipLoop(private val positions: MutableMap<String, Long> = HashMap(), private val create: (Looper) -> Player) : TextureView.SurfaceTextureListener {
+internal class ClipLoop(private val positions: MutableMap<String, Long> = HashMap(), private val players: LoopPlayers = LoopPlayers(), private val create: (Looper) -> Player) : TextureView.SurfaceTextureListener {
     private val loops = Handler(clipLoops)
     private val main = Handler(Looper.getMainLooper())
+
+    /** Whether [players] counts this loop's player. Only touched on the main thread. */
+    private var counted = false
 
     // Only touched on the loops' thread.
     private var player: Player? = null
@@ -172,6 +213,10 @@ internal class ClipLoop(private val positions: MutableMap<String, Long> = HashMa
      * first frame, with its audio track off, so it takes no audio focus, no audio decoder and no AudioTrack.
      */
     fun play(file: File, endMs: Long?) {
+        if (!counted) {
+            counted = true
+            players.taken()
+        }
         loops.post {
             path = file.path
             starting.begin()
@@ -193,6 +238,8 @@ internal class ClipLoop(private val positions: MutableMap<String, Long> = HashMa
 
     /** Lets go of the player, and keeps where in the clip it was. */
     fun release() {
+        val count = counted
+        counted = false
         loops.post {
             player?.run {
                 path?.let { positions[it] = currentPosition }
@@ -201,6 +248,7 @@ internal class ClipLoop(private val positions: MutableMap<String, Long> = HashMa
             }
             starting.end()
             player = null
+            if (count) players.released()
         }
     }
 
@@ -233,13 +281,13 @@ internal class ClipLoop(private val positions: MutableMap<String, Long> = HashMa
  * that is set, cropped to the tile as the frame is once the player knows the video's size. Its view is empty, and so
  * transparent, until the first frame arrives, and goes once the clip fails to play, so the frame under it shows through. A
  * clip that fails releases its player and calls [onFailed], so the grid can give its place to another tile. Its player is
- * released when the tile leaves the composition, and [positions] keeps where the clip was.
+ * released when the tile leaves the composition, and [positions] keeps where the clip was. [players] counts it until then.
  */
 @Composable
-internal fun LoopingClip(file: File, endMs: Long?, positions: MutableMap<String, Long>, modifier: Modifier, onFailed: () -> Unit) {
+internal fun LoopingClip(file: File, endMs: Long?, positions: MutableMap<String, Long>, players: LoopPlayers, modifier: Modifier, onFailed: () -> Unit) {
     val context = LocalContext.current.applicationContext
     val factory = LocalPlayerFactory.current
-    val loop = remember(file, factory, positions) { ClipLoop(positions) { factory(context, it) } }
+    val loop = remember(file, factory, positions, players) { ClipLoop(positions, players) { factory(context, it) } }
     DisposableEffect(loop) {
         loop.play(file, endMs)
         onDispose { loop.release() }
@@ -278,10 +326,10 @@ internal fun videoColumns(): GridCells = GridCells.Fixed(if (currentWindowAdapti
 /**
  * Which video tiles on screen move (docs/design.md §8, #457), by key: the ones in [loops] play their clip and the ones in
  * [slides] show the slideshow. It also keeps, for the life of the screen, the clips that failed to play and where each clip
- * was when its player was released, so it plays on from there.
+ * was when its player was released, so it plays on from there. [players] counts the loops' players until their releases end.
  */
 @Stable
-internal class TileMotion {
+internal class TileMotion(private val players: LoopPlayers) {
     var loops by mutableStateOf(emptySet<Any>())
         private set
     var slides by mutableStateOf(emptySet<Any>())
@@ -312,7 +360,7 @@ internal class TileMotion {
     fun Over(video: MediaRef, durationMs: Long?, endMs: Long?, modifier: Modifier) {
         val file = File(video.path)
         when (video.path) {
-            in loops -> LoopingClip(file, endMs, positions, modifier, onFailed = { failed = failed + video.path })
+            in loops -> LoopingClip(file, endMs, positions, players, modifier, onFailed = { failed = failed + video.path })
             in slides -> {
                 val length = durationMs ?: rememberLengthMillis(file, "${video.path}|${video.size}|${video.mtimeNs}")
                 if (length != null && length > 0) Slideshow(file, length, modifier)
@@ -324,15 +372,15 @@ internal class TileMotion {
 /**
  * The [TileMotion] of a grid whose tiles in [movers] move, while they may: not while the system removes animations (read
  * when the screen opens), the full size view is [open] or the app is in the background. Unless [canPlay], they all show
- * the slideshow.
+ * the slideshow. [players] counts the loops' players, for the grid's full size view.
  */
 @Composable
-internal fun rememberTileMotion(grid: LazyGridState, movers: Set<String>, open: Boolean, canPlay: Boolean): TileMotion {
+internal fun rememberTileMotion(grid: LazyGridState, movers: Set<String>, open: Boolean, canPlay: Boolean, players: LoopPlayers): TileMotion {
     val context = LocalContext.current
     val animations = remember(context) { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f }
     val started = LocalLifecycleOwner.current.lifecycle.currentStateAsState().value.isAtLeast(Lifecycle.State.STARTED)
     val moves = animations && started && !open
-    val motion = remember { TileMotion() }
+    val motion = remember(players) { TileMotion(players) }
     LaunchedEffect(motion, grid, movers, moves, canPlay) {
         // The tiles' keys are their paths. This emits when a tile comes or goes, the grid settles, or a clip fails.
         snapshotFlow { Triple(grid.layoutInfo.visibleItemsInfo.map { it.key }.filter { it in movers }, grid.isScrollInProgress, motion.failed) }
