@@ -1,10 +1,26 @@
 package io.github.bert0ns.anteater.ui
 
+import android.graphics.Bitmap
+import android.graphics.ColorSpace
+import androidx.tracing.trace
+import coil3.BitmapImage
+import coil3.ImageLoader
 import coil3.decode.DecodeResult
 import coil3.decode.Decoder
+import coil3.fetch.SourceFetchResult
+import coil3.request.Options
+import coil3.request.bitmapConfig
 import coil3.video.VideoFrameDecoder
+import coil3.video.videoFrameIndex
+import coil3.video.videoFrameMicros
+import coil3.video.videoFrameOption
+import coil3.video.videoFramePercent
 import io.github.bert0ns.anteater.tracing.traceSuspend
 import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -104,4 +120,60 @@ internal class QueuedFrameDecoder(private val queue: FrameQueue, private val sli
             queue.release(weight)
         }
     }
+}
+
+/** The thread that writes the frames a decode of the video gave to [TileCache.frames], one at a time. */
+private val frameStores = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
+
+/**
+ * The decoder of a video frame (docs/design.md §8, #481). A frame [TileCache.frames] holds decodes from its JPEG as a grid tile
+ * does ([TileDecoder]), never in [queue], so it waits for no decode of another video. Any other frame decodes from the video, by
+ * a decoder from [video], in [queue] as a [slide] or a still frame. A [cache miss][TileCache.Miss] stores what it decoded on
+ * [stores], once the permit is back and the frame is on its way to the tile, so the encode and the write delay neither.
+ */
+internal class FrameDecoderFactory(
+    private val queue: FrameQueue,
+    private val slide: Boolean,
+    private val stores: CoroutineScope = frameStores,
+    private val video: (SourceFetchResult, Options) -> Decoder,
+) : Decoder.Factory {
+    override fun create(result: SourceFetchResult, options: Options, imageLoader: ImageLoader): Decoder? {
+        if (result.source.metadata === TileCache.Hit) return TileDecoder.factory.create(result, options, imageLoader)
+        val decoder = QueuedFrameDecoder(queue, slide) { video(result, options) }
+        val miss = result.source.metadata as? TileCache.Miss ?: return decoder
+        return Decoder { decoder.decode()?.also { store(it, miss) } }
+    }
+
+    private fun store(result: DecodeResult, miss: TileCache.Miss) {
+        val bitmap = (result.image as? BitmapImage)?.bitmap ?: return
+        stores.launch { if (storable(bitmap)) trace("Frame.store") { miss.store(bitmap) } else trace("Frame.skip") {} }
+    }
+}
+
+/**
+ * Whether a JPEG gives [bitmap] back as it is: 8 bits a channel in [Bitmap.Config.ARGB_8888] or [Bitmap.Config.RGB_565], sRGB
+ * or no colour space, and no pixel that is not opaque, which a JPEG would turn black. A hardware bitmap cannot be read without
+ * a copy, and an HDR, BT.2020, extended or linear one would come back in other colours.
+ */
+internal fun storable(bitmap: Bitmap): Boolean {
+    if (bitmap.config != Bitmap.Config.ARGB_8888 && bitmap.config != Bitmap.Config.RGB_565) return false
+    val space = bitmap.colorSpace
+    if (space != null && space != ColorSpace.get(ColorSpace.Named.SRGB)) return false
+    if (!bitmap.hasAlpha()) return true
+    val row = IntArray(bitmap.width)
+    for (y in 0 until bitmap.height) {
+        bitmap.getPixels(row, 0, bitmap.width, 0, y, bitmap.width, 1)
+        if (row.any { it ushr 24 != 0xFF }) return false
+    }
+    return true
+}
+
+/**
+ * The parts of a video frame's [TileCache] key after the tile's: its time, percent and index, the retriever's option and the
+ * bitmap config. [Bitmap.Config.HARDWARE] counts as [Bitmap.Config.ARGB_8888], since the retriever hands back the same
+ * software frame for both, and Coil asks for one or the other by the thread it reads the request on.
+ */
+internal fun frameKey(options: Options): String {
+    val config = options.bitmapConfig.takeIf { it != Bitmap.Config.HARDWARE } ?: Bitmap.Config.ARGB_8888
+    return ":frame:${options.videoFrameMicros}:${options.videoFramePercent}:${options.videoFrameIndex}:${options.videoFrameOption}:$config"
 }

@@ -51,6 +51,8 @@ MediaMetadataRetriever and one codec each. "At once" is the most loads open at o
   frame waits, decodes, retries
                        Frame.wait, Frame.decode and Frame.retry: a frame's wait for one of the 2
                        decode permits, its decode, and the second decode of one that failed
+  frame cache          Frame.hit, Frame.miss, Frame.store and Frame.skip: the frames' disk cache
+                       lookups, and the misses' frames it stored or did not take
   video build, stop, detach, release
                        the full size player's calls on the main thread, which block it that long
   clip start, build, detach, release
@@ -322,6 +324,8 @@ def video_lines(sections: list[Section], stalls: list[Section]) -> list[str]:
         f"frame waits: {spread(named('Frame.wait'))}",
         f"frame decodes: {spread(named('Frame.decode'))}",
         f"frame retries: {spread(named('Frame.retry'))}",
+        f"frame cache: {len(named('Frame.hit'))} hits, {len(named('Frame.miss'))} misses, "
+        f"{len(named('Frame.store'))} stored, {len(named('Frame.skip'))} skipped",
     ]
     for name in VIDEO_CALLS:
         lines.append(f"{name.lower().replace('.', ' ')}: {listed(sections, name)}")
@@ -358,6 +362,10 @@ def main() -> None:
                     "Frame.wait",
                     "Frame.decode",
                     "Frame.retry",
+                    "Frame.hit",
+                    "Frame.miss",
+                    "Frame.store",
+                    "Frame.skip",
                 )
             )
             calls = ", ".join(f"'{n}'" for n in (*VIDEO_CALLS, *CLIP_CALLS))

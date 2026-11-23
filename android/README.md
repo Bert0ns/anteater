@@ -123,6 +123,8 @@ The code names its heavy steps with `androidx.tracing`, so a Perfetto trace of t
 | `Video.start`, `Video.seek` | the full size player (`VideoPlayback`): from a new video's start, and from a seek, to the first frame the player draws (`onRenderedFirstFrame`). An async section, and only one of each is open at a time: a new start or seek ends the one before |
 | `Video.build`, `Video.stop`, `Video.detach`, `Video.release` | the full size player's calls: building it, `stop` and `clearMediaItems` when it moves to another video, `clearVideoSurfaceView` (which waits for the player to let go of the surface), and `release`. They run on the main thread, so each blocks it that long |
 | `Frame.wait`, `Frame.decode`, `Frame.retry` | one video frame's decode (`QueuedFrameDecoder`, every video frame the app shows): the wait for one of its 2 permits (`FRAME_DECODES`), still frames before slideshow frames, the decode holding it, and the second decode of a frame whose first one failed, which runs alone. Async sections, so how many `Frame.decode` overlap at one time is the parallelism. A load section (`Videos.tile`, `Review.slideshow`, ...) holds its frame's wait and decode |
+| `Frame.hit`, `Frame.miss` | one video frame's lookup in the frames' disk cache (`TileCache.frames`), a section of no length: a hit decodes the stored JPEG as a tile does (`Tile.wait`, `Tile.decode`), with no `Frame.wait`; a miss decodes the video. A frame Coil's memory cache serves has neither. Never a name |
+| `Frame.store`, `Frame.skip` | after a miss, on the frames' own thread: the JPEG encode and the write of its frame, or a section of no length for a frame that is not stored (a transparent pixel, a colour space other than sRGB, or a config other than ARGB_8888 and RGB_565) |
 | `Clip.start` | a tile's loop (`ClipLoop`): from a play to the loop's first frame, like `Video.start` |
 | `Clip.build`, `Clip.detach`, `Clip.release` | the same calls for a tile's loop. The loops run on their own thread, not the main one |
 
@@ -186,6 +188,7 @@ It never taps a checkbox, the heart, "Exclude folder", Trash, Keep or Continue. 
 - `full size frame` and `full size strip`: the still frame of each full size page, and the strip's 5 frames under each video;
 - `video start` and `video seek`: each `Video.start` and `Video.seek`, the time to the first frame;
 - `frame waits`, `frame decodes`, `frame retries`: the `Frame.wait`, `Frame.decode` and `Frame.retry` sections, so a load's time splits into its wait for a permit and its decode, and a retry shows that a frame failed once;
+- `frame cache`: the `Frame.hit`, `Frame.miss`, `Frame.store` and `Frame.skip` sections of the run. The frames' disk cache outlives the process, so a cold start with a warm cache shows hits, and a `skip` count above 0 shows frames the cache does not take;
 - `video build, stop, detach, release` and `clip start, build, detach, release`: the `Video.*` and `Clip.*` sections of the full size player and of the tiles' loops;
 - `grid frame loads after the full size view`: the grid frame loads that start after the full size player's release, where 0 means Back found every frame in the memory cache;
 - `main thread stalls`: the app's main thread slices over 50 ms, the longest first.
