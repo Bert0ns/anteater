@@ -28,7 +28,8 @@ import java.io.IOException
  * The grid tiles' thumbnails on disk (docs/design.md §8): the bitmap a tile decoded, as a JPEG, so the next process start
  * decodes 30 to 40 KB instead of the original. Coil keeps no disk cache for local files. [disk] is Coil's own [DiskCache], which
  * evicts the least recently used thumbnails past its cap: the app deletes none of them itself. It lives in the app's cache
- * directory, so Android's "clear cache" empties it and the storage section of the settings counts it.
+ * directory, so Android's "clear cache" empties it and the storage section of the settings counts it. The video frames have an
+ * instance of their own, [frames], in another directory (#481).
  */
 internal class TileCache(private val disk: DiskCache, private val prefs: SharedPreferences, private val minBytes: Long = MIN_FILE_BYTES) {
     /** A tile request the cache holds: its thumbnail is the source. */
@@ -45,12 +46,15 @@ internal class TileCache(private val disk: DiskCache, private val prefs: SharedP
     /** [value] is the [tileKey] of [file], read when it was [length] bytes long and last modified at [modified]. */
     class Key(val value: String, val file: File, val length: Long, val modified: Long)
 
-    /** The key of [file]'s tile at the request's [size], for a file at least [minBytes] long, or null when it has none. */
-    fun key(file: File, size: Size, scale: Scale, precision: Precision): Key? {
+    /**
+     * The key of [file]'s tile at the request's [size], for a file at least [minBytes] long, or null when it has none. A video
+     * frame's key ends with its [frame] parts (see [frameKey]).
+     */
+    fun key(file: File, size: Size, scale: Scale, precision: Precision, frame: String = ""): Key? {
         val length = file.length()
         if (length < minBytes) return null
         val modified = file.lastModified()
-        return tileKey(file.path, length, modified, size, scale, precision)?.let { Key(it, file, length, modified) }
+        return tileKey(file.path, length, modified, size, scale, precision)?.let { Key(it + frame, file, length, modified) }
     }
 
     fun contains(key: Key): Boolean = snapshot(key)?.use { true } ?: false
@@ -91,30 +95,31 @@ internal class TileCache(private val disk: DiskCache, private val prefs: SharedP
     /**
      * Fetches a tile's file through the cache: its thumbnail on a hit, else the original, as the loader's own fetcher gives it, marked
      * [Miss] for the decoder to store. A file under [minBytes], or a size not in pixels, is the plain original. A `Tile.hit` or
-     * `Tile.miss` section, of no length, marks each lookup in the trace.
+     * `Tile.miss` section, of no length, marks each lookup in the trace, and `Frame.hit` or `Frame.miss` one of a video's
+     * [frames].
      */
-    class Fetcher(private val uri: Uri, private val options: Options, private val imageLoader: ImageLoader, private val cache: TileCache) : coil3.fetch.Fetcher {
+    class Fetcher(private val uri: Uri, private val options: Options, private val imageLoader: ImageLoader, private val cache: TileCache, private val frames: Boolean) : coil3.fetch.Fetcher {
         override suspend fun fetch(): FetchResult? {
             // The loader's components hold Coil's fetchers only: this one is the request's.
             val fetched = imageLoader.components.newFetcher(uri, options, imageLoader)?.first?.fetch()
             val original = fetched as? SourceFetchResult ?: return fetched
             val path = uri.filePath ?: return original
-            val key = cache.key(File(path), options.size, options.scale, options.precision) ?: return original
+            val key = cache.key(File(path), options.size, options.scale, options.precision, if (frames) frameKey(options) else "") ?: return original
             if (options.getExtra(COMPRESS_TILE)) cache.compressTileSize = options.size
             val hit = cache.source(key)
             if (hit == null) {
-                trace("Tile.miss") {}
+                trace(if (frames) "Frame.miss" else "Tile.miss") {}
                 val source = ImageSource(original.source.file(), original.source.fileSystem, metadata = Miss(cache, key))
                 return SourceFetchResult(source, original.mimeType, original.dataSource)
             }
-            trace("Tile.hit") {}
+            trace(if (frames) "Frame.hit" else "Tile.hit") {}
             original.source.close()
             return SourceFetchResult(hit, "image/jpeg", DataSource.DISK)
         }
 
-        /** For the `file:` URIs a [java.io.File] maps to. Any other data goes to Coil's own fetchers. */
-        class Factory(private val cache: (Context) -> TileCache) : coil3.fetch.Fetcher.Factory<Uri> {
-            override fun create(data: Uri, options: Options, imageLoader: ImageLoader): coil3.fetch.Fetcher? = if (data.scheme == "file") Fetcher(data, options, imageLoader, cache(options.context)) else null
+        /** For the `file:` URIs a [java.io.File] maps to, of video [frames] or not. Any other data goes to Coil's own fetchers. */
+        class Factory(private val frames: Boolean = false, private val cache: (Context) -> TileCache) : coil3.fetch.Fetcher.Factory<Uri> {
+            override fun create(data: Uri, options: Options, imageLoader: ImageLoader): coil3.fetch.Fetcher? = if (data.scheme == "file") Fetcher(data, options, imageLoader, cache(options.context), frames) else null
         }
     }
 
@@ -125,6 +130,9 @@ internal class TileCache(private val disk: DiskCache, private val prefs: SharedP
         /** A file this small decodes in a few ms, so its thumbnail would only push larger ones out. */
         const val MIN_FILE_BYTES = 1024L * 1024
 
+        /** About 250 grid videos, each a still frame of about 40 KB and 8 slideshow frames of about 25 KB. */
+        const val FRAMES_MAX_BYTES = 64L * 1024 * 1024
+
         const val QUALITY = 85
         private const val COMPRESS_SIZE = "compress_tile_size"
 
@@ -134,16 +142,30 @@ internal class TileCache(private val disk: DiskCache, private val prefs: SharedP
         @Volatile
         private var instance: TileCache? = null
 
-        /** The one cache of the process: Coil allows one [DiskCache] for each directory. */
+        @Volatile
+        private var framesInstance: TileCache? = null
+
+        /** The one tiles' cache of the process: Coil allows one [DiskCache] for each directory. */
         fun get(context: Context): TileCache = instance ?: synchronized(this) {
-            instance ?: run {
-                val app = context.applicationContext
-                val disk = DiskCache.Builder().directory(File(app.cacheDir, "tiles").toOkioPath()).maxSizeBytes(MAX_BYTES).build()
-                TileCache(disk, app.getSharedPreferences("tiles", Context.MODE_PRIVATE)).also { instance = it }
-            }
+            instance ?: create(context, "tiles", MAX_BYTES, MIN_FILE_BYTES).also { instance = it }
         }
 
-        val fetcherFactory = Fetcher.Factory(::get)
+        /**
+         * The video frames' cache, apart from the tiles' so the slideshows never push the photo tiles out, nor the reverse. It
+         * has no floor: a frame of even a small video opens a retriever and a codec.
+         */
+        fun frames(context: Context): TileCache = framesInstance ?: synchronized(this) {
+            framesInstance ?: create(context, "frames", FRAMES_MAX_BYTES, minBytes = 0).also { framesInstance = it }
+        }
+
+        private fun create(context: Context, directory: String, maxBytes: Long, minBytes: Long): TileCache {
+            val app = context.applicationContext
+            val disk = DiskCache.Builder().directory(File(app.cacheDir, directory).toOkioPath()).maxSizeBytes(maxBytes).build()
+            return TileCache(disk, app.getSharedPreferences("tiles", Context.MODE_PRIVATE), minBytes)
+        }
+
+        val fetcherFactory = Fetcher.Factory(cache = ::get)
+        val frameFetcherFactory = Fetcher.Factory(frames = true, cache = ::frames)
     }
 }
 

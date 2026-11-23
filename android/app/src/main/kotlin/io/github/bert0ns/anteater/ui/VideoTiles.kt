@@ -89,11 +89,14 @@ import java.io.File
 import kotlin.math.roundToInt
 
 /**
- * Decodes a frame of the file whatever its name says, since the screen that draws it knows it holds a video, under a permit of
- * [frameQueue]: the still frames in its first queue, and [slideFrames] in the slideshows' one.
+ * Decodes a frame of the file whatever its name says, since the screen that draws it knows it holds a video, from the frames'
+ * disk cache or under a permit of [frameQueue]: the still frames in its first queue, and [slideFrames] in the slideshows' one.
  */
-private val videoFrames = Decoder.Factory { result, options, _ -> QueuedFrameDecoder(frameQueue, slide = false) { VideoFrameDecoder(result.source, options) } }
-private val slideFrames = Decoder.Factory { result, options, _ -> QueuedFrameDecoder(frameQueue, slide = true) { VideoFrameDecoder(result.source, options) } }
+private val videoFrames = FrameDecoderFactory(frameQueue, slide = false) { result, options -> VideoFrameDecoder(result.source, options) }
+private val slideFrames = FrameDecoderFactory(frameQueue, slide = true) { result, options -> VideoFrameDecoder(result.source, options) }
+
+/** A video frame's request, through the frames' disk cache ([TileCache.frames]) and [decoder]. */
+private fun ImageRequest.Builder.frame(decoder: Decoder.Factory) = fetcherFactory(TileCache.frameFetcherFactory, coil3.Uri::class).decoderFactory(decoder)
 
 /**
  * A frame of the video, the first one or the one at [atMillis]. A file that is [unreadable] or whose frame does not decode
@@ -112,7 +115,7 @@ internal fun VideoFrame(file: File, section: String, modifier: Modifier, content
     }
 }
 
-private fun videoFrameRequest(context: Context, file: File, section: String, atMillis: Long?) = ImageRequest.Builder(context).data(file).decoderFactory(videoFrames).apply { if (atMillis != null) videoFrameMillis(atMillis) }.traced(section).build()
+private fun videoFrameRequest(context: Context, file: File, section: String, atMillis: Long?) = ImageRequest.Builder(context).data(file).frame(videoFrames).apply { if (atMillis != null) videoFrameMillis(atMillis) }.traced(section).build()
 
 /**
  * How many tiles of a video review play at once: a decoder each. The phone measured it (#438): at 4, Android already takes
@@ -377,7 +380,7 @@ internal fun Slideshow(file: File, durationMs: Long, modifier: Modifier) {
     Box(modifier.testTag("slideshow")) { shown?.let { Image(it, null, Modifier.fillMaxSize().testTag("slide"), contentScale = ContentScale.Crop) } }
 }
 
-private fun slideFrameRequest(context: Context, file: File, atMillis: Long) = ImageRequest.Builder(context).data(file).decoderFactory(slideFrames)
+private fun slideFrameRequest(context: Context, file: File, atMillis: Long) = ImageRequest.Builder(context).data(file).frame(slideFrames)
     .videoFrameMillis(atMillis).videoFrameOption(MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
     .size(SLIDE_FRAME_PX).scale(Scale.FILL).bitmapConfig(Bitmap.Config.RGB_565).allowHardware(false)
     .memoryCachePolicy(CachePolicy.DISABLED).traced("Review.slideshow").build()
