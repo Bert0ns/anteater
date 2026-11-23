@@ -148,4 +148,6 @@ data class IndexedMedia(
     val unreadable: Boolean = false,
     /** A video's length from the index, null until the video steps have read it. */
     val durationMs: Long? = null,
+    /** A video's width times its height from the index, null until the video steps have read them. */
+    val pixels: Long? = null,
 )

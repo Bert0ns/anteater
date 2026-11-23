@@ -1340,13 +1340,14 @@ class ReviewTest {
         val best = duplicateVideo("DCIM/Camera/clip.mov", 300, "v", Role.BEST)
         val copy = duplicateVideo("Download/clip.mov", 300, "v", Role.INFERIOR)
         index.setUnreadable(copy.path)
-        index.setVideoMetadata(best.path, VideoMetadata(1920, 1080, 61_000, 30.0, 1000, true, "video/avc", false, null, null))
+        index.setVideoMetadata(best.path, VideoMetadata(3840, 2160, 61_000, 30.0, 1000, true, "video/avc", false, null, null))
 
         val items = page(Category.EXACT_DUPLICATE, mediaType = MediaType.VIDEO).groups.single().images
 
         assertEquals(listOf(best, copy), items.map { it.image })
         assertEquals(listOf(false, true), items.map { it.unreadable })
         assertEquals(listOf(61_000L, null), items.map { it.durationMs })
+        assertEquals(listOf(3840L * 2160, null), items.map { it.pixels }) // the best copy's tile loops a preview (docs/design.md §8)
     }
 
     @Test
@@ -1499,6 +1500,7 @@ class ReviewTest {
         assertEquals(listOf(true, false, false), items.map { it.isFavorite })
         assertEquals(listOf(false, true, false), items.map { it.unreadable })
         assertEquals(listOf(null, null, 61_000L), items.map { it.durationMs })
+        assertEquals(listOf(null, null, 1920L * 1080), items.map { it.pixels }) // its tile loops the file (docs/design.md §8)
     }
 
     @Test

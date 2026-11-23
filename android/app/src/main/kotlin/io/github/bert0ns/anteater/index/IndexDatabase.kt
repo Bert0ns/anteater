@@ -229,6 +229,8 @@ data class StoredVideo(
     @ColumnInfo(name = "media_type") val mediaType: String,
     val unreadable: Boolean,
     @ColumnInfo(name = "duration_ms") val durationMs: Long?,
+    /** Its width times its height, null until the video steps have read them. */
+    val pixels: Long?,
 )
 
 data class StoredMetadata(
@@ -269,6 +271,8 @@ data class StoredState(
     @ColumnInfo(name = "media_type") val mediaType: String,
     val unreadable: Boolean,
     @ColumnInfo(name = "duration_ms") val durationMs: Long?,
+    /** A video's width times its height, null for an image and until the video steps have read them. */
+    val pixels: Long?,
 )
 
 @Dao
@@ -297,7 +301,7 @@ interface IndexDao {
     @Query("SELECT path, size, mtime_ns, media_type FROM images WHERE review_state != 'trashed' ORDER BY path")
     suspend fun notTrashedMedia(): List<StoredRef>
 
-    @Query("SELECT path, size, mtime_ns, media_type, unreadable, duration_ms FROM images WHERE media_type = 'video' AND review_state = 'unreviewed' ORDER BY size DESC, path")
+    @Query("SELECT path, size, mtime_ns, media_type, unreadable, duration_ms, width * height AS pixels FROM images WHERE media_type = 'video' AND review_state = 'unreviewed' ORDER BY size DESC, path")
     suspend fun unreviewedVideos(): List<StoredVideo>
 
     @Query("SELECT EXISTS(SELECT 1 FROM images WHERE media_type = 'video')")
@@ -445,7 +449,7 @@ interface IndexDao {
     suspend fun sampledTimes(model: String, modelVersion: Int, framesVersion: Int): List<StoredFrameTime>
 
     @Query(
-        """SELECT path, size, mtime_ns, media_type, unreadable, duration_ms FROM images
+        """SELECT path, size, mtime_ns, media_type, unreadable, duration_ms, width * height AS pixels FROM images
            WHERE media_type = 'video' AND width IS NOT NULL AND NOT unreadable AND review_state != 'trashed'
            AND frames_unreadable IS NOT :framesVersion ORDER BY path""",
     )
@@ -585,11 +589,17 @@ interface IndexDao {
     @Query("SELECT * FROM embeddings WHERE model = :model AND model_version = :modelVersion AND path IN (:paths)")
     suspend fun embeddingsOf(model: String, modelVersion: Int, paths: List<String>): List<EmbeddingRow>
 
-    @Query("SELECT path, size, mtime_ns, review_state, media_type, unreadable, duration_ms FROM images ORDER BY path")
+    @Query(
+        """SELECT path, size, mtime_ns, review_state, media_type, unreadable, duration_ms,
+           CASE WHEN media_type = 'video' THEN width * height END AS pixels FROM images ORDER BY path""",
+    )
     suspend fun states(): List<StoredState>
 
     /** [states], blocking, as [allSignals]. */
-    @Query("SELECT path, size, mtime_ns, review_state, media_type, unreadable, duration_ms FROM images ORDER BY path")
+    @Query(
+        """SELECT path, size, mtime_ns, review_state, media_type, unreadable, duration_ms,
+           CASE WHEN media_type = 'video' THEN width * height END AS pixels FROM images ORDER BY path""",
+    )
     fun statesNow(): List<StoredState>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)

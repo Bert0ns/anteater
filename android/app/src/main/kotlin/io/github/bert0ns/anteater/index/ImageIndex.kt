@@ -35,8 +35,8 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.atomic.AtomicLong
 
-/** A video as "Largest videos" lists it. */
-data class IndexedVideo(val ref: MediaRef, val unreadable: Boolean, val durationMs: Long?)
+/** A video as "Largest videos" lists it. [pixels] is its width times its height, null until the video steps have read them. */
+data class IndexedVideo(val ref: MediaRef, val unreadable: Boolean, val durationMs: Long?, val pixels: Long? = null)
 
 /** Methods taking a path throw [NoSuchElementException] for an image that was never recorded. */
 class ImageIndex(private val db: IndexDatabase) :
@@ -292,7 +292,7 @@ class ImageIndex(private val db: IndexDatabase) :
      * The videos whose metadata was read, readable and out of the trash, with their duration, leaving out those whose frames did
      * not read at [framesVersion]: the ones the frames step samples.
      */
-    suspend fun readVideos(framesVersion: Int): List<IndexedVideo> = dao.readVideos(framesVersion).map { IndexedVideo(MediaRef(it.path, it.size, it.mtimeNs, MediaType.of(it.mediaType)), it.unreadable, it.durationMs) }
+    suspend fun readVideos(framesVersion: Int): List<IndexedVideo> = dao.readVideos(framesVersion).map { IndexedVideo(MediaRef(it.path, it.size, it.mtimeNs, MediaType.of(it.mediaType)), it.unreadable, it.durationMs, it.pixels) }
 
     /** Marks a video whose frames do not read, so it is not decoded again at this version. */
     suspend fun setFramesUnreadable(path: String, framesVersion: Int) = write { require(dao.setFramesUnreadable(path, framesVersion), path) }
@@ -436,7 +436,7 @@ class ImageIndex(private val db: IndexDatabase) :
      * Every video the user has not reviewed, largest first: not in the trash and not kept. The excluded folders are the
      * caller's to apply. [IndexedVideo.durationMs] is null until the video steps have read the file (docs/design.md §6.5).
      */
-    suspend fun unreviewedVideos(): List<IndexedVideo> = dao.unreviewedVideos().map { IndexedVideo(MediaRef(it.path, it.size, it.mtimeNs, MediaType.of(it.mediaType)), it.unreadable, it.durationMs) }
+    suspend fun unreviewedVideos(): List<IndexedVideo> = dao.unreviewedVideos().map { IndexedVideo(MediaRef(it.path, it.size, it.mtimeNs, MediaType.of(it.mediaType)), it.unreadable, it.durationMs, it.pixels) }
 
     /** Whether the index holds a video, reviewed or not: false until a scan has found one. */
     suspend fun hasVideos(): Boolean = dao.hasVideos()
@@ -462,6 +462,7 @@ class ImageIndex(private val db: IndexDatabase) :
                     seen[row.path].orEmpty().toSet(),
                     row.unreadable,
                     row.durationMs,
+                    row.pixels,
                 )
             }
         }

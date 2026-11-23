@@ -111,13 +111,15 @@ data class ReviewItem(
     val unreadable: Boolean = false,
     /** A video's length from the index, so its full size view needs no retriever for it. */
     val durationMs: Long? = null,
+    /** A video's width times its height from the index, which says whether its tile loops the file or a preview (docs/design.md §8). */
+    val pixels: Long? = null,
 )
 
 /**
- * A video in "Largest videos" (docs/design.md §6.5). [durationMs] is null until the video steps have read the file, and an
- * [unreadable] one stays in the list: the screen shows a placeholder and says so.
+ * A video in "Largest videos" (docs/design.md §6.5). [durationMs] and [pixels], its width times its height, are null until
+ * the video steps have read the file, and an [unreadable] one stays in the list: the screen shows a placeholder and says so.
  */
-data class VideoItem(val video: MediaRef, val durationMs: Long?, val unreadable: Boolean, val isFavorite: Boolean)
+data class VideoItem(val video: MediaRef, val durationMs: Long?, val unreadable: Boolean, val isFavorite: Boolean, val pixels: Long? = null)
 
 data class CategorySummary(val category: Category, val count: Int, val hasDetector: Boolean = true, val bytes: Long = 0)
 
@@ -240,7 +242,7 @@ class Review(
     suspend fun largestVideos(): List<VideoItem> = withContext(Dispatchers.Default) {
         val excluded = index.excludedFolders()
         val favorites = favorites()
-        index.unreviewedVideos().filterNot { isExcluded(it.ref.path, excluded) }.map { VideoItem(it.ref, it.durationMs, it.unreadable, it.ref.path in favorites) }
+        index.unreviewedVideos().filterNot { isExcluded(it.ref.path, excluded) }.map { VideoItem(it.ref, it.durationMs, it.unreadable, it.ref.path in favorites, it.pixels) }
     }
 
     /** How many candidates of a [mediaType] each category would list at [thresholds] and [videoThresholds], which are the ones in use by default. */
@@ -440,7 +442,7 @@ class Review(
 
     private suspend fun singles(category: Category, candidates: List<Candidate>, grouping: ReviewOrder, favorites: Set<String>): List<ReviewGroup> {
         val groups = candidates.map {
-            ReviewGroup(it.image.ref.path, listOf(ReviewItem(it.image.ref, suggestTrash = true, isCandidate = true, score = score(it, category), reasons = it.reasons, isFavorite = it.image.ref.path in favorites, unreadable = it.image.unreadable, durationMs = it.image.durationMs)))
+            ReviewGroup(it.image.ref.path, listOf(ReviewItem(it.image.ref, suggestTrash = true, isCandidate = true, score = score(it, category), reasons = it.reasons, isFavorite = it.image.ref.path in favorites, unreadable = it.image.unreadable, durationMs = it.image.durationMs, pixels = it.image.pixels)))
         }
         if (!grouping.byDate) return groups
         val capturedAt = index.capturedAt()
@@ -520,6 +522,7 @@ class Review(
                     isFavorite = image.ref.path in favorites,
                     unreadable = image.unreadable,
                     durationMs = image.durationMs,
+                    pixels = image.pixels,
                 )
             }
             ReviewGroup(

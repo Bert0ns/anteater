@@ -403,6 +403,8 @@ class ImageIndexTest {
         setReviewState(trashed.path, ReviewState.TRASHED)
 
         assertEquals(listOf(VIDEO to 12_345L), readVideos(1).map { it.ref to it.durationMs })
+        assertEquals(listOf(1080L * 1920), readVideos(1).map { it.pixels })
+        assertEquals(mapOf(VIDEO.path to 1080L * 1920, waiting.path to null, unreadable.path to null), unreviewedVideos().associate { it.ref.path to it.pixels })
     }
 
     @Test
