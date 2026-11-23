@@ -713,7 +713,7 @@ internal fun ZoomableImage(path: String, onClose: () -> Unit) {
         fullSize = true,
         contentScale = ContentScale.Fit,
         modifier = Modifier.fillMaxSize()
-            .swipeBar(LocalFullSizeBar.current)
+            .swipeBar(LocalFullSizeBar.current, onClose)
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)

@@ -288,7 +288,7 @@ internal fun VideoPage(file: File, section: String, playback: VideoPlayback, unr
             R.string.video_play
         },
     )
-    Box(Modifier.fillMaxSize().swipeBar(LocalFullSizeBar.current).clickable(onClickLabel = tap, onClick = if (unreadable) onClose else ({ playback.toggle(file) }))) {
+    Box(Modifier.fillMaxSize().swipeBar(LocalFullSizeBar.current, onClose).clickable(onClickLabel = tap, onClick = if (unreadable) onClose else ({ playback.toggle(file) }))) {
         VideoFrame(file, section, Modifier.fillMaxSize(), ContentScale.Fit, unreadable)
         if (showing) VideoSurface(playback)
         if (!unreadable && !(showing && playback.playing)) {

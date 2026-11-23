@@ -224,4 +224,77 @@ class VideoBarTest {
         assertEquals(Player.REPEAT_MODE_ONE, viewPlayers.single().repeatMode)
         assertTrue(viewPlayers.single().repeating)
     }
+
+    private fun assertOpen(open: Boolean) {
+        compose.waitForIdle()
+        if (open) compose.onNodeWithTag("fullSize").assertExists() else compose.onNodeWithTag("fullSize").assertDoesNotExist()
+    }
+
+    @Test
+    fun `with the bar shown the first swipe down hides it and the second closes the view`() {
+        open()
+        assertBar(shown = true)
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        assertBar(shown = false)
+        assertOpen(true)
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        assertOpen(false)
+        assertTrue(viewPlayers.single().released)
+    }
+
+    @Test
+    fun `a swipe down on the bar a playing video hid closes the view and releases the player`() {
+        open()
+        playAboutASecond()
+        assertBar(shown = false)
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+
+        assertOpen(false)
+        assertTrue(viewPlayers.single().released)
+    }
+
+    @Test
+    fun `with the video paused the first swipe down hides the bar and the second closes the view`() {
+        open()
+        playAboutASecond()
+        compose.onNodeWithTag("fullSize").performTouchInput { click() } // paused: the bar is back
+        assertFalse(viewPlayers.single().playing)
+        assertBar(shown = true)
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        assertBar(shown = false)
+        assertOpen(true)
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        assertOpen(false)
+    }
+
+    @Test
+    fun `a swipe up between two swipes down brings the bar back, so it takes two again`() {
+        open()
+        playAboutASecond()
+        compose.onNodeWithTag("fullSize").performTouchInput { click() } // paused, so the clock does not hide the bar
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeUp() }
+        assertBar(shown = true)
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+
+        assertBar(shown = false)
+        assertOpen(true)
+    }
+
+    @Test
+    fun `with a touch exploration service on, swipes down neither hide the bar nor close the view`() {
+        open(touchExploration = true)
+        playAboutASecond()
+
+        repeat(3) { compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() } }
+
+        assertBar(shown = true)
+        assertOpen(true)
+    }
 }

@@ -352,6 +352,23 @@ class TrashScreenTest {
     }
 
     @Test
+    fun `in the full screen photo the first swipe down hides the bar and the second closes the view`() {
+        compose.setContent { TrashScreen(listOf(trashed[0]), emptySet(), {}, { _, _ -> }, {}, {}) }
+        compose.onNodeWithContentDescription(trashed[0].file.name, substring = true).performTouchInput { longClick() }
+        compose.waitForIdle()
+        compose.onNodeWithText("27 days left").assertExists()
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        compose.waitForIdle()
+        compose.onNodeWithText("27 days left").assertDoesNotExist()
+        compose.onNodeWithTag("fullSize").assertExists()
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("fullSize").assertDoesNotExist()
+    }
+
+    @Test
     fun `a trashed video whose length cannot be read has the placeholder, no play button and no controls`() {
         val players = Players()
         val broken = clip.copy(MediaRef("/sdcard/DCIM/broken.mp4", 412_000_000, 0, MediaType.VIDEO), file = File("/sdcard/.anteater-trash/b/broken.mp4")) // no metadata, so the retriever fails
