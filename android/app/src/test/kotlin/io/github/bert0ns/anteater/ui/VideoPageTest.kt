@@ -1,9 +1,13 @@
 package io.github.bert0ns.anteater.ui
 
+import android.view.SurfaceView
+import android.view.View
+import android.view.ViewGroup
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.junit4.createComposeRule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -11,6 +15,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.io.File
 
@@ -48,5 +53,40 @@ class VideoPageTest {
         compose.waitForIdle()
 
         assertTrue(players.isEmpty())
+    }
+
+    @Test
+    fun `the surface of a video that starts asks for another frame once it has its place, so its surface does not wait for the next redraw`() {
+        lateinit var root: View
+        compose.setContent {
+            root = LocalView.current
+            CompositionLocalProvider(LocalPageSettled provides true) { VideoPage(file, "Test.fullSize", playback, unreadable = false, onClose = {}) }
+        }
+        compose.waitForIdle()
+
+        val surface = root.rootView.surfaceView()!!
+        assertTrue("laid out", surface.width > 0)
+        assertTrue("invalidated", shadowOf(surface).wasInvalidated())
+    }
+
+    @Test
+    fun `a playing video's surface takes the video's shape from the player's event, with no position poll`() {
+        lateinit var root: View
+        compose.setContent {
+            root = LocalView.current
+            CompositionLocalProvider(LocalPageSettled provides true) { VideoPage(file, "Test.fullSize", playback, unreadable = false, onClose = {}) }
+        }
+        compose.waitForIdle()
+
+        // The page has no controls, so nothing polls the player: the fake one reports 1920 x 1080 once it is ready.
+        val surface = root.rootView.surfaceView()!!
+        assertEquals(root.width, surface.width)
+        assertEquals(root.width * 1080f / 1920, surface.height.toFloat(), 1f)
+    }
+
+    private fun View.surfaceView(): SurfaceView? = when (this) {
+        is SurfaceView -> this
+        is ViewGroup -> (0 until childCount).firstNotNullOfOrNull { getChildAt(it).surfaceView() }
+        else -> null
     }
 }
