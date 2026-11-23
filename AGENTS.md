@@ -4,37 +4,32 @@ Most of the code in this repository is written by AI coding agents. Read this fi
 
 ## Ground rules
 
-- Everything in English: code, identifiers, comments, docs, commit messages. The exceptions are `android/app/src/main/res/values-it/strings.xml`, which is Italian, `site/src/i18n/it.json`, which is the Italian site, and the Italian literals that tests hold as assertion data.
+- Everything in English: code, identifiers, comments, docs, commits and issues. Only `android/app/src/main/res/values-it/strings.xml`, `site/src/i18n/it.json` and test assertion literals are Italian.
+- Every new user-facing string in `android/` or `site/` needs its English and Italian translations in the same change (`values/strings.xml` and `values-it/strings.xml`; `site/src/i18n/en.json` and `it.json` with the same keys and the app's Italian terms).
 - Read [`docs/design.md`](docs/design.md) before starting. If a change contradicts a decision there, update the design doc in the same change and explain why.
 - Never commit image data or anything derived from personal images (embeddings, thumbnails, label files). Keep it under `lab/data/`, which is ignored by git.
 - Never write code that deletes files without going through the trash abstraction.
-- Every new user-facing string in `android/` needs its Italian translation in `values-it/strings.xml` in the same change, or `lintDebug` fails. Code, docs, commits and issues stay in English.
-- The site works the same way: every string goes in `site/src/i18n/en.json` and `it.json` in the same change, with the same keys, or the `site` job fails. Use the app's Italian terms for the same features, so the site and the app read alike.
 - Prefer `adb.exe` over `adb` when connecting to the phone, where available, since it is faster.
 
 ## Architecture rules
 
 - Detectors emit `Signal`s and never decide on their own. Ranking lives in the `Ranker`.
 - Recall over precision: no detector or ranker may drop a candidate because of protection signals. Protection signals only change the ordering.
-- Photo age must not be used as a deletion signal.
+- Photo and video age must not be used as a deletion signal.
 - Keep the Python lab (`lab/`) and the Android app (`android/`) structurally parallel: same component names, same interfaces.
 
 ## Checks
 
-The deterministic checks must pass before a PR is ready, and a red check means it is not. Run them locally first:
+All checks must pass locally before a PR is ready (CI runs `lab`, `android`, `parity`, `site` and `commit-format`):
 
 - `lab/`: `uv run ruff check && uv run ruff format --check && uv run pytest`
-- `android/`: `./gradlew ktlintCheck testDebugUnitTest lintDebug assembleDebug :baselineprofile:compileNonMinifiedReleaseKotlin`, and `./gradlew ktlintFormat` fixes the formatting
-- Gradle builds from several worktrees on one machine fight over the shared Gradle caches and the CPU, and fail on cache lock timeouts. Run Gradle through `flock`, so they wait in a queue: `flock /tmp/cribrum-gradle.lock ./gradlew ...`. The Android build and its Robolectric tests need JDK 21. The lock keeps its old name, `cribrum-gradle.lock`, on purpose, so that every worktree and agent still shares one queue.
-- Run the checks once, in one Gradle call, not several Gradle runs in parallel. If a run takes more than 30 minutes, look at `ps` and `uptime` for a stuck or starved build instead of waiting on it.
-- `site/`: `npm ci && npm run check`, with the Node version in `site/.nvmrc`. It builds the site, checks that `en.json` and `it.json` have the same keys, checks the internal links of the built pages, and checks the colour contrast of the tokens. The four run alone as `npm run build`, `npm run check:i18n`, `npm run check:links` and `npm run check:contrast`.
-- `python3 lab/scripts/check_parity.py` checks that lab and android agree on detector ids, versions and thresholds. When you change one side, change the other, and bump the detector version if its output changes.
-
-CI runs `lab`, `android`, `parity`, `site` and `commit-format` on every PR, and branch protection on `main` requires them to pass.
+- `android/` (JDK 21): `flock /tmp/cribrum-gradle.lock ./gradlew ktlintCheck testDebugUnitTest lintDebug assembleDebug :baselineprofile:compileNonMinifiedReleaseKotlin` (`./gradlew ktlintFormat` fixes formatting). Always run in one `flock` call so worktrees share one queue; if a run exceeds 30 minutes, check `ps` and `uptime` for a stuck build.
+- `site/` (Node from `site/.nvmrc`): `npm ci && npm run check` (runs `build`, `check:i18n`, `check:links` and `check:contrast`).
+- `python3 lab/scripts/check_parity.py`: checks that `lab/` and `android/` agree on detector ids, versions, media types, thresholds and constants. Bump the detector version if its output changes.
 
 ## Skills
 
-Project skills live in [`.agents/skills/`](.agents/skills/) (`.claude/skills/` only holds symlinks to them). Read a skill's `SKILL.md` before the task it covers.
+Project skills live in [`.agents/skills/`](.agents/skills/) (`.claude/skills/` holds symlinks). Read a skill's `SKILL.md` before the task it covers.
 
 | Skill | Use it for |
 |---|---|
@@ -47,65 +42,31 @@ Project skills live in [`.agents/skills/`](.agents/skills/) (`.claude/skills/` o
 | `grilling` | Stress-testing a design decision before it goes into `docs/design.md` |
 | `ui-council` | A UI/UX review of the Android app by two models, on the UI gallery |
 
-`ui-council` belongs to this repository, so it is edited here. The others come from [Bert0ns/agent-skills](https://github.com/Bert0ns/agent-skills), pinned in `skills-lock.json`. Update them with `npx skills update -p`, and never edit them in place.
+`ui-council` is edited in this repository. The others come from [Bert0ns/agent-skills](https://github.com/Bert0ns/agent-skills), pinned in `skills-lock.json`; update them with `npx skills update -p` and never edit them in place.
 
 ## Which model does the work
 
-Each task goes to one of four models, picked by how hard it is and by which parts of the code it touches.
-
 | Tier | Models | Use them for |
 |---|---|---|
-| Workers | Sonnet 5.5 high, Gemini 4 Hydrogen high | Most features and fixes, UI changes, tests, docs, and the hygiene and dependency routines |
+| Workers | Sonnet 5.5 high, Gemini 4 Hydrogen high | Most features and fixes, UI changes, tests and docs |
 | Strong | Opus 5.5 medium or high, Gemini 4 Argon medium or high, Gemini 4 Neon medium or high | The ranker and its scoring, concurrency and the scan worker, database migrations, design decisions, performance work whose output must not change, and tasks a worker got wrong |
 
-The workers do most of the implementing. Gemini 4 Hydrogen high is a little weaker than Sonnet 5.5 high, so it gets the simpler tasks of the two. Among the strong models, Opus 5.5 medium fits moderate logic changes, and Opus 5.5 high or Gemini 4 Argon the hardest ones.
-
-A task that works on the phone a lot, such as installing builds, driving the app or measuring on it, goes to a strong model, at least Opus 5.5 medium.
-
-Reviews follow the same tiers:
-
-- The reviewer is a different model from the author, from another provider when possible.
-- The reviewer's tier follows how hard the change is, not who wrote it. A worker can review a small change, and a tricky one gets a strong model.
-- Editing `docs/design.md` alone does not call for a strong reviewer. A new design decision does.
-- A check that review findings were fixed takes a worker.
-
-Credits decide what is available on a given day. When one model runs out, use the other one in the same tier, and keep the reviewer different from the author.
-
-In T3 Code, an agent that hands out work starts each issue as its own top-level thread, in a worktree, so the maintainer can follow it and talk to it. It does not start them as subagents or delegated tasks. Reviews and checks of review fixes can run as delegated tasks.
-
-## Routines
-
-Routines that keep the codebase healthy are issue templates in [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/). Nothing runs on its own. The maintainer opens an issue from a template and says "prendi in mano l'issue numero X", and the issue body is the whole prompt. Each routine starts from the commit its previous run recorded in a `Covered commit:` comment on the last closed issue with the same label, and records its own when it finishes. No routine merges anything.
-
-| Template | Covers | Suggested model |
-|---|---|---|
-| `routine-drift` | `docs/design.md` against the code, and lab against android | Gemini 4 Hydrogen high or Sonnet 5.5 high |
-| `routine-hygiene` | Dead code, duplication and needless abstractions in what changed | Sonnet 5.5 high |
-| `routine-dependencies` | Gradle, uv, npm and skills updates, in one PR | Sonnet 5.5 high |
-| `routine-audit` | A deep review of one area, chosen in rotation | Opus 5.5 xhigh or Gemini 4 Argon |
-
-The maintainer picks the model when opening the issue. Per-PR reviews stay with the `code-review` skill, and [Which model does the work](#which-model-does-the-work) says which model runs them.
+- Gemini 4 Hydrogen high gets simpler worker tasks than Sonnet 5.5 high. Opus 5.5 medium fits moderate logic changes, and Opus 5.5 high, Gemini 4 Argon or Gemini 4 Neon the hardest ones. Heavy phone work (installing builds, driving the app, measuring) needs at least Opus 5.5 medium.
+- Reviews use `code-review` with a different model from the author (another provider when possible), at the tier that matches the change's difficulty. Editing `docs/design.md` alone takes a worker; a new design decision takes a strong model. Re-checking review fixes takes a worker. If a model is out of credits, pick another in the same tier.
+- In T3 Code, start each issue as its own top-level thread in a worktree, not a subagent or delegated task. Reviews and review-fix checks can run as delegated tasks.
 
 ## Commits and pull requests
 
-Every commit subject and every PR title uses `type(scope): subject`. The `commit-format` CI job checks them.
+Every commit subject and PR title must pass `commit-format`: `type(scope): subject` (at most 72 characters, imperative, lowercase after the colon, no trailing period; `!` before `:` for breaking changes).
 
-- Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`. Add `!` before the colon for a breaking change.
-- Scopes: `android`, `lab`, `site`, `skills`. Leave the scope out when a change spans the repo.
-- Subject: imperative, lowercase after the colon, no trailing period, at most 72 characters for the whole line. Example: `feat(android): add the DOCUMENT detector`.
-- The body follows `unslop` (plain words, no em dashes) and explains why. `unslop` asks for sentence case in headings, but the lowercase subject wins for commit subjects and PR titles.
-- The check skips `Merge pull request #N from ...`, `Merge branch ...` and `Merge remote-tracking branch ...` commits, and the `Revert "..."` commits and PR titles that GitHub's Revert button writes.
-
-The person merging picks the merge method by size:
-
-- Small change: squash merge. The PR title becomes the commit.
-- Medium change, with commits that each make sense alone: rebase merge.
-- Large change: merge commit.
-
-Rebase and merge keep every commit, so every commit in a PR must follow the format, not only the title. Fix review findings with a new conventional commit (`fix(android): ...`), or squash the fix into the commit it fixes before the PR is merged.
+- Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`.
+- Scopes: `android`, `lab`, `site`, `skills` (omit when a change spans the repo).
+- Body: explain why, and follow `unslop` (plain words, no em dashes).
+- Small PRs squash merge, medium ones rebase merge, and large ones merge commit, so every commit in a PR must follow the format.
 
 ## Layout
 
 - `lab/`: Python 3.12+, `src/` layout, tests under `lab/tests/` (pytest).
-- `android/`: Kotlin + Jetpack Compose, with tests under `android/app/src/test/` (JUnit and Robolectric).
-- `site/`: Astro, building static files, with English at `/` and Italian at `/it/`. The strings live in `site/src/i18n/`. Read [`site/VISUAL-SYSTEM.md`](site/VISUAL-SYSTEM.md) before styling anything: tokens, type, layout and the motion rules.
+- `android/`: Kotlin + Jetpack Compose, tests under `android/app/src/test/` (JUnit and Robolectric). See [`android/README.md`](android/README.md).
+- `fixtures/`: golden test images and videos shared by the lab and Android tests.
+- `site/`: Astro static site (`/` in English, `/it/` in Italian, strings in `site/src/i18n/`). Read [`site/VISUAL-SYSTEM.md`](site/VISUAL-SYSTEM.md) before styling.
