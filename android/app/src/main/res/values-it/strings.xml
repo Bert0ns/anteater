@@ -175,6 +175,10 @@
     </plurals>
     <string name="undo">Annulla</string>
     <string name="trash_empty">Il cestino è vuoto.</string>
+    <string name="tab_stickers">Sticker</string>
+    <string name="trash_empty_photos">Nessuna foto nel cestino.</string>
+    <string name="trash_empty_videos">Nessun video nel cestino.</string>
+    <string name="trash_empty_stickers">Nessuno sticker nel cestino.</string>
     <string name="trash_hint">Tocca per selezionare, tieni premuto per vedere a schermo intero.</string>
     <string name="days_left">%1$d gg</string>
     <plurals name="trash_tile_days_left">

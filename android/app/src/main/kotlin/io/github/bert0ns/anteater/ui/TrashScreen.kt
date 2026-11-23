@@ -2,6 +2,8 @@
 package io.github.bert0ns.anteater.ui
 
 import android.text.format.Formatter
+import androidx.annotation.PluralsRes
+import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,6 +21,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
@@ -27,13 +30,17 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +55,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.bert0ns.anteater.R
 import io.github.bert0ns.anteater.folders.isStickerFolder
@@ -59,6 +67,20 @@ import java.time.Instant
 import kotlin.math.ceil
 
 private const val MILLIS_PER_DAY = 86_400_000.0
+
+/** The tabs of the trash (#526): stickers and videos apart from the photos, as thousands of them would bury the rest. */
+enum class TrashTab(@StringRes val label: Int, @StringRes val empty: Int, @PluralsRes val title: Int) {
+    PHOTOS(R.string.tab_photos, R.string.trash_empty_photos, R.plurals.trash_section_images),
+    VIDEOS(R.string.tab_videos, R.string.trash_empty_videos, R.plurals.trash_section_videos),
+    STICKERS(R.string.tab_stickers, R.string.trash_empty_stickers, R.plurals.trash_section_stickers),
+}
+
+private fun firstNonEmptyTab(images: List<TrashedImage>, videos: List<TrashedImage>, stickers: List<TrashedImage>) = when {
+    images.isNotEmpty() -> TrashTab.PHOTOS
+    videos.isNotEmpty() -> TrashTab.VIDEOS
+    stickers.isNotEmpty() -> TrashTab.STICKERS
+    else -> TrashTab.PHOTOS
+}
 
 @Composable
 fun TrashScreen(
@@ -80,33 +102,49 @@ fun TrashScreen(
     var fullSize by remember { mutableStateOf<TrashedImage?>(null) }
     // With a selection the button deletes only it, and only an empty selection empties the trash.
     val targets = if (selected.isEmpty()) trashed else trashed.filter { it.file.path in selected }
+    val (stickers, others) = trashed.partition { isStickerFolder(it.original.path) }
+    val (videos, images) = others.partition { it.isVideo }
+    // Until the user picks a tab, the screen shows the first one with items, also when the list arrives after it opened.
+    var chosenTab by rememberSaveable { mutableStateOf<TrashTab?>(null) }
+    val activeTab = chosenTab ?: firstNonEmptyTab(images, videos, stickers)
+    val currentItems = when (activeTab) {
+        TrashTab.PHOTOS -> images
+        TrashTab.VIDEOS -> videos
+        TrashTab.STICKERS -> stickers
+    }
     Column(modifier.fillMaxSize()) {
         if (trashed.isEmpty()) {
             if (!loading) Text(stringResource(R.string.trash_empty), Modifier.padding(16.dp))
             return@Column
         }
-        // How long the trash keeps images is in Settings. Here the hint says how to look before restoring.
-        Text(stringResource(R.string.trash_hint), Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
-        // Stickers apart, as in the review: thousands of them would bury the photos.
-        val (stickers, others) = trashed.partition { isStickerFolder(it.original.path) }
-        val (videos, images) = others.partition { it.isVideo }
-        val sections = listOf(R.plurals.trash_section_images to images, R.plurals.trash_section_videos to videos, R.plurals.trash_section_stickers to stickers)
-        LazyVerticalGrid(GridCells.Adaptive(110.dp), Modifier.weight(1f)) {
-            for ((title, section) in sections.filter { it.second.isNotEmpty() }) {
-                item(span = { GridItemSpan(maxLineSpan) }, key = "section-$title") {
-                    val all = section.all { it.file.path in selected }
-                    Row(Modifier.padding(start = 16.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(pluralStringResource(title, section.size, section.size), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                        TextButton({ onSelectAll(section, !all) }) {
-                            Text(stringResource(if (all) R.string.deselect_all else R.string.select_all))
+        PrimaryTabRow(activeTab.ordinal) {
+            for (tab in TrashTab.entries) {
+                Tab(tab == activeTab, { chosenTab = tab }, text = { Text(stringResource(tab.label), maxLines = 1, overflow = TextOverflow.Ellipsis) })
+            }
+        }
+        if (currentItems.isEmpty()) {
+            Text(stringResource(activeTab.empty), Modifier.weight(1f).padding(16.dp))
+        } else {
+            // How long the trash keeps images is in Settings. Here the hint says how to look before restoring.
+            Text(stringResource(R.string.trash_hint), Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
+            // A grid per tab, so a scroll position does not carry over from one tab to the next.
+            key(activeTab) {
+                LazyVerticalGrid(GridCells.Adaptive(110.dp), Modifier.weight(1f), rememberLazyGridState()) {
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "section-${activeTab.title}") {
+                        val all = currentItems.all { it.file.path in selected }
+                        Row(Modifier.padding(start = 16.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(pluralStringResource(activeTab.title, currentItems.size, currentItems.size), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                            TextButton({ onSelectAll(currentItems, !all) }) {
+                                Text(stringResource(if (all) R.string.deselect_all else R.string.select_all))
+                            }
                         }
                     }
+                    trashItems(currentItems, selected, onSelect) { fullSize = it }
                 }
-                trashItems(section, selected, onSelect) { fullSize = it }
             }
         }
         // With nothing selected, emptying the trash is the only action. With a selection, deleting it for good weighs
-        // less than Restore: a text button, in the error color.
+        // less than Restore: a text button, in the error color. The selection holds across the tabs.
         if (selected.isEmpty()) {
             // A trashed file frees nothing until the retention ends, and people trash videos to get space now.
             val held = Formatter.formatShortFileSize(LocalContext.current, trashed.sumOf { it.original.size })
@@ -139,18 +177,18 @@ fun TrashScreen(
             dismissButton = { TextButton({ confirmDelete = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
-    // A restore or a delete can take the image out of the trash while it is open.
-    LaunchedEffect(trashed, fullSize) {
-        if (fullSize != null && fullSize !in trashed) fullSize = null
+    // A restore or a delete can take the image out of the trash while it is open, and a first tab that fills in can take it out of the tab.
+    LaunchedEffect(currentItems, fullSize) {
+        if (fullSize != null && fullSize !in currentItems) fullSize = null
     }
     fullSize?.let { start ->
         val close = { fullSize = null }
         val playback = rememberVideoPlayback()
         // A video that leaves the trash while it plays leaves the pager's page where it was, so no swipe stops it.
-        val paths = trashed.map { it.file.path }
+        val paths = currentItems.map { it.file.path }
         LaunchedEffect(paths) { if (playback.loaded != null && playback.loaded !in paths) playback.stop() }
         val image: @Composable (Int) -> Unit = { page ->
-            trashed.getOrNull(page)?.let { item ->
+            currentItems.getOrNull(page)?.let { item ->
                 if (item.isVideo) {
                     // The index has no record of a trashed video, so it plays once the retriever has read its length, and not at all when it cannot.
                     val read = rememberLengthRead(item.file)
@@ -161,7 +199,7 @@ fun TrashScreen(
             }
         }
         FullSizeViewer(paths, start.file.path, onClose = close, image = image, onPage = { if (playback.loaded != paths.getOrNull(it)) playback.stop() }, shareable = false) { page ->
-            val item = trashed.getOrNull(page) ?: return@FullSizeViewer
+            val item = currentItems.getOrNull(page) ?: return@FullSizeViewer
             FullSizeToggle(item.file.path in selected, stringResource(R.string.tile_selected), MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary) { onSelect(item) }
             FullSizeBar(item.original.path, item.favorite, playback = playback.takeIf { item.isVideo }) {
                 if (item.isVideo) {

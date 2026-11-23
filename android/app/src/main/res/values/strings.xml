@@ -134,6 +134,11 @@
     </plurals>
     <string name="undo">Undo</string>
     <string name="trash_empty">The trash is empty.</string>
+    <!-- The third tab of the trash, and what each tab says when it holds nothing while another tab does (docs/design.md §9). -->
+    <string name="tab_stickers">Stickers</string>
+    <string name="trash_empty_photos">No photos in the trash.</string>
+    <string name="trash_empty_videos">No videos in the trash.</string>
+    <string name="trash_empty_stickers">No stickers in the trash.</string>
     <string name="trash_hint">Tap to select, hold to see full size.</string>
     <string name="days_left">%1$dd left</string>
     <!-- Spoken form of days_left: a screen reader would spell out "26d". -->
