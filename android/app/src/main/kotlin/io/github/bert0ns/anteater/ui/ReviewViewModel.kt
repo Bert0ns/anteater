@@ -2,9 +2,11 @@ package io.github.bert0ns.anteater.ui
 
 import android.app.Application
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.bert0ns.anteater.AnteaterApp
+import io.github.bert0ns.anteater.R
 import io.github.bert0ns.anteater.model.Category
 import io.github.bert0ns.anteater.model.MediaRef
 import io.github.bert0ns.anteater.model.MediaType
@@ -22,6 +24,7 @@ import io.github.bert0ns.anteater.review.ReviewGroup
 import io.github.bert0ns.anteater.review.ReviewOrder
 import io.github.bert0ns.anteater.review.VideoItem
 import io.github.bert0ns.anteater.sources.FavoriteRequests
+import io.github.bert0ns.anteater.sources.FavoriteResult
 import io.github.bert0ns.anteater.sources.favoritePaths
 import io.github.bert0ns.anteater.tracing.traceSuspend
 import io.github.bert0ns.anteater.trash.TrashRetention
@@ -170,9 +173,16 @@ class ReviewViewModel @JvmOverloads constructor(
             firstDayOfWeek = { WeekFields.of(it.resources.configuration.locales[0]).firstDayOfWeek },
         )
     },
-    /** Asks the user to mark the image at the path as a favourite, or to take the mark off. True once they agreed. */
+    /**
+     * Asks the user to mark the image at the path as a favourite, or to take the mark off. True once they agreed.
+     * A file that left MediaStore since the heart was offered gets a toast with the reason (#524), as a tap on the dimmed heart does.
+     */
     private val askFavorite: suspend (path: String, favorite: Boolean) -> Boolean = { path, favorite ->
-        FavoriteRequests.set(application.contentResolver, path, favorite)
+        val result = FavoriteRequests.set(application.contentResolver, path, favorite)
+        if (result == FavoriteResult.NOT_IN_GALLERY) {
+            withContext(Dispatchers.Main) { Toast.makeText(application, R.string.favorite_off_not_in_gallery, Toast.LENGTH_SHORT).show() }
+        }
+        result == FavoriteResult.GRANTED
     },
 ) : AndroidViewModel(application) {
     private val app = application as AnteaterApp

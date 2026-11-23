@@ -2,6 +2,7 @@ package io.github.bert0ns.anteater.ui
 
 import android.content.Context
 import android.os.Looper
+import android.provider.MediaStore
 import androidx.test.core.app.ApplicationProvider
 import androidx.work.testing.WorkManagerTestInitHelper
 import io.github.bert0ns.anteater.AnteaterApp
@@ -22,6 +23,7 @@ import io.github.bert0ns.anteater.review.Decision
 import io.github.bert0ns.anteater.review.PAGE_SIZE
 import io.github.bert0ns.anteater.review.Review
 import io.github.bert0ns.anteater.review.ReviewOrder
+import io.github.bert0ns.anteater.sources.FakeMediaStore
 import io.github.bert0ns.anteater.trash.AppTrash
 import io.github.bert0ns.anteater.trash.ExpiredPurge
 import io.github.bert0ns.anteater.trash.Trash
@@ -38,9 +40,11 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowToast
 import java.io.File
 import java.io.IOException
 import java.time.Duration
@@ -1385,6 +1389,28 @@ class ReviewViewModelTest {
         assertEquals(before.marked, model.state.value.marked)
         assertEquals(before.remaining, model.state.value.remaining)
         assertFalse(model.state.value.favoriteAppeared)
+    }
+
+    @Test
+    fun `hearting an image that is not in MediaStore shows the reason and changes nothing`() {
+        FakeMediaStore.rows = emptyList()
+        FakeMediaStore.failing = false
+        Robolectric.setupContentProvider(FakeMediaStore::class.java, MediaStore.AUTHORITY)
+        repeat(2) { blurry("/sdcard/a$it.jpg", 0.9f - it * 0.1f) }
+        val model = ReviewViewModel(app, Review(app.index, RecordingTrash(), favorites = { emptySet() }))
+        model.open(Category.BLURRY)
+        settle(model) { paths(it).size == 2 }
+        val image = model.state.value.page[0].images.single().image
+        model.toggle(image) // the user keeps it, so the heart is on offer
+        settle(model) { image.path !in it.state.value.marked }
+        val before = model.state.value
+
+        model.setFavorite(image, true)
+        settle(model) { ShadowToast.getTextOfLatestToast() != null }
+
+        assertEquals("Not in your gallery, so it can't be added to favourites.", ShadowToast.getTextOfLatestToast())
+        assertEquals(emptyList<String>(), hearts(model))
+        assertEquals(before, model.state.value)
     }
 
     @Test

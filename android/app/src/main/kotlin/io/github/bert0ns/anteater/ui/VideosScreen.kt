@@ -353,8 +353,9 @@ private fun FullSize(videos: List<VideoItem>, start: VideoItem, selected: Set<St
         val item = videos.getOrNull(page) ?: return@FullSizeViewer // the list emptied under the dialog; the screen closes it next
         FullSizeToggle(item.video.path in selected, stringResource(R.string.video_tile_selected), MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.onPrimary) { onToggle(item.video.path) }
         // A selected video is one the user means to trash, and a favourite and a trash contradict each other, as in the review.
+        val inGallery = rememberInGallery(item.video.path)
         val heart: @Composable () -> Unit = {
-            FavoriteToggle(item.isFavorite, enabled = item.video.path !in selected, offReason = R.string.favorite_off_selected_video) {
+            FavoriteToggle(item.isFavorite, enabled = item.video.path !in selected, offReason = R.string.favorite_off_selected_video, inGallery = inGallery) {
                 haptics.performHapticFeedback(Haptic.TICK.type)
                 onFavorite(item.video, it)
             }

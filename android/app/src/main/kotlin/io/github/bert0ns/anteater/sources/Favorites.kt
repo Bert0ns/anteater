@@ -118,14 +118,20 @@ object FavoriteRequests {
     }
 
     /**
-     * Asks the user to mark the image at [path] as a favourite, or to take the mark off, and says whether they agreed.
-     * A decline, an image MediaStore does not index, and a dialog that could not open all answer false and change nothing.
+     * Asks the user to mark the image or video at [path] as a favourite, or to take the mark off, and says what came of it.
+     * A decline and a dialog that could not open answer [FavoriteResult.DECLINED], a file MediaStore does not index
+     * (a `.nomedia` folder, #524) answers [FavoriteResult.NOT_IN_GALLERY], and both change nothing.
      * A caller that is cancelled while the dialog waits for the screen withdraws the request.
      */
-    suspend fun set(resolver: ContentResolver, path: String, favorite: Boolean): Boolean {
-        val uri = withContext(Dispatchers.IO) { mediaUri(resolver, path) } ?: return false
+    suspend fun set(resolver: ContentResolver, path: String, favorite: Boolean): FavoriteResult {
+        val uri = withContext(Dispatchers.IO) { mediaUri(resolver, path) } ?: return FavoriteResult.NOT_IN_GALLERY
         return suspendCancellableCoroutine { continuation ->
-            val ask = Ask(listOf(uri), { lost -> if (continuation.isActive) continuation.resume(lost == 0) }, { continuation.isActive }, favorite)
+            val ask = Ask(
+                listOf(uri),
+                { lost -> if (continuation.isActive) continuation.resume(if (lost == 0) FavoriteResult.GRANTED else FavoriteResult.DECLINED) },
+                { continuation.isActive },
+                favorite,
+            )
             queue.trySend(ask)
         }
     }
@@ -166,6 +172,25 @@ object FavoriteRequests {
     fun answered(granted: Boolean) {
         val ask = inFlight.getAndUpdate { null } ?: return
         ask.onAnswer(if (granted) 0 else ask.uris.size)
+    }
+}
+
+/** What came of [FavoriteRequests.set]. */
+enum class FavoriteResult { GRANTED, DECLINED, NOT_IN_GALLERY }
+
+/**
+ * Whether MediaStore indexes the image or video at [path], which a favourite needs: the mark lives on its row (docs/design.md §6.2).
+ * A file in a `.nomedia` or hidden folder, like `WhatsApp Images/Sent` or `.thumbnails`, has no row (#524).
+ * A provider that fails, as for an unmounted volume, answers false and does not crash.
+ */
+suspend fun isInGallery(resolver: ContentResolver, path: String): Boolean = withContext(Dispatchers.IO) {
+    try {
+        mediaUri(resolver, path) != null
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: RuntimeException) { // a SecurityException too
+        Log.w("favorites", "Could not look up $path", e)
+        false
     }
 }
 

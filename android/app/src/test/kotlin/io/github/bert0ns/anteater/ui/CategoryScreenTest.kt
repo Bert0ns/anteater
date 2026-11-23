@@ -62,6 +62,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowToast
 import java.io.File
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -752,14 +753,16 @@ class CategoryScreenTest {
     }
 
     /** The page and the marks as a view model holds them: a heart flips the flag of its image in place, and a tap on the checkbox flips the mark. */
-    private fun heartScreen(requests: MutableList<Pair<String, Boolean>>, marked: Set<String>, start: List<ReviewGroup> = page) {
+    private fun heartScreen(requests: MutableList<Pair<String, Boolean>>, marked: Set<String>, start: List<ReviewGroup> = page, inGallery: (String) -> Boolean = { true }) {
         compose.setContent {
             var shown by remember { mutableStateOf(start) }
             var now by remember { mutableStateOf(marked) }
-            CategoryScreen(shown, 3, now, false, { image -> now = if (image.path in now) now - image.path else now + image.path }, { _, _ -> }, {}, onFavorite = { image, favorite ->
-                requests += image.path to favorite
-                shown = shown.map { group -> group.copy(images = group.images.map { if (it.image == image) it.copy(isFavorite = favorite) else it }) }
-            })
+            CompositionLocalProvider(LocalCanFavorite provides { path -> inGallery(path) }) {
+                CategoryScreen(shown, 3, now, false, { image -> now = if (image.path in now) now - image.path else now + image.path }, { _, _ -> }, {}, onFavorite = { image, favorite ->
+                    requests += image.path to favorite
+                    shown = shown.map { group -> group.copy(images = group.images.map { if (it.image == image) it.copy(isFavorite = favorite) else it }) }
+                })
+            }
         }
     }
 
@@ -798,6 +801,54 @@ class CategoryScreenTest {
         assertNull(stateDescription(heart("Add to favourites")))
         toggle().performClick().assertIsOn()
         heart("Add to favourites").assertIsNotEnabled()
+    }
+
+    @Test
+    fun `the heart of an image MediaStore does not index is dimmed, says why in a toast, and asks for nothing`() {
+        val requests = mutableListOf<Pair<String, Boolean>>()
+        heartScreen(requests, marked = emptySet(), inGallery = { false })
+
+        openFullSize("img1.jpg")
+        compose.waitForIdle()
+        heart("Add to favourites").performClick()
+
+        assertEquals("Not in your gallery, so it can't be added to favourites.", stateDescription(heart("Add to favourites")))
+        assertEquals("Not in your gallery, so it can't be added to favourites.", ShadowToast.getTextOfLatestToast())
+        assertEquals(emptyList<Pair<String, Boolean>>(), requests)
+    }
+
+    @Test
+    fun `the heart follows the page in the full size view, dimmed for an unindexed image and live for an indexed one`() {
+        val requests = mutableListOf<Pair<String, Boolean>>()
+        heartScreen(requests, marked = emptySet(), inGallery = { it != images[0].path })
+
+        openFullSize("img1.jpg")
+        compose.waitForIdle()
+        assertEquals("Not in your gallery, so it can't be added to favourites.", stateDescription(heart("Add to favourites")))
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        assertNull(stateDescription(heart("Add to favourites")))
+        heart("Add to favourites").performClick()
+        assertEquals(listOf(images[1].path to true), requests)
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeRight() }
+        compose.waitForIdle()
+        assertEquals("Not in your gallery, so it can't be added to favourites.", stateDescription(heart("Add to favourites")))
+    }
+
+    @Test
+    fun `the not in gallery reason comes before the marked one, and a tap on the heart still explains`() {
+        val requests = mutableListOf<Pair<String, Boolean>>()
+        heartScreen(requests, marked = setOf(images[0].path), inGallery = { false })
+
+        openFullSize("img1.jpg")
+        compose.waitForIdle()
+        heart("Add to favourites").performClick()
+
+        assertEquals("Not in your gallery, so it can't be added to favourites.", stateDescription(heart("Add to favourites")))
+        assertEquals("Not in your gallery, so it can't be added to favourites.", ShadowToast.getTextOfLatestToast())
+        assertEquals(emptyList<Pair<String, Boolean>>(), requests)
     }
 
     @Test

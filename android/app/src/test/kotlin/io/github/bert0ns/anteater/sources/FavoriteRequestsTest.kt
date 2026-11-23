@@ -46,6 +46,7 @@ class FakeMediaStore : ContentProvider() {
 
     companion object {
         var rows: List<Row> = emptyList()
+        var failing = false
         val requests = mutableListOf<Request>()
         val queries = mutableListOf<Int>()
         val selections = mutableListOf<String?>()
@@ -58,6 +59,7 @@ class FakeMediaStore : ContentProvider() {
     override fun onCreate() = true
 
     override fun query(uri: Uri, projection: Array<String>?, selection: String?, args: Array<String>?, order: String?): Cursor {
+        if (failing) throw IllegalStateException("volume gone")
         val video = "video" in uri.pathSegments
         // The Images table's queries are the ones counted: a video table is asked as well, and holds only the video rows.
         if (!video) queries += args?.size ?: 0
@@ -108,6 +110,7 @@ class FavoriteRequestsTest {
     @Before
     fun setUp() {
         FakeMediaStore.rows = emptyList()
+        FakeMediaStore.failing = false
         FakeMediaStore.requests.clear()
         FakeMediaStore.queries.clear()
         FakeMediaStore.selections.clear()
@@ -199,7 +202,7 @@ class FavoriteRequestsTest {
         FavoriteRequests.answered(granted = true)
 
         assertEquals(listOf(FakeMediaStore.videoUri(4)), request.uris)
-        assertEquals(true, runBlocking { withTimeout(5_000) { marked.await() } })
+        assertEquals(FavoriteResult.GRANTED, runBlocking { withTimeout(5_000) { marked.await() } })
     }
 
     @Test
@@ -348,18 +351,34 @@ class FavoriteRequestsTest {
         mark.intentSender(context.contentResolver)
         unmark.intentSender(context.contentResolver)
         assertEquals(listOf(true, false), FakeMediaStore.requests.map { it.value })
-        assertEquals(true, runBlocking { withTimeout(5_000) { marked.await() } })
-        assertEquals(false, runBlocking { withTimeout(5_000) { unmarked.await() } })
+        assertEquals(FavoriteResult.GRANTED, runBlocking { withTimeout(5_000) { marked.await() } })
+        assertEquals(FavoriteResult.DECLINED, runBlocking { withTimeout(5_000) { unmarked.await() } })
     }
 
     @Test
     fun `an image MediaStore does not index cannot be marked, and nothing is queued`() {
         FakeMediaStore.rows = emptyList()
 
-        val granted = runBlocking { FavoriteRequests.set(context.contentResolver, "/p/not-indexed.jpg", true) }
+        val result = runBlocking { FavoriteRequests.set(context.contentResolver, "/p/not-indexed.jpg", true) }
 
-        assertEquals(false, granted)
+        assertEquals(FavoriteResult.NOT_IN_GALLERY, result)
         assertEquals(null, runBlocking { withTimeoutOrNull(300) { FavoriteRequests.next() } })
+    }
+
+    @Test
+    fun `isInGallery is true for an indexed image and an indexed video, and false for a path MediaStore does not hold`() {
+        FakeMediaStore.rows = listOf(FakeMediaStore.Row(1, "/p/a.jpg", favorite = false), FakeMediaStore.Row(4, "/p/clip.mp4", favorite = false, video = true))
+
+        assertTrue(runBlocking { isInGallery(context.contentResolver, "/p/a.jpg") })
+        assertTrue(runBlocking { isInGallery(context.contentResolver, "/p/clip.mp4") })
+        assertEquals(false, runBlocking { isInGallery(context.contentResolver, "/p/WhatsApp Images/Sent/b.jpg") })
+    }
+
+    @Test
+    fun `isInGallery answers false when the provider fails`() {
+        FakeMediaStore.failing = true
+
+        assertEquals(false, runBlocking { isInGallery(context.contentResolver, "/p/a.jpg") })
     }
 
     @Test
