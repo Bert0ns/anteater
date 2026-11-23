@@ -1,7 +1,10 @@
 package io.github.bert0ns.anteater.ui
 
+import android.content.Context
+import android.view.accessibility.AccessibilityManager
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -22,6 +25,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
+import androidx.test.core.app.ApplicationProvider
 import io.github.bert0ns.anteater.compress.BatchState
 import io.github.bert0ns.anteater.compress.CompressibleImage
 import io.github.bert0ns.anteater.compress.CompressionLevel
@@ -30,11 +34,13 @@ import io.github.bert0ns.anteater.compress.JpegStatus
 import io.github.bert0ns.anteater.compress.Marker
 import io.github.bert0ns.anteater.model.Category
 import io.github.bert0ns.anteater.model.MediaRef
+import io.github.bert0ns.anteater.model.MediaType
 import io.github.bert0ns.anteater.ranker.THRESHOLDS
 import io.github.bert0ns.anteater.review.CategorySummary
 import io.github.bert0ns.anteater.review.ReviewGroup
 import io.github.bert0ns.anteater.review.ReviewItem
 import io.github.bert0ns.anteater.review.ReviewOrder
+import io.github.bert0ns.anteater.review.VideoItem
 import io.github.bert0ns.anteater.trash.TrashedImage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -43,6 +49,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.io.File
 import java.time.Duration
@@ -231,6 +238,25 @@ class AccessibilityTest {
         assertTouchTargets("trash tabs, at twice the font size")
         compose.onNodeWithText("Stickers").performClick()
         compose.onNodeWithText("No stickers in the trash.").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a video's full size view with a screen reader keeps its speed buttons at 48 dp, and they work, at twice the font size`() {
+        RuntimeEnvironment.setFontScale(2f)
+        shadowOf(ApplicationProvider.getApplicationContext<Context>().getSystemService(AccessibilityManager::class.java)).setTouchExplorationEnabled(true)
+        val players = Players()
+        val video = VideoItem(MediaRef("/sdcard/Movies/one.mp4", 1_000_000, 0, MediaType.VIDEO), 61_000, false, false)
+        compose.setContent {
+            CompositionLocalProvider(LocalPlayerFactory provides players.factory) { VideosScreen(listOf(video), emptySet(), onToggle = {}, onApply = { _, _ -> }) }
+        }
+        compose.onNodeWithContentDescription("one.mp4", substring = true).performTouchInput { longClick() }
+        compose.waitForIdle()
+
+        compose.onNodeWithContentDescription("Faster").assertIsDisplayed()
+        assertTouchTargets("video full size, screen reader")
+        compose.onNodeWithContentDescription("Faster").performClick()
+        compose.onNodeWithText("Speed 1.25x").assertIsDisplayed()
+        assertEquals(1.25f, players.made.last().playbackSpeed, 0f)
     }
 
     private val photo = CompressibleImage("/sdcard/DCIM/img1.jpg", 6_200_000, 4000, 3000, JpegInfo(JpegStatus.ELIGIBLE, quality = 92))

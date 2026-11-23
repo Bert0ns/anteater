@@ -202,6 +202,88 @@ class VideoPlaybackTest {
     }
 
     @Test
+    fun `a video plays at normal speed, unlocked, and a speed reaches the player within a quarter and four times`() {
+        playback.play(one)
+        assertEquals(1f, playback.speed, 0f)
+        assertFalse(playback.speedLocked)
+        assertEquals(1f, players.single().playbackSpeed, 0f)
+
+        playback.setSpeed(1.5f)
+        assertEquals(1.5f, players.single().playbackSpeed, 0f)
+        playback.setSpeed(10f)
+        assertEquals(4f, players.single().playbackSpeed, 0f)
+        playback.setSpeed(0.1f)
+        assertEquals(0.25f, playback.speed, 0f)
+        assertEquals(0.25f, players.single().playbackSpeed, 0f)
+    }
+
+    @Test
+    fun `a locked speed stays, locking at normal speed unlocks, and a reset goes back to normal and unlocks`() {
+        playback.play(one)
+        playback.setSpeed(2f)
+        playback.lockSpeed()
+        assertTrue(playback.speedLocked)
+
+        playback.setSpeed(1f)
+        playback.lockSpeed()
+        assertFalse(playback.speedLocked)
+
+        playback.setSpeed(0.5f)
+        playback.lockSpeed()
+        playback.resetSpeed()
+        assertFalse(playback.speedLocked)
+        assertEquals(1f, players.single().playbackSpeed, 0f)
+    }
+
+    @Test
+    fun `another video, and a stop, start again at normal speed and unlocked`() {
+        playback.play(one)
+        playback.setSpeed(2f)
+        playback.lockSpeed()
+        playback.seekTo(one, 5_000) // the same video keeps its speed
+        assertEquals(2f, players.single().playbackSpeed, 0f)
+
+        playback.play(two)
+        assertEquals(1f, playback.speed, 0f)
+        assertFalse(playback.speedLocked)
+        assertEquals(1f, players.single().playbackSpeed, 0f)
+
+        playback.setSpeed(3f)
+        playback.lockSpeed()
+        playback.stop()
+        assertEquals(1f, playback.speed, 0f)
+        assertFalse(playback.speedLocked)
+    }
+
+    @Test
+    fun `the screen reader's steps go through the usual speeds, lock them, and stop at the ends`() {
+        playback.play(one)
+        playback.stepSpeed(faster = true)
+        assertEquals(1.25f, playback.speed, 0f)
+        assertTrue(playback.speedLocked)
+
+        repeat(10) { playback.stepSpeed(faster = true) }
+        assertEquals(4f, playback.speed, 0f)
+        repeat(20) { playback.stepSpeed(faster = false) }
+        assertEquals(0.25f, playback.speed, 0f)
+        repeat(3) { playback.stepSpeed(faster = true) }
+        assertEquals(1f, playback.speed, 0f)
+        assertFalse(playback.speedLocked)
+    }
+
+    @Test
+    fun `a drag moves the speed on a log scale in steps of 0_05, a quarter to four times`() {
+        assertEquals(2f, heldSpeed(1f, 100f, 100f), 0f)
+        assertEquals(4f, heldSpeed(1f, 200f, 100f), 0f)
+        assertEquals(4f, heldSpeed(1f, 900f, 100f), 0f)
+        assertEquals(0.5f, heldSpeed(1f, -100f, 100f), 0f)
+        assertEquals(0.25f, heldSpeed(1f, -900f, 100f), 0f)
+        assertEquals(1.5f, heldSpeed(1f, 58.5f, 100f), 0f) // 2^0.585 = 1.4999
+        assertEquals(1.05f, heldSpeed(1f, 7f, 100f), 0f)
+        assertEquals(1f, heldSpeed(1f, 0f, 100f), 0f)
+    }
+
+    @Test
     fun `the strip's frames are the middles of five equal parts of the video`() {
         assertEquals(listOf(6_100L, 18_300L, 30_500L, 42_700L, 54_900L), stripTimes(61_000))
     }
