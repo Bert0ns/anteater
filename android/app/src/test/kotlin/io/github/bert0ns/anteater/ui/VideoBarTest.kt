@@ -23,6 +23,7 @@ import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.up
+import androidx.media3.common.Player
 import androidx.test.core.app.ApplicationProvider
 import io.github.bert0ns.anteater.model.MediaRef
 import io.github.bert0ns.anteater.model.MediaType
@@ -213,5 +214,14 @@ class VideoBarTest {
         compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
 
         assertBar(shown = true)
+    }
+
+    @Test
+    fun `a video that autoplays in the full size view loops`() {
+        open()
+
+        assertTrue(viewPlayers.single().playing)
+        assertEquals(Player.REPEAT_MODE_ONE, viewPlayers.single().repeatMode)
+        assertTrue(viewPlayers.single().repeating)
     }
 }

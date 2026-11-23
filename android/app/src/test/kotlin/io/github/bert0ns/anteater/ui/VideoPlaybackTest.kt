@@ -187,11 +187,18 @@ class VideoPlaybackTest {
     }
 
     @Test
-    fun `a video of the full size view keeps its sound track and plays once`() {
+    fun `a video of the full size view keeps its sound track and loops`() {
         playback.play(one)
 
         assertFalse(C.TRACK_TYPE_AUDIO in players.single().trackSelectionParameters.disabledTrackTypes)
-        assertEquals(Player.REPEAT_MODE_OFF, players.single().repeatMode)
+        assertEquals(Player.REPEAT_MODE_ONE, players.single().repeatMode)
+        assertTrue(players.single().repeating)
+
+        playback.release()
+        playback.play(two)
+
+        assertEquals(Player.REPEAT_MODE_ONE, players.last().repeatMode)
+        assertTrue(players.last().repeating)
     }
 
     @Test

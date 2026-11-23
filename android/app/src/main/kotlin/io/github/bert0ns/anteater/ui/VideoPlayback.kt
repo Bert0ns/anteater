@@ -148,6 +148,7 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
     fun play(file: File, atMs: Long = 0) {
         val player = player ?: trace("Video.build") { create() }.also {
             it.addListener(listener)
+            it.repeatMode = Player.REPEAT_MODE_ONE
             it.sound()
             (it as? ExoPlayer)?.setHandleAudioBecomingNoisy(true)
             player = it
