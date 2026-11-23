@@ -119,6 +119,28 @@ class ImageIndexTest {
     }
 
     @Test
+    fun `hasVideosAbove finds an unreviewed readable video larger than the size, or not sized yet`() = test {
+        suspend fun clip(name: String) = MediaRef("/videos/$name.mp4", 800, 1, MediaType.VIDEO).also { record(it) }
+        suspend fun sized(name: String, width: Int, height: Int) = clip(name).also { setVideoMetadata(it.path, VideoMetadata(width, height, 10_000, 30.0, 1000, true, "video/avc", false)) }
+        val limit = 1920L * 1080
+        assertFalse(hasVideosAbove(limit))
+
+        sized("hd", 1920, 1080)
+        sized("portrait", 1080, 1920)
+        assertFalse(hasVideosAbove(limit))
+        setReviewState(sized("trashed", 3840, 2160).path, ReviewState.TRASHED)
+        setReviewState(sized("kept", 3840, 2160).path, ReviewState.KEPT)
+        setUnreadable(clip("broken").path)
+        assertFalse(hasVideosAbove(limit))
+
+        val unsized = clip("new")
+        assertTrue(hasVideosAbove(limit))
+        setReviewState(unsized.path, ReviewState.TRASHED)
+        sized("uhd", 3840, 2160)
+        assertTrue(hasVideosAbove(limit))
+    }
+
+    @Test
     fun `notTrashedMedia keeps a kept video and an unreadable one, as it keeps an image`() = test {
         val kept = MediaRef("/videos/kept.mp4", 800, 1, MediaType.VIDEO)
         val broken = MediaRef("/videos/broken.mp4", 700, 1, MediaType.VIDEO)
@@ -1107,6 +1129,7 @@ class ImageIndexTest {
         "notTrashedMedia" to { notTrashedMedia() },
         "unreviewedVideos" to { unreviewedVideos() },
         "hasVideos" to { hasVideos() },
+        "hasVideosAbove" to { hasVideosAbove(1920L * 1080) },
         "videosWaiting" to { videosWaiting() },
         "capturedAt" to { capturedAt() },
         "cameraCaptures" to { cameraCaptures() },

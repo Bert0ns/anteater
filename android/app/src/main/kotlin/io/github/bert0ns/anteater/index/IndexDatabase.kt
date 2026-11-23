@@ -307,6 +307,12 @@ interface IndexDao {
     @Query("SELECT EXISTS(SELECT 1 FROM images WHERE media_type = 'video')")
     suspend fun hasVideos(): Boolean
 
+    @Query(
+        """SELECT EXISTS(SELECT 1 FROM images WHERE media_type = 'video' AND review_state = 'unreviewed' AND unreadable = 0
+           AND (width IS NULL OR height IS NULL OR width * height > :pixels))""",
+    )
+    suspend fun hasVideosAbove(pixels: Long): Boolean
+
     @Query("SELECT count(*) FROM images WHERE media_type = 'video' AND width IS NULL AND NOT unreadable AND review_state != 'trashed'")
     suspend fun videosWaiting(): Int
 
