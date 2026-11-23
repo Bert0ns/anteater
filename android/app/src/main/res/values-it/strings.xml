@@ -175,6 +175,7 @@
     </plurals>
     <string name="undo">Annulla</string>
     <string name="trash_empty">Il cestino è vuoto.</string>
+    <string name="tab_stickers">Sticker</string>
     <string name="trash_empty_photos">Nessuna foto nel cestino.</string>
     <string name="trash_empty_videos">Nessun video nel cestino.</string>
     <string name="trash_empty_stickers">Nessuno sticker nel cestino.</string>
@@ -226,7 +227,6 @@
     <string name="video_play_failed">Non è possibile riprodurre questo video.</string>
     <string name="tab_photos">Foto</string>
     <string name="tab_videos">Video</string>
-    <string name="tab_stickers">Sticker</string>
     <string name="videos_largest">Video più grandi</string>
     <plurals name="videos_count">
         <item quantity="one">%d video</item>

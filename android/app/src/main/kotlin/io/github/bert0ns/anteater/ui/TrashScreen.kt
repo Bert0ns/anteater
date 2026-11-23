@@ -2,6 +2,8 @@
 package io.github.bert0ns.anteater.ui
 
 import android.text.format.Formatter
+import androidx.annotation.PluralsRes
+import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -67,7 +69,11 @@ import kotlin.math.ceil
 private const val MILLIS_PER_DAY = 86_400_000.0
 
 /** The tabs of the trash (#526): stickers and videos apart from the photos, as thousands of them would bury the rest. */
-enum class TrashTab { PHOTOS, VIDEOS, STICKERS }
+enum class TrashTab(@StringRes val label: Int, @StringRes val empty: Int, @PluralsRes val title: Int) {
+    PHOTOS(R.string.tab_photos, R.string.trash_empty_photos, R.plurals.trash_section_images),
+    VIDEOS(R.string.tab_videos, R.string.trash_empty_videos, R.plurals.trash_section_videos),
+    STICKERS(R.string.tab_stickers, R.string.trash_empty_stickers, R.plurals.trash_section_stickers),
+}
 
 private fun firstNonEmptyTab(images: List<TrashedImage>, videos: List<TrashedImage>, stickers: List<TrashedImage>) = when {
     images.isNotEmpty() -> TrashTab.PHOTOS
@@ -113,36 +119,21 @@ fun TrashScreen(
         }
         PrimaryTabRow(activeTab.ordinal) {
             for (tab in TrashTab.entries) {
-                val label = when (tab) {
-                    TrashTab.PHOTOS -> R.string.tab_photos
-                    TrashTab.VIDEOS -> R.string.tab_videos
-                    TrashTab.STICKERS -> R.string.tab_stickers
-                }
-                Tab(tab == activeTab, { chosenTab = tab }, text = { Text(stringResource(label), maxLines = 1, overflow = TextOverflow.Ellipsis) })
+                Tab(tab == activeTab, { chosenTab = tab }, text = { Text(stringResource(tab.label), maxLines = 1, overflow = TextOverflow.Ellipsis) })
             }
         }
         if (currentItems.isEmpty()) {
-            val empty = when (activeTab) {
-                TrashTab.PHOTOS -> R.string.trash_empty_photos
-                TrashTab.VIDEOS -> R.string.trash_empty_videos
-                TrashTab.STICKERS -> R.string.trash_empty_stickers
-            }
-            Text(stringResource(empty), Modifier.weight(1f).padding(16.dp))
+            Text(stringResource(activeTab.empty), Modifier.weight(1f).padding(16.dp))
         } else {
             // How long the trash keeps images is in Settings. Here the hint says how to look before restoring.
             Text(stringResource(R.string.trash_hint), Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
-            val title = when (activeTab) {
-                TrashTab.PHOTOS -> R.plurals.trash_section_images
-                TrashTab.VIDEOS -> R.plurals.trash_section_videos
-                TrashTab.STICKERS -> R.plurals.trash_section_stickers
-            }
             // A grid per tab, so a scroll position does not carry over from one tab to the next.
             key(activeTab) {
                 LazyVerticalGrid(GridCells.Adaptive(110.dp), Modifier.weight(1f), rememberLazyGridState()) {
-                    item(span = { GridItemSpan(maxLineSpan) }, key = "section-$title") {
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "section-${activeTab.title}") {
                         val all = currentItems.all { it.file.path in selected }
                         Row(Modifier.padding(start = 16.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(pluralStringResource(title, currentItems.size, currentItems.size), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                            Text(pluralStringResource(activeTab.title, currentItems.size, currentItems.size), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
                             TextButton({ onSelectAll(currentItems, !all) }) {
                                 Text(stringResource(if (all) R.string.deselect_all else R.string.select_all))
                             }

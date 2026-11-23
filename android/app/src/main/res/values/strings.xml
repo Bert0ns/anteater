@@ -134,7 +134,8 @@
     </plurals>
     <string name="undo">Undo</string>
     <string name="trash_empty">The trash is empty.</string>
-    <!-- What a tab of the trash says when it holds nothing, while another tab does (docs/design.md §9). -->
+    <!-- The third tab of the trash, and what each tab says when it holds nothing while another tab does (docs/design.md §9). -->
+    <string name="tab_stickers">Stickers</string>
     <string name="trash_empty_photos">No photos in the trash.</string>
     <string name="trash_empty_videos">No videos in the trash.</string>
     <string name="trash_empty_stickers">No stickers in the trash.</string>
@@ -187,7 +188,6 @@
     <!-- The two tabs of Clean, and "Largest videos", the first row of the Videos tab (docs/design.md §8). -->
     <string name="tab_photos">Photos</string>
     <string name="tab_videos">Videos</string>
-    <string name="tab_stickers">Stickers</string>
     <string name="videos_largest">Largest videos</string>
     <plurals name="videos_count">
         <item quantity="one">%d video</item>
