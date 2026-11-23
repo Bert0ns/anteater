@@ -36,6 +36,7 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -60,6 +61,7 @@ import io.github.bert0ns.anteater.pipeline.ScanKind
 import io.github.bert0ns.anteater.ranker.GROUP_CATEGORIES
 import io.github.bert0ns.anteater.review.Decision
 import io.github.bert0ns.anteater.review.ReviewOrder
+import io.github.bert0ns.anteater.sources.isInGallery
 import io.github.bert0ns.anteater.ui.AllFilesAccess
 import io.github.bert0ns.anteater.ui.AnteaterTheme
 import io.github.bert0ns.anteater.ui.AppSnackbarHost
@@ -76,6 +78,7 @@ import io.github.bert0ns.anteater.ui.FreeNowDialog
 import io.github.bert0ns.anteater.ui.FreeNowVisuals
 import io.github.bert0ns.anteater.ui.Haptic
 import io.github.bert0ns.anteater.ui.HomeReloads
+import io.github.bert0ns.anteater.ui.LocalCanFavorite
 import io.github.bert0ns.anteater.ui.ReviewOrderMenu
 import io.github.bert0ns.anteater.ui.ReviewViewModel
 import io.github.bert0ns.anteater.ui.ScanStatus
@@ -169,8 +172,13 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun App(model: ReviewViewModel = viewModel()) {
     val state by model.state.collectAsStateWithLifecycle()
+    val resolver = LocalContext.current.contentResolver
     WithHaptics(state.hapticsEnabled) {
-        AppContent(model = model)
+        // The heart of the full size view is off for a file MediaStore does not index (#524).
+        val canFavorite = remember(resolver) { suspend { path: String -> isInGallery(resolver, path) } }
+        CompositionLocalProvider(LocalCanFavorite provides canFavorite) {
+            AppContent(model = model)
+        }
     }
 }
 

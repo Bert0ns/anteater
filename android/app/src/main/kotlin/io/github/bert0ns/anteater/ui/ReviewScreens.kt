@@ -3,6 +3,7 @@
 package io.github.bert0ns.anteater.ui
 
 import android.text.format.Formatter
+import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -76,6 +77,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -531,8 +533,9 @@ private fun FullSize(
             onToggle(current.image)
         }
         val marked = current.image.path in marked
+        val inGallery = rememberInGallery(current.image.path)
         val heart: @Composable () -> Unit = {
-            FavoriteToggle(current.isFavorite, enabled = !marked, offReason = if (video) R.string.favorite_off_marked_video else R.string.favorite_off_marked) {
+            FavoriteToggle(current.isFavorite, enabled = !marked, offReason = if (video) R.string.favorite_off_marked_video else R.string.favorite_off_marked, inGallery = inGallery) {
                 haptics.performHapticFeedback(Haptic.TICK.type)
                 onFavorite(current.image, it)
             }
@@ -651,23 +654,44 @@ internal fun BoxScope.FullSizeBar(path: String, favorite: Boolean, heart: @Compo
 }
 
 /**
+ * Whether the file at a path is in the gallery's MediaStore, which a favourite needs (#524). The app provides the real
+ * lookup; the default says yes, so a screen without it offers the heart as before.
+ */
+internal val LocalCanFavorite = staticCompositionLocalOf<suspend (String) -> Boolean> { { true } }
+
+/** Whether [path] can be a favourite. True until the lookup says otherwise, so the heart does not flash dimmed. */
+@Composable
+internal fun rememberInGallery(path: String): Boolean {
+    val canFavorite = LocalCanFavorite.current
+    var inGallery by remember(path) { mutableStateOf(true) }
+    LaunchedEffect(path) { inGallery = canFavorite(path) }
+    return inGallery
+}
+
+/**
  * The heart of the full size view of a photo or a video: filled for a favourite, an outline for any other, and a tap says
  * the other. It is off while the item is marked for the trash, and says why with [offReason] to a screen reader, which would
- * only hear "dimmed" from a plain disabled button.
+ * only hear "dimmed" from a plain disabled button. A file MediaStore does not index ([inGallery] false, as in a `.nomedia`
+ * folder like `Sent` or `.thumbnails`) cannot be a favourite whatever its marks: its heart is dimmed the same way, and a tap
+ * says why in a toast instead of asking, so it stays tappable even when [enabled] is false.
  */
 @Composable
-internal fun FavoriteToggle(favorite: Boolean, enabled: Boolean, @StringRes offReason: Int = R.string.favorite_off_marked, onChange: (Boolean) -> Unit) {
+internal fun FavoriteToggle(favorite: Boolean, enabled: Boolean, @StringRes offReason: Int = R.string.favorite_off_marked, inGallery: Boolean = true, onChange: (Boolean) -> Unit) {
+    val context = LocalContext.current
     val label = stringResource(if (favorite) R.string.favorite_remove else R.string.favorite_add)
-    val reason = stringResource(offReason)
+    val reason = stringResource(if (inGallery) offReason else R.string.favorite_off_not_in_gallery)
+    val available = enabled && inGallery
     IconButton(
-        { onChange(!favorite) },
-        Modifier.semantics { if (!enabled) stateDescription = reason },
-        enabled,
+        {
+            if (inGallery) onChange(!favorite) else Toast.makeText(context, reason, Toast.LENGTH_SHORT).show()
+        },
+        Modifier.semantics { if (!available) stateDescription = reason },
+        enabled || !inGallery,
     ) {
         Icon(
             if (favorite) Icons.Filled.Favorite else FavoriteOutline,
             label,
-            tint = (if (favorite) Color(0xFFFF6B81) else Color.White).copy(alpha = if (enabled) 1f else 0.4f),
+            tint = (if (favorite) Color(0xFFFF6B81) else Color.White).copy(alpha = if (available) 1f else 0.4f),
         )
     }
 }

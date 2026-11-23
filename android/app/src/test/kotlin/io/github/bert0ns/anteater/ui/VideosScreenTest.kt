@@ -59,6 +59,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowDialog
+import org.robolectric.shadows.ShadowToast
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -516,11 +517,11 @@ class VideosScreenTest {
     }
 
     /** The screen with a list of its own, as the view model holds it: a heart flips the flag of its video in place. */
-    private fun showHearts(requests: MutableList<Pair<String, Boolean>>, start: List<VideoItem>) {
+    private fun showHearts(requests: MutableList<Pair<String, Boolean>>, start: List<VideoItem>, inGallery: Boolean = true) {
         compose.setContent {
             var items by remember { mutableStateOf(start) }
             var selected by remember { mutableStateOf(emptySet<String>()) }
-            CompositionLocalProvider(LocalPlayerFactory provides players.factory) {
+            CompositionLocalProvider(LocalPlayerFactory provides players.factory, LocalCanFavorite provides { inGallery }) {
                 VideosScreen(items, selected, onToggle = { selected = if (it in selected) selected - it else selected + it }, onApply = { _, _ -> }, onFavorite = { video, favorite ->
                     requests += video.path to favorite
                     items = items.map { if (it.video == video) it.copy(isFavorite = favorite) else it }
@@ -560,6 +561,35 @@ class VideosScreenTest {
 
         compose.onNodeWithText("Selected").performClick() // the full size checkbox
         heart("Add to favourites").assertIsEnabled()
+    }
+
+    @Test
+    fun `the heart of a video MediaStore does not index is dimmed, says why in a toast, and asks for nothing`() {
+        val requests = mutableListOf<Pair<String, Boolean>>()
+        showHearts(requests, videos, inGallery = false)
+
+        openFullSize("big.mp4")
+        compose.waitForIdle()
+        heart("Add to favourites").performClick()
+
+        assertEquals("Not in your gallery, so it can't be added to favourites.", heart("Add to favourites").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription))
+        assertEquals("Not in your gallery, so it can't be added to favourites.", ShadowToast.getTextOfLatestToast())
+        assertEquals(emptyList<Pair<String, Boolean>>(), requests)
+    }
+
+    @Test
+    fun `the not in gallery reason comes before the selected one, and a tap on the heart still explains`() {
+        val requests = mutableListOf<Pair<String, Boolean>>()
+        showHearts(requests, videos, inGallery = false)
+        tile("big.mp4").performClick() // selected
+
+        openFullSize("big.mp4")
+        compose.waitForIdle()
+        heart("Add to favourites").performClick()
+
+        assertEquals("Not in your gallery, so it can't be added to favourites.", heart("Add to favourites").fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription))
+        assertEquals("Not in your gallery, so it can't be added to favourites.", ShadowToast.getTextOfLatestToast())
+        assertEquals(emptyList<Pair<String, Boolean>>(), requests)
     }
 
     @Test
