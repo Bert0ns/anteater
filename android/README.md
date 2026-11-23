@@ -127,6 +127,7 @@ The code names its heavy steps with `androidx.tracing`, so a Perfetto trace of t
 | `Frame.store`, `Frame.skip` | after a miss, on the frames' own thread: the JPEG encode and the write of its frame, or a section of no length for a frame that is not stored (a transparent pixel, a colour space other than sRGB, or a config other than ARGB_8888 and RGB_565) |
 | `Clip.start` | a tile's loop (`ClipLoop`): from a play to the loop's first frame, like `Video.start` |
 | `Clip.build`, `Clip.detach`, `Clip.release` | the same calls for a tile's loop. The loops run on their own thread, not the main one |
+| `Preview.make` | one transcode of a video larger than 1080p into the preview its tile loops (`VideoPreviews`, #482), made by the job after a scan or on a tile's first view, holding one of the 2 frame decode permits. An async section: its `Frame.wait` comes before it, and a view that leaves cancels it |
 
 Sections are per image at the finest, never per pixel or row. Perfetto shows the async sections on process tracks and the others on thread tracks, so a query for a name must read both.
 
