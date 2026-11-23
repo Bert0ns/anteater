@@ -56,7 +56,7 @@ Each task goes to one of four models, picked by how hard it is and by which part
 | Tier | Models | Use them for |
 |---|---|---|
 | Workers | Sonnet 5.5 high, Gemini 4 Hydrogen high | Most features and fixes, UI changes, tests, docs, and the hygiene and dependency routines |
-| Strong | Opus 5.5 medium or high, Gemini 4 Argon medium or high, Gemini 4 Neon high | The ranker and its scoring, concurrency and the scan worker, database migrations, design decisions, performance work whose output must not change, and tasks a worker got wrong |
+| Strong | Opus 5.5 medium or high, Gemini 4 Argon medium or high, Gemini 4 Neon medium or high | The ranker and its scoring, concurrency and the scan worker, database migrations, design decisions, performance work whose output must not change, and tasks a worker got wrong |
 
 The workers do most of the implementing. Gemini 4 Hydrogen high is a little weaker than Sonnet 5.5 high, so it gets the simpler tasks of the two. Among the strong models, Opus 5.5 medium fits moderate logic changes, and Opus 5.5 high or Gemini 4 Argon the hardest ones.
 
