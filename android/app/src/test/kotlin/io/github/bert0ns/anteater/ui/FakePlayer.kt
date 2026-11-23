@@ -7,6 +7,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.SimpleBasePlayer
 import androidx.media3.common.TrackSelectionParameters
@@ -30,6 +31,7 @@ internal class FakePlayer(private val lengthMs: Long = 61_000, looper: Looper = 
     private var repeat = Player.REPEAT_MODE_OFF
     private var tracks = TrackSelectionParameters.DEFAULT
     private var failure: PlaybackException? = null
+    private var parameters = PlaybackParameters.DEFAULT
 
     var released = false
         private set
@@ -44,6 +46,9 @@ internal class FakePlayer(private val lengthMs: Long = 61_000, looper: Looper = 
     /** Where it is, in ms, and whether it was told to play. */
     val positionMs get() = position
     val playing get() = wanted
+
+    /** The speed it was last told to play at, read without the player's own getters. */
+    val playbackSpeed get() = parameters.speed
 
     /** Fails as a file that no extractor reads does. */
     fun fail() {
@@ -77,6 +82,7 @@ internal class FakePlayer(private val lengthMs: Long = 61_000, looper: Looper = 
         .setRepeatMode(repeat)
         .setTrackSelectionParameters(tracks)
         .setPlayerError(failure)
+        .setPlaybackParameters(parameters)
         .setVideoSize(if (state == STATE_READY) VideoSize(1920, 1080) else VideoSize.UNKNOWN)
         .build()
 
@@ -119,6 +125,11 @@ internal class FakePlayer(private val lengthMs: Long = 61_000, looper: Looper = 
     @Suppress("OVERRIDE_DEPRECATION")
     override fun handleSetVolume(volume: Float): ListenableFuture<*> {
         level = volume
+        return Futures.immediateVoidFuture()
+    }
+
+    override fun handleSetPlaybackParameters(playbackParameters: PlaybackParameters): ListenableFuture<*> {
+        parameters = playbackParameters
         return Futures.immediateVoidFuture()
     }
 

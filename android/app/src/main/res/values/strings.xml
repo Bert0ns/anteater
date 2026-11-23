@@ -186,6 +186,13 @@
     <!-- A frame of the strip under the controls: %1$s is a time such as "01:42". -->
     <string name="video_go_to">Go to %1$s</string>
     <string name="video_play_failed">This video can\'t be played.</string>
+    <string name="video_speed_value">%1$sx</string>
+    <string name="video_speed_hint">Slide up for faster, down for slower. Swipe sideways to lock it.</string>
+    <string name="video_speed_locked">Speed locked</string>
+    <string name="video_speed_reset">Back to normal speed</string>
+    <string name="video_speed_label">Speed %1$s</string>
+    <string name="video_speed_faster">Faster</string>
+    <string name="video_speed_slower">Slower</string>
     <!-- The two tabs of Clean, and "Largest videos", the first row of the Videos tab (docs/design.md §8). -->
     <string name="tab_photos">Photos</string>
     <string name="tab_videos">Videos</string>

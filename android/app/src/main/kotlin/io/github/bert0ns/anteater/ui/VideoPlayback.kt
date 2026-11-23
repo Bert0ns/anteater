@@ -31,9 +31,11 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -45,6 +47,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -57,6 +60,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
@@ -66,6 +70,9 @@ import io.github.bert0ns.anteater.R
 import io.github.bert0ns.anteater.tracing.OpenSection
 import kotlinx.coroutines.delay
 import java.io.File
+import kotlin.math.abs
+import kotlin.math.pow
+import kotlin.math.roundToInt
 
 /** How many frames the strip under the controls shows. */
 internal const val STRIP_FRAMES = 5
@@ -121,6 +128,14 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
     var muted by mutableStateOf(startMuted)
         private set
 
+    /** How fast the video plays, from [MIN_SPEED] to [MAX_SPEED]. Every new video starts at normal speed (#527). */
+    val speed get() = speedState
+    private var speedState by mutableFloatStateOf(1f)
+
+    /** Whether the user locked [speed], so it stays after the finger that chose it lets go. */
+    var speedLocked by mutableStateOf(false)
+        private set
+
     /** The video whose last play failed. A video that does not play is a line of text, never a crash. */
     var failed by mutableStateOf<String?>(null)
         private set
@@ -160,6 +175,7 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
         } else {
             seeking.end()
             starting.begin()
+            resetSpeed()
             player.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)), atMs)
             player.prepare()
             loaded = file.path
@@ -188,6 +204,28 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
         seeking.begin()
         player?.seekTo(ms)
         sync()
+    }
+
+    fun setSpeed(value: Float) {
+        speedState = value.coerceIn(MIN_SPEED, MAX_SPEED)
+        player?.playbackParameters = PlaybackParameters(speed)
+    }
+
+    /** Keeps the speed chosen. Locking normal speed is no lock at all. */
+    fun lockSpeed() {
+        speedLocked = abs(speed - 1f) > SPEED_EPSILON
+    }
+
+    fun resetSpeed() {
+        speedLocked = false
+        setSpeed(1f)
+    }
+
+    /** The next of the usual speeds up or down, locked: the screen reader's way to the speed, which has no hold. */
+    fun stepSpeed(faster: Boolean) {
+        val next = if (faster) SPEED_STEPS.firstOrNull { it > speed + SPEED_EPSILON } else SPEED_STEPS.lastOrNull { it < speed - SPEED_EPSILON }
+        setSpeed(next ?: return)
+        lockSpeed()
     }
 
     fun pause() {
@@ -220,6 +258,7 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
         seeking.end()
         loaded = null
         playing = false
+        resetSpeed()
         positionMs = 0
         durationMs = 0
         videoSize = null
@@ -254,6 +293,20 @@ internal class VideoPlayback(startMuted: Boolean = false, private val create: ()
     }
 }
 
+internal const val MIN_SPEED = 0.25f
+internal const val MAX_SPEED = 4f
+private const val SPEED_EPSILON = 0.001f
+private val SPEED_STEPS = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 3f, 4f)
+
+/**
+ * The speed a hold that began at [start] reaches after the finger went [upPx] up (negative for down): each [octavePx] doubles
+ * or halves it, so a slow speed moves as finely as a fast one, and it snaps to steps of 0.05 within [MIN_SPEED] and [MAX_SPEED].
+ */
+internal fun heldSpeed(start: Float, upPx: Float, octavePx: Float): Float {
+    val raw = start * 2f.pow(upPx / octavePx)
+    return ((raw * 20f).roundToInt() / 20f).coerceIn(MIN_SPEED, MAX_SPEED)
+}
+
 /** The [VideoPlayback] of the full size view that calls this: it is released when the view leaves, and pauses when the app leaves the screen. */
 @Composable
 internal fun rememberVideoPlayback(startMuted: Boolean = true): VideoPlayback {
@@ -268,7 +321,7 @@ internal fun rememberVideoPlayback(startMuted: Boolean = true): VideoPlayback {
 /**
  * The page of a video in the full size view: its frame, which starts the video once the pager comes to rest on the page
  * ([LocalPageSettled]), and a play button over it. A page that is swiped past starts nothing. A tap pauses the video and
- * plays it again, and the close button closes the view. A vertical swipe shows or hides the bar ([swipeBar]), as on a photo. A video that is [unreadable] is the placeholder, which a tap
+ * plays it again, and the close button closes the view. A hold on the playing video changes its speed ([videoSpeedGesture]). A vertical swipe shows or hides the bar ([swipeBar]), as on a photo. A video that is [unreadable] is the placeholder, which a tap
  * closes, and never plays. [autoplay] is false while the page cannot yet tell whether the video is readable. A video that fails to play keeps its frame, and the play button tries it again.
  */
 @Composable
@@ -288,9 +341,18 @@ internal fun VideoPage(file: File, section: String, playback: VideoPlayback, unr
             R.string.video_play
         },
     )
-    Box(Modifier.fillMaxSize().swipeBar(LocalFullSizeBar.current, onClose).clickable(onClickLabel = tap, onClick = if (unreadable) onClose else ({ playback.toggle(file) }))) {
+    val bar = LocalFullSizeBar.current
+    var hold by remember { mutableStateOf<SpeedHold?>(null) }
+    val holdable by rememberUpdatedState(showing && playback.playing && !unreadable && !bar.screenReader)
+    Box(
+        Modifier.fillMaxSize().swipeBar(bar, onClose).clickable(onClickLabel = tap, onClick = if (unreadable) onClose else ({ playback.toggle(file) }))
+            // Last, so it sees each touch before the tap and the swipe and can keep a hold from them (#527).
+            .videoSpeedGesture(playback, LocalHapticFeedback.current, { holdable }) { hold = it },
+    ) {
         VideoFrame(file, section, Modifier.fillMaxSize(), ContentScale.Fit, unreadable)
         if (showing) VideoSurface(playback)
+        hold?.let { SpeedPopup(playback.speed, it.locked) }
+        if (showing && playback.speedLocked && hold == null) SpeedBadge(playback)
         if (!unreadable && !(showing && playback.playing)) {
             IconButton(
                 { playback.toggle(file) },
@@ -392,6 +454,7 @@ internal fun VideoControls(playback: VideoPlayback, file: File, section: String,
                 Icon(if (playback.muted) SoundOff else SoundOn, stringResource(if (playback.muted) R.string.video_unmute else R.string.video_mute), tint = Color.White)
             }
         }
+        if (here && bar.screenReader) SpeedControls(playback)
         if (stripLength > 0) {
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 for (ms in stripTimes(stripLength)) {
