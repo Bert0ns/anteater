@@ -41,7 +41,9 @@ import io.github.bert0ns.anteater.model.MediaType
 import io.github.bert0ns.anteater.ranker.GROUP_CATEGORIES
 import io.github.bert0ns.anteater.review.ReviewGroup
 import io.github.bert0ns.anteater.review.ReviewItem
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -67,15 +69,25 @@ class ClipLoopsTest {
     val compose = createComposeRule()
 
     private val players = Players(3_000)
+    private val previews = FakeClips()
     private fun clips(count: Int) = (1..count).map { MediaRef("/sdcard/DCIM/Camera/clip$it.mp4", 2_000_000, 0, MediaType.VIDEO) }
-    private fun page(clips: List<MediaRef>, unreadable: Set<Int> = emptySet()) = clips.mapIndexed { i, clip ->
-        ReviewGroup(clip.path, listOf(ReviewItem(clip, suggestTrash = true, isCandidate = true, unreadable = i in unreadable, durationMs = 3_000)))
+
+    /** Clips of 1080p, which loop their file, but those at the positions in [large], in 4K, and those in [unsized], which the index has not read. */
+    private fun page(clips: List<MediaRef>, unreadable: Set<Int> = emptySet(), large: Set<Int> = emptySet(), unsized: Set<Int> = emptySet()) = clips.mapIndexed { i, clip ->
+        val pixels = if (i in large) {
+            UHD
+        } else if (i in unsized) {
+            null
+        } else {
+            FULL_HD
+        }
+        ReviewGroup(clip.path, listOf(ReviewItem(clip, suggestTrash = true, isCandidate = true, unreadable = i in unreadable, durationMs = 3_000, pixels = pixels)))
     }
 
     /** Groups of a best copy and a copy, the copy first in grid order so a test sees which of the two moves. */
     private fun copies(count: Int) = (1..count).map {
-        val best = ReviewItem(MediaRef("/sdcard/DCIM/Camera/best$it.mp4", 2_000_000, 0, MediaType.VIDEO), suggestTrash = false, isCandidate = false, isBest = true, durationMs = 61_000)
-        val copy = ReviewItem(MediaRef("/sdcard/Download/copy$it.mp4", 2_000_000, 0, MediaType.VIDEO), suggestTrash = true, isCandidate = true, durationMs = 61_000)
+        val best = ReviewItem(MediaRef("/sdcard/DCIM/Camera/best$it.mp4", 2_000_000, 0, MediaType.VIDEO), suggestTrash = false, isCandidate = false, isBest = true, durationMs = 61_000, pixels = FULL_HD)
+        val copy = ReviewItem(MediaRef("/sdcard/Download/copy$it.mp4", 2_000_000, 0, MediaType.VIDEO), suggestTrash = true, isCandidate = true, durationMs = 61_000, pixels = FULL_HD)
         ReviewGroup("g$it", listOf(copy, best))
     }
 
@@ -124,7 +136,7 @@ class ClipLoopsTest {
 
     private fun show(page: List<ReviewGroup>, owner: LifecycleOwner? = null, category: Category = Category.SHORT_CLIPS, canPlay: Boolean = true) {
         compose.setContent {
-            val locals = listOfNotNull(LocalPlayerFactory provides players.factory, owner?.let { LocalLifecycleOwner provides it })
+            val locals = listOfNotNull(LocalPlayerFactory provides players.factory, LocalClips provides { previews }, owner?.let { LocalLifecycleOwner provides it })
             CompositionLocalProvider(*locals.toTypedArray()) {
                 CategoryScreen(page, page.size, emptySet(), category in GROUP_CATEGORIES, {}, { _, _ -> }, {}, mediaType = MediaType.VIDEO, category = category, canPlay = canPlay)
             }
@@ -482,7 +494,7 @@ class ClipLoopsTest {
 
     @Test
     fun `in takes the longest take of each group moves`() {
-        fun take(group: Int, n: Int, length: Long) = ReviewItem(MediaRef("/sdcard/DCIM/Camera/take$group-$n.mp4", 2_000_000, 0, MediaType.VIDEO), suggestTrash = false, isCandidate = true, durationMs = length)
+        fun take(group: Int, n: Int, length: Long) = ReviewItem(MediaRef("/sdcard/DCIM/Camera/take$group-$n.mp4", 2_000_000, 0, MediaType.VIDEO), suggestTrash = false, isCandidate = true, durationMs = length, pixels = FULL_HD)
         val takes = (1..4).map { ReviewGroup("t$it", listOf(take(it, 1, 2_000), take(it, 2, 9_000), take(it, 3, 5_000))) }
 
         show(takes, category = Category.TAKES)
@@ -496,12 +508,136 @@ class ClipLoopsTest {
 
     @Test
     fun `a moment whose longest take cannot be read moves its longest readable take`() {
-        fun take(group: Int, n: Int, length: Long, unreadable: Boolean = false) = ReviewItem(MediaRef("/sdcard/DCIM/Camera/take$group-$n.mp4", 2_000_000, 0, MediaType.VIDEO), suggestTrash = false, isCandidate = true, unreadable = unreadable, durationMs = length)
+        fun take(group: Int, n: Int, length: Long, unreadable: Boolean = false) = ReviewItem(MediaRef("/sdcard/DCIM/Camera/take$group-$n.mp4", 2_000_000, 0, MediaType.VIDEO), suggestTrash = false, isCandidate = true, unreadable = unreadable, durationMs = length, pixels = FULL_HD)
         val takes = listOf(ReviewGroup("t1", listOf(take(1, 1, 2_000), take(1, 2, 9_000, unreadable = true), take(1, 3, 5_000))))
 
         show(takes, category = Category.TAKES)
 
         assertEquals(listOf("/sdcard/DCIM/Camera/take1-3.mp4"), players.made.flatMap { it.paths })
+    }
+
+    private fun clip(n: Int) = "/sdcard/DCIM/Camera/clip$n.mp4"
+
+    @Test
+    fun `a video larger than 1080p never plays its file, shows the slideshow until its preview exists, and gives its place to the next tile`() {
+        previews.gate = CompletableDeferred() // its preview is still being made
+        show(page(clips(8), large = setOf(0)))
+
+        assertEquals(listOf(clip(2), clip(3)), running.flatMap { it.paths })
+        assertTrue(players.made.none { clip(1) in it.paths })
+        firstSlide()
+        assertEquals(listOf(187L), framesOf(clip(1)))
+    }
+
+    @Test
+    fun `a video larger than 1080p loops its preview once the cache holds it, whole, as the preview holds only what the tile loops`() {
+        previews.previews[clip(1)] = previews.preview(clip(1))
+        show(page(clips(8), large = setOf(0)), category = Category.BLURRY)
+
+        assertEquals(listOf(previews.preview(clip(1)).path, clip(2)), running.flatMap { it.paths })
+        assertEquals(listOf(C.TIME_END_OF_SOURCE, LONG_LOOP_MS), running.map { it.endMs })
+        assertTrue(running.all { it.muted && it.repeating && it.soundless })
+        assertTrue(previews.made.isEmpty())
+    }
+
+    @Test
+    fun `a tile on screen gets its preview on first view, one at a time in grid order, and then plays it`() {
+        previews.gate = CompletableDeferred()
+        show(page(clips(2), large = setOf(0, 1)))
+
+        assertEquals(listOf(clip(1)), previews.made.toList())
+        assertTrue(running.isEmpty())
+
+        previews.gate!!.complete(Unit)
+        settle()
+
+        assertEquals(listOf(clip(1), clip(2)), previews.made.toList())
+        assertEquals(listOf(clip(1), clip(2)).map { previews.preview(it).path }, running.flatMap { it.paths })
+    }
+
+    @Test
+    fun `no preview is made while the grid scrolls, and the tiles that came on screen get theirs once it settles`() {
+        for (n in 1..10) previews.previews[clip(n)] = previews.preview(clip(n)) // the first screen, which the job after a scan made
+        show(page(clips(16), large = (0 until 16).toSet()))
+        assertTrue(previews.made.isEmpty())
+        val grid = compose.onNode(hasScrollAction())
+
+        grid.performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -700f))
+        }
+        settle()
+        assertTrue(previews.made.isEmpty())
+
+        grid.performTouchInput { up() }
+        settle()
+        assertTrue(previews.made.isNotEmpty())
+        assertTrue(previews.made.all { it in (11..16).map(::clip) })
+    }
+
+    @Test
+    fun `a preview that cannot be made leaves its tile on the slideshow, is not tried again, and does not make the video unreadable`() {
+        previews.failing = setOf(clip(1))
+        show(page(clips(2), large = setOf(0)))
+        settle()
+
+        assertEquals(listOf(clip(1)), previews.made.toList())
+        assertEquals(listOf(clip(2)), running.flatMap { it.paths })
+        firstSlide()
+        assertEquals(listOf(187L), framesOf(clip(1))) // an unreadable video runs no slideshow
+    }
+
+    @Test
+    fun `the full size view stops the preview being made, and closing it makes it again`() {
+        previews.gate = CompletableDeferred()
+        show(page(clips(8), large = setOf(0)))
+        assertEquals(listOf(clip(1)), previews.made.toList())
+
+        compose.onNodeWithContentDescription("clip2.mp4", substring = true).performTouchInput { longClick() }
+        settle()
+        assertEquals(listOf(clip(1)), previews.cancelled.toList())
+
+        compose.onNodeWithContentDescription("Close").performClick()
+        settle()
+        assertEquals(listOf(clip(1), clip(1)), previews.made.toList())
+    }
+
+    @Test
+    fun `a hot phone or battery saver makes no preview`() {
+        show(page(clips(8), large = setOf(0)), canPlay = false)
+
+        assertTrue(previews.made.isEmpty())
+    }
+
+    @Test
+    fun `videos the index has not sized show the slideshow until their header is read, and then play their file when it is 1080p or less`() {
+        previews.headers = (1..8).associate { clip(it) to FULL_HD } + (clip(1) to UHD)
+        show(page(clips(8), unsized = (0 until 8).toSet()))
+
+        assertEquals(listOf(clip(1)), previews.made.toList()) // only the 4K one is transcoded
+        assertEquals(listOf(previews.preview(clip(1)).path, clip(2)), running.flatMap { it.paths })
+    }
+
+    @Test
+    fun `a change in the list of moving tiles keeps what the unchanged tiles had, and drops what a changed one had`() = runBlocking {
+        fun mover(n: Int, pixels: Long?, endMs: Long? = LONG_LOOP_MS, size: Long = 1_000) = Mover(MediaRef(clip(n), size, 0, MediaType.VIDEO), pixels, 60_000, endMs)
+        previews.headers = mapOf(clip(1) to FULL_HD)
+        previews.failing = setOf(clip(3))
+        val motion = TileMotion(previews, LoopPlayers())
+        val first = listOf(mover(1, null), mover(2, UHD), mover(3, UHD), mover(4, UHD))
+        motion.find(first)
+        for (mover in first) motion.make(mover)
+        previews.headers = emptyMap() // a header read again would now fail
+        previews.previews.clear() // a preview looked for again would now miss
+
+        motion.find(listOf(mover(1, null), mover(2, UHD), mover(3, UHD), mover(4, UHD, endMs = null), mover(5, FULL_HD)))
+
+        assertEquals(mapOf(clip(1) to File(clip(1)), clip(2) to previews.preview(clip(2)), clip(5) to File(clip(5))), motion.sources)
+        assertEquals(setOf(clip(3)), motion.unmade) // not tried again
+        assertEquals(listOf(clip(2), clip(3), clip(4)), previews.made.toList())
+
+        motion.find(listOf(mover(2, UHD, size = 2_000))) // the video was edited
+        assertEquals(emptyMap<Any, File>(), motion.sources)
     }
 
     private fun columns(): Int {

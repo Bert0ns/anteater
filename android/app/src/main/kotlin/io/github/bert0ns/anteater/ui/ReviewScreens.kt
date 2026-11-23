@@ -227,10 +227,10 @@ private val ReviewOrder.title
 /**
  * A thumbnail that is marked for the trash or kept. Tap toggles, a long press shows it full size.
  * A screen reader hears why the image is here and how it is marked, and gets both as actions too.
- * A video tile that moves, by [motion], plays its clip over its frame, to [loopEndMs] when that is set, or shows its slideshow.
+ * A video tile that moves, by [motion], plays its clip over its frame or shows its slideshow.
  */
 @Composable
-private fun Tile(item: ReviewItem, marked: Boolean, motion: TileMotion, loopEndMs: Long?, onTap: () -> Unit, onHold: () -> Unit) {
+private fun Tile(item: ReviewItem, marked: Boolean, motion: TileMotion, onTap: () -> Unit, onHold: () -> Unit) {
     val state = stringResource(
         when {
             marked -> R.string.selected_for_trash
@@ -269,7 +269,7 @@ private fun Tile(item: ReviewItem, marked: Boolean, motion: TileMotion, loopEndM
         if (video) {
             val file = File(item.image.path)
             VideoFrame(file, "Review.tile", Modifier.fillMaxSize(), unreadable = item.unreadable)
-            motion.Over(item.image, item.durationMs, loopEndMs, Modifier.fillMaxSize())
+            motion.Over(item.image, item.durationMs, Modifier.fillMaxSize())
             Text(details, Modifier.align(Alignment.BottomStart).background(Color.Black.copy(alpha = 0.6f)).padding(4.dp).clearAndSetSemantics {}, color = Color.White, style = MaterialTheme.typography.labelSmall)
         } else {
             TracedAsyncImage(File(item.image.path), "Review.tile", null, Modifier.fillMaxSize(), tile = true)
@@ -298,17 +298,18 @@ private fun Tile(item: ReviewItem, marked: Boolean, motion: TileMotion, loopEndM
 }
 
 /**
- * The tiles of a video review that move (#457): every video of a review of single videos, the best copy of each group of
- * copies, and the longest take of each moment, since the user compares the others against it. An unreadable video never
- * moves.
+ * The tiles of a video review that move (#457), in grid order: every video of a review of single videos, the best copy of
+ * each group of copies, and the longest take of each moment, since the user compares the others against it. An unreadable
+ * video never moves. A short clip or a take loops whole, and the other videos, which can be long, their first
+ * [LONG_LOOP_MS].
  */
-private fun movingTiles(category: Category, page: List<ReviewGroup>): Set<String> = when (category) {
+internal fun movingTiles(category: Category, page: List<ReviewGroup>): List<Mover> = when (category) {
     in SINGLE_VIDEO_CATEGORIES -> page.flatMap { it.images }.filterNot { it.unreadable }
     Category.EXACT_DUPLICATE, Category.NEAR_DUPLICATE -> page.mapNotNull { group -> group.images.firstOrNull { it.isBest && !it.unreadable } }
     // The longest readable take, so a moment whose longest take cannot be read still moves.
     Category.TAKES -> page.mapNotNull { group -> group.images.filterNot { it.unreadable }.maxByOrNull { it.durationMs ?: 0 } }
     else -> emptyList()
-}.map { it.image.path }.toSet()
+}.map { Mover(it.image, it.pixels, it.durationMs, if (category == Category.SHORT_CLIPS || category == Category.TAKES) null else LONG_LOOP_MS) }
 
 /** The badge of a tile selected for an action, in Compress and in the trash. A check means "selected" everywhere. */
 @Composable
@@ -399,10 +400,8 @@ fun CategoryScreen(
         // A new grouping reorders the page: start at its top instead of in the middle of it.
         val grid = rememberLazyGridState()
         LaunchedEffect(reviewOrder) { grid.scrollToItem(0) }
-        val movers = remember(page, category, videos) { if (videos && category != null) movingTiles(category, page) else emptySet() }
+        val movers = remember(page, category, videos) { if (videos && category != null) movingTiles(category, page) else emptyList() }
         val motion = rememberTileMotion(grid, movers, fullSize != null, canPlay, loops)
-        // A short clip or a take loops whole, and the other videos, which can be long, their first seconds.
-        val loopEndMs = if (category == Category.SHORT_CLIPS || category == Category.TAKES) null else LONG_LOOP_MS
         val columns = if (videos && category in SINGLE_VIDEO_CATEGORIES) videoColumns() else GridCells.Adaptive(110.dp)
         LazyVerticalGrid(columns, Modifier.weight(1f), grid) {
             for ((position, group) in page.withIndex()) {
@@ -435,7 +434,6 @@ fun CategoryScreen(
                         item,
                         item.image.path in marked,
                         motion,
-                        loopEndMs,
                         onTap = {
                             haptics.performHapticFeedback(Haptic.TICK.type)
                             onToggle(item.image)

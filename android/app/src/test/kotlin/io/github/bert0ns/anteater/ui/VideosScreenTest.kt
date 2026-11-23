@@ -44,6 +44,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.C
 import io.github.bert0ns.anteater.model.Category
 import io.github.bert0ns.anteater.model.MediaRef
 import io.github.bert0ns.anteater.model.MediaType
@@ -69,7 +70,7 @@ class VideosScreenTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private fun clip(name: String, size: Long, durationMs: Long? = 61_000, unreadable: Boolean = false, favorite: Boolean = false) = VideoItem(MediaRef("/sdcard/Movies/$name", size, 0, MediaType.VIDEO), durationMs, unreadable, favorite)
+    private fun clip(name: String, size: Long, durationMs: Long? = 61_000, unreadable: Boolean = false, favorite: Boolean = false, pixels: Long? = FULL_HD) = VideoItem(MediaRef("/sdcard/Movies/$name", size, 0, MediaType.VIDEO), durationMs, unreadable, favorite, pixels)
 
     private val videos = listOf(clip("big.mp4", 1_500_000_000), clip("middle.mp4", 800_000_000), clip("small.mp4", 90_000_000))
 
@@ -77,6 +78,7 @@ class VideosScreenTest {
     private class Applied(var paths: Set<String>? = null, var trash: Boolean? = null)
 
     private var players = Players()
+    private val previews = FakeClips()
 
     /** The players of the full size view, made on the main thread, and not the tiles' loops, made on theirs. */
     private val viewPlayers get() = players.made.filter { it.builtOn == Looper.getMainLooper().thread }
@@ -84,7 +86,7 @@ class VideosScreenTest {
     private fun show(items: List<VideoItem>, applied: Applied = Applied(), owner: LifecycleOwner? = null) {
         compose.setContent {
             var selected by remember { mutableStateOf(emptySet<String>()) }
-            val locals = listOfNotNull(LocalPlayerFactory provides players.factory, owner?.let { LocalLifecycleOwner provides it })
+            val locals = listOfNotNull(LocalPlayerFactory provides players.factory, LocalClips provides { previews }, owner?.let { LocalLifecycleOwner provides it })
             CompositionLocalProvider(*locals.toTypedArray()) {
                 VideosScreen(items, selected, onToggle = { selected = if (it in selected) selected - it else selected + it }, onApply = { paths, trash ->
                     applied.paths = paths
@@ -828,6 +830,17 @@ class VideosScreenTest {
         assertEquals(listOf("/sdcard/Movies/v1.mp4", "/sdcard/Movies/v2.mp4"), loops.flatMap { it.paths })
         assertTrue(loops.all { it.endMs == LONG_LOOP_MS && it.muted && it.repeating })
         assertEquals(compose.onAllNodesWithContentDescription(".mp4", substring = true).fetchSemanticsNodes().size - LOOPING_CLIPS, slideshows)
+    }
+
+    @Test
+    fun `a video larger than 1080p loops a preview of its first 10 seconds, made once the grid shows it`() {
+        val large = (1..8).map { clip("v$it.mp4", 2_000_000_000L - it, pixels = UHD) }
+        show(large)
+        settle()
+
+        assertEquals(large.take(LOOPING_CLIPS).map { previews.preview(it.video.path).path }, loops.flatMap { it.paths })
+        assertTrue(loops.all { it.endMs == C.TIME_END_OF_SOURCE }) // the preview holds only the first 10 seconds
+        assertEquals(List(previews.made.size) { LONG_LOOP_MS }, previews.ends.toList())
     }
 
     @Test
