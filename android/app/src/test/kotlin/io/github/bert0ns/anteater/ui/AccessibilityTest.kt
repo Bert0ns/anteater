@@ -216,6 +216,23 @@ class AccessibilityTest {
         compose.onNodeWithText("Delete 1 image for good?").assertIsDisplayed()
     }
 
+    @Test
+    fun `the three tabs of the trash fit at twice the font size, with targets of 48 dp`() {
+        RuntimeEnvironment.setFontScale(2f)
+        val at = Instant.now() - Duration.ofDays(3)
+        val trashed = listOf(TrashedImage(images[0], at, File("/sdcard/.anteater-trash/x/img1.jpg"), at + Duration.ofDays(30)))
+        compose.setContent { TrashScreen(trashed, emptySet(), {}, { _, _ -> }, {}, {}) }
+
+        val screen = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        for (tab in listOf("Photos", "Videos", "Stickers")) {
+            val bounds = compose.onNodeWithText(tab).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            assertTrue("$tab inside the screen: $bounds", bounds.left >= screen.left && bounds.right <= screen.right)
+        }
+        assertTouchTargets("trash tabs, at twice the font size")
+        compose.onNodeWithText("Stickers").performClick()
+        compose.onNodeWithText("No stickers in the trash.").assertIsDisplayed()
+    }
+
     private val photo = CompressibleImage("/sdcard/DCIM/img1.jpg", 6_200_000, 4000, 3000, JpegInfo(JpegStatus.ELIGIBLE, quality = 92))
     private val compressTile = CompressState(
         loaded = true,

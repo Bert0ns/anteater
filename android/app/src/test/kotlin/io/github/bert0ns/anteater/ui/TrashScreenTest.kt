@@ -250,22 +250,128 @@ class TrashScreenTest {
         compose.onNodeWithTag("fullSize").assertDoesNotExist()
     }
 
+    private val sticker = TrashedImage(
+        MediaRef("/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Stickers/s.webp", 1, 0),
+        Instant.now(),
+        File("/sdcard/.anteater-trash/y/s.webp"),
+        Instant.now() + Duration.ofDays(30),
+    )
+
     @Test
-    fun `stickers have their own section, selected all at once`() {
-        val sticker = TrashedImage(
-            MediaRef("/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Stickers/s.webp", 1, 0),
-            Instant.now(),
-            File("/sdcard/.anteater-trash/y/s.webp"),
-            Instant.now() + Duration.ofDays(30),
-        )
+    fun `stickers have their own tab, selected all at once`() {
         var chosen: List<TrashedImage> = emptyList()
         compose.setContent { TrashScreen(trashed + sticker, emptySet(), {}, { items, _ -> chosen = items }, {}, {}) }
 
         compose.onNodeWithText("2 images").assertExists()
+        compose.onNodeWithContentDescription("s.webp", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Stickers").performClick()
         compose.onNodeWithText("1 WhatsApp sticker").assertExists()
-        compose.onAllNodesWithText("Select all")[1].performClick()
+        compose.onNodeWithContentDescription("s.webp", substring = true).assertExists()
+        compose.onNodeWithContentDescription("a.jpg", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Select all").performClick()
 
         assertEquals(listOf(sticker), chosen)
+    }
+
+    @Test
+    fun `select all in a tab acts on that tab only`() {
+        val chosen = mutableListOf<List<TrashedImage>>()
+        compose.setContent { TrashScreen(trashed + sticker, emptySet(), {}, { items, _ -> chosen += items }, {}, {}) }
+
+        compose.onNodeWithText("Select all").performClick()
+
+        assertEquals(listOf(trashed), chosen)
+    }
+
+    @Test
+    fun `the trash opens on the first tab that has items`() {
+        compose.setContent { TrashScreen(listOf(sticker), emptySet(), {}, { _, _ -> }, {}, {}) }
+
+        compose.onNodeWithContentDescription("s.webp", substring = true).assertExists()
+        compose.onNodeWithText("1 WhatsApp sticker").assertExists()
+    }
+
+    @Test
+    fun `items that arrive after the trash opened land on the first tab that has items`() {
+        val video = clip.copy(file = File("/sdcard/.anteater-trash/l/clip.mp4"))
+        var items by mutableStateOf(emptyList<TrashedImage>())
+        var loading by mutableStateOf(true)
+        compose.setContent { TrashScreen(items, emptySet(), {}, { _, _ -> }, {}, {}, loading = loading) }
+        compose.onNodeWithText("Photos").assertDoesNotExist() // no tabs while the list is still empty
+
+        items = listOf(video)
+        loading = false
+
+        compose.onNodeWithContentDescription("clip.mp4", substring = true).assertExists()
+        compose.onNodeWithText("1 video").assertExists()
+    }
+
+    @Test
+    fun `a tab with nothing in it says so, and the bar still acts on the whole trash`() {
+        compose.setContent { TrashScreen(trashed, emptySet(), {}, { _, _ -> }, {}, {}) }
+
+        compose.onNodeWithText("Videos").performClick()
+
+        compose.onNodeWithText("No videos in the trash.").assertExists()
+        compose.onNodeWithContentDescription("a.jpg", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Select all").assertDoesNotExist()
+        compose.onNodeWithText("Empty trash").assertExists()
+        compose.onNodeWithText("Stickers").performClick()
+        compose.onNodeWithText("No stickers in the trash.").assertExists()
+        compose.onNodeWithText("Photos").performClick()
+        compose.onNodeWithContentDescription("a.jpg", substring = true).assertExists()
+    }
+
+    @Test
+    fun `an empty photos tab says so when the trash holds only videos and the user goes back to it`() {
+        val video = clip.copy(file = File("/sdcard/.anteater-trash/e/clip.mp4"))
+        compose.setContent { TrashScreen(listOf(video), emptySet(), {}, { _, _ -> }, {}, {}) }
+
+        compose.onNodeWithText("Photos").performClick()
+
+        compose.onNodeWithText("No photos in the trash.").assertExists()
+    }
+
+    @Test
+    fun `a selection holds across the tabs, and Restore and Delete act on all of it`() {
+        var restored = emptySet<String>()
+        var deleted: Set<String>? = null
+        compose.setContent {
+            var selected by remember { mutableStateOf(emptySet<String>()) }
+            TrashScreen(
+                trashed + sticker,
+                selected,
+                onSelect = { selected = selected + it.file.path },
+                onSelectAll = { _, _ -> },
+                onRestore = { restored = selected },
+                onDelete = { deleted = it },
+            )
+        }
+
+        compose.onNodeWithContentDescription("a.jpg", substring = true).performClick()
+        compose.onNodeWithText("Stickers").performClick()
+        compose.onNodeWithContentDescription("s.webp", substring = true).performClick()
+
+        compose.onNodeWithText("Restore 2").performClick()
+        assertEquals(setOf(trashed[0].file.path, sticker.file.path), restored)
+        compose.onNodeWithText("Delete 2").performClick()
+        compose.onNodeWithText("Delete").performClick()
+        assertEquals(setOf(trashed[0].file.path, sticker.file.path), deleted)
+    }
+
+    @Test
+    fun `the full size view pages only through the tab it was opened from`() {
+        compose.setContent { TrashScreen(trashed + sticker, emptySet(), {}, { _, _ -> }, {}, {}) }
+
+        compose.onNodeWithContentDescription("b.jpg", substring = true).performTouchInput { longClick() }
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() } // b.jpg is the last photo: the sticker is not next
+        compose.waitForIdle()
+
+        compose.onNodeWithTag("fullSize").assertExists()
+        compose.onNodeWithText("27 days left").assertExists()
+        compose.onNodeWithText("30 days left").assertDoesNotExist() // the sticker's bar
+        compose.onNodeWithContentDescription("Close").performClick()
+        compose.onNodeWithTag("fullSize").assertDoesNotExist()
     }
 
     private val clip = run {
@@ -274,15 +380,18 @@ class TrashScreenTest {
     }
 
     @Test
-    fun `a trashed video has its own section and shows its duration and size`() {
+    fun `a trashed video has its own tab and shows its duration and size`() {
         // A trash file of its own: the lengths read are kept for the process, and the other tests read none for theirs.
         val clip = clip.copy(file = File("/sdcard/.anteater-trash/d/clip.mp4"))
         ShadowMediaMetadataRetriever.addMetadata(clip.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "102000")
         compose.setContent { TrashScreen(trashed + clip, emptySet(), {}, { _, _ -> }, {}, {}) }
 
         compose.onNodeWithText("2 images").assertExists()
+        compose.onNodeWithContentDescription("clip.mp4", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Videos").performClick()
         compose.onNodeWithText("1 video").assertExists()
         compose.onNodeWithContentDescription("clip.mp4. Video, 01:42, 412 MB. 27 days left").assertExists()
+        compose.onNodeWithContentDescription("a.jpg", substring = true).assertDoesNotExist()
     }
 
     @Test
@@ -328,11 +437,12 @@ class TrashScreenTest {
     }
 
     @Test
-    fun `the bar a playing video hid is back on the photo after it, and a swipe on the photo hides it`() {
+    fun `the bar a playing video hid is back on the page after it`() {
         val players = Players()
         val video = clip.copy(file = File("/sdcard/.anteater-trash/q/clip.mp4"))
+        val broken = clip.copy(MediaRef("/sdcard/DCIM/broken.mp4", 412_000_000, 0, MediaType.VIDEO), file = File("/sdcard/.anteater-trash/q/broken.mp4")) // no length: a placeholder that does not play
         ShadowMediaMetadataRetriever.addMetadata(video.file.path, MediaMetadataRetriever.METADATA_KEY_DURATION, "102000")
-        compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { TrashScreen(listOf(video, trashed[0]), emptySet(), {}, { _, _ -> }, {}, {}) } }
+        compose.setContent { CompositionLocalProvider(LocalPlayerFactory provides players.factory) { TrashScreen(listOf(video, broken), emptySet(), {}, { _, _ -> }, {}, {}) } }
         compose.onNodeWithContentDescription("clip.mp4", substring = true).performTouchInput { longClick() }
         compose.waitForIdle()
         compose.mainClock.advanceTimeBy(1_200)
@@ -343,11 +453,27 @@ class TrashScreenTest {
         compose.waitForIdle()
 
         compose.onNodeWithText("27 days left").assertExists()
+    }
+
+    @Test
+    fun `a swipe on a photo hides the bar, and the next photo has it back`() {
+        compose.setContent { TrashScreen(trashed, emptySet(), {}, { _, _ -> }, {}, {}) }
+        compose.onNodeWithContentDescription("a.jpg", substring = true).performTouchInput { longClick() }
+        compose.waitForIdle()
+        compose.onNodeWithText("27 days left").assertExists()
+
         compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
         compose.waitForIdle()
         compose.onNodeWithText("27 days left").assertDoesNotExist()
         compose.onNodeWithTag("fullSize").performTouchInput { swipeUp() }
         compose.waitForIdle()
+        compose.onNodeWithText("27 days left").assertExists()
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        compose.waitForIdle()
+        compose.onNodeWithText("27 days left").assertDoesNotExist()
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+
         compose.onNodeWithText("27 days left").assertExists()
     }
 
@@ -386,7 +512,7 @@ class TrashScreenTest {
     }
 
     @Test
-    fun `deleting a video for good counts files, not images`() {
+    fun `deleting a video for good counts files, not images, also from another tab`() {
         compose.setContent { TrashScreen(trashed + clip, emptySet(), {}, { _, _ -> }, {}, {}) }
 
         compose.onNodeWithText("Empty trash").performClick()
