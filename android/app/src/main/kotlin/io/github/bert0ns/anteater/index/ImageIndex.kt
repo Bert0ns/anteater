@@ -441,6 +441,9 @@ class ImageIndex(private val db: IndexDatabase) :
     /** Whether the index holds a video, reviewed or not: false until a scan has found one. */
     suspend fun hasVideos(): Boolean = dao.hasVideos()
 
+    /** Whether an unreviewed, readable video is larger than [pixels], or of a size the video steps have not read yet. */
+    suspend fun hasVideosAbove(pixels: Long): Boolean = dao.hasVideosAbove(pixels)
+
     /** The videos out of the trash whose metadata the video steps have not read, unreadable ones aside: what "Scan videos" has left to do. */
     suspend fun videosWaiting(): Int = dao.videosWaiting()
 
