@@ -52,12 +52,21 @@ internal class FullSizeBarState {
         touches++
     }
 
-    /** A swipe down [hide]s the bar and a swipe up shows it, and a swipe up on a bar the video hid keeps it. Not with a screen reader on. */
-    fun swipe(hide: Boolean) {
-        if (screenReader) return
-        if (!hide && hidden && playing) pinned = true
-        if (hide) pinned = false
-        hidden = hide
+    /**
+     * A swipe up shows the bar, and a swipe up on a bar the video hid keeps it. A swipe down hides a bar that shows, and closes the
+     * view once it is hidden, so it takes two (#523). Returns whether the view should close. Does nothing with a screen reader on.
+     */
+    fun swipe(hide: Boolean): Boolean {
+        if (screenReader) return false
+        if (!hide) {
+            if (hidden && playing) pinned = true
+            hidden = false
+            return false
+        }
+        if (hidden) return true
+        pinned = false
+        hidden = true
+        return false
     }
 }
 
@@ -101,12 +110,12 @@ internal fun rememberTouchExploration(): Boolean {
 }
 
 /**
- * A vertical swipe: up shows the bar, down hides it, wherever it ends. It claims a finger only when the first move past the touch
+ * A vertical swipe: up shows the bar, down hides it and, with the bar already hidden, calls [onClose] (#523), wherever it ends. It claims a finger only when the first move past the touch
  * slop is more vertical than horizontal, so a flick that is mostly sideways, even a little askew, stays the pager's. It goes
  * before the zoom gestures of a photo on the same node, which see a drag first and consume it while the photo is zoomed, where
  * it pans, and a consumed finger is not one of these. A second finger leaves it to the pinch.
  */
-internal fun Modifier.swipeBar(bar: FullSizeBarState) = pointerInput(bar) {
+internal fun Modifier.swipeBar(bar: FullSizeBarState, onClose: () -> Unit = {}) = pointerInput(bar, onClose) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
         var dx = 0f
@@ -125,7 +134,7 @@ internal fun Modifier.swipeBar(bar: FullSizeBarState) = pointerInput(bar) {
             }
             if (claimed) change.consume()
             if (!change.pressed) {
-                if (claimed && dy != 0f) bar.swipe(hide = dy > 0)
+                if (claimed && dy != 0f && bar.swipe(hide = dy > 0)) onClose()
                 return@awaitEachGesture
             }
         }

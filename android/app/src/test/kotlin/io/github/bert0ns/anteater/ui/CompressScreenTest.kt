@@ -634,6 +634,38 @@ class CompressScreenTest {
     }
 
     @Test
+    fun `in the full screen photo the first swipe down hides the bar and the second closes the view`() {
+        show(model(big, middle))
+        awaitText("2 photos, largest first")
+        tile("IMG_1.jpg").performTouchInput { longClick() }
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        compose.waitForIdle()
+        compose.onNodeWithText("DCIM").assertDoesNotExist()
+        compose.onNodeWithTag("fullSize").assertExists()
+
+        compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("fullSize").assertDoesNotExist()
+    }
+
+    @Test
+    fun `in the full screen photo, once zoomed, a vertical pan neither hides the bar nor closes the view`() {
+        show(model(big, middle))
+        awaitText("2 photos, largest first")
+        tile("IMG_1.jpg").performTouchInput { longClick() }
+        compose.onNodeWithTag("fullSize").performTouchInput {
+            pinch(Offset(center.x - 10, center.y), Offset(center.x + 10, center.y), Offset(center.x - 60, center.y), Offset(center.x + 60, center.y))
+        }
+
+        repeat(3) { compose.onNodeWithTag("fullSize").performTouchInput { swipeDown() } }
+        compose.waitForIdle()
+
+        compose.onNodeWithText("DCIM").assertExists()
+        compose.onNodeWithTag("fullSize").assertExists()
+    }
+
+    @Test
     fun `in the full screen photo, once zoomed, a swipe up pans and does not bring the bar back`() {
         show(model(big, middle))
         awaitText("2 photos, largest first")
