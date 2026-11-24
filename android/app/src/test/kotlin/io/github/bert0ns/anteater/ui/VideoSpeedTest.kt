@@ -76,8 +76,9 @@ class VideoSpeedTest {
         compose.waitForIdle()
     }
 
-    private fun move(x: Float = 0f, y: Float = 0f) {
-        page.performTouchInput { repeat(4) { moveBy(Offset(x / 4, y / 4)) } }
+    /** Moves the finger in [steps] pointer events, one for a flick the system reports at once. */
+    private fun move(x: Float = 0f, y: Float = 0f, steps: Int = 4) {
+        page.performTouchInput { repeat(steps) { moveBy(Offset(x / steps, y / steps)) } }
         compose.waitForIdle()
     }
 
@@ -183,6 +184,65 @@ class VideoSpeedTest {
         compose.onNodeWithContentDescription("Speed locked").assertDoesNotExist()
         lift()
         assertEquals(1f, player.playbackSpeed, 0f)
+    }
+
+    @Test
+    fun `a quick swipe back past where the finger went down unlocks`() {
+        open()
+        press()
+        move(y = -px(72))
+        move(x = px(60))
+        compose.onNodeWithContentDescription("Speed locked").assertExists()
+
+        move(x = -px(95), steps = 1)
+        compose.onNodeWithContentDescription("Speed locked").assertDoesNotExist()
+        lift()
+        assertEquals(1f, player.playbackSpeed, 0f)
+    }
+
+    @Test
+    fun `after an unlock a short way sideways does not lock again, and a full swipe does, on either side`() {
+        open()
+        press()
+        move(y = -px(72))
+        move(x = px(80), steps = 8)
+        move(x = -px(40), steps = 8) // unlocks after 24 dp back, so 16 dp past the unlock
+        compose.onNodeWithContentDescription("Speed locked").assertDoesNotExist()
+
+        move(x = px(40), steps = 8) // 24 dp from the unlock
+        compose.onNodeWithContentDescription("Speed locked").assertDoesNotExist()
+        move(x = px(40), steps = 8)
+        compose.onNodeWithContentDescription("Speed locked").assertExists()
+    }
+
+    @Test
+    fun `a finger past either end turns back from the end at once`() {
+        open()
+        press()
+        move(y = -px(400))
+        assertEquals(4f, player.playbackSpeed, 0f)
+        move(y = px(18))
+        assertEquals(3.75f, player.playbackSpeed, 0f)
+
+        move(y = px(1_000))
+        assertEquals(0.25f, player.playbackSpeed, 0f)
+        move(y = -px(18))
+        assertEquals(0.5f, player.playbackSpeed, 0f)
+    }
+
+    @Test
+    @Config(qualifiers = "w340dp-h640dp")
+    fun `on a narrow page at a large font the number stays on the page`() {
+        RuntimeEnvironment.setFontScale(1.5f)
+        open()
+        val bounds = page.fetchSemanticsNode().boundsInRoot
+        for (x in listOf(0.45f, 0.55f)) {
+            press { width, height -> Offset(width * x, height / 2) }
+            move(y = px(1_000))
+            val number = compose.onNodeWithText("0.25x", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            assertTrue("$number in $bounds", number.left >= bounds.left - 1 && number.right <= bounds.right + 1)
+            lift()
+        }
     }
 
     @Test

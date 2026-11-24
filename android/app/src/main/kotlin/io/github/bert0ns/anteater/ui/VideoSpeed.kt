@@ -117,14 +117,17 @@ internal fun Modifier.videoSpeedGesture(playback: VideoPlayback, haptics: Haptic
         val before = playback.speed
         val hold = SpeedHold(down.position)
         onHold(hold)
+        var ended = false
         try {
             val step = SPEED_STEP_DRAG.toPx()
             val lock = SPEED_LOCK_SWIPE.toPx()
             val unlock = SPEED_UNLOCK_SWIPE.toPx()
             var from = before
             var up = 0f
-            // Sideways from where the finger went down, or from where it last unlocked; and while locked, the farthest it went.
+            // Sideways from where the finger went down, or from where it last unlocked; and while locked, the side it locked on
+            // and the farthest it went that way, so a quick swipe back past the start still counts as coming back.
             var dx = 0f
+            var lockSide = 1f
             var farthest = 0f
             while (true) {
                 val event = awaitPointerEvent()
@@ -134,10 +137,10 @@ internal fun Modifier.videoSpeedGesture(playback: VideoPlayback, haptics: Haptic
                 if (change == null || move == null || !change.pressed) break
                 dx += move.x
                 if (hold.locked) {
-                    farthest = maxOf(farthest, abs(dx))
+                    farthest = maxOf(farthest, dx * lockSide)
                     hold.sideways = 1f
                     // Any way back toward where it came from unlocks, however far the swipe that locked went.
-                    if (farthest - abs(dx) >= unlock) {
+                    if (farthest - dx * lockSide >= unlock) {
                         hold.locked = false
                         from = playback.speed
                         up = 0f
@@ -150,6 +153,7 @@ internal fun Modifier.videoSpeedGesture(playback: VideoPlayback, haptics: Haptic
                 hold.sideways = (abs(dx) / lock).coerceAtMost(1f)
                 if (abs(dx) >= lock) {
                     hold.locked = true
+                    lockSide = if (dx > 0) 1f else -1f
                     farthest = abs(dx)
                     haptics.performHapticFeedback(Haptic.KEEP.type)
                     continue
@@ -163,7 +167,10 @@ internal fun Modifier.videoSpeedGesture(playback: VideoPlayback, haptics: Haptic
                 }
             }
             if (hold.locked) playback.lockSpeed() else playback.setSpeed(before)
+            ended = true
         } finally {
+            // A hold cut short, as when the page leaves the composition under the finger, keeps the speed from before it.
+            if (!ended) playback.setSpeed(before)
             onHold(null)
         }
     }
@@ -233,7 +240,9 @@ internal fun BoxScope.SpeedDial(speed: Float, hold: SpeedHold) {
                 val column = measurable.measure(outer.copy(minWidth = 0, minHeight = 0))
                 val x = hold.origin.x + side * NUMBER_GAP.toPx()
                 val y = middle - (LOCK_ICON + LOCK_ICON_GAP).toPx() - rollHeight.toPx() / 2
-                layout(outer.maxWidth, outer.maxHeight) { column.place((if (side > 0) x else x - column.width).roundToInt(), y.roundToInt()) }
+                // On a narrow page or at a large font, the number stays on the page even if it comes closer to the ticks.
+                val left = (if (side > 0) x else x - column.width).coerceIn(0f, (outer.maxWidth - column.width).coerceAtLeast(0).toFloat())
+                layout(outer.maxWidth, outer.maxHeight) { column.place(left.roundToInt(), y.roundToInt()) }
             },
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
