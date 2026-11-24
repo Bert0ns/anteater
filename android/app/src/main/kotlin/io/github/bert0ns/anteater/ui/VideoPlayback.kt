@@ -71,7 +71,6 @@ import io.github.bert0ns.anteater.tracing.OpenSection
 import kotlinx.coroutines.delay
 import java.io.File
 import kotlin.math.abs
-import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /** How many frames the strip under the controls shows. */
@@ -314,14 +313,14 @@ internal const val MAX_SPEED = 4f
 private const val SPEED_EPSILON = 0.001f
 private val SPEED_STEPS = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 3f, 4f)
 
+/** The steps of the hold's slider (#538), from [MIN_SPEED] to [MAX_SPEED]. */
+internal const val SPEED_TICK = 0.25f
+
 /**
- * The speed a hold that began at [start] reaches after the finger went [upPx] up (negative for down): each [octavePx] doubles
- * or halves it, so a slow speed moves as finely as a fast one, and it snaps to steps of 0.05 within [MIN_SPEED] and [MAX_SPEED].
+ * The speed a hold that began at [start] reaches after the finger went [upPx] up (negative for down): one [SPEED_TICK] for
+ * every [tickPx], within [MIN_SPEED] and [MAX_SPEED].
  */
-internal fun heldSpeed(start: Float, upPx: Float, octavePx: Float): Float {
-    val raw = start * 2f.pow(upPx / octavePx)
-    return ((raw * 20f).roundToInt() / 20f).coerceIn(MIN_SPEED, MAX_SPEED)
-}
+internal fun heldSpeed(start: Float, upPx: Float, tickPx: Float): Float = ((start / SPEED_TICK + upPx / tickPx).roundToInt() * SPEED_TICK).coerceIn(MIN_SPEED, MAX_SPEED)
 
 /**
  * The [VideoPlayback] of the full size view that calls this: it is released when the view leaves, and pauses when the app
@@ -370,7 +369,7 @@ internal fun VideoPage(file: File, section: String, playback: VideoPlayback, unr
     ) {
         VideoFrame(file, section, Modifier.fillMaxSize(), ContentScale.Fit, unreadable)
         if (showing) VideoSurface(playback)
-        hold?.let { SpeedPopup(playback.speed, it.locked) }
+        hold?.let { SpeedDial(playback.speed, it) }
         if (showing && playback.speedLocked && hold == null) SpeedBadge(playback)
         if (!unreadable && !(showing && playback.playing)) {
             IconButton(

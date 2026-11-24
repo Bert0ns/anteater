@@ -49,7 +49,7 @@ class VideoSpeedTest {
     private val players = Players()
     private val player get() = players.made.single { it.builtOn == Looper.getMainLooper().thread }
     private val page get() = compose.onNodeWithTag("fullSize")
-    private val hint = "Slide up for faster, down for slower. Swipe sideways to lock it."
+    private val dial get() = compose.onNodeWithTag(SPEED_DIAL_TAG, useUnmergedTree = true)
 
     private fun clip(name: String, unreadable: Boolean = false) = VideoItem(MediaRef("/sdcard/Movies/$name", 1_000_000, 0, MediaType.VIDEO), 61_000, unreadable, false)
 
@@ -69,9 +69,9 @@ class VideoSpeedTest {
 
     private fun px(dp: Int) = with(compose.density) { dp.dp.toPx() }
 
-    /** Puts a finger down in the middle of the page and keeps it there past the long press timeout. */
-    private fun press() {
-        page.performTouchInput { down(center) }
+    /** Puts a finger down on the page, in the middle unless [at] says where, and keeps it there past the long press timeout. */
+    private fun press(at: ((width: Float, height: Float) -> Offset)? = null) {
+        page.performTouchInput { down(at?.invoke(width.toFloat(), height.toFloat()) ?: center) }
         compose.mainClock.advanceTimeBy(700)
         compose.waitForIdle()
     }
@@ -91,24 +91,24 @@ class VideoSpeedTest {
     @Test
     fun `a hold on a playing video opens the speed slider, and lifting the finger closes it with nothing else changed`() {
         open()
-        compose.onNodeWithText(hint).assertDoesNotExist()
+        dial.assertDoesNotExist()
 
         press()
-        compose.onNodeWithText(hint).assertExists()
+        dial.assertExists()
         compose.onNodeWithText("1x").assertExists()
 
         lift()
-        compose.onNodeWithText(hint).assertDoesNotExist()
+        dial.assertDoesNotExist()
         assertTrue(player.playing) // the lift is not the tap that pauses
         assertEquals(1f, player.playbackSpeed, 0f)
     }
 
     @Test
-    fun `up is faster and down is slower, from a quarter to four times, and lifting goes back to the speed before`() {
+    fun `up is faster and down is slower, in quarters from a quarter to four times, and lifting goes back to the speed before`() {
         open()
         press()
 
-        move(y = -px(64)) // one doubling
+        move(y = -px(72)) // four steps of a quarter
         compose.onNodeWithText("2x").assertExists()
         assertEquals(2f, player.playbackSpeed, 0f)
 
@@ -130,10 +130,10 @@ class VideoSpeedTest {
     fun `a swipe sideways locks the speed, which stays after the lift, without changing page, and the badge sets it back`() {
         open()
         press()
-        move(y = -px(64))
+        move(y = -px(72))
 
         move(x = -px(80))
-        compose.onNodeWithText("Speed locked").assertExists()
+        compose.onNodeWithContentDescription("Speed locked").assertExists()
         lift()
 
         assertEquals(2f, player.playbackSpeed, 0f)
@@ -146,6 +146,60 @@ class VideoSpeedTest {
         assertEquals(1f, player.playbackSpeed, 0f)
         assertTrue(player.playing) // the badge is not the picture's tap
         compose.onNodeWithText("2x").assertDoesNotExist()
+    }
+
+    @Test
+    fun `bringing the finger back unlocks the speed, which moves again from where it was, and the other side locks it again`() {
+        open()
+        press()
+        move(y = -px(72))
+        move(x = px(80))
+        move(y = -px(72)) // locked: nothing changes
+        assertEquals(2f, player.playbackSpeed, 0f)
+
+        move(x = -px(60))
+        compose.onNodeWithContentDescription("Speed locked").assertDoesNotExist()
+        move(y = -px(36))
+        assertEquals(2.5f, player.playbackSpeed, 0f)
+        compose.onNodeWithText("2.5x").assertExists()
+
+        move(x = -px(80))
+        compose.onNodeWithContentDescription("Speed locked").assertExists()
+        lift()
+
+        assertEquals(2.5f, player.playbackSpeed, 0f)
+        compose.onNodeWithText("2.5x").assertExists() // the badge
+    }
+
+    @Test
+    fun `an unlocked hold that ends goes back to the speed before, even after a lock and an unlock`() {
+        open()
+        press()
+        move(y = -px(72))
+        move(x = px(80))
+        move(x = -px(80))
+        lift()
+
+        assertEquals(1f, player.playbackSpeed, 0f)
+        compose.onNodeWithText("2x").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the slider opens next to the finger, on the side with more room`() {
+        open()
+        val bounds = page.fetchSemanticsNode().boundsInRoot
+
+        press { width, height -> Offset(width * 0.8f, height * 0.4f) }
+        val left = compose.onNodeWithText("1x", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue("$left", left.right < bounds.left + bounds.width * 0.8f)
+        assertEquals(bounds.top + bounds.height * 0.4f, left.center.y, px(20))
+        lift()
+
+        press { width, height -> Offset(width * 0.2f, height * 0.6f) }
+        val right = compose.onNodeWithText("1x", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue("$right", right.left > bounds.left + bounds.width * 0.2f)
+        assertEquals(bounds.top + bounds.height * 0.6f, right.center.y, px(20))
+        lift()
     }
 
     @Test
@@ -163,13 +217,13 @@ class VideoSpeedTest {
     fun `a new hold on a locked speed starts from it and goes back to it`() {
         open()
         press()
-        move(y = -px(64))
+        move(y = -px(72))
         move(x = px(80))
         lift()
 
         press()
-        move(y = -px(64))
-        assertEquals(4f, player.playbackSpeed, 0f)
+        move(y = -px(72))
+        assertEquals(3f, player.playbackSpeed, 0f)
         lift()
 
         assertEquals(2f, player.playbackSpeed, 0f)
@@ -180,7 +234,7 @@ class VideoSpeedTest {
     fun `the next video plays at normal speed`() {
         open()
         press()
-        move(y = -px(64))
+        move(y = -px(72))
         move(x = px(80))
         lift()
 
@@ -214,7 +268,7 @@ class VideoSpeedTest {
         page.performTouchInput { click() }
         compose.waitForIdle()
         assertFalse(player.playing)
-        compose.onNodeWithText(hint).assertDoesNotExist()
+        dial.assertDoesNotExist()
 
         page.performTouchInput { swipeDown() }
         page.performTouchInput { swipeDown() }
@@ -230,8 +284,8 @@ class VideoSpeedTest {
         assertFalse(player.playing)
 
         press()
-        compose.onNodeWithText(hint).assertDoesNotExist()
-        move(y = -px(64))
+        dial.assertDoesNotExist()
+        move(y = -px(72))
         lift()
 
         assertEquals(1f, player.playbackSpeed, 0f)
@@ -243,14 +297,14 @@ class VideoSpeedTest {
 
         press()
 
-        compose.onNodeWithText(hint).assertDoesNotExist()
+        dial.assertDoesNotExist()
     }
 
     @Test
     fun `with a screen reader on, a hold opens nothing, and the bar's buttons step the speed`() {
         open(touchExploration = true)
         press()
-        compose.onNodeWithText(hint).assertDoesNotExist()
+        dial.assertDoesNotExist()
         lift()
 
         compose.onNodeWithText("Speed 1x").assertExists()
@@ -275,7 +329,7 @@ class VideoSpeedTest {
         RuntimeEnvironment.setFontScale(1.3f)
         open()
         press()
-        move(y = -px(64))
+        move(y = -px(72))
         move(x = px(80))
         lift()
 
