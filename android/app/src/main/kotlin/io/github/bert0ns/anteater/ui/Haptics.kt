@@ -26,7 +26,7 @@ enum class Haptic(val type: HapticFeedbackType) {
     GRAB(HapticFeedbackType.LongPress),
 
     /** Each step of a slider under a dragging finger, firm enough to count the steps by. */
-    STEP(HapticFeedbackType.KeyboardTap),
+    STEP(HapticFeedbackType.VirtualKey),
 }
 
 /** Whether the app gives haptic feedback: a user setting, on by default. */
