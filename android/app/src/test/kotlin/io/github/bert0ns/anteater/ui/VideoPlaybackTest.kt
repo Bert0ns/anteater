@@ -332,23 +332,27 @@ class VideoPlaybackTest {
     }
 
     @Test
-    fun `another video, and a stop, start again at normal speed and unlocked`() {
+    fun `a locked speed carries over to another video and a stop, and an unlocked one goes back to normal`() {
         playback.play(one)
         playback.setSpeed(2f)
         playback.lockSpeed()
-        playback.seekTo(one, 5_000) // the same video keeps its speed
+        playback.seekTo(one, 5_000)
         assertEquals(2f, players.single().playbackSpeed, 0f)
 
         playback.play(two)
-        assertEquals(1f, playback.speed, 0f)
-        assertFalse(playback.speedLocked)
-        assertEquals(1f, players.single().playbackSpeed, 0f)
+        assertEquals(2f, playback.speed, 0f)
+        assertTrue(playback.speedLocked)
+        assertEquals(2f, players.single().playbackSpeed, 0f)
 
-        playback.setSpeed(3f)
-        playback.lockSpeed()
         playback.stop()
+        playback.play(one)
+        assertEquals(2f, players.single().playbackSpeed, 0f)
+
+        playback.resetSpeed()
+        playback.setSpeed(3f) // a hold that is not locked
+        playback.play(two)
         assertEquals(1f, playback.speed, 0f)
-        assertFalse(playback.speedLocked)
+        assertEquals(1f, players.single().playbackSpeed, 0f)
     }
 
     @Test
@@ -368,15 +372,15 @@ class VideoPlaybackTest {
     }
 
     @Test
-    fun `a drag moves the speed on a log scale in steps of 0_05, a quarter to four times`() {
-        assertEquals(2f, heldSpeed(1f, 100f, 100f), 0f)
-        assertEquals(4f, heldSpeed(1f, 200f, 100f), 0f)
-        assertEquals(4f, heldSpeed(1f, 900f, 100f), 0f)
-        assertEquals(0.5f, heldSpeed(1f, -100f, 100f), 0f)
-        assertEquals(0.25f, heldSpeed(1f, -900f, 100f), 0f)
-        assertEquals(1.5f, heldSpeed(1f, 58.5f, 100f), 0f) // 2^0.585 = 1.4999
-        assertEquals(1.05f, heldSpeed(1f, 7f, 100f), 0f)
-        assertEquals(1f, heldSpeed(1f, 0f, 100f), 0f)
+    fun `a drag moves the speed in steps of a quarter, from a quarter to four times`() {
+        assertEquals(1.25f, heldSpeed(1f, 100f, 100f), 0f)
+        assertEquals(2f, heldSpeed(1f, 400f, 100f), 0f)
+        assertEquals(4f, heldSpeed(1f, 9_000f, 100f), 0f)
+        assertEquals(0.5f, heldSpeed(1f, -200f, 100f), 0f)
+        assertEquals(0.25f, heldSpeed(1f, -9_000f, 100f), 0f)
+        assertEquals(1f, heldSpeed(1f, 49f, 100f), 0f)
+        assertEquals(1.25f, heldSpeed(1f, 51f, 100f), 0f)
+        assertEquals(2.75f, heldSpeed(2.5f, 100f, 100f), 0f)
     }
 
     @Test

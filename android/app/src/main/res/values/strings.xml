@@ -187,7 +187,6 @@
     <string name="video_go_to">Go to %1$s</string>
     <string name="video_play_failed">This video can\'t be played.</string>
     <string name="video_speed_value">%1$sx</string>
-    <string name="video_speed_hint">Slide up for faster, down for slower. Swipe sideways to lock it.</string>
     <string name="video_speed_locked">Speed locked</string>
     <string name="video_speed_reset">Back to normal speed</string>
     <string name="video_speed_label">Speed %1$s</string>

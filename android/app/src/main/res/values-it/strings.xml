@@ -227,7 +227,6 @@
     <string name="video_go_to">Vai a %1$s</string>
     <string name="video_play_failed">Non è possibile riprodurre questo video.</string>
     <string name="video_speed_value">%1$sx</string>
-    <string name="video_speed_hint">Scorri in su per accelerare, in giù per rallentare. Scorri di lato per bloccarla.</string>
     <string name="video_speed_locked">Velocità bloccata</string>
     <string name="video_speed_reset">Torna alla velocità normale</string>
     <string name="video_speed_label">Velocità %1$s</string>

@@ -36,10 +36,10 @@ class HapticsTest {
     val compose = createComposeRule()
 
     @Test
-    fun `trashing, keeping and a tick are three different feedbacks`() {
+    fun `each feedback is a different one`() {
         assertEquals(
-            listOf(HapticFeedbackType.Reject, HapticFeedbackType.Confirm, HapticFeedbackType.SegmentTick),
-            listOf(Haptic.TRASH, Haptic.KEEP, Haptic.TICK).map { it.type },
+            listOf(HapticFeedbackType.Reject, HapticFeedbackType.Confirm, HapticFeedbackType.SegmentTick, HapticFeedbackType.LongPress, HapticFeedbackType.VirtualKey),
+            listOf(Haptic.TRASH, Haptic.KEEP, Haptic.TICK, Haptic.GRAB, Haptic.STEP).map { it.type },
         )
     }
 
