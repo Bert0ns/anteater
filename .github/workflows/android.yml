@@ -37,6 +37,14 @@ jobs:
           java-version: 21
       - if: steps.changed.outputs.run
         uses: gradle/actions/setup-gradle@v5
+      # Robolectric fetches ~700 MB of android-all-instrumented jars into ~/.m2 outside Gradle's cache.
+      - if: steps.changed.outputs.run
+        uses: actions/cache@v5
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ runner.os }}-${{ hashFiles('android/gradle/libs.versions.toml', 'android/app/build.gradle.kts') }}
+          restore-keys: |
+            robolectric-${{ runner.os }}-
       - if: steps.changed.outputs.run
         run: ./gradlew ktlintCheck assembleDebug testDebugUnitTest lintDebug :baselineprofile:compileNonMinifiedReleaseKotlin
       - if: steps.changed.outputs.run
