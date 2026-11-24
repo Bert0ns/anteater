@@ -172,6 +172,20 @@ class VideoSpeedTest {
     }
 
     @Test
+    fun `after a long swipe that locks, a short way back unlocks`() {
+        open()
+        press()
+        move(y = -px(72))
+        move(x = px(200))
+        compose.onNodeWithContentDescription("Speed locked").assertExists()
+
+        move(x = -px(40))
+        compose.onNodeWithContentDescription("Speed locked").assertDoesNotExist()
+        lift()
+        assertEquals(1f, player.playbackSpeed, 0f)
+    }
+
+    @Test
     fun `an unlocked hold that ends goes back to the speed before, even after a lock and an unlock`() {
         open()
         press()
@@ -231,7 +245,7 @@ class VideoSpeedTest {
     }
 
     @Test
-    fun `the next video plays at normal speed`() {
+    fun `a locked speed carries over to the next video, with its badge`() {
         open()
         press()
         move(y = -px(72))
@@ -242,8 +256,8 @@ class VideoSpeedTest {
         compose.waitForIdle()
 
         assertEquals(listOf("/sdcard/Movies/two.mp4"), player.paths)
-        assertEquals(1f, player.playbackSpeed, 0f)
-        compose.onNodeWithText("2x").assertDoesNotExist()
+        assertEquals(2f, player.playbackSpeed, 0f)
+        compose.onNodeWithText("2x").assertExists()
     }
 
     @Test

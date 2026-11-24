@@ -21,6 +21,12 @@ enum class Haptic(val type: HapticFeedbackType) {
 
     /** Selecting, skipping and other small steps. */
     TICK(HapticFeedbackType.SegmentTick),
+
+    /** A finger takes hold of a control, such as the video speed slider, or lets go of a lock. */
+    GRAB(HapticFeedbackType.LongPress),
+
+    /** Each step of a slider under a dragging finger, firm enough to count the steps by. */
+    STEP(HapticFeedbackType.KeyboardTap),
 }
 
 /** Whether the app gives haptic feedback: a user setting, on by default. */

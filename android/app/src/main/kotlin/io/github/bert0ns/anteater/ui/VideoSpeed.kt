@@ -44,11 +44,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
@@ -63,6 +70,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -82,14 +91,14 @@ import kotlin.math.roundToInt
 internal class SpeedHold(val origin: Offset) {
     var locked by mutableStateOf(false)
 
-    /** How far the finger is from [origin] sideways, as a share of the swipe that locks, from 0 to 1. */
+    /** How far the finger went sideways since it went down or last unlocked, as a share of the swipe that locks, from 0 to 1. */
     var sideways by mutableFloatStateOf(0f)
 }
 
 /**
  * Holding a finger still on a playing video for the long press timeout opens the speed slider ([onHold] gets a [SpeedHold],
  * and null when the finger lifts). Up is faster and down slower, one [SPEED_TICK] every [SPEED_STEP_DRAG], and a swipe
- * sideways locks the speed. While the finger is still down, bringing it back toward where it went down unlocks the speed,
+ * sideways locks the speed. While the finger is still down, bringing it back by [SPEED_UNLOCK_SWIPE] unlocks the speed,
  * and up and down move it again from there. Lifting the finger keeps a locked speed and goes back to the one before the hold
  * otherwise.
  *
@@ -104,16 +113,19 @@ internal fun Modifier.videoSpeedGesture(playback: VideoPlayback, haptics: Haptic
         if (!enabled()) return@awaitEachGesture
         val slop = viewConfiguration.touchSlop
         if (withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) { awaitLeave(down.id, slop) } != null) return@awaitEachGesture
-        haptics.performHapticFeedback(Haptic.TICK.type)
+        haptics.performHapticFeedback(Haptic.GRAB.type)
         val before = playback.speed
         val hold = SpeedHold(down.position)
         onHold(hold)
         try {
             val step = SPEED_STEP_DRAG.toPx()
             val lock = SPEED_LOCK_SWIPE.toPx()
+            val unlock = SPEED_UNLOCK_SWIPE.toPx()
             var from = before
             var up = 0f
+            // Sideways from where the finger went down, or from where it last unlocked; and while locked, the farthest it went.
             var dx = 0f
+            var farthest = 0f
             while (true) {
                 val event = awaitPointerEvent()
                 val change = event.changes.firstOrNull { it.id == down.id }
@@ -121,18 +133,24 @@ internal fun Modifier.videoSpeedGesture(playback: VideoPlayback, haptics: Haptic
                 event.changes.forEach { it.consume() }
                 if (change == null || move == null || !change.pressed) break
                 dx += move.x
-                hold.sideways = (abs(dx) / lock).coerceAtMost(1f)
                 if (hold.locked) {
-                    if (abs(dx) <= lock / 2) {
+                    farthest = maxOf(farthest, abs(dx))
+                    hold.sideways = 1f
+                    // Any way back toward where it came from unlocks, however far the swipe that locked went.
+                    if (farthest - abs(dx) >= unlock) {
                         hold.locked = false
                         from = playback.speed
                         up = 0f
-                        haptics.performHapticFeedback(Haptic.TICK.type)
+                        dx = 0f
+                        hold.sideways = 0f
+                        haptics.performHapticFeedback(Haptic.GRAB.type)
                     }
                     continue
                 }
+                hold.sideways = (abs(dx) / lock).coerceAtMost(1f)
                 if (abs(dx) >= lock) {
                     hold.locked = true
+                    farthest = abs(dx)
                     haptics.performHapticFeedback(Haptic.KEEP.type)
                     continue
                 }
@@ -141,7 +159,7 @@ internal fun Modifier.videoSpeedGesture(playback: VideoPlayback, haptics: Haptic
                 val speed = heldSpeed(from, up, step)
                 if (speed != playback.speed) {
                     playback.setSpeed(speed)
-                    haptics.performHapticFeedback(Haptic.TICK.type)
+                    haptics.performHapticFeedback(Haptic.STEP.type)
                 }
             }
             if (hold.locked) playback.lockSpeed() else playback.setSpeed(before)
@@ -176,17 +194,18 @@ internal fun speedText(speed: Float): String {
 /**
  * The slider a hold opens next to the finger, on the side of the page with more room (#538): a column of ticks, one per
  * [SPEED_TICK], that scrolls past the finger's height, where the chosen tick is the longest and the others shrink to dots and
- * fade toward the ends. Beside it, one number whose digits roll to the next speed, and a lock that shows as the finger goes
- * sideways and is solid once the speed is locked, when the other ticks fade out. No box and no hint, so it covers little of
+ * fade toward the ends. Beside it, one number whose digits roll to the next speed, and an open padlock that brightens as the
+ * finger goes sideways and snaps shut once the speed is locked, when the other ticks fade out. No box and no hint, so it covers little of
  * the video.
  */
 @Composable
 internal fun BoxScope.SpeedDial(speed: Float, hold: SpeedHold) {
     val position by animateFloatAsState(speed / SPEED_TICK - 1, spring(stiffness = Spring.StiffnessMediumLow), label = "speed")
     val lock by animateFloatAsState(if (hold.locked) 1f else hold.sideways * 0.75f, label = "lock")
+    val shut by animateFloatAsState(if (hold.locked) 1f else 0f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium), label = "shut")
     val faded by animateFloatAsState(if (hold.locked) 1f else hold.sideways * 0.6f, label = "faded")
     val chosen = (speed / SPEED_TICK).roundToInt() - 1
-    val rollHeight = with(LocalDensity.current) { 26.sp.toDp() }
+    val rollHeight = with(LocalDensity.current) { 32.sp.toDp() }
     BoxWithConstraints(Modifier.matchParentSize().testTag(SPEED_DIAL_TAG)) {
         val width = constraints.maxWidth.toFloat()
         val height = constraints.maxHeight.toFloat()
@@ -203,9 +222,9 @@ internal fun BoxScope.SpeedDial(speed: Float, hold: SpeedHold) {
                 val y = middle - distance * TICK_SPACING.toPx()
                 val start = Offset(anchor, y)
                 val end = Offset(anchor + side * TICK_LENGTH.toPx() * near * near, y)
-                val stroke = (2.4f + 0.8f * near).dp.toPx()
+                val stroke = (3.2f + 1f * near).dp.toPx()
                 // A dark edge under each tick keeps it visible on a white sky.
-                drawLine(Color.Black.copy(alpha = 0.3f * alpha), start, end, stroke + 2.dp.toPx(), StrokeCap.Round)
+                drawLine(Color.Black.copy(alpha = 0.3f * alpha), start, end, stroke + 2.5f.dp.toPx(), StrokeCap.Round)
                 drawLine(Color.White.copy(alpha = alpha), start, end, stroke, StrokeCap.Round)
             }
         }
@@ -218,11 +237,10 @@ internal fun BoxScope.SpeedDial(speed: Float, hold: SpeedHold) {
             },
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Icon(
-                Icons.Filled.Lock,
-                if (hold.locked) stringResource(R.string.video_speed_locked) else null,
-                Modifier.size(LOCK_ICON).graphicsLayer { alpha = lock },
-                tint = Color.White,
+            val locked = stringResource(R.string.video_speed_locked)
+            Padlock(
+                { shut },
+                Modifier.size(LOCK_ICON).graphicsLayer { alpha = 0.5f + 0.5f * lock }.semantics { if (hold.locked) contentDescription = locked },
             )
             Spacer(Modifier.height(LOCK_ICON_GAP))
             Box(Modifier.height(rollHeight).clipToBounds(), if (side > 0) Alignment.CenterStart else Alignment.CenterEnd) {
@@ -238,12 +256,38 @@ internal fun BoxScope.SpeedDial(speed: Float, hold: SpeedHold) {
     }
 }
 
+/** A padlock whose shackle is lifted and swung open at [shut] 0, and drops into the body at 1. */
+@Composable
+private fun Padlock(shut: () -> Float, modifier: Modifier) {
+    Canvas(modifier) {
+        val w = size.width
+        val open = 1 - shut()
+        val leg = Offset(w * 0.3f, w * 0.52f)
+        val shackle = Path().apply {
+            moveTo(leg.x, leg.y)
+            lineTo(leg.x, w * 0.34f)
+            arcTo(Rect(w * 0.3f, w * 0.14f, w * 0.7f, w * 0.54f), 180f, 180f, false)
+            lineTo(w * 0.7f, leg.y)
+        }
+        translate(top = -w * 0.14f * open) {
+            rotate(-28f * open, leg) {
+                drawPath(shackle, Color.Black.copy(alpha = 0.3f), style = Stroke(w * 0.17f, cap = StrokeCap.Round))
+                drawPath(shackle, Color.White, style = Stroke(w * 0.11f, cap = StrokeCap.Round))
+            }
+        }
+        val body = Offset(w * 0.14f, w * 0.48f)
+        val bodySize = Size(w * 0.72f, w * 0.48f)
+        drawRoundRect(Color.Black.copy(alpha = 0.3f), body - Offset(w * 0.03f, w * 0.03f), Size(bodySize.width + w * 0.06f, bodySize.height + w * 0.06f), CornerRadius(w * 0.12f))
+        drawRoundRect(Color.White, body, bodySize, CornerRadius(w * 0.09f))
+    }
+}
+
 @Composable
 private fun DialNumber(tick: Int, modifier: Modifier) {
     Text(speedText((tick + 1) * SPEED_TICK), modifier, style = DIAL_NUMBER)
 }
 
-private val DIAL_NUMBER = TextStyle(color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold, shadow = Shadow(Color.Black.copy(alpha = 0.6f), blurRadius = 6f))
+private val DIAL_NUMBER = TextStyle(color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, shadow = Shadow(Color.Black.copy(alpha = 0.6f), blurRadius = 6f))
 
 internal const val SPEED_DIAL_TAG = "speedDial"
 
@@ -283,8 +327,11 @@ internal fun SpeedControls(playback: VideoPlayback) {
     }
 }
 
-/** How far a held finger goes sideways to lock the speed, a deliberate swipe and not the drift of a drag up or down. Half way back unlocks it. */
+/** How far a held finger goes sideways to lock the speed: a deliberate swipe, not the drift of a drag up or down. */
 private val SPEED_LOCK_SWIPE = 56.dp
+
+/** How far a locked finger comes back from the farthest it went to unlock the speed. */
+private val SPEED_UNLOCK_SWIPE = 24.dp
 
 /** Below the top row of the full size view: its 8 dp padding, a 48 dp button and 16 dp of space. */
 internal val SPEED_BADGE_TOP = 72.dp
@@ -296,19 +343,19 @@ private const val TICKS = 16
 
 /** How many ticks either side of the chosen one show, fading out toward the last. */
 private const val VISIBLE_TICKS = 4.2f
-private val TICK_SPACING = 15.dp
-private val TICK_LENGTH = 22.dp
+private val TICK_SPACING = 20.dp
+private val TICK_LENGTH = 30.dp
 
 /** The ticks' distance from the finger, so the finger does not cover them. */
-private val DIAL_GAP = 44.dp
+private val DIAL_GAP = 52.dp
 
 /** The number's distance from the finger: past the longest tick. */
-private val NUMBER_GAP = 76.dp
+private val NUMBER_GAP = 94.dp
 
 /** How close the dial's middle comes to the top or bottom of the page, so its ticks stay on it. */
-private val DIAL_MARGIN = 72.dp
-private val LOCK_ICON = 14.dp
-private val LOCK_ICON_GAP = 4.dp
+private val DIAL_MARGIN = 96.dp
+private val LOCK_ICON = 22.dp
+private val LOCK_ICON_GAP = 6.dp
 
 // Material's Remove, which material-icons-extended holds and the app does not depend on.
 private val Slower: ImageVector by lazy {

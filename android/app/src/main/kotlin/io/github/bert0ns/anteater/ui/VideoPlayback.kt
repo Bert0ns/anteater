@@ -131,7 +131,7 @@ internal class VideoPlayback(startMuted: Boolean = false, private val loops: Loo
     var muted by mutableStateOf(startMuted)
         private set
 
-    /** How fast the video plays, from [MIN_SPEED] to [MAX_SPEED]. Every new video starts at normal speed (#527). */
+    /** How fast the video plays, from [MIN_SPEED] to [MAX_SPEED]. A new video starts at normal speed unless the speed is locked (#527, #538). */
     val speed get() = speedState
     private var speedState by mutableFloatStateOf(1f)
 
@@ -187,7 +187,8 @@ internal class VideoPlayback(startMuted: Boolean = false, private val loops: Loo
         } else {
             seeking.end()
             starting.begin()
-            resetSpeed()
+            // A locked speed carries over to the next video (#538), and any other goes back to normal.
+            if (speedLocked) setSpeed(speed) else resetSpeed()
             player.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)), atMs)
             player.prepare()
             loaded = file.path
@@ -273,7 +274,7 @@ internal class VideoPlayback(startMuted: Boolean = false, private val loops: Loo
         seeking.end()
         loaded = null
         playing = false
-        resetSpeed()
+        if (!speedLocked) resetSpeed()
         positionMs = 0
         durationMs = 0
         videoSize = null
